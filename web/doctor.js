@@ -224,6 +224,170 @@ app.registerExtension({
         // Store reference on app for settings callbacks
         app.Doctor = doctorUI;
 
+        // ========================================
+        // Register Sidebar Tab (Modern ComfyUI API)
+        // ========================================
+        // Check if the new sidebar API is available (ComfyUI 2024+)
+        if (app.extensionManager && typeof app.extensionManager.registerSidebarTab === 'function') {
+            app.extensionManager.registerSidebarTab({
+                id: "comfyui-doctor",
+                icon: "pi pi-heart-fill",  // PrimeVue icon
+                title: "Doctor",
+                tooltip: "ComfyUI Doctor - Error Diagnostics",
+                type: "custom",
+                render: (container) => {
+                    // Add styles for the sidebar content if not already added
+                    if (!document.getElementById('doctor-sidebar-styles')) {
+                        const style = document.createElement('style');
+                        style.id = 'doctor-sidebar-styles';
+                        style.textContent = `
+                            .doctor-sidebar-content {
+                                padding: 15px;
+                                height: 100%;
+                                overflow-y: auto;
+                                background: var(--bg-color, #1a1a2e);
+                                color: var(--fg-color, #eee);
+                                font-family: system-ui, -apple-system, sans-serif;
+                            }
+                            .doctor-sidebar-content h3 {
+                                margin: 0 0 15px 0;
+                                font-size: 18px;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                            }
+                            .doctor-sidebar-content .status-indicator {
+                                width: 10px;
+                                height: 10px;
+                                border-radius: 50%;
+                                background: #4caf50;
+                                display: inline-block;
+                            }
+                            .doctor-sidebar-content .status-indicator.error {
+                                background: #ff4444;
+                                animation: pulse 1s infinite;
+                            }
+                            @keyframes pulse {
+                                0%, 100% { opacity: 1; }
+                                50% { opacity: 0.5; }
+                            }
+                            .doctor-sidebar-content .error-card {
+                                background: rgba(255, 68, 68, 0.1);
+                                border: 1px solid #ff4444;
+                                border-radius: 8px;
+                                padding: 12px;
+                                margin-bottom: 12px;
+                            }
+                            .doctor-sidebar-content .error-card .error-type {
+                                font-weight: bold;
+                                color: #ff6b6b;
+                                margin-bottom: 5px;
+                            }
+                            .doctor-sidebar-content .error-card .error-message {
+                                font-size: 13px;
+                                color: #ddd;
+                                word-break: break-word;
+                            }
+                            .doctor-sidebar-content .error-card .error-time {
+                                font-size: 11px;
+                                color: #888;
+                                margin-top: 8px;
+                            }
+                            .doctor-sidebar-content .node-context {
+                                background: rgba(0,0,0,0.2);
+                                border-radius: 4px;
+                                padding: 8px;
+                                margin-top: 8px;
+                                font-size: 12px;
+                            }
+                            .doctor-sidebar-content .node-context span {
+                                display: block;
+                                margin-bottom: 3px;
+                            }
+                            .doctor-sidebar-content .action-btn {
+                                background: #333;
+                                color: #eee;
+                                border: 1px solid #555;
+                                padding: 8px 12px;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                font-size: 12px;
+                                margin-top: 8px;
+                                width: 100%;
+                                text-align: center;
+                                transition: background 0.2s;
+                            }
+                            .doctor-sidebar-content .action-btn:hover {
+                                background: #444;
+                            }
+                            .doctor-sidebar-content .action-btn.primary {
+                                background: #2563eb;
+                                border-color: #3b82f6;
+                            }
+                            .doctor-sidebar-content .action-btn.primary:hover {
+                                background: #1d4ed8;
+                            }
+                            .doctor-sidebar-content .no-errors {
+                                text-align: center;
+                                padding: 40px 20px;
+                                color: #888;
+                            }
+                            .doctor-sidebar-content .no-errors .icon {
+                                font-size: 48px;
+                                margin-bottom: 10px;
+                            }
+                            .doctor-sidebar-content .ai-response {
+                                background: rgba(37, 99, 235, 0.1);
+                                border: 1px solid #2563eb;
+                                border-radius: 8px;
+                                padding: 12px;
+                                margin-top: 12px;
+                                font-size: 13px;
+                                line-height: 1.5;
+                            }
+                            .doctor-sidebar-content .ai-response h4 {
+                                margin: 0 0 8px 0;
+                                color: #60a5fa;
+                            }
+                        `;
+                        document.head.appendChild(style);
+                    }
+
+                    // Create sidebar content
+                    container.innerHTML = '';
+                    const content = document.createElement('div');
+                    content.className = 'doctor-sidebar-content';
+                    content.id = 'doctor-sidebar-tab-content';
+                    content.innerHTML = `
+                        <h3>
+                            <span class="status-indicator" id="doctor-tab-status"></span>
+                            🏥 ComfyUI Doctor
+                        </h3>
+                        <div id="doctor-tab-error-container">
+                            <div class="no-errors">
+                                <div class="icon">✅</div>
+                                <div>No errors detected</div>
+                                <div style="margin-top: 5px; font-size: 12px;">System running smoothly</div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(content);
+
+                    // Store reference for updates
+                    doctorUI.sidebarTabContent = content;
+                    doctorUI.sidebarTabContainer = container;
+
+                    // Update content if there's already an error
+                    if (doctorUI.lastErrorData) {
+                        doctorUI.updateSidebarTab(doctorUI.lastErrorData);
+                    }
+                }
+            });
+            console.log("[ComfyUI-Doctor] ✅ Sidebar tab registered successfully");
+        } else {
+            console.log("[ComfyUI-Doctor] Sidebar API not available, using legacy menu button");
+        }
+
         // Sync initial language with backend
         try {
             await DoctorAPI.setLanguage(language);
@@ -234,3 +398,4 @@ app.registerExtension({
         console.log("[ComfyUI-Doctor] Settings registered successfully");
     }
 });
+

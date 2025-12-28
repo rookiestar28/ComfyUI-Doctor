@@ -96,9 +96,15 @@ export class DoctorUI {
      * Handle a new error (from either event or polling).
      */
     handleNewError(data) {
+        // Store for sidebar tab access
+        this.lastErrorData = data;
+
         this.updateLogCard(data);
 
-        // Update status dot
+        // Update sidebar tab if available
+        this.updateSidebarTab(data);
+
+        // Update status dot (legacy sidebar)
         const statusDot = document.getElementById('doctor-status');
         if (statusDot) statusDot.classList.add('active');
 
@@ -115,6 +121,97 @@ export class DoctorUI {
                 : (data.last_error ? data.last_error.substring(0, 100) : 'New error detected');
             new Notification('ComfyUI Doctor', { body, icon: '🏥' });
         }
+    }
+
+    /**
+     * Update the modern sidebar tab content with error data.
+     */
+    updateSidebarTab(data) {
+        const container = document.getElementById('doctor-tab-error-container');
+        const statusDot = document.getElementById('doctor-tab-status');
+
+        if (!container) return;
+
+        // Update status indicator
+        if (statusDot) {
+            if (data && data.last_error) {
+                statusDot.classList.add('error');
+            } else {
+                statusDot.classList.remove('error');
+            }
+        }
+
+        if (!data || !data.last_error) {
+            container.innerHTML = `
+                <div class="no-errors">
+                    <div class="icon">✅</div>
+                    <div>No errors detected</div>
+                    <div style="margin-top: 5px; font-size: 12px;">System running smoothly</div>
+                </div>
+            `;
+            return;
+        }
+
+        const nodeContext = data.node_context || {};
+        const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : 'Unknown';
+
+        // Extract error type and message
+        let errorType = 'Error';
+        let errorMessage = data.last_error || 'Unknown error';
+        if (errorMessage.includes(':')) {
+            const colonIndex = errorMessage.indexOf(':');
+            errorType = errorMessage.substring(0, colonIndex).trim();
+            errorMessage = errorMessage.substring(colonIndex + 1).trim();
+        }
+
+        container.innerHTML = `
+            <div class="error-card">
+                <div class="error-type">⚠️ ${this.escapeHtml(errorType)}</div>
+                <div class="error-message">${this.escapeHtml(errorMessage.substring(0, 300))}${errorMessage.length > 300 ? '...' : ''}</div>
+                <div class="error-time">🕐 ${timestamp}</div>
+                ${nodeContext.node_id ? `
+                    <div class="node-context">
+                        <span><strong>Node:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${nodeContext.node_id})</span>
+                        ${nodeContext.node_class ? `<span><strong>Class:</strong> ${this.escapeHtml(nodeContext.node_class)}</span>` : ''}
+                        ${nodeContext.custom_node_path ? `<span><strong>Source:</strong> ${this.escapeHtml(nodeContext.custom_node_path)}</span>` : ''}
+                    </div>
+                ` : ''}
+                <button class="action-btn" id="doctor-tab-locate-btn">🔍 Locate Node on Canvas</button>
+                <button class="action-btn primary" id="doctor-tab-ai-btn">✨ Analyze with AI</button>
+            </div>
+            <div id="doctor-tab-ai-response"></div>
+            ${data.suggestion ? `
+                <div class="ai-response">
+                    <h4>💡 Suggestion</h4>
+                    <div>${this.escapeHtml(data.suggestion)}</div>
+                </div>
+            ` : ''}
+        `;
+
+        // Attach event listeners
+        const locateBtn = document.getElementById('doctor-tab-locate-btn');
+        const aiBtn = document.getElementById('doctor-tab-ai-btn');
+
+        if (locateBtn && nodeContext.node_id) {
+            locateBtn.onclick = () => this.locateNodeOnCanvas(nodeContext.node_id);
+        } else if (locateBtn) {
+            locateBtn.disabled = true;
+            locateBtn.style.opacity = '0.5';
+        }
+
+        if (aiBtn) {
+            aiBtn.onclick = () => this.triggerAIAnalysis(data, 'doctor-tab-ai-response', aiBtn);
+        }
+    }
+
+    /**
+     * Escape HTML to prevent XSS.
+     */
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
 
