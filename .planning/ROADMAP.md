@@ -85,32 +85,32 @@ graph TD
 
 ### 3.1 Features
 
-- [ ] **F1**: Error history persistence (SQLite/JSON) - 🟡 Medium
+- [ ] **F1**: Error history persistence (SQLite/JSON) - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F2**: Hot-reload error patterns from external JSON/YAML - 🟢 Low
-- [ ] **F3**: Workflow context capture on error - 🔴 High
-- [ ] **F4**: Error statistics dashboard - 🟡 Medium
+- [ ] **F3**: Workflow context capture on error - 🔴 High ⚠️ *Use dev branch*
+- [ ] **F4**: Error statistics dashboard - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F5**: Node health scoring - 🟢 Low
-- [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium
+- [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F7**: One-click auto-fix for specific errors - 🟢 Low
 
 ### 3.2 Robustness
 
 - [x] **R1**: Comprehensive error handling refactor - 🔴 High ✅ *Completed*
 - [x] **R2**: Thread safety hardening - 🔴 High ✅ *Completed*
-- [ ] **R3**: aiohttp session reuse - 🟡 Medium
+- [ ] **R3**: aiohttp session reuse - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **R4**: XSS protection - 🔴 High ✅ *Completed*
-- [ ] **R5**: Frontend error boundaries - 🟡 Medium
+- [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
 
 ### 3.3 Testing
 
 - [x] **T1**: API endpoint unit tests - 🔴 High ✅ *Completed*
-- [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium
+- [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
 
 ### 3.4 Documentation
 
-- [ ] **D1**: OpenAPI/Swagger spec - 🟡 Medium
+- [ ] **D1**: OpenAPI/Swagger spec - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **D2**: Architecture documentation - 🟢 Low
 - [ ] **D3**: Contribution guide - 🟢 Low
 
@@ -121,9 +121,12 @@ graph TD
 - [ ] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low
 - [ ] **A2**: Integrate ruff linter (replace flake8/isort) - 🟢 Low  
 - [ ] **A3**: Add pytest-cov with `--cov-report=term-missing` - 🟢 Low
-- [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium
-- [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium
-- [ ] **A6**: Refactor analyzer.py to Pipeline pattern (capture→parse→classify→suggest) - 🔴 High
+- [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium ⚠️ *Use dev branch*
+- [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
+- [ ] **A6**: Refactor analyzer.py to Pipeline pattern (capture→parse→classify→suggest) - 🔴 High ⚠️ *Use dev branch*
+
+> [!IMPORTANT]
+> Items marked with ⚠️ should be developed on a separate `dev` branch to prevent breaking existing functionality. Merge to `main` only after thorough testing.
 
 ---
 
@@ -305,7 +308,7 @@ graph TD
 - [ ] **F1: 錯誤歷史持久化**
   - 將 `_analysis_history` 寫入 SQLite 或 JSON 檔
   - 支援跨重啟查看歷史
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **F2: 錯誤模式熱更新**
   - 從外部 JSON/YAML 載入 `PATTERNS`
@@ -315,12 +318,12 @@ graph TD
 - [ ] **F3: Workflow 上下文擷取**
   - 在錯誤發生時捕獲當前 workflow JSON
   - 提供給 LLM 更完整的上下文
-  - 優先級：🔴 High
+  - 優先級：🔴 High ⚠️ *使用 dev branch 開發*
 
 - [ ] **F4: 錯誤統計儀表板**
   - 按節點/錯誤類型分組統計
   - 視覺化常見錯誤熱點
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **F5: 節點健康評分**
   - 追蹤各 custom_node 的錯誤頻率
@@ -330,7 +333,7 @@ graph TD
 - [ ] **F6: 多 LLM Provider 快速切換**
   - 在 UI 中提供下拉選單快速切換 preset
   - 預設配置：OpenAI/DeepSeek/Ollama
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **F7: 錯誤自動修復建議執行**
   - 對於特定錯誤（如 pip install 缺失模組），提供一鍵執行
@@ -352,7 +355,7 @@ graph TD
 - [ ] **R3: Session 複用**
   - 為 LLM API 呼叫建立可複用的 `aiohttp.ClientSession`
   - 加入連線池管理
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **R4: XSS 防護**
   - 確保所有 `innerHTML` 使用都經過淨化
@@ -362,7 +365,7 @@ graph TD
 - [ ] **R5: 前端錯誤邊界**
   - 加入 try-catch 於關鍵前端函數
   - 顯示友善錯誤訊息而非靜默失敗
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 ### 3.3 測試擴充（Testing）
 
@@ -374,7 +377,7 @@ graph TD
 - [ ] **T2: 前端互動測試**
   - 使用 Playwright 或 Puppeteer
   - 測試 Settings 面板、Sidebar、AI 分析
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **T3: 端對端整合測試**
   - 在真實 ComfyUI 環境中執行
@@ -390,7 +393,7 @@ graph TD
 
 - [ ] **D1: API 文件**
   - 為所有 API 端點撰寫 OpenAPI/Swagger 規格
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **D2: 架構文件**
   - 繪製完整資料流圖
@@ -421,15 +424,18 @@ graph TD
 
 - [ ] **A4: NodeContext 改為 frozen dataclass**
   - 使用 `@dataclass(frozen=True)` + `__post_init__` 驗證
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **A5: 建立 LLMProvider Protocol**
   - 統一 OpenAI/Ollama/DeepSeek 介面
-  - 優先級：🟡 Medium
+  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
 
 - [ ] **A6: 重構 analyzer.py 為 Pipeline 架構**
   - 採用 capture→parse→classify→suggest 管線模式
-  - 優先級：🔴 High
+  - 優先級：🔴 High ⚠️ *使用 dev branch 開發*
+
+> [!IMPORTANT]
+> 標註 ⚠️ 的項目應在獨立的 `dev` 分支上開發，以避免破壞現有功能。完成充分測試後再合併至 `main`。
 
 ---
 
