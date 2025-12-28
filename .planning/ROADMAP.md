@@ -1,3 +1,152 @@
+# ComfyUI-Doctor Architecture Analysis & Extension Roadmap
+
+[繁體中文](#comfyui-doctor-專案架構分析與擴展規劃) | English
+
+## Overview
+
+This document provides a complete architecture analysis, robustness assessment, and extension todo-list for the ComfyUI-Doctor project.
+
+---
+
+## 1. Architecture Analysis
+
+### 1.1 Core Module Structure
+
+```mermaid
+graph TD
+    A[prestartup_script.py] -->|Early Hook| B[__init__.py]
+    B --> C[logger.py]
+    B --> D[analyzer.py]
+    B --> E[i18n.py]
+    B --> F[config.py]
+    B --> G[nodes.py]
+    
+    C --> H[AsyncFileWriter]
+    C --> I[SmartLogger]
+    
+    D --> J[ErrorAnalyzer]
+    D --> K[NodeContext]
+    
+    B --> L[API Endpoints]
+    L --> M[/debugger/last_analysis]
+    L --> N[/debugger/history]
+    L --> O[/debugger/set_language]
+    L --> P[/doctor/analyze]
+    L --> Q[/doctor/verify_key]
+    L --> R[/doctor/list_models]
+    
+    S[web/doctor.js] --> T[Settings Registration]
+    U[web/doctor_ui.js] --> V[Sidebar Panel]
+    U --> W[Error Cards]
+    U --> X[AI Analysis]
+    Y[web/doctor_api.js] --> Z[Fetch Wrapper]
+```
+
+### 1.2 Module Overview
+
+| Module | Lines | Function |
+|--------|-------|----------|
+| `prestartup_script.py` | 102 | Earliest log interception hook (before custom_nodes load) |
+| `__init__.py` | 477 | Main entry: full Logger install, 6 API endpoints, LLM integration |
+| `logger.py` | 339 | Smart logger: async writes, real-time error analysis, history |
+| `analyzer.py` | 271 | Error analyzer: 20+ error patterns, node context extraction |
+| `i18n.py` | 190 | Internationalization: 4 languages (en, zh_TW, zh_CN, ja) |
+| `config.py` | 65 | Config management: dataclass + JSON persistence |
+| `nodes.py` | 179 | Smart Debug Node: deep data inspection |
+| `doctor.js` | 528 | ComfyUI settings panel integration |
+| `doctor_ui.js` | 778 | Sidebar UI, error cards, AI analysis trigger |
+| `doctor_api.js` | 114 | API wrapper layer |
+
+---
+
+## 2. Robustness Assessment
+
+### 2.1 Strengths ✅
+
+1. **Two-phase logging system** - `prestartup_script.py` ensures capture before all custom_nodes load
+2. **Async I/O** - `AsyncFileWriter` uses background thread + batch writes, non-blocking
+3. **Thread safety** - `threading.Lock` protects traceback buffer, `weakref.finalize` ensures cleanup
+4. **Complete error analysis pipeline** - 20+ predefined patterns, regex LRU cache, node context extraction
+5. **LLM integration** - Supports OpenAI/DeepSeek/Ollama/LMStudio, auto-detects local LLMs
+6. **Frontend integration** - Native ComfyUI Settings API, WebSocket `execution_error` subscription
+7. **Internationalization** - 4 languages, extensible `SUGGESTIONS` structure
+
+### 2.2 Potential Issues ⚠️
+
+- **P1**: Overly broad `except Exception: pass` statements
+- **P2**: Race conditions on `_analysis_history` deque and `SmartLogger._instances`
+- **P3**: Resource leak risks with `aiohttp.ClientSession` per-request creation
+- **P4**: No XSS protection on AI analysis results in frontend
+- **P5**: Missing API endpoint tests and frontend tests
+
+---
+
+## 3. Extension Todo-List
+
+### 3.1 Features
+
+- [ ] **F1**: Error history persistence (SQLite/JSON) - 🟡 Medium
+- [ ] **F2**: Hot-reload error patterns from external JSON/YAML - 🟢 Low
+- [ ] **F3**: Workflow context capture on error - 🔴 High
+- [ ] **F4**: Error statistics dashboard - 🟡 Medium
+- [ ] **F5**: Node health scoring - 🟢 Low
+- [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium
+- [ ] **F7**: One-click auto-fix for specific errors - 🟢 Low
+
+### 3.2 Robustness
+
+- [x] **R1**: Comprehensive error handling refactor - 🔴 High ✅ *Completed*
+- [x] **R2**: Thread safety hardening - 🔴 High ✅ *Completed*
+- [ ] **R3**: aiohttp session reuse - 🟡 Medium
+- [x] **R4**: XSS protection - 🔴 High ✅ *Completed*
+- [ ] **R5**: Frontend error boundaries - 🟡 Medium
+
+### 3.3 Testing
+
+- [x] **T1**: API endpoint unit tests - 🔴 High ✅ *Completed*
+- [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium
+- [ ] **T3**: End-to-end integration tests - 🟢 Low
+- [ ] **T4**: Stress tests - 🟢 Low
+
+### 3.4 Documentation
+
+- [ ] **D1**: OpenAPI/Swagger spec - 🟡 Medium
+- [ ] **D2**: Architecture documentation - 🟢 Low
+- [ ] **D3**: Contribution guide - 🟢 Low
+
+---
+
+## 4. Priority Phases
+
+### Phase 1: Immediate Improvements (1-2 weeks) ✅ COMPLETED
+
+1. **R1** Error handling refactor
+2. **R2** Thread safety
+3. **R4** XSS protection
+4. **T1** API tests
+
+### Phase 2: Feature Enhancement (2-4 weeks)
+
+1. **F3** Workflow context
+2. **F1** History persistence
+3. **R3** Session reuse
+4. **F6** Provider quick switch
+
+### Phase 3: Advanced Features (1-2 months)
+
+1. **F4** Statistics dashboard
+2. **T2** Frontend tests
+3. **F2** Pattern hot-reload
+4. **D1-D3** Full documentation
+
+---
+
+> [!IMPORTANT]
+> The above todo-list items are suggestions. Actual priority should be adjusted based on project needs and resources.
+
+---
+---
+
 # ComfyUI-Doctor 專案架構分析與擴展規劃
 
 ## 概述
