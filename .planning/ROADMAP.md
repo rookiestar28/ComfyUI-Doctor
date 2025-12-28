@@ -114,6 +114,17 @@ graph TD
 - [ ] **D2**: Architecture documentation - 🟢 Low
 - [ ] **D3**: Contribution guide - 🟢 Low
 
+### 3.5 Architecture Improvements (from Cordon analysis)
+
+*Sorted by complexity (simple → complex):*
+
+- [ ] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low
+- [ ] **A2**: Integrate ruff linter (replace flake8/isort) - 🟢 Low  
+- [ ] **A3**: Add pytest-cov with `--cov-report=term-missing` - 🟢 Low
+- [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium
+- [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium
+- [ ] **A6**: Refactor analyzer.py to Pipeline pattern (capture→parse→classify→suggest) - 🔴 High
+
 ---
 
 ## 4. Priority Phases
@@ -134,10 +145,16 @@ graph TD
 
 ### Phase 3: Advanced Features (1-2 months)
 
-1. **F4** Statistics dashboard
-2. **T2** Frontend tests
-3. **F2** Pattern hot-reload
-4. **D1-D3** Full documentation
+1. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
+2. **F4** Statistics dashboard
+3. **T2** Frontend tests
+4. **A4-A5** Dataclass + Protocol refactoring
+
+### Phase 4: Major Refactoring (2+ months)
+
+1. **A6** Pipeline architecture refactor
+2. **F2** Pattern hot-reload
+3. **D1-D3** Full documentation
 
 ---
 
@@ -386,6 +403,34 @@ graph TD
   - 如何新增 LLM Provider
   - 優先級：🟢 Low
 
+### 3.5 架構改進（參考 Cordon 專案）
+
+*按複雜度排序（簡單 → 複雜）：*
+
+- [ ] **A1: 加入 py.typed + mypy 配置**
+  - 在 pyproject.toml 加入嚴格型別檢查
+  - 優先級：🟢 Low
+
+- [ ] **A2: 整合 ruff linter**
+  - 取代 flake8/isort，統一程式碼風格
+  - 優先級：🟢 Low
+
+- [ ] **A3: 加入 pytest-cov 覆蓋率報告**
+  - 使用 `--cov-report=term-missing` 顯示未覆蓋行
+  - 優先級：🟢 Low
+
+- [ ] **A4: NodeContext 改為 frozen dataclass**
+  - 使用 `@dataclass(frozen=True)` + `__post_init__` 驗證
+  - 優先級：🟡 Medium
+
+- [ ] **A5: 建立 LLMProvider Protocol**
+  - 統一 OpenAI/Ollama/DeepSeek 介面
+  - 優先級：🟡 Medium
+
+- [ ] **A6: 重構 analyzer.py 為 Pipeline 架構**
+  - 採用 capture→parse→classify→suggest 管線模式
+  - 優先級：🔴 High
+
 ---
 
 ## 四、優先級排序建議
@@ -406,10 +451,16 @@ graph TD
 
 ### Phase 3: 進階功能（1-2 月）
 
-1. **F4** 統計儀表板
-2. **T2** 前端測試
-3. **F2** 模式熱更新
-4. **D1-D3** 完整文件
+1. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
+2. **F4** 統計儀表板
+3. **T2** 前端測試
+4. **A4-A5** Dataclass + Protocol 重構
+
+### Phase 4: 重大重構（2+ 月）
+
+1. **A6** Pipeline 架構重構
+2. **F2** 模式熱更新
+3. **D1-D3** 完整文件
 
 ---
 
