@@ -53,8 +53,8 @@ log_dir = os.path.join(current_dir, "logs")
 if not os.path.exists(log_dir):
     try:
         os.makedirs(log_dir, exist_ok=True)
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"[ComfyUI-Doctor] Warning: Could not create log directory: {e}")
 
 
 # --- 2. Log File Cleanup ---
@@ -72,10 +72,10 @@ def cleanup_old_logs(log_directory: str, max_files: int = 10) -> None:
             for old_file in log_files[:-max_files]:
                 try:
                     os.remove(old_file)
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                except OSError:
+                    pass  # File may be locked, continue with others
+    except OSError:
+        pass  # Directory access may fail, silently continue
 
 
 cleanup_old_logs(log_dir, CONFIG.max_log_files)

@@ -63,22 +63,22 @@ class PrestartupLogger:
         try:
             self.stream.write(message)
             self.stream.flush()
-        except:
-            pass
+        except (OSError, AttributeError):
+            pass  # Stream may be unavailable during early startup
         try:
             if PrestartupLogger._log_file:
                 PrestartupLogger._log_file.write(message)
                 PrestartupLogger._log_file.flush()
-        except:
-            pass
+        except (OSError, AttributeError):
+            pass  # Log file may be unavailable
 
     def flush(self):
         try:
             self.stream.flush()
             if PrestartupLogger._log_file:
                 PrestartupLogger._log_file.flush()
-        except:
-            pass
+        except (OSError, AttributeError):
+            pass  # Stream or file may be unavailable
 
     @property
     def encoding(self):

@@ -26,15 +26,21 @@ _last_analysis: Dict[str, Any] = {
 # P1: Error history buffer (ring buffer for last N errors)
 _analysis_history: deque = deque(maxlen=CONFIG.history_size)
 
+# R2: Thread safety locks for shared mutable state
+_history_lock = threading.Lock()
+_instances_lock = threading.Lock()
+
 
 def get_last_analysis() -> Dict[str, Any]:
     """Get the last error analysis result for API access."""
-    return _last_analysis.copy()
+    with _history_lock:
+        return _last_analysis.copy()
 
 
 def get_analysis_history() -> List[Dict[str, Any]]:
     """Get the error analysis history (most recent first)."""
-    return list(reversed(_analysis_history))
+    with _history_lock:
+        return list(reversed(_analysis_history))
 
 
 class AsyncFileWriter:
@@ -66,8 +72,8 @@ class AsyncFileWriter:
                 file_handle.writelines(batch)
                 file_handle.flush()
                 file_handle.close()
-        except Exception:
-            pass
+        except OSError:
+            pass  # Silently ignore I/O errors during cleanup
     
     def write(self, message: str) -> None:
         """Non-blocking write: enqueue message for background processing."""
@@ -95,8 +101,8 @@ class AsyncFileWriter:
                 
             except queue.Empty:
                 continue
-            except Exception:
-                pass
+            except OSError:
+                pass  # Background thread: suppress I/O errors silently
     
     def flush(self) -> None:
         """Force flush: wait for queue to drain (with timeout)."""
@@ -143,7 +149,8 @@ class SmartLogger:
         self._last_buffer_time = 0.0
         self.lock = threading.Lock()  # Only for traceback buffer, not for I/O
         
-        SmartLogger._instances.append(self)
+        with _instances_lock:
+            SmartLogger._instances.append(self)
 
     @classmethod
     def install(cls, log_path: str):
@@ -173,7 +180,8 @@ class SmartLogger:
             cls._async_writer.close()
             cls._async_writer = None
         
-        cls._instances.clear()
+        with _instances_lock:
+            cls._instances.clear()
 
     def write(self, message: str) -> None:
         """Write message to both console and log file, analyzing for errors."""
@@ -181,8 +189,8 @@ class SmartLogger:
         try:
             self.stream.write(message)
             self.stream.flush()
-        except Exception:
-            pass 
+        except (OSError, AttributeError):
+            pass  # Stream may be closed or invalid during shutdown
         
         # 2. Write to log file - async (non-blocking)
         if SmartLogger._async_writer:
@@ -258,15 +266,17 @@ class SmartLogger:
         
         # Update global state for API access
         global _last_analysis
-        _last_analysis = {
+        new_analysis = {
             "error": full_traceback,
             "suggestion": suggestion,
             "timestamp": datetime.datetime.now().isoformat(),
             "node_context": node_context.to_dict() if node_context else None,
         }
         
-        # Add to history buffer
-        _analysis_history.append(_last_analysis.copy())
+        # R2: Thread-safe update of shared state
+        with _history_lock:
+            _last_analysis = new_analysis
+            _analysis_history.append(new_analysis.copy())
         
         # Only print if we have something useful to say (Context OR Suggestion)
         # This prevents empty boxes for unhandled system errors (like shutdown noise)
@@ -304,8 +314,8 @@ class SmartLogger:
             self.stream.write(formatted_output)
             if SmartLogger._async_writer:
                 SmartLogger._async_writer.write(formatted_output)
-        except Exception:
-            pass
+        except (OSError, AttributeError):
+            pass  # Stream may be closed during shutdown
 
     def flush(self) -> None:
         """Flush both streams."""
@@ -313,8 +323,8 @@ class SmartLogger:
             self.stream.flush()
             if SmartLogger._async_writer:
                 SmartLogger._async_writer.flush()
-        except Exception:
-            pass
+        except (OSError, AttributeError):
+            pass  # Stream may be closed during shutdown
             
     def close(self) -> None:
         """Close is handled by class-level uninstall."""

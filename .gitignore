@@ -5,5 +5,5 @@
 .DS_Store
 .vscode/
 REFERENCE/*
-logs/
+logs/*
 !logs/.gitkeep

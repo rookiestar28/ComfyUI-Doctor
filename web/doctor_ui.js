@@ -684,16 +684,18 @@ export class DoctorUI {
         let html = `
             <div class="doctor-card-title">LATEST DIAGNOSIS</div>
             <div class="doctor-card-body">
-                <div style="font-weight:bold;color:#ff8888;margin-bottom:8px">${errorText}</div>
+                <div style="font-weight:bold;color:#ff8888;margin-bottom:8px">${this.escapeHtml(errorText)}</div>
                 <div style="font-size:11px;color:#888;margin-bottom:8px">${new Date(data.timestamp).toLocaleTimeString()}</div>
         `;
 
         if (data.node_context && data.node_context.node_id) {
+            const safeNodeId = this.escapeHtml(String(data.node_context.node_id));
+            const safeNodeName = this.escapeHtml(data.node_context.node_name || 'Unknown');
             html += `
                 <div style="background:#222;padding:6px;border-radius:4px;margin-bottom:8px;font-family:monospace;font-size:11px;">
-                    Node #${data.node_context.node_id}: ${data.node_context.node_name || 'Unknown'}
+                    Node #${safeNodeId}: ${safeNodeName}
                 </div>
-                <button class="doctor-action-btn" id="doctor-locate-btn" data-node="${data.node_context.node_id}">
+                <button class="doctor-action-btn" id="doctor-locate-btn" data-node="${safeNodeId}">
                     🔍 Locate Node on Canvas
                 </button>
              `;
