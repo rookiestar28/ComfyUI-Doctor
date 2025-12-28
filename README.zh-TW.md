@@ -30,7 +30,7 @@ ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動
 2. 下載此專案：
 
    ```bash
-   git clone https://github.com/yourusername/ComfyUI-Doctor.git
+   git clone https://github.com/rookiestar28/ComfyUI-Doctor.git
    ```
 
 3. 重新啟動 ComfyUI

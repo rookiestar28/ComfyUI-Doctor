@@ -32,7 +32,7 @@ A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically int
 2. Clone or download this repository:
 
    ```bash
-   git clone https://github.com/yourusername/ComfyUI-Doctor.git
+   git clone https://github.com/rookiestar28/ComfyUI-Doctor.git
    ```
 
 3. Restart ComfyUI
