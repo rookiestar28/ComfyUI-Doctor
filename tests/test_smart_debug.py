@@ -41,21 +41,21 @@ sys.modules['torch'] = mock_torch
 
 # Add Project Root to Path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
 sys.path.insert(0, project_root)
 
-node_root = os.path.abspath(os.path.join(current_dir, ".."))
-log_dir = os.path.join(node_root, "logs")
+log_dir = os.path.join(project_root, "logs")
 
 print(f">>> TEST: Project Root: {project_root}")
 print(">>> TEST: Importing modules...")
 
 try:
-    from ComfyUI_Runtime_Diagnostics.i18n import (
+    from i18n import (
         set_language, get_language, get_suggestion, 
         SUPPORTED_LANGUAGES, ERROR_KEYS
     )
-    from ComfyUI_Runtime_Diagnostics.analyzer import ErrorAnalyzer
+    from analyzer import ErrorAnalyzer
+    print("✅ All modules imported successfully.")
     print("✅ All modules imported successfully.")
 except ImportError as e:
     print(f"❌ Import Error: {e}")

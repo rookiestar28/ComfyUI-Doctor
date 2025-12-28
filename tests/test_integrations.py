@@ -8,9 +8,9 @@ import tempfile
 from unittest.mock import MagicMock
 
 # --- PATH SETUP ---
-# Add Project Root (ComfyUI-Debugger) to Path
+# Add Project Root (ComfyUI-Doctor) to Path
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -26,9 +26,9 @@ mock_torch.cuda.get_device_properties.return_value.total_memory = 24 * 1024**3
 sys.modules['torch'] = mock_torch
 sys.modules['server'] = MagicMock() # Also mock server just in case
 
-from ComfyUI_Runtime_Diagnostics.analyzer import ErrorAnalyzer, NodeContext, ERROR_KEYS
-from ComfyUI_Runtime_Diagnostics.i18n import set_language, get_suggestion
-from ComfyUI_Runtime_Diagnostics.logger import SmartLogger
+from analyzer import ErrorAnalyzer, NodeContext, ERROR_KEYS
+from i18n import set_language, get_suggestion
+from logger import SmartLogger
 
 class TestIntegration(unittest.TestCase):
     

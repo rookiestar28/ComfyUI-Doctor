@@ -43,17 +43,13 @@ mock_torch.isinf = mock_isinf
 sys.modules['torch'] = mock_torch
 
 # --- PROJECT SETUP ---
+# --- PROJECT SETUP ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-module_root = os.path.abspath(os.path.join(current_dir, "..")) # ComfyUI_Runtime_Diagnostics
-sys.path.append(module_root)
+module_root = os.path.abspath(os.path.join(current_dir, "..")) # ComfyUI-Doctor
+if module_root not in sys.path:
+    sys.path.append(module_root)
 
-try:
-    from nodes import DebugPrintNode
-except ImportError:
-    # If nodes imports torch as 'import torch', our mock works.
-    # If it is inside package, we might need to add parent to path.
-    sys.path.append(os.path.dirname(module_root)) # Add project root
-    from ComfyUI_Runtime_Diagnostics.nodes import DebugPrintNode
+from nodes import DebugPrintNode
 
 # --- TEST CASE ---
 print("\n>>> TEST: Deep Inspection Node <<<")
