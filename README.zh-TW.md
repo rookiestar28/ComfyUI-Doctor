@@ -77,7 +77,7 @@ SUGGESTION: OOM（記憶體不足）：GPU VRAM 已滿。建議：
 
 ### 主動模式（除錯節點）
 
-1. 在畫布上右鍵點選：`Add Node` → `Debugger` → `Debug Console Print`
+1. 在畫布上右鍵點選：`Add Node` → `Smart Debug Node`
 2. 將節點串接在任何連線中（支援萬用輸入 `*`）
 3. 執行工作流
 
@@ -116,7 +116,7 @@ ComfyUI-Doctor 提供互動式側邊欄介面，用於即時錯誤監控和診�
   - 錯誤訊息與時間戳記
   - 節點上下文（節點 ID、名稱、類別）
   - **🔍 在畫布上定位節點**：自動居中並高亮顯示問題節點
-  - **✨ 使用 AI 分析**：將錯誤發送至已配置的 LLM 以獲取智能除錯建議
+  - **✨ 使用 AI 分析**：將錯誤發送至已配置的 LLM 以獲取 AI 提供的除錯建議
 
 - **即時更新**：面板透過 WebSocket 事件自動更新新錯誤
 
@@ -159,7 +159,7 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 #### 查詢本地 LLM 可用模型
 
-當您選擇 **Ollama** 或 **LMStudio** 作為提供商時，系統會自動顯示可用模型的警示視窗：
+當您選擇 **Ollama** 或 **LMStudio** 作為 LLM 提供來源時，系統會自動顯示可用模型的彈出視窗：
 
 ![模型列表警示](./assets/model%20list.png)
 
@@ -167,16 +167,16 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 ### 使用 AI 分析
 
-1. 當發生錯誤時，開啟 Doctor 面板
-2. 點擊錯誤卡片上的 **✨ 使用 AI 分析** 按鈕
+1. 當發生錯誤時，自動彈出 Doctor 面板
+2. 參考預設的系統建議、或點擊錯誤卡片上的 **✨ 使用 AI 分析** 按鈕
 3. 等待 LLM 分析錯誤（通常需要 3-10 秒）
 4. 檢視 AI 生成的除錯建議
 
 **安全性說明**：您的 API 金鑰僅在分析請求期間從前端傳輸至後端。系統不會記錄或持久儲存該金鑰。
 
-### 提供商設定範例
+### LLM 來源設定範例
 
-| 提供商             | Base URL                                                   | 模型範例                        |
+| 服務提供者             | Base URL                                                   | 模型範例                        |
 |--------------------|------------------------------------------------------------|---------------------------------|
 | OpenAI             | `https://api.openai.com/v1`                                | `gpt-4o`                        |
 | DeepSeek           | `https://api.deepseek.com/v1`                              | `deepseek-chat`                 |
@@ -206,10 +206,10 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 **功能**：前端檢查錯誤的頻率（毫秒）。預設：`2000`。
 **用途**：調低（如 500）反應更靈敏；調高（如 5000）節省資源。通常保持預設即可。
 
-### 4. Suggestion Language (建議語言)
+### 4. Suggestion Language (語系選擇)
 
-**功能**：選擇診斷報告與建議的顯示語言。
-**用途**：支援英文、繁體中文、簡體中文、日文。設定後對新錯誤生效。
+**功能**：選擇診斷報告與 Doctor 的顯示語系。
+**用途**：目前已支援英文、繁體中文、簡體中文、日文 (陸續新增中)。設定後對新錯誤生效。
 
 ### 5. Enable Doctor (requires restart) (啟用 Doctor)
 
@@ -220,7 +220,7 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 **功能**：從下拉選單中選擇您偏好的 LLM 服務供應來源。
 **選項**：OpenAI、DeepSeek、Groq Cloud、Google Gemini、xAI Grok、OpenRouter、Ollama（本地）、LMStudio（本地）、Custom（自訂）。
-**用途**：選擇提供來源後會自動填入對應的 Base URL。對於本地提供商（Ollama/LMStudio），系統會提示可用模型清單的彈出視窗，若沒有出現，請嘗試重新整理 ComfyUI 的前端（瀏覽器）。
+**用途**：選擇提供來源後會自動填入對應的 Base URL。對於本地提供商（Ollama/LMStudio），會自動彈出對話視窗提示可用模型清單；若沒有出現，請嘗試重新整理 ComfyUI 的前端（瀏覽器）。
 
 ### 7. AI Base URL (AI 基礎網址)
 
@@ -280,7 +280,7 @@ curl http://localhost:8188/debugger/history
 
 ### POST `/debugger/set_language`
 
-切換建議語系（請見語系切換章節）。
+切換 Doctor 的語系（請見語系切換章節）。
 
 ### POST `/doctor/analyze`
 

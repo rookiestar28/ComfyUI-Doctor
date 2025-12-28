@@ -81,7 +81,7 @@ SUGGESTION: OOM (Out Of Memory): Your GPU VRAM is full. Try:
 
 ### Active Mode (Debug Node)
 
-1. Right-click on the canvas → `Add Node` → `Debugger` → `Debug Console Print`
+1. Right-click on the canvas → `Add Node` → `Smart Debug Node`
 2. Connect the node inline with any connection (supports wildcard input `*`)
 3. Execute your workflow
 
@@ -163,7 +163,7 @@ Configure AI analysis in **ComfyUI Settings** → **Doctor** → **LLM Settings*
 
 #### Finding Available Models for Local LLMs
 
-When you select **Ollama** or **LMStudio** as the provider, an alert will automatically display available models:
+When you select **Ollama** or **LMStudio** as the provider and refresh the UI, a dialog box will automatically display available models:
 
 ![Model List Alert](./assets/model%20list.png)
 
@@ -171,10 +171,10 @@ Simply copy the desired model name and paste it into the **AI Model Name** field
 
 ### Using AI Analysis
 
-1. When an error occurs, open the Doctor panel
-2. Click the **✨ Analyze with AI** button on the error card
-3. Wait for the LLM to analyze the error (typically 3-10 seconds)
-4. Review the AI-generated debugging suggestions
+1. Automatically opens the Doctor panel when an error occurs.
+2. Review the built-in suggestions, or click the ✨ Analyze with AI button on the error card.
+3. Wait for the LLM to analyze the error (typically 3-10 seconds).
+4. Review the AI-generated debugging suggestions.
 
 **Security Note**: Your API key is transmitted securely from frontend to backend for the analysis request only. It is never logged or stored persistently.
 
@@ -212,8 +212,8 @@ You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear i
 
 ### 4. Suggestion Language
 
-**Function**: Language for diagnostic reports and suggestions.
-**Usage**: Supports English, Traditional Chinese, Simplified Chinese, and Japanese. Changes apply to new errors.
+**Function**: Language for diagnostic reports and Doctor suggestions.
+**Usage**: Currently supports English, Traditional Chinese, Simplified Chinese, and Japanese (more coming soon). Changes apply to new errors.
 
 ### 5. Enable Doctor (requires restart)
 
