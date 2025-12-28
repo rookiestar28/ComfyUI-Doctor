@@ -15,9 +15,9 @@ ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動
 - **除錯節點**：深度檢查工作流中的數據流動 (Tensor 形狀、數值統計等)
 - **錯誤歷史記錄**：透過 API 保留最近的錯誤緩衝區
 - **RESTful API**：提供六個端點供前端整合使用
-- ✨ **AI 智能分析**：一鍵呼叫 LLM 進行錯誤分析，支援 8+ 種 AI 提供商（OpenAI、DeepSeek、Groq、Gemini、Ollama、LMStudio 等）
-- 🎨 **互動式側邊欄介面**：視覺化錯誤面板，可定位節點並即時診斷
-- ⚙️ **靈活配置**：完整的設定面板，自訂各項行為
+- **AI 智能分析**：一鍵呼叫 LLM 進行錯誤分析，支援 8+ 種 AI 提供商（OpenAI、DeepSeek、Groq、Gemini、Ollama、LMStudio 等）
+- **互動式側邊欄介面**：視覺化錯誤面板，可定位節點並即時診斷
+- **靈活配置**：完整的設定面板，自訂各項行為
 
 ## 安裝
 
@@ -128,6 +128,8 @@ ComfyUI-Doctor 提供互動式側邊欄介面，用於即時錯誤監控和診�
 
 ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的除錯建議。
 
+![Analyze with AI](./assets/Analyze%20with%20AI.png)
+
 ### 支援的 AI 提供商
 
 #### 雲端服務
@@ -214,21 +216,21 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 **功能**：日誌攔截系統的總開關。
 **用途**：若需完全停用 Doctor 功能，可關閉此項（需重啟 ComfyUI 生效）。
 
-### 6. AI Provider (AI 提供商)
+### 6. LLM Provider (LLM 服務提供者)
 
-**功能**：從下拉選單中選擇您偏好的 LLM 服務提供商。
+**功能**：從下拉選單中選擇您偏好的 LLM 服務供應來源。
 **選項**：OpenAI、DeepSeek、Groq Cloud、Google Gemini、xAI Grok、OpenRouter、Ollama（本地）、LMStudio（本地）、Custom（自訂）。
-**用途**：選擇提供商後會自動填入對應的 Base URL。對於本地提供商（Ollama/LMStudio），系統會顯示可用模型的警示視窗。
+**用途**：選擇提供來源後會自動填入對應的 Base URL。對於本地提供商（Ollama/LMStudio），系統會提示可用模型清單的彈出視窗，若沒有出現，請嘗試重新整理 ComfyUI 的前端（瀏覽器）。
 
 ### 7. AI Base URL (AI 基礎網址)
 
 **功能**：LLM 服務的 API 端點。
-**用途**：選擇提供商後自動填入，但可針對自架或自訂端點進行修改。
+**用途**：選擇提供來源後自動填入，但可針對自架或自訂端點進行修改。
 
 ### 8. AI API Key (AI API 金鑰)
 
 **功能**：用於雲端 LLM 服務身份驗證的 API 金鑰。
-**用途**：雲端提供商（OpenAI、DeepSeek 等）必填。本地 LLM（Ollama、LMStudio）可留空。
+**用途**：雲端 LLM 提供來源（OpenAI、DeepSeek 等）必填。本地 LLM（Ollama、LMStudio）可留空。
 **安全性**：金鑰僅在分析請求時傳輸，不會被記錄或持久儲存。
 
 ### 9. AI Model Name (AI 模型名稱)
@@ -381,7 +383,6 @@ ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
   "traceback_timeout_seconds": 5.0,  // Traceback 逾時秒數
   "history_size": 20,             // 錯誤歷史記錄數量
   "default_language": "zh_TW",    // 預設語系
-  "enable_web_panel": true,       // 啟用 Web 面板（未來功能）
   "enable_api": true              // 啟用 API 端點
 }
 ```
@@ -412,7 +413,7 @@ ComfyUI-Doctor 可偵測並提供以下建議：
 
 1. **搭配 ComfyUI Manager**：自動安裝缺少的自訂節點
 2. **查看日誌檔案**：問題回報時，完整的 Traceback 都有記錄
-3. **API 整合**：可開發自訂前端來顯示錯誤建議
+3. **使用內建側邊欄**：點擊左側選單的 🏥 Doctor 圖標，即時查看診斷
 4. **節點除錯**：懷疑哪個節點有問題，就將除錯節點串接上去檢視數據
 
 ## 授權

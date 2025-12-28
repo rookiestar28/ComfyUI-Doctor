@@ -23,6 +23,120 @@ const SUPPORTED_LANGUAGES = [
     { value: "ja", text: "日本語" },
 ];
 
+/**
+ * Show a custom dialog with selectable/copyable text (replaces native alert).
+ * @param {string} title - Dialog title
+ * @param {string} content - Main content (can contain newlines)
+ * @param {string} footer - Footer text/hint
+ */
+function showSelectableDialog(title, content, footer = '') {
+    // Remove existing dialog if any
+    const existing = document.getElementById('doctor-selectable-dialog');
+    if (existing) existing.remove();
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'doctor-selectable-dialog';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
+
+    // Create dialog box
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: #1a1a2e;
+        border: 1px solid #444;
+        border-radius: 12px;
+        padding: 20px;
+        max-width: 500px;
+        max-height: 70vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        color: #eee;
+        font-family: system-ui, -apple-system, sans-serif;
+    `;
+
+    // Title
+    const titleEl = document.createElement('h3');
+    titleEl.style.cssText = 'margin: 0 0 15px 0; font-size: 16px; color: #fff;';
+    titleEl.textContent = title;
+    dialog.appendChild(titleEl);
+
+    // Content area (selectable)
+    const contentEl = document.createElement('pre');
+    contentEl.style.cssText = `
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 0 0 15px 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #ddd;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+        user-select: text;
+        cursor: text;
+        font-family: 'Consolas', 'Monaco', monospace;
+    `;
+    contentEl.textContent = content;
+    dialog.appendChild(contentEl);
+
+    // Footer hint
+    if (footer) {
+        const footerEl = document.createElement('div');
+        footerEl.style.cssText = 'font-size: 12px; color: #888; margin-bottom: 15px;';
+        footerEl.textContent = footer;
+        dialog.appendChild(footerEl);
+    }
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '確定';
+    closeBtn.style.cssText = `
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 10px 30px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        width: 100%;
+        transition: opacity 0.2s;
+    `;
+    closeBtn.onmouseover = () => closeBtn.style.opacity = '0.8';
+    closeBtn.onmouseout = () => closeBtn.style.opacity = '1';
+    closeBtn.onclick = () => overlay.remove();
+    dialog.appendChild(closeBtn);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Close on overlay click (not dialog)
+    overlay.onclick = (e) => {
+        if (e.target === overlay) overlay.remove();
+    };
+
+    // Close on Escape key
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
 app.registerExtension({
     name: "ComfyUI-Doctor",
 
@@ -154,7 +268,7 @@ app.registerExtension({
                     app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", newUrl);
                 }
 
-                // Auto-fetch and SHOW available models for local providers via alert
+                // Auto-fetch and SHOW available models for local providers via custom dialog
                 const isLocal = newVal === "ollama" || newVal === "lmstudio";
                 if (isLocal && newUrl) {
                     setTimeout(async () => {
@@ -168,12 +282,24 @@ app.registerExtension({
                             const result = await response.json();
                             if (result.success && result.models.length > 0) {
                                 const modelNames = result.models.map(m => m.id).join('\n• ');
-                                alert(`🤖 Available models (${result.models.length}):\n\n• ${modelNames}\n\n📋 Copy a model name to 'AI Model Name' field.`);
+                                showSelectableDialog(
+                                    `🤖 Available models (${result.models.length}):`,
+                                    `• ${modelNames}`,
+                                    `📋 Copy a model name to 'AI Model Name' field.`
+                                );
                             } else if (!result.success) {
-                                alert(`⚠️ Could not fetch models:\n${result.message}\n\nMake sure the service is running.`);
+                                showSelectableDialog(
+                                    '⚠️ Could not fetch models',
+                                    result.message,
+                                    'Make sure the service is running.'
+                                );
                             }
                         } catch (e) {
-                            alert(`⚠️ Failed to connect to ${newVal}:\n${e.message}\n\nMake sure the service is running on ${newUrl}`);
+                            showSelectableDialog(
+                                `⚠️ Failed to connect to ${newVal}`,
+                                e.message,
+                                `Make sure the service is running on ${newUrl}`
+                            );
                         }
                     }, 300);
                 }

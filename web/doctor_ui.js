@@ -214,6 +214,194 @@ export class DoctorUI {
         return div.innerHTML;
     }
 
+    /**
+     * Locate and highlight a node on the canvas.
+     * Uses ComfyUI's centralized approach similar to NodesMap.
+     * @param {string|number} nodeId - The node ID to locate
+     */
+    locateNodeOnCanvas(nodeId) {
+        console.log('[ComfyUI-Doctor] locateNodeOnCanvas called with:', nodeId);
+        try {
+            const numericId = typeof nodeId === 'string' ? parseInt(nodeId, 10) : nodeId;
+            if (isNaN(numericId)) {
+                console.warn('[ComfyUI-Doctor] Invalid node ID:', nodeId);
+                return;
+            }
+
+            if (!app || !app.graph || !app.canvas) {
+                console.error('[ComfyUI-Doctor] ComfyUI app, graph or canvas not available');
+                return;
+            }
+
+            const node = app.graph.getNodeById(numericId);
+            if (!node) {
+                console.warn('[ComfyUI-Doctor] Node not found in graph:', numericId);
+                return;
+            }
+
+            console.log('[ComfyUI-Doctor] Found node:', node.title || node.type, 'at pos:', node.pos);
+
+            // Method 1: Use selectNodes (ComfyUI's NodesMap approach) - jumps and selects
+            if (typeof app.canvas.selectNodes === 'function') {
+                app.canvas.selectNodes([node]);
+                console.log('[ComfyUI-Doctor] Used selectNodes method');
+            }
+
+            // Method 2: Center on node using offset calculation
+            const canvas = app.canvas;
+            const nodeX = node.pos[0] + (node.size[0] || 100) / 2;
+            const nodeY = node.pos[1] + (node.size[1] || 50) / 2;
+
+            // Get canvas dimensions
+            const canvasWidth = canvas.canvas?.width || canvas.bgcanvas?.width || 1920;
+            const canvasHeight = canvas.canvas?.height || canvas.bgcanvas?.height || 1080;
+            const scale = canvas.ds?.scale || 1;
+
+            // Calculate offset to center the node
+            const offsetX = canvasWidth / 2 / scale - nodeX;
+            const offsetY = canvasHeight / 2 / scale - nodeY;
+
+            if (canvas.ds) {
+                canvas.ds.offset[0] = offsetX;
+                canvas.ds.offset[1] = offsetY;
+            } else if (canvas.offset) {
+                canvas.offset[0] = offsetX;
+                canvas.offset[1] = offsetY;
+            }
+
+            // Ensure the node is selected (fallback)
+            if (!canvas.selected_nodes || !canvas.selected_nodes[node.id]) {
+                canvas.selected_nodes = {};
+                canvas.selected_nodes[node.id] = node;
+            }
+
+            // Redraw canvas
+            if (typeof canvas.setDirty === 'function') {
+                canvas.setDirty(true, true);
+            }
+            if (typeof canvas.draw === 'function') {
+                canvas.draw(true);
+            }
+
+            console.log('[ComfyUI-Doctor] Successfully located node:', numericId);
+        } catch (e) {
+            console.error('[ComfyUI-Doctor] Failed to locate node:', e);
+        }
+    }
+
+    /**
+     * Trigger AI analysis for an error.
+     * @param {object} data - Error data
+     * @param {string} resultContainerId - ID of the container to show results
+     * @param {HTMLElement} button - The button element to update state
+     */
+    async triggerAIAnalysis(data, resultContainerId, button) {
+        const resultContainer = document.getElementById(resultContainerId);
+
+        // Get LLM settings
+        const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
+        const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "";
+        const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
+        const language = app.ui.settings.getSettingValue("Doctor.General.Language", this.language);
+        const provider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
+
+        console.log('[ComfyUI-Doctor] AI Analysis settings:', { apiKey: apiKey ? '***' : 'empty', baseUrl, model, provider, language });
+
+        // Check if this is a local LLM (Ollama/LMStudio) - doesn't need API key
+        // Check both provider setting AND URL pattern
+        const isLocalProvider = provider === "ollama" || provider === "lmstudio";
+        const isLocalUrl = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
+        const isLocal = isLocalProvider || isLocalUrl;
+        console.log('[ComfyUI-Doctor] Is local LLM:', isLocal, '(provider:', isLocalProvider, ', url:', isLocalUrl, ')');
+
+        // Only require API key for non-local LLMs
+        if (!apiKey && !isLocal) {
+            if (resultContainer) {
+                resultContainer.innerHTML = `
+                    <div class="ai-response" style="border-color: #ff6b6b;">
+                        <h4 style="color: #ff6b6b;">⚠️ Missing API Key</h4>
+                        <div>Please configure your API Key in:</div>
+                        <div style="margin-top: 8px; font-weight: bold;">ComfyUI Settings → Doctor → AI API Key</div>
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        // Update button state
+        if (button) {
+            button.disabled = true;
+            button.textContent = "⏳ Analyzing...";
+        }
+
+        // Show loading state
+        if (resultContainer) {
+            resultContainer.innerHTML = `
+                <div class="ai-response">
+                    <h4>⏳ ${isLocal ? 'Connecting to local LLM...' : 'Connecting to AI...'}</h4>
+                    <div>Please wait, this may take a few seconds...</div>
+                </div>
+            `;
+        }
+
+        try {
+            const payload = {
+                error: data.last_error || "Unknown Error",
+                node_context: data.node_context,
+                api_key: apiKey,
+                base_url: baseUrl,
+                model: model,
+                language: language
+            };
+
+            const result = await DoctorAPI.analyzeError(payload);
+
+            if (resultContainer) {
+                if (result.analysis) {
+                    // Use textContent for security (prevent XSS)
+                    const analysisDiv = document.createElement('div');
+                    analysisDiv.className = 'ai-response';
+                    analysisDiv.innerHTML = '<h4>🤖 AI Analysis</h4>';
+                    const contentDiv = document.createElement('div');
+                    contentDiv.style.whiteSpace = 'pre-wrap';
+                    contentDiv.textContent = result.analysis;
+                    analysisDiv.appendChild(contentDiv);
+                    resultContainer.innerHTML = '';
+                    resultContainer.appendChild(analysisDiv);
+                } else if (result.error) {
+                    resultContainer.innerHTML = `
+                        <div class="ai-response" style="border-color: #ff6b6b;">
+                            <h4 style="color: #ff6b6b;">⚠️ Error</h4>
+                            <div>${this.escapeHtml(result.error)}</div>
+                        </div>
+                    `;
+                } else {
+                    resultContainer.innerHTML = `
+                        <div class="ai-response">
+                            <h4>No analysis returned</h4>
+                        </div>
+                    `;
+                }
+            }
+        } catch (e) {
+            console.error('[ComfyUI-Doctor] AI analysis failed:', e);
+            if (resultContainer) {
+                resultContainer.innerHTML = `
+                    <div class="ai-response" style="border-color: #ff6b6b;">
+                        <h4 style="color: #ff6b6b;">⚠️ Analysis Failed</h4>
+                        <div>${this.escapeHtml(e.message)}</div>
+                    </div>
+                `;
+            }
+        } finally {
+            // Reset button state
+            if (button) {
+                button.disabled = false;
+                button.textContent = "✨ Analyze with AI";
+            }
+        }
+    }
+
 
     // Note: LLM settings are now registered in doctor.js with Doctor.LLM.* IDs
 
@@ -524,26 +712,12 @@ export class DoctorUI {
         container.innerHTML = html;
         container.classList.add('error');
 
-        // Re-bind locate button
+        // Re-bind locate button using the class method
         const btn = container.querySelector('#doctor-locate-btn');
         if (btn) {
             btn.onclick = () => {
-                try {
-                    const nodeId = btn.getAttribute('data-node');
-                    const numericId = parseInt(nodeId, 10);
-                    if (isNaN(numericId)) {
-                        console.warn('[ComfyUI-Doctor] Invalid node ID:', nodeId);
-                        return;
-                    }
-                    app.canvas.centerOnNode(numericId);
-                    // Optional: visual flash logic
-                    const node = app.graph.getNodeById(numericId);
-                    if (node) {
-                        app.canvas.selectNode(node);
-                    }
-                } catch (e) {
-                    console.error('[ComfyUI-Doctor] Failed to locate node:', e);
-                }
+                const nodeId = btn.getAttribute('data-node');
+                this.locateNodeOnCanvas(nodeId);
             };
         }
 
@@ -553,11 +727,14 @@ export class DoctorUI {
         if (aiBtn) {
             aiBtn.onclick = async () => {
                 const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
-                const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
+                const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "";
                 const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
+                const provider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
 
-                // Check if this is a local LLM (Ollama/LMStudio)
-                const isLocal = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
+                // Check if this is a local LLM (Ollama/LMStudio) - check both provider and URL
+                const isLocalProvider = provider === "ollama" || provider === "lmstudio";
+                const isLocalUrl = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
+                const isLocal = isLocalProvider || isLocalUrl;
 
                 // Only require API key for non-local LLMs
                 if (!apiKey && !isLocal) {

@@ -191,7 +191,11 @@ try:
             language = data.get("language", "en")
 
             # Validate required parameters
-            if not api_key:
+            # Check if this is a local LLM (doesn't require API key)
+            is_local = is_local_llm_url(base_url)
+            
+            # Only require API key for non-local LLMs
+            if not api_key and not is_local:
                 return web.json_response({"error": "Missing API Key"}, status=401)
 
             if not error_text:
@@ -202,11 +206,23 @@ try:
             if len(error_text) > MAX_ERROR_LENGTH:
                 error_text = error_text[:MAX_ERROR_LENGTH] + "\n\n[... truncated ...]"
 
-            # Construct Prompt
+            # Construct Prompt - Enhanced for ComfyUI debugging
             system_prompt = (
-                "You are an expert Developer and Python Debugger specializing in ComfyUI. "
-                "Analyze the following error and provide a concise, actionable solution. "
-                f"Respond in {language}."
+                "You are an expert ComfyUI debugger and Python specialist. "
+                "ComfyUI is a node-based Stable Diffusion workflow editor where users connect nodes "
+                "(e.g., 'KSampler', 'VAEDecode', 'CheckpointLoaderSimple', 'CLIPTextEncode') to build image generation pipelines.\n\n"
+                "Common ComfyUI error categories:\n"
+                "- **OOM (Out of Memory)**: Reduce batch_size, lower resolution, use --lowvram or --cpu flags\n"
+                "- **Missing Models**: Check if model file exists in ComfyUI/models/ folder, verify filename spelling\n"
+                "- **Type Mismatch**: Ensure connected nodes have compatible data types (MODEL, CLIP, VAE, LATENT, IMAGE)\n"
+                "- **CUDA/cuDNN Errors**: Often driver version issues, try updating GPU drivers or PyTorch\n"
+                "- **Shape Mismatch**: Usually caused by incompatible image sizes or LoRA/model combinations\n"
+                "- **Module Not Found**: Missing Python dependencies, run 'pip install <module>' in ComfyUI environment\n\n"
+                "Analyze the error and provide:\n"
+                "1. **Root Cause** (1-2 sentences, be specific)\n"
+                "2. **Solution Steps** (numbered list, actionable commands if applicable)\n"
+                "3. **Prevention Tips** (optional, if the error is common)\n\n"
+                f"Respond in {language}. Be concise but thorough."
             )
             
             user_prompt = f"Error:\n{error_text}\n\n"

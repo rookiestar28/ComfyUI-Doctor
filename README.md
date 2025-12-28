@@ -15,9 +15,9 @@ A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically int
 - **Debug Inspector Node**: Deep inspection of data flowing through your workflow
 - **Error History**: Maintains a buffer of recent errors via API
 - **RESTful API**: Six endpoints for frontend integration
-- ✨ **AI-Powered Analysis**: One-click LLM error analysis with support for 8+ providers (OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more)
-- 🎨 **Interactive Sidebar UI**: Visual error panel with node location and instant diagnostics
-- ⚙️ **Flexible Configuration**: Comprehensive settings panel for behavior customization
+- **AI-Powered Analysis**: One-click LLM error analysis with support for 8+ providers (OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more)
+- **Interactive Sidebar UI**: Visual error panel with node location and instant diagnostics
+- **Flexible Configuration**: Comprehensive settings panel for behavior customization
 
 ---
 
@@ -131,6 +131,8 @@ Click the **🏥 Doctor** button in the ComfyUI menu (left sidebar) to open the 
 ## AI-Powered Error Analysis
 
 ComfyUI-Doctor integrates with popular LLM services to provide intelligent, context-aware debugging suggestions.
+
+![Analyze with AI](./assets/Analyze%20with%20AI.png)
 
 ### Supported AI Providers
 
@@ -385,7 +387,6 @@ Create `config.json` to customize behavior:
   "traceback_timeout_seconds": 5.0,
   "history_size": 20,
   "default_language": "zh_TW",
-  "enable_web_panel": true,
   "enable_api": true
 }
 ```
@@ -397,7 +398,6 @@ Create `config.json` to customize behavior:
 - `traceback_timeout_seconds`: Timeout for incomplete tracebacks
 - `history_size`: Number of errors to keep in history
 - `default_language`: Default suggestion language
-- `enable_web_panel`: Enable web panel (future feature)
 - `enable_api`: Enable API endpoints
 
 ---
@@ -430,7 +430,7 @@ And more...
 
 1. **Pair with ComfyUI Manager**: Install missing custom nodes automatically
 2. **Check log files**: Full tracebacks are recorded for issue reporting
-3. **API Integration**: Build custom frontends to display error suggestions
+3. **Use the built-in sidebar**: Click the 🏥 Doctor icon in the left menu for real-time diagnostics
 4. **Node Debugging**: Connect Debug nodes to inspect suspicious data flow
 
 ---
