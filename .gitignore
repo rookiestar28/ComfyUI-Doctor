@@ -1,0 +1,9 @@
+﻿__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.vscode/
+REFERENCE/*
+logs/
+!logs/.gitkeep

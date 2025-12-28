@@ -1,0 +1,20 @@
+[project]
+name = "comfyui-doctor"
+description = "A continuous, real-time runtime diagnostics suite for ComfyUI. Automatic error interception, intelligent fix suggestions, and deep data flow inspection."
+version = "1.0.0"
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.10"
+
+# No external dependencies required - uses only Python stdlib + ComfyUI's bundled packages
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/rookiestar28/ComfyUI-Doctor"
+Documentation = "https://github.com/rookiestar28/ComfyUI-Doctor#readme"
+"Bug Tracker" = "https://github.com/rookiestar28/ComfyUI-Doctor/issues"
+
+[tool.comfy]
+PublisherId = "rookiestar"
+DisplayName = "ComfyUI Doctor"
+Icon = "🏥"
