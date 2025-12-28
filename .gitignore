@@ -7,3 +7,5 @@
 REFERENCE/*
 logs/*
 !logs/.gitkeep
+# Planning - private files
+.planning/phase1_*.md
