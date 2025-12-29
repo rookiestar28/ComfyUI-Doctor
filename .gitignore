@@ -8,5 +8,7 @@ REFERENCE/*
 logs/*
 !logs/.gitkeep
 # Planning - private files
-.planning/phase*.md
-.planning/PHASE*.md
+.planning/
+.claude/
+.env
+.pytest_cache/

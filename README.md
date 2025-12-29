@@ -1,6 +1,6 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | English | [📋 Roadmap & Development Status](.planning/ROADMAP.md)
+[繁體中文](README.zh-TW.md) | English | [📋 Roadmap & Development Status](ROADMAP.md)
 
 A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Features 19+ error pattern recognition, i18n support for Multilingual, persistent log history, and RESTful API for frontend integration.
 

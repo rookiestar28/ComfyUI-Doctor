@@ -65,13 +65,20 @@ graph TD
 6. **Frontend integration** - Native ComfyUI Settings API, WebSocket `execution_error` subscription
 7. **Internationalization** - 4 languages, extensible `SUGGESTIONS` structure
 
-### 2.2 Potential Issues ⚠️ → ✅ ALL FIXED
+### 2.2 Outstanding Risks (new)
 
-- [x] **P1**: Overly broad `except Exception: pass` statements → *Fixed in Phase 1 (R1)*
-- [x] **P2**: Race conditions on `_analysis_history` deque and `SmartLogger._instances` → *Fixed in Phase 1 (R2)*
-- [x] **P3**: Resource leak risks with `aiohttp.ClientSession` per-request creation → *Fixed in Phase 2 (R3)*
-- [x] **P4**: No XSS protection on AI analysis results in frontend → *Fixed in Phase 1 (R4)*
-- [x] **P5**: Missing API endpoint tests and frontend tests → *Fixed in Phase 1 (T1) + Phase 2*
+- 🔴 **S4**: Chat markdown rendering (LLM/user output) lacks sanitization → sidebar/chat can be XSSed by crafted messages.
+- 🟡 **R9**: SSE stream parser assumes chunk-aligned `data:` lines → needs buffered newline framing to avoid truncated/garbled chat tokens.
+- 🟡 **R10**: Chat uses a stale snapshot of LLM settings (API key/base URL/model) until reload → update settings must hot-sync before send.
+- 🟢 **S5**: CDN-only `marked`/`highlight.js` without pinning or local fallback → supply-chain/offline risk.
+
+### 2.3 Resolved Issues ✅
+
+- ✅ **P1**: Overly broad `except Exception: pass` statements → *Fixed in Phase 1 (R1)*
+- ✅ **P2**: Race conditions on `_analysis_history` deque and `SmartLogger._instances` → *Fixed in Phase 1 (R2)*
+- ✅ **P3**: Resource leak risks with `aiohttp.ClientSession` per-request creation → *Fixed in Phase 2 (R3)*
+- ✅ **P4**: No XSS protection on AI analysis results in frontend → *Fixed in Phase 1 (R4)*
+- ✅ **P5**: Missing API endpoint tests and frontend tests → *Fixed in Phase 1 (T1) + Phase 2*
 
 ---
 
@@ -95,7 +102,12 @@ graph TD
 - [x] **R2**: Thread safety hardening - 🔴 High ✅ *Completed*
 - [x] **R3**: aiohttp session reuse - 🟡 Medium ✅ *Completed (Phase 2)*
 - [x] **R4**: XSS protection - 🔴 High ✅ *Completed*
+- [ ] **R9**: SSE streaming chunk framing (buffer `data:` lines) - 🔴 High
+- [ ] **R10**: Hot-sync LLM settings for chat (API key/base URL/model) - 🟡 Medium
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
+- [ ] **R8**: Smart workflow truncation for large graphs - 🟡 Medium
+- [ ] **R6**: Network retry logic with exponential backoff - 🟢 Low
+- [ ] **R7**: Rate limiting for LLM API calls - 🟢 Low
 
 ### 3.3 Testing
 
@@ -103,14 +115,24 @@ graph TD
 - [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
+- [ ] **T5**: Online API integration tests (OpenAI, DeepSeek) - 🟡 Medium
+- [ ] **T6**: Fix test import issues (relative import errors) - 🟢 Low
 
-### 3.4 Documentation
+### 3.4 Security Enhancements
+
+- [ ] **S4**: Sanitize chat markdown/HTML rendering (LLM + user output) - 🔴 High
+- [ ] **S2**: Add SSRF protection for Base URL validation - 🟡 Medium
+- [ ] **S5**: Bundle/pin markdown & highlight assets with local fallback (no CDN-only) - 🟡 Medium
+- [ ] **S1**: Add Content-Security-Policy headers - 🟢 Low
+- [ ] **S3**: Implement telemetry (opt-in, anonymous) - 🟢 Low
+
+### 3.5 Documentation
 
 - [ ] **D1**: OpenAPI/Swagger spec - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **D2**: Architecture documentation - 🟢 Low
 - [ ] **D3**: Contribution guide - 🟢 Low
 
-### 3.5 Architecture Improvements (from Cordon analysis)
+### 3.6 Architecture Improvements (from Cordon analysis)
 
 *Sorted by complexity (simple → complex):*
 
@@ -121,45 +143,54 @@ graph TD
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **A6**: Refactor analyzer.py to Pipeline pattern (capture→parse→classify→suggest) - 🔴 High ⚠️ *Use dev branch*
 
-> [!IMPORTANT]
-> Items marked with ⚠️ should be developed on a separate `dev` branch to prevent breaking existing functionality. Merge to `main` only after thorough testing.
+> [Note]
+> Items marked with ⚠️ should be developed on a separate `dev` branch. Merge to `main` only after thorough testing.
 
 ---
 
 ## 4. Priority Phases
 
-### Phase 1: Immediate Improvements (1-2 weeks) ✅ COMPLETED
+### Phase 1: Immediate Improvements ✅ COMPLETED
 
 1. **R1** Error handling refactor
 2. **R2** Thread safety
 3. **R4** XSS protection
 4. **T1** API tests
 
-### Phase 2: Feature Enhancement (2-4 weeks) ✅ COMPLETED
+### Phase 2: Feature Enhancement ✅ COMPLETED
 
-1. **F3** Workflow context ✅
-2. **F1** History persistence ✅
-3. **R3** Session reuse ✅
-4. **F6** Provider quick switch ⏳ *Deferred to next cycle*
+1. ✅ **F3** Workflow context capture on error
+2. ✅ **F1** Error history persistence (SQLite/JSON)
+3. ✅ **R3** aiohttp session reuse
+4. ⏳ **F6** Multi-LLM provider quick switch *Deferred to Phase 3*
 
-### Phase 3: Advanced Features (1-2 months)
+### Phase 3: Advanced Features
 
-1. **F8** Settings panel integration into sidebar
-2. **F9** Expand language support (de, fr, it, es, ko)
-3. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
-4. **F4** Statistics dashboard
-5. **T2** Frontend tests
-6. **A4-A5** Dataclass + Protocol refactoring
+1. **S4** Chat markdown sanitization (sidebar/chat) - **PRIORITY**
+2. **R9** SSE stream framing for `/doctor/chat` (buffer `data:` lines)
+3. **R10** Live-sync LLM settings (API key/base URL/model) into chat sends
+4. **T5** Online API integration tests (OpenAI, DeepSeek)
+5. **T6** Fix test import issues
+6. **S2** SSRF protection for base URL validation
+7. **S5** Local bundle/pinned versions for `marked`/`highlight.js` (CDN fallback)
+8. **F8** Settings panel integration into sidebar
+9. **F9** Expand language support (de, fr, it, es, ko)
+10. **R8** Smart workflow truncation for large graphs
+11. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
+12. **F4** Statistics dashboard
+13. **T2** Frontend tests
 
-### Phase 4: Major Refactoring (2+ months)
+### Phase 4: Major Refactoring
 
 1. **A6** Pipeline architecture refactor
-2. **F2** Pattern hot-reload
-3. **D1-D3** Full documentation
+2. **R6-R7** Network retry logic & Rate limiting
+3. **S1 & S3** Security enhancements (CSP, telemetry)
+4. **F2** Pattern hot-reload
+5. **D1-D3** Full documentation
 
 ---
 
-## 5. v2.0 Major Feature: LLM Debug Chat Interface 🆕
+## 5. v2.0 Major Feature: LLM Debug Chat Interface
 
 > **Target Version**: v2.0.0
 > **Status**: ✅ Core Features Complete (Phase 2.0-C: Production Fixes)
@@ -180,6 +211,7 @@ Transform the single-shot analysis into a context-aware, multi-turn AI coding as
     - **ContextInfo**: A dedicated sub-component to display currently selected node details.
 
 2. **Global State Management**
+
     - **DoctorContext**: A centralized state manager (Pub/Sub pattern) to handle:
         - `messages`: Conversation history
         - `sessionId`: Current active session UUID
@@ -214,22 +246,24 @@ Transform the single-shot analysis into a context-aware, multi-turn AI coding as
 - ✅ **Intent System**: Update frontend to send `intent` metadata (e.g., "Explain this node").
 - ✅ **Regenerate & Stop**: Add control buttons to the chat interface.
 
-#### Phase 2.0-C: Production Fixes & UX Enhancement ✅ COMPLETED (2025-12-29)
+#### Phase 2.0-C: Production Fixes & UX Enhancement ✅ COMPLETED
 
 **Critical Architectural Redesign:**
+
 - ✅ **Sidebar Integration**: Completely redesigned chat UI architecture
   - Abandoned floating ChatPanel approach → Integrated into ComfyUI left sidebar
-  - Followed ComfyUI-Copilot's component structure pattern
   - Created simplified flex-based layout: Header → Error Context → Messages (flex-1) → Input (sticky bottom)
   - Fixed button click handler using `querySelector` on parent element instead of global `getElementById`
   - Added comprehensive debugging logs throughout the event flow
 
 **Root Cause Analysis:**
+
 - Original issue: Chat input box invisible due to improper component insertion
 - User explicitly requested: "Stop trying! Analyze ComfyUI-Copilot and integrate into LEFT SIDEBAR"
 - Solution: Complete UI rewrite in [doctor.js](../web/doctor.js) lines 482-541
 
 **Critical Bug Fixes:**
+
 - ✅ **Chat UI Visibility**: Fixed sidebar chat interface integration
   - Created proper flex container hierarchy in `doctor.js`
   - Error context area with collapsible "Analyze with AI" button
@@ -252,8 +286,9 @@ Transform the single-shot analysis into a context-aware, multi-turn AI coding as
   - Removed old "Analyze with AI" button from right-side error popup panel
   - Added hint text directing users to sidebar: "💡 Open the Doctor sidebar (left panel) to analyze with AI"
 
-**ComfyUI-Copilot Architecture Integration:**
-- ✅ **Component Structure**: Followed Copilot's React-like patterns (implemented in Vanilla JS)
+**Refactor the user interface:**
+
+- ✅ **Component Structure**: Followed React-like patterns (implemented in Vanilla JS)
   - Flex-based full-height container
   - Sticky bottom input (position: sticky; bottom: 0)
   - Proper state management with `this.currentErrorData`
@@ -278,6 +313,7 @@ Transform the single-shot analysis into a context-aware, multi-turn AI coding as
   - Graceful handling of user cancellation
 
 **Future Enhancements:**
+
 - [ ] **Session Persistence**: Save/Restore chat history using `localStorage`.
 - [ ] **Quick Actions**: Add "Explain" button to the selected node context menu.
 - [ ] **Response Polishing**: Typewriter effect enhancement.
@@ -379,7 +415,7 @@ graph TD
 
 ---
 
-## 二、架構強健性評估
+## 二、架構強健性
 
 ### 2.1 優點 ✅
 
@@ -414,43 +450,20 @@ graph TD
    - 4 語言支援，結構化翻譯字典
    - 可擴展的 `SUGGESTIONS` 結構
 
-### 2.2 潛在問題與改進點 ⚠️
+### 2.2 未解決風險（新增）
 
-#### P1: 錯誤處理
+- 🔴 **S4**: 聊天 Markdown 渲染（LLM/用戶輸出）缺少淨化 → 側邊欄/聊天可被插入惡意腳本（XSS）。
+- 🟡 **R9**: SSE 串流解析假設資料行完整 → 需要以換行緩衝處理 `data:` 行，避免分塊截斷或內容錯亂。
+- 🟡 **R10**: 聊天使用舊的 LLM 設定快照（API Key/Base URL/Model）直到重新整理 → 發送前需熱同步設定。
+- 🟢 **S5**: `marked`/`highlight.js` 只有 CDN 且未鎖定版本，也無本地 fallback → 供應鏈與離線風險。
 
-| 問題 | 位置 | 建議 |
-|------|------|------|
-| `except Exception: pass` 過於寬泛 | `logger.py:184`, `__init__.py:56` | 至少記錄到 log 或使用特定 Exception |
-| `api_verify_key` 中 `data` 可能未定義 | `__init__.py:364` | 使用 `.get()` 前先確認或用 try block 外的預設值 |
+### 2.3 已修復問題 
 
-#### P2: 競態條件（Race Conditions）
-
-| 問題 | 位置 | 建議 |
-|------|------|------|
-| `_analysis_history` 是 `deque`，多執行緒寫入可能不安全 | `logger.py:269` | 使用 `threading.Lock` 保護或改用 `collections.deque` with `maxlen` + 單一寫入者模式 |
-| `SmartLogger._instances` 無鎖保護 | `logger.py:146` | 加入鎖保護或確保單一執行緒操作 |
-
-#### P3: 資源洩漏風險
-
-| 問題 | 位置 | 建議 |
-|------|------|------|
-| `prestartup_script.py` 的 `_log_file` 僅在 finalizer 處理 | `prestartup_script.py:45` | 加入顯式 `close()` 方法 |
-| `aiohttp.ClientSession` 在每次請求建立 | `__init__.py:258,341,403` | 考慮複用 session 或確保例外時正確關閉 |
-
-#### P4: 前端穩健性
-
-| 問題 | 位置 | 建議 |
-|------|------|------|
-| `locateNodeOnCanvas` 依賴 `app.graph._nodes_by_id` 內部 API | `doctor_ui.js:243` | 加入 fallback 或檢查 API 存在 |
-| 無 XSS 防護於 AI analysis 結果 | `doctor_ui.js:398` | 確保 `innerHTML` 輸入已淨化 |
-
-#### P5: 測試覆蓋
-
-| 問題 | 說明 |
-|------|------|
-| 無 API 端點測試 | 缺少 `/doctor/analyze`, `/doctor/verify_key` 等 API 的 mock 測試 |
-| 無前端測試 | JavaScript 無單元測試 |
-| 整合測試依賴 mock | `test_integrations.py` mock 了 torch/server，無法測真實整合 |
+- ✅ **P1**: `except Exception: pass` 過於寬泛 → *已於 Phase 1 (R1) 修復*
+- ✅ **P2**: `_analysis_history` deque 與 `SmartLogger._instances` 的競態條件 → *已於 Phase 1 (R2) 修復*
+- ✅ **P3**: `aiohttp.ClientSession` 每次請求建立造成的資源洩漏風險 → *已於 Phase 2 (R3) 修復*
+- ✅ **P4**: 前端 AI 分析結果缺少 XSS 防護 → *已於 Phase 1 (R4) 修復*
+- ✅ **P5**: 缺少 API 端點測試與前端測試 → *已於 Phase 1 (T1) + Phase 2 修復*
 
 ---
 
@@ -458,151 +471,69 @@ graph TD
 
 ### 3.1 功能擴展（Feature）
 
-- [ ] **F1: 錯誤歷史持久化**
-  - 將 `_analysis_history` 寫入 SQLite 或 JSON 檔
-  - 支援跨重啟查看歷史
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **F2: 錯誤模式熱更新**
-  - 從外部 JSON/YAML 載入 `PATTERNS`
-  - 允許使用者自訂錯誤模式
-  - 優先級：🟢 Low
-
-- [ ] **F3: Workflow 上下文擷取**
-  - 在錯誤發生時捕獲當前 workflow JSON
-  - 提供給 LLM 更完整的上下文
-  - 優先級：🔴 High ⚠️ *使用 dev branch 開發*
-
-- [ ] **F4: 錯誤統計儀表板**
-  - 按節點/錯誤類型分組統計
-  - 視覺化常見錯誤熱點
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **F5: 節點健康評分**
-  - 追蹤各 custom_node 的錯誤頻率
-  - 標記高風險節點
-  - 優先級：🟢 Low
-
-- [ ] **F6: 多 LLM Provider 快速切換**
-  - 在 UI 中提供下拉選單快速切換 preset
-  - 預設配置：OpenAI/DeepSeek/Ollama
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **F7: 錯誤自動修復建議執行**
-  - 對於特定錯誤（如 pip install 缺失模組），提供一鍵執行
-  - 需評估安全性風險
-  - 優先級：🟢 Low
-
-- [ ] **F8: 設定面板整合至側邊欄介面**
-  - 將 ComfyUI 設定面板的 Doctor 配置項目移至側邊欄
-  - 提供更流暢的使用者體驗，無需切換分頁
-  - 優先級：🟡 Medium
-
-- [ ] **F9: 擴展多語系支援**
-  - 新增德語 (de)、法語 (fr)、義大利語 (it)、西班牙語 (es)、韓語 (ko) 辭典
-  - 更新 `i18n.py` 的 `SUGGESTIONS` 結構
-  - 優先級：🟡 Medium
+- [x] **F1**: 錯誤歷史持久化 (SQLite/JSON) - 🟡 Medium ✅ *已於 Phase 2 完成*
+- [ ] **F2**: 錯誤模式熱更新（從外部 JSON/YAML 載入） - 🟢 Low
+- [x] **F3**: Workflow 上下文擷取 - 🔴 High ✅ *已於 Phase 2 完成*
+- [ ] **F4**: 錯誤統計儀表板 - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **F5**: 節點健康評分 - 🟢 Low
+- [ ] **F6**: 多 LLM Provider 快速切換 - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **F7**: 錯誤自動修復建議執行（一鍵修復） - 🟢 Low
+- [ ] **F8**: 設定面板整合至側邊欄介面 - 🟡 Medium
+- [ ] **F9**: 擴展多語系支援（德、法、義、西、韓語） - 🟡 Medium
 
 ### 3.2 穩健性改進（Robustness）
 
-- [ ] **R1: 全面的錯誤處理重構**
-  - 替換所有 `except: pass` 為特定錯誤處理
-  - 加入日誌記錄
-  - 優先級：🔴 High
-
-- [ ] **R2: 執行緒安全加固**
-  - 為 `_analysis_history` 加入鎖
-  - 審計所有共享狀態
-  - 優先級：🔴 High
-
-- [ ] **R3: Session 複用**
-  - 為 LLM API 呼叫建立可複用的 `aiohttp.ClientSession`
-  - 加入連線池管理
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **R4: XSS 防護**
-  - 確保所有 `innerHTML` 使用都經過淨化
-  - 對 LLM 回應使用 markdown 渲染器
-  - 優先級：🔴 High
-
-- [ ] **R5: 前端錯誤邊界**
-  - 加入 try-catch 於關鍵前端函數
-  - 顯示友善錯誤訊息而非靜默失敗
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
+- [x] **R1**: 全面的錯誤處理重構 - 🔴 High ✅ *已完成*
+- [x] **R2**: 執行緒安全加固 - 🔴 High ✅ *已完成*
+- [x] **R3**: aiohttp session 複用 - 🟡 Medium ✅ *已於 Phase 2 完成*
+- [x] **R4**: XSS 防護 - 🔴 High ✅ *已完成*
+- [ ] **R9**: SSE 串流分塊重組（以換行緩衝 `data:` 行）- 🔴 High
+- [ ] **R10**: 聊天 LLM 設定熱同步（API Key/Base URL/Model）- 🟡 Medium
+- [ ] **R5**: 前端錯誤邊界 - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **R8**: 大型工作流智能截斷 - 🟡 Medium
+- [ ] **R6**: 網路重試邏輯（exponential backoff） - 🟢 Low
+- [ ] **R7**: LLM API 呼叫速率限制 - 🟢 Low
 
 ### 3.3 測試擴充（Testing）
 
-- [ ] **T1: API 端點單元測試**
-  - 使用 `aiohttp.test_utils` 測試所有端點
-  - 包含正常/錯誤回應
-  - 優先級：🔴 High
+- [x] **T1**: API 端點單元測試 - 🔴 High ✅ *已完成*
+- [ ] **T2**: 前端互動測試（Playwright） - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **T3**: 端對端整合測試 - 🟢 Low
+- [ ] **T4**: 壓力測試 - 🟢 Low
+- [ ] **T5**: 線上 API 整合測試（OpenAI、DeepSeek） - 🟡 Medium
+- [ ] **T6**: 修復測試導入問題 - 🟢 Low
 
-- [ ] **T2: 前端互動測試**
-  - 使用 Playwright 或 Puppeteer
-  - 測試 Settings 面板、Sidebar、AI 分析
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
+### 3.4 安全性增強（Security）
 
-- [ ] **T3: 端對端整合測試**
-  - 在真實 ComfyUI 環境中執行
-  - 模擬錯誤並驗證捕獲
-  - 優先級：🟢 Low
+- [ ] **S4**: 聊天 Markdown/HTML 渲染淨化（LLM/用戶輸出）- 🔴 High
+- [ ] **S2**: SSRF 防護（Base URL 驗證） - 🟡 Medium
+- [ ] **S5**: `marked`/`highlight.js` 本地 bundle 或鎖版 + fallback（避免只靠 CDN）- 🟡 Medium
+- [ ] **S1**: Content-Security-Policy 標頭 - 🟢 Low
+- [ ] **S3**: 遙測數據收集（匿名、可選） - 🟢 Low
 
-- [ ] **T4: 壓力測試**
-  - 高頻 stdout 輸出不阻塞
-  - 大量錯誤歷史記錄效能
-  - 優先級：🟢 Low
+### 3.5 文件與 DX（Documentation）
 
-### 3.4 文件與 DX（Documentation）
+- [ ] **D1**: OpenAPI/Swagger 規格文件 - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **D2**: 架構文件 - 🟢 Low
+- [ ] **D3**: 貢獻指南 - 🟢 Low
 
-- [ ] **D1: API 文件**
-  - 為所有 API 端點撰寫 OpenAPI/Swagger 規格
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **D2: 架構文件**
-  - 繪製完整資料流圖
-  - 說明各模組責任
-  - 優先級：🟢 Low
-
-- [ ] **D3: 貢獻指南**
-  - 如何新增錯誤模式
-  - 如何新增語言
-  - 如何新增 LLM Provider
-  - 優先級：🟢 Low
-
-### 3.5 架構改進（參考 Cordon 專案）
+### 3.6 架構改進（參考 Cordon 專案）
 
 *按複雜度排序（簡單 → 複雜）：*
 
-- [ ] **A1: 加入 py.typed + mypy 配置**
-  - 在 pyproject.toml 加入嚴格型別檢查
-  - 優先級：🟢 Low
+- [ ] **A1**: py.typed + mypy 配置 - 🟢 Low
+- [ ] **A2**: 整合 ruff linter - 🟢 Low
+- [ ] **A3**: pytest-cov 覆蓋率報告 - 🟢 Low
+- [ ] **A4**: NodeContext 改為 frozen dataclass - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **A5**: 建立 LLMProvider Protocol - 🟡 Medium ⚠️ *使用 dev branch 開發*
+- [ ] **A6**: 重構 analyzer.py 為 Pipeline 架構 - 🔴 High ⚠️ *使用 dev branch 開發*
 
-- [ ] **A2: 整合 ruff linter**
-  - 取代 flake8/isort，統一程式碼風格
-  - 優先級：🟢 Low
-
-- [ ] **A3: 加入 pytest-cov 覆蓋率報告**
-  - 使用 `--cov-report=term-missing` 顯示未覆蓋行
-  - 優先級：🟢 Low
-
-- [ ] **A4: NodeContext 改為 frozen dataclass**
-  - 使用 `@dataclass(frozen=True)` + `__post_init__` 驗證
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **A5: 建立 LLMProvider Protocol**
-  - 統一 OpenAI/Ollama/DeepSeek 介面
-  - 優先級：🟡 Medium ⚠️ *使用 dev branch 開發*
-
-- [ ] **A6: 重構 analyzer.py 為 Pipeline 架構**
-  - 採用 capture→parse→classify→suggest 管線模式
-  - 優先級：🔴 High ⚠️ *使用 dev branch 開發*
-
-> [!IMPORTANT]
-> 標註 ⚠️ 的項目應在獨立的 `dev` 分支上開發，以避免破壞現有功能。完成充分測試後再合併至 `main`。
+> [注意]
+> 標註 ⚠️ 的項目應在獨立的 `dev` 分支上開發，完成充分測試後再合併至 `main`。
 
 ---
 
-## 四、優先級排序建議
+## 四、優先級排序
 
 ### Phase 1: 立即改進（1-2 週）✅ 已完成
 
@@ -611,27 +542,36 @@ graph TD
 3. **R4** XSS 防護
 4. **T1** API 測試
 
-### Phase 2: 功能增強（2-4 週）
+### Phase 2: 功能增強（2-4 週）✅ 已完成
 
-1. **F3** Workflow 上下文
-2. **F1** 歷史持久化
-3. **R3** Session 複用
-4. **F6** Provider 快速切換
+1. ✅ **F3** Workflow 上下文擷取
+2. ✅ **F1** 錯誤歷史持久化（SQLite/JSON）
+3. ✅ **R3** aiohttp Session 複用
+4. ⏳ **F6** 多 LLM Provider 快速切換 *延後至 Phase 3*
 
 ### Phase 3: 進階功能（1-2 月）
 
-1. **F8** 設定面板整合至側邊欄
-2. **F9** 擴展多語系支援（de, fr, it, es, ko）
-3. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
-4. **F4** 統計儀表板
-5. **T2** 前端測試
-6. **A4-A5** Dataclass + Protocol 重構
+1. **S4** 聊天 markdown 淨化（側邊欄/聊天）- **優先**
+2. **R9** `/doctor/chat` SSE 串流換行重組（緩衝 `data:` 行）
+3. **R10** 聊天 LLM 設定熱同步（API Key/Base URL/Model）
+4. **T5** 線上 API 整合測試（OpenAI、DeepSeek）
+5. **T6** 修復測試導入問題
+6. **S2** SSRF 防護（Base URL 驗證）
+7. **S5** `marked`/`highlight.js` 本地 bundle / 鎖版 + fallback（避免只靠 CDN）
+8. **F8** 設定面板整合至側邊欄
+9. **F9** 擴展多語系支援（de, fr, it, es, ko）
+10. **R8** 大型工作流智能截斷
+11. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
+12. **F4** 統計儀表板
+13. **T2** 前端測試
 
-### Phase 4: 重大重構（2+ 月）
+### Phase 4: 重大重構
 
 1. **A6** Pipeline 架構重構
-2. **F2** 模式熱更新
-3. **D1-D3** 完整文件
+2. **R6-R7** 網路重試邏輯與速率限制
+3. **S1 & S3** 安全性增強（CSP、遙測）
+4. **F2** 模式熱更新
+5. **D1-D3** 完整文件
 
 ---
 
@@ -775,7 +715,7 @@ __init__.py             # 新增 /doctor/chat 串流端點
 
 ### 5.7 實作階段
 
-#### Phase 2.0-A：基礎對話（1-2 週）
+#### Phase 2.0-A：基礎對話
 
 | 任務 | 估時 | 依賴 |
 |------|------|------|
@@ -786,7 +726,7 @@ __init__.py             # 新增 /doctor/chat 串流端點
 | 後端 `/doctor/chat` 端點（非串流）| 3h | - |
 | 前後端整合測試 | 2h | 以上全部 |
 
-#### Phase 2.0-B：串流與進階（1-2 週）
+#### Phase 2.0-B：串流與進階
 
 | 任務 | 估時 | 依賴 |
 |------|------|------|
@@ -797,7 +737,7 @@ __init__.py             # 新增 /doctor/chat 串流端點
 | 快速追問按鈕 | 2h | - |
 | 程式碼複製按鈕 | 1h | highlight.js |
 
-#### Phase 2.0-C：優化與測試（1 週）
+#### Phase 2.0-C：優化與測試
 
 | 任務 | 估時 | 依賴 |
 |------|------|------|
@@ -834,4 +774,4 @@ __init__.py             # 新增 /doctor/chat 串流端點
 1. **穩健性**：加強錯誤處理、執行緒安全、XSS 防護 ✅ 已完成
 2. **可測試性**：補齊 API 與前端測試
 3. **功能深度**：Workflow 上下文整合、歷史持久化
-4. **v2.0 核心功能**：LLM 除錯對話介面，提供多輪對話式除錯體驗 🆕
+4. **v2.0 核心功能**：LLM 除錯對話介面，提供多輪對話式除錯體驗 

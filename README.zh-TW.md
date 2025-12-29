@@ -1,6 +1,6 @@
 # ComfyUI-Doctor
 
-繁體中文 | [English](README.md) | [📋 專案進度與開發藍圖](.planning/ROADMAP.md)
+繁體中文 | [English](README.md) | [📋 專案進度與開發藍圖](ROADMAP.md)
 
 ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動後的所有終端機輸出，捕捉完整的 Python 追蹤回溯 (Tracebacks)，並透過節點層級 (Node-level) 的上下文提取，提供具優先順序的修復建議。內建 19 種以上的錯誤模式識別、支援多國語言國際化 (i18n)、具備日誌持久化功能，並提供便於前端整合的 RESTful API。
 
