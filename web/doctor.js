@@ -479,29 +479,60 @@ app.registerExtension({
                         document.head.appendChild(style);
                     }
 
-                    // Create sidebar content
+                    // Create sidebar content - SIMPLIFIED STRUCTURE following ComfyUI-Copilot
                     container.innerHTML = '';
-                    const content = document.createElement('div');
-                    content.className = 'doctor-sidebar-content';
-                    content.id = 'doctor-sidebar-tab-content';
-                    content.innerHTML = `
-                        <h3>
-                            <span class="status-indicator" id="doctor-tab-status"></span>
-                            🏥 ComfyUI Doctor
-                        </h3>
-                        <div id="doctor-tab-error-container">
-                            <div class="no-errors">
-                                <div class="icon">✅</div>
-                                <div>No errors detected</div>
-                                <div style="margin-top: 5px; font-size: 12px;">System running smoothly</div>
-                            </div>
+                    container.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--bg-color, #1a1a2e);';
+
+                    // HEADER
+                    const header = document.createElement('div');
+                    header.style.cssText = 'padding: 12px 15px; border-bottom: 1px solid var(--border-color, #444); display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+                    header.innerHTML = `
+                        <span class="status-indicator" id="doctor-tab-status" style="width: 10px; height: 10px; border-radius: 50%; background: #4caf50; display: inline-block;"></span>
+                        <span style="font-size: 16px; font-weight: bold; color: var(--fg-color, #eee);">🏥 Doctor</span>
+                    `;
+                    container.appendChild(header);
+
+                    // ERROR CONTEXT AREA (shows error details when available)
+                    const errorContext = document.createElement('div');
+                    errorContext.id = 'doctor-error-context';
+                    errorContext.style.cssText = 'flex-shrink: 0; border-bottom: 1px solid var(--border-color, #444); display: none;';
+                    container.appendChild(errorContext);
+
+                    // MESSAGES AREA (flex-1 to fill remaining space)
+                    const messages = document.createElement('div');
+                    messages.id = 'doctor-messages';
+                    messages.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; min-height: 0;';
+                    messages.innerHTML = `
+                        <div style="text-align: center; padding: 40px 20px; color: #888;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
+                            <div>No errors detected</div>
+                            <div style="margin-top: 5px; font-size: 12px;">System running smoothly</div>
                         </div>
                     `;
-                    container.appendChild(content);
+                    container.appendChild(messages);
 
-                    // Store reference for updates
-                    doctorUI.sidebarTabContent = content;
+                    // INPUT AREA (fixed at bottom using sticky positioning)
+                    const inputArea = document.createElement('div');
+                    inputArea.id = 'doctor-input-area';
+                    inputArea.style.cssText = 'border-top: 1px solid var(--border-color, #444); background: var(--bg-color, #252525); padding: 10px; position: sticky; bottom: 0; flex-shrink: 0;';
+                    inputArea.innerHTML = `
+                        <textarea id="doctor-input" placeholder="Ask AI about this error..."
+                            style="width: 100%; min-height: 60px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; padding: 8px; font-family: inherit; font-size: 13px; resize: vertical;"
+                            rows="2"></textarea>
+                        <div style="display: flex; gap: 8px; margin-top: 8px;">
+                            <button id="doctor-send-btn" style="flex: 1; background: #4caf50; color: white; border: none; border-radius: 4px; padding: 8px; cursor: pointer; font-weight: bold;">Send</button>
+                            <button id="doctor-clear-btn" style="background: #666; color: white; border: none; border-radius: 4px; padding: 8px; cursor: pointer;">Clear</button>
+                        </div>
+                    `;
+                    container.appendChild(inputArea);
+
+                    // Store references
                     doctorUI.sidebarTabContainer = container;
+                    doctorUI.sidebarErrorContext = errorContext;
+                    doctorUI.sidebarMessages = messages;
+                    doctorUI.sidebarInput = inputArea.querySelector('#doctor-input');
+                    doctorUI.sidebarSendBtn = inputArea.querySelector('#doctor-send-btn');
+                    doctorUI.sidebarClearBtn = inputArea.querySelector('#doctor-clear-btn');
 
                     // Update content if there's already an error
                     if (doctorUI.lastErrorData) {

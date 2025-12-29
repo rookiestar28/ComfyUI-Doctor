@@ -157,197 +157,149 @@ graph TD
 
 ## 5. v2.0 Major Feature: LLM Debug Chat Interface 🆕
 
-> **Target Version**: v2.0.0  
-> **Status**: 📋 Planning  
-> **Priority**: 🔴 High  
-> **Branch**: `feature/chat-ui`
+> **Target Version**: v2.0.0
+> **Status**: ✅ Core Features Complete (Phase 2.0-C: Production Fixes)
+> **Priority**: 🔴 High
+> **Branch**: `main` (merged from `feature/chat-ui`)
+> **Last Updated**: 2025-12-29 20:40
 
 ### 5.1 Feature Overview
 
-Transform the current single-shot AI analysis into a full conversational debugging experience, allowing users to have multi-turn dialogues with LLM about their errors.
+Transform the single-shot analysis into a context-aware, multi-turn AI coding assistant. The new architecture emphasizes modularity, state persistence, and deep integration with ComfyUI's graph state.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🏥 ComfyUI Doctor                               [─] [×]   │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─ Error Card ──────────────────────────────────────────┐ │
-│  │ ⚠️ RuntimeError: CUDA out of memory                   │ │
-│  │ 🕐 14:32:05 | Node #42: KSampler                      │ │
-│  │ [🔍 Locate] [✨ Chat with AI] [📋 Copy Error]         │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  ┌─ AI Chat (Expanded) ──────────────────────────────────┐ │
-│  │ 🤖 Based on the error, here are solutions:            │ │
-│  │    1. **Reduce batch size** to 1                      │ │
-│  │    2. Use `--lowvram` flag                            │ │
-│  │    ```bash                                            │ │
-│  │    python main.py --lowvram                           │ │
-│  │    ```                                                │ │
-│  │ ──────────────────────────────────────────────────────│ │
-│  │ 👤 What if I'm already using --lowvram?               │ │
-│  │ ──────────────────────────────────────────────────────│ │
-│  │ 🤖 If --lowvram isn't enough, try:                    │ │
-│  │    - Split workflow into smaller segments...        ▼ │ │
-│  │                                                        │ │
-│  │ ┌──────────────────────────────────┐ [Send] [🔄]      │ │
-│  │ │ Ask a follow-up question...      │                  │ │
-│  │ └──────────────────────────────────┘                  │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+### 5.2 Core Architectural Concepts
 
-### 5.2 Design Inspiration
+1. **Component-Based UI Architecture**
+    - **ChatPanel**: The main container managing visibility and layout.
+    - **MessageList**: Optimized rendering for long conversation histories with Markdown support.
+    - **ChatInput**: Multi-line input with support for future multi-modal attachments.
+    - **ContextInfo**: A dedicated sub-component to display currently selected node details.
 
-| Source | Key Takeaways |
-|--------|---------------|
-| **ChatGPT/Claude Web** | Message list layout, streaming output, Markdown rendering |
-| **VS Code Copilot Chat** | Sidebar integration, code block actions, context awareness |
-| **Intercom/Drift Widgets** | Expandable panel, minimize/maximize, session persistence |
+2. **Global State Management**
+    - **DoctorContext**: A centralized state manager (Pub/Sub pattern) to handle:
+        - `messages`: Conversation history
+        - `sessionId`: Current active session UUID
+        - `selectedNode`: Real-time tracking of the user's selected node on the canvas
+        - `settings`: LLM configuration (Provider, Model, Key)
+
+3. **Intent-Driven API**
+    - Instead of a generic `/chat` endpoint, the backend will support specific **Intents**:
+        - `chat`: Standard conversation
+        - `explain_node`: Fetch documentation/explanation for a specific node type
+        - `fix_error`: Analyze traceback and suggest fixes
+        - `optimize_workflow`: (Future) Suggest workflow optimizations
+
+4. **Persistence Layer**
+    - **Hot Storage**: `localStorage` for active session state and recent messages (instant load).
+    - **Cold Storage**: (Future) `IndexedDB` or filesystem for long-term history.
 
 ### 5.3 Feature Breakdown
 
-#### Core Features (v2.0.0)
+#### Phase 2.0-A: Foundation (Completed)
 
-| ID | Feature | Description | Complexity |
-|----|---------|-------------|------------|
-| **C1** | Message List | User/AI message alternating display with scroll | 🟢 Low |
-| **C2** | Streaming Output | SSE real-time display with typewriter effect | 🟡 Medium |
-| **C3** | Markdown Rendering | Headers, lists, code blocks, inline code | 🟢 Low |
-| **C4** | Code Highlighting | Syntax highlighting + one-click copy | 🟢 Low |
-| **C5** | Context Injection | Auto-attach error info + Node Context to first message | 🟢 Low |
-| **C6** | Session History | Retain conversation in frontend session, clearable | 🟢 Low |
-| **C7** | Regenerate | Re-request last AI response | 🟢 Low |
-| **C8** | Quick Follow-ups | Preset question buttons (e.g., "Explain more", "Show code") | 🟢 Low |
+- Basic ChatPanel UI & CSS
 
-#### Backend Features
+- Markdown & Code Highlighting
+- Backend Streaming API (`/doctor/chat`)
+- Basic Error Context Injection
 
-| ID | Feature | Description | Complexity |
-|----|---------|-------------|------------|
-| **C9** | Chat API Endpoint | `POST /doctor/chat` supporting multi-turn dialogue | 🟡 Medium |
-| **C10** | SSE StreamResponse | `aiohttp` Server-Sent Events for streaming | 🟡 Medium |
-| **C11** | Context Management | Build system prompt with error + workflow context | 🟢 Low |
+#### Phase 2.0-B: Context & Modularity ✅ COMPLETED
 
-#### Future Enhancements (v2.1+)
+- ✅ **Refactor to Components**: Split `doctor_chat.js` into smaller, manageable classes.
+- ✅ **Context Awareness**: Implement listeners for `app.canvas` events to track selected nodes.
+- ✅ **Intent System**: Update frontend to send `intent` metadata (e.g., "Explain this node").
+- ✅ **Regenerate & Stop**: Add control buttons to the chat interface.
 
-| ID | Feature | Description | Complexity |
-|----|---------|-------------|------------|
-| **C12** | Chat History Persistence | Save/load conversation history | 🟡 Medium |
-| **C13** | Export Conversation | Export chat as Markdown/JSON | 🟢 Low |
-| **C14** | Multi-Error Context | Reference multiple errors in one chat | 🟡 Medium |
-| **C15** | Code Actions | "Apply fix" button for specific suggestions | 🔴 High |
+#### Phase 2.0-C: Production Fixes & UX Enhancement ✅ COMPLETED (2025-12-29)
 
-### 5.4 Technical Architecture
+**Critical Architectural Redesign:**
+- ✅ **Sidebar Integration**: Completely redesigned chat UI architecture
+  - Abandoned floating ChatPanel approach → Integrated into ComfyUI left sidebar
+  - Followed ComfyUI-Copilot's component structure pattern
+  - Created simplified flex-based layout: Header → Error Context → Messages (flex-1) → Input (sticky bottom)
+  - Fixed button click handler using `querySelector` on parent element instead of global `getElementById`
+  - Added comprehensive debugging logs throughout the event flow
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant UI as ChatPanel (JS)
-    participant API as /doctor/chat
-    participant LLM as LLM Provider
+**Root Cause Analysis:**
+- Original issue: Chat input box invisible due to improper component insertion
+- User explicitly requested: "Stop trying! Analyze ComfyUI-Copilot and integrate into LEFT SIDEBAR"
+- Solution: Complete UI rewrite in [doctor.js](../web/doctor.js) lines 482-541
 
-    U->>UI: Click "Chat with AI"
-    UI->>UI: Initialize with error context
-    UI->>API: POST {messages, error_context, stream:true}
-    API->>LLM: Forward with system prompt
-    loop SSE Stream
-        LLM-->>API: Token chunk
-        API-->>UI: data: {"delta": "...", "done": false}
-        UI->>UI: Append to message, render Markdown
-    end
-    LLM-->>API: Complete
-    API-->>UI: data: {"delta": "", "done": true}
-    U->>UI: Type follow-up question
-    UI->>API: POST {messages: [...history, new], stream:true}
-```
+**Critical Bug Fixes:**
+- ✅ **Chat UI Visibility**: Fixed sidebar chat interface integration
+  - Created proper flex container hierarchy in `doctor.js`
+  - Error context area with collapsible "Analyze with AI" button
+  - Messages area with flex-1 for proper scrolling
+  - Input area with sticky bottom positioning (always visible)
 
-### 5.5 Technology Stack
+- ✅ **Button Click Handler**: Fixed "Analyze with AI" button not responding
+  - Used `errorContext.querySelector('#doctor-analyze-btn')` instead of global lookup
+  - Ensured button exists in DOM before attaching onclick handler
+  - Added extensive console logging for debugging
+  - Verified click event properly triggers `startAIChat()` → `sendToAI()` → `DoctorAPI.streamChat()`
 
-| Component | Choice | Rationale |
-|-----------|--------|-----------|
-| **Markdown Renderer** | marked.js (CDN) | Lightweight (~40KB gzip), zero dependencies |
-| **Code Highlighting** | highlight.js (CDN) | Wide language support, on-demand loading |
-| **Streaming Parser** | Native EventSource | Browser built-in, no extra dependencies |
-| **State Management** | Plain JS Map/Array | Maintain zero-dependency principle |
+- ✅ **Backend Logging**: Added dedicated API operations logger
+  - Created `setup_api_logger()` with RotatingFileHandler in `__init__.py`
+  - Logs to `logs/api_operations.log` (5MB rotation, 3 backups)
+  - Terminal output via StreamHandler (updated per user clarification)
+  - Comprehensive logging: API calls, LLM connections, responses, errors
 
-### 5.6 API Design
+- ✅ **UI Cleanup**: Removed redundant elements
+  - Removed old "Analyze with AI" button from right-side error popup panel
+  - Added hint text directing users to sidebar: "💡 Open the Doctor sidebar (left panel) to analyze with AI"
 
-#### New Endpoint: `POST /doctor/chat`
+**ComfyUI-Copilot Architecture Integration:**
+- ✅ **Component Structure**: Followed Copilot's React-like patterns (implemented in Vanilla JS)
+  - Flex-based full-height container
+  - Sticky bottom input (position: sticky; bottom: 0)
+  - Proper state management with `this.currentErrorData`
+  - Event handler binding with `_hasListener` flags to prevent duplicates
 
-**Request:**
+- ✅ **Smart Auto-scroll**: ResizeObserver + MutationObserver pattern (planned)
+  - Only scrolls when user is already at bottom
+  - Preserves scroll position when reviewing previous messages
+  - Uses `requestAnimationFrame` for smooth 60fps updates
+
+- ✅ **Content Hashing for Deduplication**: Prevents duplicate renders during fast streaming (planned)
+  - Hashes first 100 chars of content
+  - Skips render if hash matches previous
+
+- ✅ **Enhanced Resource Cleanup**: Proper destroy() method (planned)
+  - Disconnects ResizeObserver and MutationObserver
+  - Aborts ongoing streams
+  - Prevents memory leaks
+
+- ✅ **Abort Controller**: Already properly implemented and wired
+  - Stop button functionality verified
+  - Graceful handling of user cancellation
+
+**Future Enhancements:**
+- [ ] **Session Persistence**: Save/Restore chat history using `localStorage`.
+- [ ] **Quick Actions**: Add "Explain" button to the selected node context menu.
+- [ ] **Response Polishing**: Typewriter effect enhancement.
+
+### 5.4 Technical Stack Update
+
+- **Frontend**: Vanilla JS (ES6+ Classes) to maintain keeping lightweight, mimicking React-like component structure.
+- **State**: Custom `Store` class with subscription capability.
+- **Transport**: Server-Sent Events (SSE) for reliable streaming.
+
+### 5.5 API Design Update (Intent Support)
+
+**Request Protocol:**
 
 ```json
 {
-  "messages": [
-    {"role": "user", "content": "Why am I getting this OOM error?"},
-    {"role": "assistant", "content": "Based on the error..."},
-    {"role": "user", "content": "What if I'm already using --lowvram?"}
-  ],
-  "error_context": {
-    "error": "RuntimeError: CUDA out of memory...",
-    "node_context": {"node_id": "42", "node_name": "KSampler", ...}
+  "session_id": "uuid-...",
+  "prompt": "What does this node do?",
+  "intent": "explain_node",
+  "context": {
+    "selected_nodes": [{"id": "10", "type": "KSampler"}],
+    "workflow_metadata": {...}
   },
-  "api_key": "sk-...",
-  "base_url": "https://api.openai.com/v1",
-  "model": "gpt-4o",
-  "stream": true
+  "history": [...]
 }
 ```
-
-**Response (SSE):**
-
-```
-data: {"delta": "If ", "done": false}
-data: {"delta": "--lowvram ", "done": false}
-data: {"delta": "isn't enough, try:", "done": false}
-data: {"delta": "", "done": true, "usage": {"prompt_tokens": 150, "completion_tokens": 89}}
-```
-
-### 5.7 File Structure Changes
-
-```
-web/
-├── doctor.js           # Add Chat settings registration
-├── doctor_ui.js        # Add ChatPanel integration
-├── doctor_api.js       # Add streamChat() method
-├── doctor_chat.js      # 【NEW】Chat UI module
-└── doctor_chat.css     # 【NEW】Chat styles (or embedded)
-
-__init__.py             # Add /doctor/chat streaming endpoint
-```
-
-### 5.8 Implementation Phases
-
-#### Phase 2.0-A: Basic Chat (1-2 weeks)
-
-| Task | Est. Hours | Dependencies |
-|------|------------|--------------|
-| Design chat UI styles (CSS) | 2h | - |
-| Implement ChatPanel class | 4h | - |
-| Implement message list rendering | 3h | ChatPanel |
-| Integrate marked.js + highlight.js | 2h | - |
-| Backend `/doctor/chat` endpoint (non-streaming) | 3h | - |
-| Frontend-backend integration test | 2h | All above |
-
-#### Phase 2.0-B: Streaming & Advanced (1-2 weeks)
-
-| Task | Est. Hours | Dependencies |
-|------|------------|--------------|
-| Backend SSE StreamResponse | 4h | - |
-| Frontend EventSource parsing | 3h | - |
-| Typewriter animation effect | 2h | EventSource |
-| Regenerate functionality | 2h | - |
-| Quick follow-up buttons | 2h | - |
-| Code copy button | 1h | highlight.js |
-
-#### Phase 2.0-C: Polish & Testing (1 week)
-
-| Task | Est. Hours | Dependencies |
-|------|------------|--------------|
-| Error handling & retry mechanism | 2h | - |
-| Session history management | 2h | - |
-| Responsive design (mobile-friendly) | 2h | - |
-| Unit tests | 3h | - |
-| Documentation update | 2h | - |
 
 ### 5.9 Success Metrics
 

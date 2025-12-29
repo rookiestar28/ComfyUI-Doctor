@@ -15,6 +15,8 @@ import glob
 import datetime
 import platform
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, SUPPORTED_LANGUAGES
@@ -102,6 +104,56 @@ else:
 # --- 4. Install/Upgrade to Full Smart Logger ---
 # This will replace the minimal PrestartupLogger with the full-featured SmartLogger
 SmartLogger.install(log_path)
+
+
+# --- 5. Setup API Logger for Doctor Operations ---
+def setup_api_logger():
+    """
+    Create a dedicated logger for API operations.
+    Logs to logs/api_operations.log (separate from SmartLogger's error logs).
+    """
+    api_logger = logging.getLogger('ComfyUI-Doctor-API')
+
+    # Prevent duplicate handlers if called multiple times
+    if api_logger.handlers:
+        return api_logger
+
+    api_logger.setLevel(logging.INFO)
+
+    # File handler with rotation (max 5MB, keep 3 backups)
+    api_log_path = os.path.join(log_dir, 'api_operations.log')
+    file_handler = RotatingFileHandler(
+        api_log_path,
+        maxBytes=5 * 1024 * 1024,  # 5MB
+        backupCount=3,
+        encoding='utf-8'
+    )
+
+    # Formatter with timestamp and level
+    formatter = logging.Formatter(
+        '[%(asctime)s] [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(formatter)
+    api_logger.addHandler(file_handler)
+
+    # Console handler for terminal output (user requested visibility)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_formatter = logging.Formatter(
+        '[Doctor-API] [%(levelname)s] %(message)s'
+    )
+    console_handler.setFormatter(console_formatter)
+    console_handler.setLevel(logging.INFO)
+    api_logger.addHandler(console_handler)
+
+    # Prevent propagation to root logger (avoid duplicate console output)
+    api_logger.propagate = False
+
+    return api_logger
+
+# Initialize logger
+logger = setup_api_logger()
+print(f"[ComfyUI-Doctor] 📋 API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
 
 
 # --- 5. Log System Information (Hardware Snapshot) ---
@@ -192,6 +244,8 @@ try:
             model = data.get("model", "gpt-4o")
             language = data.get("language", "en")
 
+            logger.info(f"Analyze API called - error_length={len(error_text) if error_text else 0}, has_workflow={bool(workflow)}, model={model}")
+
             # Validate required parameters
             # Check if this is a local LLM (doesn't require API key)
             is_local = is_local_llm_url(base_url)
@@ -281,6 +335,7 @@ try:
                     content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                     if not content:
                         return web.json_response({"error": "Empty response from LLM"}, status=502)
+                    logger.info(f"Analysis successful, response length={len(content)}")
                     return web.json_response({"analysis": content})
                 except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
                     return web.json_response(
@@ -290,10 +345,194 @@ try:
 
         except aiohttp.ClientError as e:
             # Network-level errors (timeout, connection refused, etc.)
-            print(f"[ComfyUI-Doctor] LLM Network Error: {e}")
+            logger.error(f"LLM Network Error: {str(e)}")
             return web.json_response({"error": f"Network Error: {str(e)}"}, status=503)
         except Exception as e:
-            print(f"[ComfyUI-Doctor] LLM Analysis Failed: {e}")
+            logger.error(f"LLM Analysis Failed: {str(e)}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.post("/doctor/chat")
+    async def api_chat(request):
+        """
+        API endpoint for multi-turn chat with LLM (SSE streaming).
+        
+        Payload: {
+            "messages": [{"role": "user|assistant", "content": "..."}],
+            "error_context": {"error": "...", "node_context": {...}, "workflow": "..."},
+            "api_key": str,
+            "base_url": str,
+            "model": str,
+            "language": str,
+            "stream": bool (default: true)
+        }
+        
+        Response (SSE):
+            data: {"delta": "token", "done": false}
+            data: {"delta": "", "done": true}
+        """
+        try:
+            data = await request.json()
+            messages = data.get("messages", [])
+            error_context = data.get("error_context", {})
+            api_key = data.get("api_key", "")
+            base_url = data.get("base_url", "https://api.openai.com/v1")
+            model = data.get("model", "gpt-4o")
+            language = data.get("language", "en")
+            stream = data.get("stream", True)
+            intent = data.get("intent", "chat")  # New: intent parameter
+            selected_nodes = data.get("selected_nodes", [])  # New: node selection context
+            
+            logger.info(f"Chat API called - model={model}, intent={intent}, messages={len(messages)}, stream={stream}")
+            
+            # Validate
+            is_local = is_local_llm_url(base_url)
+            if not api_key and not is_local:
+                return web.json_response({"error": "Missing API Key"}, status=401)
+            
+            if not messages:
+                return web.json_response({"error": "No messages provided"}, status=400)
+            
+            # Build system prompt with error context
+            error_text = error_context.get("error", "")
+            node_context = error_context.get("node_context", {})
+            workflow = error_context.get("workflow", "")
+            
+            # Truncate to prevent token overflow
+            MAX_ERROR_LENGTH = 4000
+            if len(error_text) > MAX_ERROR_LENGTH:
+                error_text = error_text[:MAX_ERROR_LENGTH] + "\n[... truncated ...]"
+            
+            MAX_WORKFLOW_LENGTH = 2000
+            if workflow and len(workflow) > MAX_WORKFLOW_LENGTH:
+                workflow = workflow[:MAX_WORKFLOW_LENGTH] + "\n[... truncated ...]"
+            
+            # Intent-aware system prompt
+            if intent == "explain_node":
+                system_prompt = (
+                    "You are an expert ComfyUI node documentation assistant. ComfyUI is a node-based Stable Diffusion workflow editor.\n\n"
+                    "Your task is to explain how specific nodes work, their inputs/outputs, and best practices for using them.\n"
+                    "Be concise, clear, and provide practical examples when relevant.\n"
+                    f"Respond in {language}.\n\n"
+                )
+                if selected_nodes:
+                    system_prompt += f"**Selected Node(s):** {json.dumps(selected_nodes)}\n\n"
+            else:
+                # Default chat/debug intent
+                system_prompt = (
+                    "You are an expert ComfyUI debugger. ComfyUI is a node-based Stable Diffusion workflow editor.\n\n"
+                    "You are helping the user debug an error. Be concise, helpful, and provide actionable solutions.\n"
+                    f"Respond in {language}.\n\n"
+                )
+            
+            if error_text:
+                system_prompt += f"**Current Error:**\n```\n{error_text}\n```\n\n"
+            
+            if node_context:
+                system_prompt += f"**Node Context:** {json.dumps(node_context)}\n\n"
+            
+            if workflow:
+                system_prompt += f"**Workflow (simplified):** {workflow}\n\n"
+            
+            # Build conversation with system prompt
+            api_messages = [{"role": "system", "content": system_prompt}]
+            
+            # Limit conversation history to prevent token overflow
+            MAX_HISTORY = 10
+            recent_messages = messages[-MAX_HISTORY:] if len(messages) > MAX_HISTORY else messages
+            api_messages.extend(recent_messages)
+            
+            # Prepare request
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            base_url = base_url.rstrip("/")
+            if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
+                base_url += "/v1"
+            
+            url = f"{base_url}/chat/completions"
+            logger.info(f"Connecting to LLM: {url}")
+            
+            payload = {
+                "model": model,
+                "messages": api_messages,
+                "temperature": 0.7,
+                "stream": stream
+            }
+            
+            if not stream:
+                # Non-streaming fallback
+                session = await SessionManager.get_session()
+                async with session.post(url, json=payload, headers=headers) as response:
+                    if response.status != 200:
+                        error_msg = await response.text()
+                        logger.error(f"LLM non-stream error: {error_msg[:200]}")
+                        return web.json_response({"error": f"LLM Error: {error_msg[:500]}"}, status=response.status)
+                    
+                    result = await response.json()
+                    content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    logger.info(f"LLM response received (non-stream), length={len(content)}")
+                    return web.json_response({"content": content, "done": True})
+
+            # SSE Streaming response
+            logger.info("Starting SSE stream...")
+            response = web.StreamResponse(
+                status=200,
+                reason='OK',
+                headers={
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no',
+                }
+            )
+            await response.prepare(request)
+            
+            try:
+                session = await SessionManager.get_session()
+                async with session.post(url, json=payload, headers=headers) as llm_response:
+                    if llm_response.status != 200:
+                        error_msg = await llm_response.text()
+                        logger.error(f"LLM stream error: {error_msg[:200]}")
+                        error_data = json.dumps({"error": f"LLM Error: {error_msg[:200]}", "done": True})
+                        await response.write(f"data: {error_data}\n\n".encode('utf-8'))
+                        return response
+                    
+                    # Stream chunks
+                    async for line in llm_response.content:
+                        line = line.decode('utf-8').strip()
+                        if not line or not line.startswith('data:'):
+                            continue
+                        
+                        if line == 'data: [DONE]':
+                            done_data = json.dumps({"delta": "", "done": True})
+                            await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                            break
+                        
+                        try:
+                            json_str = line[5:].strip()  # Remove 'data: ' prefix
+                            if not json_str:
+                                continue
+                            chunk = json.loads(json_str)
+                            delta = chunk.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                            if delta:
+                                chunk_data = json.dumps({"delta": delta, "done": False})
+                                await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                        except json.JSONDecodeError:
+                            continue
+                
+            except Exception as stream_err:
+                error_data = json.dumps({"error": str(stream_err), "done": True})
+                await response.write(f"data: {error_data}\n\n".encode('utf-8'))
+            
+            return response
+            
+        except aiohttp.ClientError as e:
+            print(f"[ComfyUI-Doctor] Chat Network Error: {e}")
+            return web.json_response({"error": f"Network Error: {str(e)}"}, status=503)
+        except Exception as e:
+            print(f"[ComfyUI-Doctor] Chat Failed: {e}")
             return web.json_response({"error": str(e)}, status=500)
         
     @server.PromptServer.instance.routes.get("/debugger/history")
@@ -363,6 +602,7 @@ try:
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     msg = "API key is valid" if not is_local else "Local LLM connection successful"
+                    logger.info(f"API key verification successful - base_url={base_url}, is_local={is_local}")
                     return web.json_response({
                         "success": True,
                         "message": msg,
@@ -372,6 +612,7 @@ try:
                     error_text = await response.text()
                     if len(error_text) > 200:
                         error_text = error_text[:200] + "..."
+                    logger.warning(f"API key verification failed - status={response.status}, base_url={base_url}")
                     return web.json_response({
                         "success": False,
                         "message": f"Verification failed ({response.status}): {error_text}",
@@ -482,6 +723,7 @@ try:
     print("  - POST /debugger/set_language")
     print("  - POST /debugger/clear_history")
     print("  - POST /doctor/analyze")
+    print("  - POST /doctor/chat (SSE streaming)")
     print("  - POST /doctor/verify_key")
     print("  - POST /doctor/list_models")
 

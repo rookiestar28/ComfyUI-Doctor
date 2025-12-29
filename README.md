@@ -1,6 +1,6 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | English
+[繁體中文](README.zh-TW.md) | English | [📋 Roadmap & Development Status](.planning/ROADMAP.md)
 
 A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Features 19+ error pattern recognition, i18n support for Multilingual, persistent log history, and RESTful API for frontend integration.
 
@@ -16,8 +16,29 @@ A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically int
 - **Error History**: Maintains a buffer of recent errors via API
 - **RESTful API**: Six endpoints for frontend integration
 - **AI-Powered Analysis**: One-click LLM error analysis with support for 8+ providers (OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more)
+- **Interactive Chat Interface**: Multi-turn AI debugging assistant integrated into ComfyUI sidebar
 - **Interactive Sidebar UI**: Visual error panel with node location and instant diagnostics
 - **Flexible Configuration**: Comprehensive settings panel for behavior customization
+
+### 🆕 AI Chat Interface
+
+The new interactive chat interface provides a conversational debugging experience directly within ComfyUI's left sidebar. When an error occurs, simply click "Analyze with AI" to start a multi-turn conversation with your preferred LLM.
+
+![AI Chat Interface](assets/chat-ui.png)
+
+**Key Features:**
+- **Context-Aware**: Automatically includes error details, node information, and workflow context
+- **Streaming Responses**: Real-time LLM responses with proper formatting
+- **Multi-Turn Conversations**: Ask follow-up questions to dig deeper into issues
+- **Always Accessible**: Input area stays visible at the bottom with sticky positioning
+- **Supports 8+ LLM Providers**: OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more
+
+**How to Use:**
+1. When an error occurs, open the Doctor sidebar (left panel)
+2. Click the "✨ Analyze with AI" button in the error context area
+3. The AI will automatically analyze the error and provide suggestions
+4. Continue the conversation by typing follow-up questions in the input box
+5. Press Enter or click "Send" to submit your message
 
 ---
 

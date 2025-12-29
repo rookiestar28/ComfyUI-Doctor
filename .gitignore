@@ -9,3 +9,4 @@ logs/*
 !logs/.gitkeep
 # Planning - private files
 .planning/phase*.md
+.planning/PHASE*.md

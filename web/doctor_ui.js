@@ -3,6 +3,7 @@
  */
 import { app } from "../../../scripts/app.js";
 import { DoctorAPI } from "./doctor_api.js";
+import { ChatPanel } from "./doctor_chat.js";
 
 export class DoctorUI {
     constructor(options = {}) {
@@ -125,32 +126,38 @@ export class DoctorUI {
 
     /**
      * Update the modern sidebar tab content with error data.
+     * NEW SIMPLIFIED VERSION - Following ComfyUI-Copilot architecture
      */
     updateSidebarTab(data) {
-        const container = document.getElementById('doctor-tab-error-container');
+        const errorContext = this.sidebarErrorContext;
+        const messages = this.sidebarMessages;
         const statusDot = document.getElementById('doctor-tab-status');
 
-        if (!container) return;
+        if (!errorContext || !messages) return;
 
         // Update status indicator
         if (statusDot) {
             if (data && data.last_error) {
-                statusDot.classList.add('error');
+                statusDot.style.background = '#ff4444';
             } else {
-                statusDot.classList.remove('error');
+                statusDot.style.background = '#4caf50';
             }
         }
 
         if (!data || !data.last_error) {
-            container.innerHTML = `
-                <div class="no-errors">
-                    <div class="icon">✅</div>
+            errorContext.style.display = 'none';
+            messages.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; color: #888;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
                     <div>No errors detected</div>
                     <div style="margin-top: 5px; font-size: 12px;">System running smoothly</div>
                 </div>
             `;
             return;
         }
+
+        // Store error data for chat
+        this.currentErrorData = data;
 
         const nodeContext = data.node_context || {};
         const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : 'Unknown';
@@ -164,44 +171,203 @@ export class DoctorUI {
             errorMessage = errorMessage.substring(colonIndex + 1).trim();
         }
 
-        container.innerHTML = `
-            <div class="error-card">
-                <div class="error-type">⚠️ ${this.escapeHtml(errorType)}</div>
-                <div class="error-message">${this.escapeHtml(errorMessage.substring(0, 300))}${errorMessage.length > 300 ? '...' : ''}</div>
-                <div class="error-time">🕐 ${timestamp}</div>
+        // Show error context
+        errorContext.style.display = 'block';
+        errorContext.innerHTML = `
+            <div style="padding: 12px; background: rgba(255, 68, 68, 0.1); border-bottom: 1px solid #ff4444;">
+                <div style="font-weight: bold; color: #ff6b6b; margin-bottom: 5px;">⚠️ ${this.escapeHtml(errorType)}</div>
+                <div style="font-size: 13px; color: #ddd; word-break: break-word; margin-bottom: 8px;">${this.escapeHtml(errorMessage.substring(0, 200))}${errorMessage.length > 200 ? '...' : ''}</div>
+                <div style="font-size: 11px; color: #888;">🕐 ${timestamp}</div>
                 ${nodeContext.node_id ? `
-                    <div class="node-context">
-                        <span><strong>Node:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${nodeContext.node_id})</span>
-                        ${nodeContext.node_class ? `<span><strong>Class:</strong> ${this.escapeHtml(nodeContext.node_class)}</span>` : ''}
-                        ${nodeContext.custom_node_path ? `<span><strong>Source:</strong> ${this.escapeHtml(nodeContext.custom_node_path)}</span>` : ''}
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; margin-top: 8px; font-size: 12px;">
+                        <div><strong>Node:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${nodeContext.node_id})</div>
                     </div>
                 ` : ''}
-                <button class="action-btn" id="doctor-tab-locate-btn">🔍 Locate Node on Canvas</button>
-                <button class="action-btn primary" id="doctor-tab-ai-btn">✨ Analyze with AI</button>
+                <button id="doctor-analyze-btn" style="width: 100%; background: #2563eb; color: white; border: none; border-radius: 4px; padding: 8px; margin-top: 8px; cursor: pointer; font-weight: bold;">✨ Analyze with AI</button>
             </div>
-            <div id="doctor-tab-ai-response"></div>
-            ${data.suggestion ? `
-                <div class="ai-response">
-                    <h4>💡 Suggestion</h4>
-                    <div>${this.escapeHtml(data.suggestion)}</div>
-                </div>
-            ` : ''}
         `;
 
-        // Attach event listeners
-        const locateBtn = document.getElementById('doctor-tab-locate-btn');
-        const aiBtn = document.getElementById('doctor-tab-ai-btn');
+        // Clear messages and show welcome
+        messages.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #888;">
+                <div style="font-size: 32px; margin-bottom: 10px;">🤖</div>
+                <div>Click "Analyze with AI" to start debugging</div>
+            </div>
+        `;
 
-        if (locateBtn && nodeContext.node_id) {
-            locateBtn.onclick = () => this.locateNodeOnCanvas(nodeContext.node_id);
-        } else if (locateBtn) {
-            locateBtn.disabled = true;
-            locateBtn.style.opacity = '0.5';
+        // Attach analyze button listener - use querySelector on errorContext to ensure we find the newly created button
+        console.log('[Doctor] Looking for analyze button in errorContext...');
+        const analyzeBtn = errorContext.querySelector('#doctor-analyze-btn');
+        console.log('[Doctor] Found button:', analyzeBtn);
+        if (analyzeBtn) {
+            console.log('[Doctor] Attaching click listener to Analyze button');
+            analyzeBtn.onclick = () => {
+                console.log('[Doctor] Analyze button clicked!');
+                this.startAIChat(data);
+            };
+            console.log('[Doctor] Click listener attached successfully');
+        } else {
+            console.error('[Doctor] Analyze button NOT found in errorContext!');
+            console.error('[Doctor] errorContext innerHTML:', errorContext.innerHTML);
         }
 
-        if (aiBtn) {
-            aiBtn.onclick = () => this.triggerAIAnalysis(data, 'doctor-tab-ai-response', aiBtn);
+        // Wire up send button
+        if (this.sidebarSendBtn && !this.sidebarSendBtn._hasListener) {
+            this.sidebarSendBtn.addEventListener('click', () => this.handleSendMessage());
+            this.sidebarSendBtn._hasListener = true;
         }
+
+        // Wire up clear button
+        if (this.sidebarClearBtn && !this.sidebarClearBtn._hasListener) {
+            this.sidebarClearBtn.addEventListener('click', () => this.handleClearChat());
+            this.sidebarClearBtn._hasListener = true;
+        }
+
+        // Wire up Enter key for input
+        if (this.sidebarInput && !this.sidebarInput._hasListener) {
+            this.sidebarInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.handleSendMessage();
+                }
+            });
+            this.sidebarInput._hasListener = true;
+        }
+    }
+
+    async startAIChat(data) {
+        try {
+            console.log('[Doctor] Starting AI chat with error data:', data);
+            console.log('[Doctor] this.currentErrorData:', this.currentErrorData);
+            console.log('[Doctor] this.sidebarMessages:', this.sidebarMessages);
+
+            // Add system message
+            console.log('[Doctor] Adding system message...');
+            this.addChatMessage('system', `Analyzing error: ${data.last_error}`);
+            console.log('[Doctor] System message added');
+
+            // Auto-trigger analysis
+            console.log('[Doctor] Calling sendToAI...');
+            await this.sendToAI(`Analyze this error and provide debugging suggestions:\n\n**Error:** ${data.last_error}\n**Node:** ${data.node_context?.node_name || 'Unknown'}`);
+            console.log('[Doctor] sendToAI completed');
+        } catch (error) {
+            console.error('[Doctor] startAIChat failed:', error);
+            console.error('[Doctor] Error stack:', error.stack);
+        }
+    }
+
+    addChatMessage(role, content) {
+        if (!this.sidebarMessages) return;
+
+        const msgDiv = document.createElement('div');
+        msgDiv.style.cssText = role === 'user'
+            ? 'background: #2b5c92; color: white; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; align-self: flex-end; max-width: 80%;'
+            : role === 'assistant'
+            ? 'background: #333; color: #eee; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; align-self: flex-start; max-width: 90%; border: 1px solid #444;'
+            : 'background: transparent; color: #888; font-size: 11px; font-style: italic; padding: 4px; text-align: center; margin-bottom: 10px;';
+
+        msgDiv.textContent = content;
+        msgDiv.dataset.role = role;
+
+        // Clear welcome message if exists
+        const welcome = this.sidebarMessages.querySelector('div[style*="text-align: center"]');
+        if (welcome) this.sidebarMessages.innerHTML = '';
+
+        // Set flex layout for proper alignment
+        if (!this.sidebarMessages.style.display.includes('flex')) {
+            this.sidebarMessages.style.display = 'flex';
+            this.sidebarMessages.style.flexDirection = 'column';
+        }
+
+        this.sidebarMessages.appendChild(msgDiv);
+        this.sidebarMessages.scrollTop = this.sidebarMessages.scrollHeight;
+
+        return msgDiv;
+    }
+
+    async handleSendMessage() {
+        if (!this.sidebarInput || !this.currentErrorData) return;
+
+        const text = this.sidebarInput.value.trim();
+        if (!text) return;
+
+        // Add user message
+        this.addChatMessage('user', text);
+        this.sidebarInput.value = '';
+
+        // Send to AI
+        await this.sendToAI(text);
+    }
+
+    async sendToAI(text) {
+        try {
+            console.log('[Doctor] sendToAI called with text:', text.substring(0, 100));
+
+            // Get LLM settings
+            const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
+            const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
+            const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
+            const language = app.ui.settings.getSettingValue("Doctor.General.Language", this.language);
+
+            console.log('[Doctor] LLM Settings:', { baseUrl, model, language, hasApiKey: !!apiKey });
+
+            const payload = {
+                messages: [{ role: 'user', content: text }],
+                error_context: this.currentErrorData || {},
+                intent: 'chat',
+                selected_nodes: [],
+                api_key: apiKey,
+                base_url: baseUrl,
+                model: model,
+                language: language
+            };
+
+            console.log('[Doctor] Payload prepared:', payload);
+
+            // Add placeholder assistant message
+            const placeholderMsg = this.addChatMessage('assistant', 'Thinking...');
+            console.log('[Doctor] Placeholder message added');
+
+            try {
+                let fullContent = '';
+                const controller = new AbortController();
+
+                console.log('[Doctor] Calling DoctorAPI.streamChat...');
+                await DoctorAPI.streamChat(
+                    payload,
+                    (chunk) => {
+                        console.log('[Doctor] Received chunk:', chunk);
+                        if (chunk.delta) {
+                            fullContent += chunk.delta;
+                            placeholderMsg.textContent = fullContent;
+                        }
+                    },
+                    (error) => {
+                        console.error("[Doctor] Stream error:", error);
+                        placeholderMsg.textContent = `Error: ${error.message}`;
+                    },
+                    controller.signal
+                );
+                console.log('[Doctor] DoctorAPI.streamChat completed');
+            } catch (e) {
+                console.error('[Doctor] AI request failed:', e);
+                console.error('[Doctor] Error stack:', e.stack);
+                placeholderMsg.textContent = `Error: ${e.message}`;
+            }
+        } catch (outerError) {
+            console.error('[Doctor] sendToAI outer catch:', outerError);
+            console.error('[Doctor] Outer error stack:', outerError.stack);
+        }
+    }
+
+    handleClearChat() {
+        if (!this.sidebarMessages) return;
+        this.sidebarMessages.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #888;">
+                <div style="font-size: 32px; margin-bottom: 10px;">🤖</div>
+                <div>Chat cleared. Click "Analyze with AI" to start again</div>
+            </div>
+        `;
     }
 
     /**
@@ -735,12 +901,12 @@ export class DoctorUI {
              `;
         }
 
-        // Add AI Analysis Button
+        // Removed: Old AI Analysis Button - now use sidebar instead
+        // Add hint to use sidebar
         html += `
-            <button class="doctor-action-btn" id="doctor-ai-btn" style="border-color:#6699ff;color:#6699ff;">
-                ✨ Analyze with AI
-            </button>
-            <div id="doctor-ai-result" style="margin-top:10px;font-size:13px;line-height:1.5;color:#eee;white-space:pre-wrap;display:none;background:#223;padding:10px;border-radius:4px;"></div>
+            <div style="margin-top:10px;font-size:11px;color:#888;text-align:center;font-style:italic;">
+                💡 Open the Doctor sidebar (left panel) to analyze with AI
+            </div>
         `;
 
         html += `</div>`;
@@ -757,61 +923,6 @@ export class DoctorUI {
             };
         }
 
-        // Bind AI button
-        const aiBtn = container.querySelector('#doctor-ai-btn');
-        const aiResult = container.querySelector('#doctor-ai-result');
-        if (aiBtn) {
-            aiBtn.onclick = async () => {
-                const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
-                const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "";
-                const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
-                const provider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
-
-                // Check if this is a local LLM (Ollama/LMStudio) - check both provider and URL
-                const isLocalProvider = provider === "ollama" || provider === "lmstudio";
-                const isLocalUrl = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
-                const isLocal = isLocalProvider || isLocalUrl;
-
-                // Only require API key for non-local LLMs
-                if (!apiKey && !isLocal) {
-                    alert("Please configure API Key in ComfyUI Settings -> Doctor first.");
-                    return;
-                }
-
-                aiBtn.disabled = true;
-                aiBtn.textContent = "⏳ Analyzing...";
-                aiResult.style.display = 'block';
-                aiResult.textContent = isLocal ? "Connecting to local LLM..." : "Connecting to LLM...";
-
-                try {
-                    // F3: Capture workflow context
-                    const workflowContext = this.getWorkflowContext();
-
-                    const payload = {
-                        error: data.last_error || "Unknown Error",
-                        node_context: data.node_context,
-                        workflow: workflowContext,
-                        api_key: apiKey,
-                        base_url: baseUrl,
-                        model: model,
-                        language: this.language
-                    };
-
-                    const result = await DoctorAPI.analyzeError(payload);
-
-                    if (result.analysis) {
-                        // Security: Use textContent to prevent XSS
-                        aiResult.textContent = "🤖 AI Analysis:\n\n" + result.analysis;
-                    } else {
-                        aiResult.textContent = "No analysis returned.";
-                    }
-                } catch (e) {
-                    aiResult.textContent = `Error: ${e.message}`;
-                } finally {
-                    aiBtn.disabled = false;
-                    aiBtn.textContent = "✨ Analyze with AI";
-                }
-            };
-        }
+        // Removed: Old AI button binding - now handled in sidebar
     }
 }

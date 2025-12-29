@@ -109,5 +109,99 @@ export const DoctorAPI = {
             console.error('[ComfyUI-Doctor] Failed to list models:', error);
             return { success: false, models: [], message: error.message };
         }
+    },
+
+    /**
+     * Stream chat with LLM (SSE)
+     * @param {Object} payload - Chat payload
+     * @param {Array<{role: string, content: string}>} payload.messages - Conversation history
+     * @param {Object} payload.error_context - Error context {error, node_context, workflow}
+     * @param {string} payload.api_key - LLM API key
+     * @param {string} payload.base_url - LLM API base URL
+     * @param {string} payload.model - Model name
+     * @param {string} payload.language - Response language
+     * @param {Function} onChunk - Callback for each chunk {delta: string, done: boolean}
+     * @param {Function} onError - Callback for errors
+     * @param {AbortSignal} signal - Optional AbortSignal for cancellation
+     * @returns {Promise<void>}
+     */
+    async streamChat(payload, onChunk, onError, signal = null) {
+        try {
+            const response = await fetch('/doctor/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, stream: true }),
+                signal
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+                    const jsonStr = trimmed.slice(5).trim();
+                    if (!jsonStr) continue;
+
+                    try {
+                        const data = JSON.parse(jsonStr);
+                        if (data.error) {
+                            onError?.(new Error(data.error));
+                            return;
+                        }
+                        onChunk?.(data);
+                        if (data.done) return;
+                    } catch (parseErr) {
+                        console.warn('[ComfyUI-Doctor] Failed to parse SSE chunk:', jsonStr);
+                    }
+                }
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('[ComfyUI-Doctor] Chat stream aborted');
+                return;
+            }
+            console.error('[ComfyUI-Doctor] Stream chat failed:', error);
+            onError?.(error);
+        }
+    },
+
+    /**
+     * Non-streaming chat with LLM (fallback)
+     * @param {Object} payload - Same as streamChat
+     * @returns {Promise<{content: string, done: boolean}>}
+     */
+    async chat(payload) {
+        try {
+            const response = await fetch('/doctor/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, stream: false })
+            });
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Chat failed:', error);
+            throw error;
+        }
     }
 };
