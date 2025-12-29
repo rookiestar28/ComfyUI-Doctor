@@ -499,28 +499,57 @@ try:
                         await response.write(f"data: {error_data}\n\n".encode('utf-8'))
                         return response
                     
-                    # Stream chunks
-                    async for line in llm_response.content:
-                        line = line.decode('utf-8').strip()
-                        if not line or not line.startswith('data:'):
-                            continue
+                    # Stream chunks with newline buffering to handle partial lines
+                    buffer = ""
+                    stream_done = False
+                    async for chunk in llm_response.content.iter_chunked(1024):
+                        buffer += chunk.decode('utf-8', errors='ignore')
                         
-                        if line == 'data: [DONE]':
-                            done_data = json.dumps({"delta": "", "done": True})
-                            await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                            break
-                        
-                        try:
-                            json_str = line[5:].strip()  # Remove 'data: ' prefix
-                            if not json_str:
+                        while '\n' in buffer:
+                            line, buffer = buffer.split('\n', 1)
+                            line = line.strip()
+                            if not line or not line.startswith('data:'):
                                 continue
-                            chunk = json.loads(json_str)
-                            delta = chunk.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                            if delta:
-                                chunk_data = json.dumps({"delta": delta, "done": False})
-                                await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                        except json.JSONDecodeError:
-                            continue
+                            
+                            payload_str = line[5:].strip()
+                            if payload_str == '[DONE]':
+                                done_data = json.dumps({"delta": "", "done": True})
+                                await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                stream_done = True
+                                break
+                            
+                            if not payload_str:
+                                continue
+                            
+                            try:
+                                chunk_json = json.loads(payload_str)
+                                delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                if delta:
+                                    chunk_data = json.dumps({"delta": delta, "done": False})
+                                    await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                            except json.JSONDecodeError:
+                                continue
+                        
+                        if stream_done:
+                            break
+                    
+                    # Process any remaining buffered line if stream ended without newline
+                    if not stream_done and buffer.strip():
+                        line = buffer.strip()
+                        if line.startswith('data:'):
+                            payload_str = line[5:].strip()
+                            if payload_str == '[DONE]':
+                                done_data = json.dumps({"delta": "", "done": True})
+                                await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                            else:
+                                try:
+                                    chunk_json = json.loads(payload_str)
+                                    delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                    if delta:
+                                        chunk_data = json.dumps({"delta": delta, "done": False})
+                                        await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                                except json.JSONDecodeError:
+                                    pass
                 
             except Exception as stream_err:
                 error_data = json.dumps({"error": str(stream_err), "done": True})

@@ -63,6 +63,40 @@ export class ChatPanel {
         console.log('[ChatPanel] Constructor complete. Element classes:', this.element.className);
     }
 
+    sanitizeHtml(unsafeHtml) {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(unsafeHtml, 'text/html');
+
+            // Remove dangerous tags
+            const blockedTags = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'];
+            blockedTags.forEach(tag => {
+                doc.querySelectorAll(tag).forEach(node => node.remove());
+            });
+
+            // Remove event handlers and javascript: URLs
+            doc.querySelectorAll('*').forEach(node => {
+                [...node.attributes].forEach(attr => {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value || '';
+                    if (name.startsWith('on')) {
+                        node.removeAttribute(attr.name);
+                    }
+                    if ((name === 'src' || name === 'href') && /^javascript:/i.test(value.trim())) {
+                        node.removeAttribute(attr.name);
+                    }
+                });
+            });
+
+            return doc.body.innerHTML;
+        } catch (e) {
+            console.warn('[ChatPanel] sanitizeHtml failed, falling back to plain text:', e);
+            const div = document.createElement('div');
+            div.textContent = unsafeHtml;
+            return div.innerHTML;
+        }
+    }
+
     destroy() {
         console.log('[ChatPanel] Destroying panel and cleaning up resources');
 
@@ -329,7 +363,8 @@ export class ChatPanel {
 
         if (msg.role === 'assistant' || msg.role === 'system') {
             if (window.marked) {
-                msgDiv.innerHTML = window.marked.parse(content);
+                const raw = window.marked.parse(content);
+                msgDiv.innerHTML = this.sanitizeHtml(raw);
                 if (window.hljs) {
                     msgDiv.querySelectorAll('pre code').forEach((block) => {
                         window.hljs.highlightElement(block);
@@ -397,7 +432,8 @@ export class ChatPanel {
         const lastMsg = this.messagesContainer.lastElementChild;
         if (lastMsg && lastMsg.classList.contains('assistant')) {
             if (window.marked) {
-                lastMsg.innerHTML = window.marked.parse(content);
+                const raw = window.marked.parse(content);
+                lastMsg.innerHTML = this.sanitizeHtml(raw);
                 if (window.hljs) {
                     lastMsg.querySelectorAll('pre code').forEach((block) => {
                         window.hljs.highlightElement(block);
@@ -457,6 +493,11 @@ export class ChatPanel {
         let fullContent = '';
 
         try {
+            // Refresh LLM settings just-in-time to avoid stale API keys/base URLs
+            if (typeof doctorContext.refreshSettings === 'function') {
+                doctorContext.refreshSettings();
+            }
+
             const state = doctorContext.state;
             const payload = {
                 // OpenAI expects history. our store has all.

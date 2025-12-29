@@ -117,6 +117,7 @@ graph TD
 - [ ] **T4**: Stress tests - 🟢 Low
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek) - 🟡 Medium
 - [ ] **T6**: Fix test import issues (relative import errors) - 🟢 Low
+- [ ] **T7**: SSE/chat safety tests (stream parser + sanitizer) - 🟡 Medium
 
 ### 3.4 Security Enhancements
 
@@ -167,26 +168,28 @@ graph TD
 ### Phase 3: Advanced Features
 
 1. **S4** Chat markdown sanitization (sidebar/chat) - **PRIORITY**
-2. **R9** SSE stream framing for `/doctor/chat` (buffer `data:` lines)
-3. **R10** Live-sync LLM settings (API key/base URL/model) into chat sends
-4. **T5** Online API integration tests (OpenAI, DeepSeek)
-5. **T6** Fix test import issues
-6. **S2** SSRF protection for base URL validation
-7. **S5** Local bundle/pinned versions for `marked`/`highlight.js` (CDN fallback)
-8. **F8** Settings panel integration into sidebar
-9. **F9** Expand language support (de, fr, it, es, ko)
-10. **R8** Smart workflow truncation for large graphs
-11. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
-12. **F4** Statistics dashboard
-13. **T2** Frontend tests
+2. **S5** Local bundle/pinned versions for `marked`/`highlight.js` (CDN fallback)
+3. **R9** SSE stream framing for `/doctor/chat` (buffer `data:` lines)
+4. **R10** Live-sync LLM settings (API key/base URL/model) into chat sends
+5. **S2** SSRF protection for base URL validation
+6. **R6** Network retry logic (exponential backoff)
+7. **R7** Rate limiting for LLM API calls
+8. **T7** SSE/chat safety tests (stream parser + sanitizer)
+9. **T5** Online API integration tests (OpenAI, DeepSeek)
+10. **T6** Fix test import issues
+11. **T2** Frontend tests
+12. **F8** Settings panel integration into sidebar
+13. **F9** Expand language support (de, fr, it, es, ko)
+14. **R8** Smart workflow truncation for large graphs
+15. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
+16. **F4** Statistics dashboard
 
 ### Phase 4: Major Refactoring
 
 1. **A6** Pipeline architecture refactor
-2. **R6-R7** Network retry logic & Rate limiting
-3. **S1 & S3** Security enhancements (CSP, telemetry)
-4. **F2** Pattern hot-reload
-5. **D1-D3** Full documentation
+2. **S1 & S3** Security enhancements (CSP, telemetry)
+3. **F2** Pattern hot-reload
+4. **D1-D3** Full documentation
 
 ---
 
@@ -502,6 +505,7 @@ graph TD
 - [ ] **T4**: 壓力測試 - 🟢 Low
 - [ ] **T5**: 線上 API 整合測試（OpenAI、DeepSeek） - 🟡 Medium
 - [ ] **T6**: 修復測試導入問題 - 🟢 Low
+- [ ] **T7**: SSE/聊天安全測試（串流解析 + 淨化）- 🟡 Medium
 
 ### 3.4 安全性增強（Security）
 
@@ -552,26 +556,28 @@ graph TD
 ### Phase 3: 進階功能（1-2 月）
 
 1. **S4** 聊天 markdown 淨化（側邊欄/聊天）- **優先**
-2. **R9** `/doctor/chat` SSE 串流換行重組（緩衝 `data:` 行）
-3. **R10** 聊天 LLM 設定熱同步（API Key/Base URL/Model）
-4. **T5** 線上 API 整合測試（OpenAI、DeepSeek）
-5. **T6** 修復測試導入問題
-6. **S2** SSRF 防護（Base URL 驗證）
-7. **S5** `marked`/`highlight.js` 本地 bundle / 鎖版 + fallback（避免只靠 CDN）
-8. **F8** 設定面板整合至側邊欄
-9. **F9** 擴展多語系支援（de, fr, it, es, ko）
-10. **R8** 大型工作流智能截斷
-11. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
-12. **F4** 統計儀表板
-13. **T2** 前端測試
+2. **S5** `marked`/`highlight.js` 本地 bundle / 鎖版 + fallback（避免只靠 CDN）
+3. **R9** `/doctor/chat` SSE 串流換行重組（緩衝 `data:` 行）
+4. **R10** 聊天 LLM 設定熱同步（API Key/Base URL/Model）
+5. **S2** SSRF 防護（Base URL 驗證）
+6. **R6** 網路重試邏輯（exponential backoff）
+7. **R7** LLM API 呼叫速率限制
+8. **T7** SSE/聊天安全測試（串流解析 + 淨化）
+9. **T5** 線上 API 整合測試（OpenAI、DeepSeek）
+10. **T6** 修復測試導入問題
+11. **T2** 前端測試
+12. **F8** 設定面板整合至側邊欄
+13. **F9** 擴展多語系支援（de, fr, it, es, ko）
+14. **R8** 大型工作流智能截斷
+15. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
+16. **F4** 統計儀表板
 
 ### Phase 4: 重大重構
 
 1. **A6** Pipeline 架構重構
-2. **R6-R7** 網路重試邏輯與速率限制
-3. **S1 & S3** 安全性增強（CSP、遙測）
-4. **F2** 模式熱更新
-5. **D1-D3** 完整文件
+2. **S1 & S3** 安全性增強（CSP、遙測）
+3. **F2** 模式熱更新
+4. **D1-D3** 完整文件
 
 ---
 
