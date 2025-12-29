@@ -215,6 +215,36 @@ export class DoctorUI {
     }
 
     /**
+     * Capture current workflow context for AI analysis.
+     * Returns a simplified workflow structure to avoid token overflow.
+     */
+    getWorkflowContext() {
+        try {
+            if (!app || !app.graph) return null;
+
+            // Get full workflow
+            const workflow = app.graph.serialize();
+            if (!workflow) return null;
+
+            // Simplify to essential info (nodes and links)
+            const simplified = {
+                nodes: (workflow.nodes || []).map(n => ({
+                    id: n.id,
+                    type: n.type,
+                    title: n.title || n.type,
+                    widgets_values: n.widgets_values ? n.widgets_values.slice(0, 5) : undefined, // Limit widget values
+                })).slice(0, 50), // Limit to 50 nodes
+                links: (workflow.links || []).slice(0, 100), // Limit links
+            };
+
+            return JSON.stringify(simplified);
+        } catch (e) {
+            console.warn('[ComfyUI-Doctor] Failed to capture workflow:', e);
+            return null;
+        }
+    }
+
+    /**
      * Locate and highlight a node on the canvas.
      * Uses ComfyUI's centralized approach similar to NodesMap.
      * @param {string|number} nodeId - The node ID to locate
@@ -345,9 +375,13 @@ export class DoctorUI {
         }
 
         try {
+            // F3: Capture workflow context
+            const workflowContext = this.getWorkflowContext();
+
             const payload = {
                 error: data.last_error || "Unknown Error",
                 node_context: data.node_context,
+                workflow: workflowContext,
                 api_key: apiKey,
                 base_url: baseUrl,
                 model: model,
@@ -750,9 +784,13 @@ export class DoctorUI {
                 aiResult.textContent = isLocal ? "Connecting to local LLM..." : "Connecting to LLM...";
 
                 try {
+                    // F3: Capture workflow context
+                    const workflowContext = this.getWorkflowContext();
+
                     const payload = {
                         error: data.last_error || "Unknown Error",
                         node_context: data.node_context,
+                        workflow: workflowContext,
                         api_key: apiKey,
                         base_url: baseUrl,
                         model: model,

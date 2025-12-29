@@ -15,10 +15,11 @@ import glob
 import datetime
 import platform
 import json
-from .logger import SmartLogger, get_last_analysis, get_analysis_history
+from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, SUPPORTED_LANGUAGES
 from .config import CONFIG
+from .session_manager import SessionManager
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -185,6 +186,7 @@ try:
             data = await request.json()
             error_text = data.get("error")
             node_context = data.get("node_context", {})
+            workflow = data.get("workflow")  # F3: Workflow context from frontend
             api_key = data.get("api_key")
             base_url = data.get("base_url", "https://api.openai.com/v1")
             model = data.get("model", "gpt-4o")
@@ -205,6 +207,11 @@ try:
             MAX_ERROR_LENGTH = 8000
             if len(error_text) > MAX_ERROR_LENGTH:
                 error_text = error_text[:MAX_ERROR_LENGTH] + "\n\n[... truncated ...]"
+            
+            # Truncate workflow context (F3)
+            MAX_WORKFLOW_LENGTH = 4000
+            if workflow and len(workflow) > MAX_WORKFLOW_LENGTH:
+                workflow = workflow[:MAX_WORKFLOW_LENGTH] + "\n[... truncated ...]"
 
             # Construct Prompt - Enhanced for ComfyUI debugging
             system_prompt = (
@@ -227,7 +234,11 @@ try:
             
             user_prompt = f"Error:\n{error_text}\n\n"
             if node_context:
-                user_prompt += f"Node Context: {json.dumps(node_context, indent=2)}\n"
+                user_prompt += f"Node Context: {json.dumps(node_context, indent=2)}\n\n"
+            
+            # F3: Include workflow context if available
+            if workflow:
+                user_prompt += f"Workflow Structure (simplified):\n{workflow}\n"
             
             # Prepare headers (API key is NOT logged)
             headers = {
@@ -252,33 +263,30 @@ try:
                 "temperature": 0.5
             }
 
-            # Set timeout to prevent hanging requests
-            timeout = aiohttp.ClientTimeout(total=60)
-            
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, json=payload, headers=headers) as response:
-                    if response.status != 200:
-                        error_msg = await response.text()
-                        # Truncate error message for readability
-                        if len(error_msg) > 500:
-                            error_msg = error_msg[:500] + "..."
-                        return web.json_response(
-                            {"error": f"LLM Provider Error ({response.status}): {error_msg}"}, 
-                            status=response.status
-                        )
-                    
-                    # Safely parse JSON response
-                    try:
-                        result = await response.json()
-                        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-                        if not content:
-                            return web.json_response({"error": "Empty response from LLM"}, status=502)
-                        return web.json_response({"analysis": content})
-                    except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
-                        return web.json_response(
-                            {"error": f"Failed to parse LLM response: {str(parse_err)}"}, 
-                            status=502
-                        )
+            session = await SessionManager.get_session()
+            async with session.post(url, json=payload, headers=headers) as response:
+                if response.status != 200:
+                    error_msg = await response.text()
+                    # Truncate error message for readability
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:500] + "..."
+                    return web.json_response(
+                        {"error": f"LLM Provider Error ({response.status}): {error_msg}"}, 
+                        status=response.status
+                    )
+                
+                # Safely parse JSON response
+                try:
+                    result = await response.json()
+                    content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    if not content:
+                        return web.json_response({"error": "Empty response from LLM"}, status=502)
+                    return web.json_response({"analysis": content})
+                except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
+                    return web.json_response(
+                        {"error": f"Failed to parse LLM response: {str(parse_err)}"}, 
+                        status=502
+                    )
 
         except aiohttp.ClientError as e:
             # Network-level errors (timeout, connection refused, etc.)
@@ -300,6 +308,20 @@ try:
             "history": get_analysis_history(),
             "count": len(get_analysis_history()),
         })
+
+    @server.PromptServer.instance.routes.post("/debugger/clear_history")
+    async def api_clear_history(request):
+        """
+        API endpoint to clear error analysis history.
+        
+        Returns:
+            JSON with success status.
+        """
+        try:
+            success = clear_analysis_history()
+            return web.json_response({"success": success})
+        except Exception as e:
+            return web.json_response({"success": False, "message": str(e)}, status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/verify_key")
     async def api_verify_key(request):
@@ -337,25 +359,24 @@ try:
             headers = {"Authorization": f"Bearer {api_key}"}
             url = f"{base_url}/models"
             
-            timeout = aiohttp.ClientTimeout(total=10)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers) as response:
-                    if response.status == 200:
-                        msg = "API key is valid" if not is_local else "Local LLM connection successful"
-                        return web.json_response({
-                            "success": True,
-                            "message": msg,
-                            "is_local": is_local
-                        })
-                    else:
-                        error_text = await response.text()
-                        if len(error_text) > 200:
-                            error_text = error_text[:200] + "..."
-                        return web.json_response({
-                            "success": False,
-                            "message": f"Verification failed ({response.status}): {error_text}",
-                            "is_local": is_local
-                        })
+            session = await SessionManager.get_session()
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    msg = "API key is valid" if not is_local else "Local LLM connection successful"
+                    return web.json_response({
+                        "success": True,
+                        "message": msg,
+                        "is_local": is_local
+                    })
+                else:
+                    error_text = await response.text()
+                    if len(error_text) > 200:
+                        error_text = error_text[:200] + "..."
+                    return web.json_response({
+                        "success": False,
+                        "message": f"Verification failed ({response.status}): {error_text}",
+                        "is_local": is_local
+                    })
                         
         except aiohttp.ClientError as e:
             return web.json_response({
@@ -399,49 +420,48 @@ try:
             headers = {"Authorization": f"Bearer {api_key}"}
             url = f"{base_url}/models"
             
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers) as response:
-                    if response.status != 200:
-                        return web.json_response({
-                            "success": False,
-                            "models": [],
-                            "message": f"Failed to fetch models ({response.status})"
-                        })
+            session = await SessionManager.get_session()
+            async with session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    return web.json_response({
+                        "success": False,
+                        "models": [],
+                        "message": f"Failed to fetch models ({response.status})"
+                    })
+                
+                try:
+                    result = await response.json()
+                    models = []
                     
-                    try:
-                        result = await response.json()
-                        models = []
-                        
-                        # Handle OpenAI-style response
-                        if "data" in result:
-                            for m in result["data"]:
-                                model_id = m.get("id", "")
-                                models.append({
-                                    "id": model_id,
-                                    "name": model_id
-                                })
-                        # Handle Ollama-style response
-                        elif "models" in result:
-                            for m in result["models"]:
-                                model_name = m.get("name", m.get("model", ""))
-                                models.append({
-                                    "id": model_name,
-                                    "name": model_name
-                                })
-                        
-                        return web.json_response({
-                            "success": True,
-                            "models": models,
-                            "message": f"Found {len(models)} models"
-                        })
-                        
-                    except (json.JSONDecodeError, KeyError) as e:
-                        return web.json_response({
-                            "success": False,
-                            "models": [],
-                            "message": f"Failed to parse model list: {str(e)}"
-                        })
+                    # Handle OpenAI-style response
+                    if "data" in result:
+                        for m in result["data"]:
+                            model_id = m.get("id", "")
+                            models.append({
+                                "id": model_id,
+                                "name": model_id
+                            })
+                    # Handle Ollama-style response
+                    elif "models" in result:
+                        for m in result["models"]:
+                            model_name = m.get("name", m.get("model", ""))
+                            models.append({
+                                "id": model_name,
+                                "name": model_name
+                            })
+                    
+                    return web.json_response({
+                        "success": True,
+                        "models": models,
+                        "message": f"Found {len(models)} models"
+                    })
+                    
+                except (json.JSONDecodeError, KeyError) as e:
+                    return web.json_response({
+                        "success": False,
+                        "models": [],
+                        "message": f"Failed to parse model list: {str(e)}"
+                    })
                         
         except aiohttp.ClientError as e:
             return web.json_response({
@@ -460,6 +480,7 @@ try:
     print("  - GET  /debugger/last_analysis")
     print("  - GET  /debugger/history")
     print("  - POST /debugger/set_language")
+    print("  - POST /debugger/clear_history")
     print("  - POST /doctor/analyze")
     print("  - POST /doctor/verify_key")
     print("  - POST /doctor/list_models")

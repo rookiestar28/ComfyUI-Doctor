@@ -79,9 +79,9 @@ graph TD
 
 ### 3.1 Features
 
-- [ ] **F1**: Error history persistence (SQLite/JSON) - 🟡 Medium ⚠️ *Use dev branch*
+- [x] **F1**: Error history persistence (SQLite/JSON) - 🟡 Medium ✅ *Completed (Phase 2)*
 - [ ] **F2**: Hot-reload error patterns from external JSON/YAML - 🟢 Low
-- [ ] **F3**: Workflow context capture on error - 🔴 High ⚠️ *Use dev branch*
+- [x] **F3**: Workflow context capture on error - 🔴 High ✅ *Completed (Phase 2)*
 - [ ] **F4**: Error statistics dashboard - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium ⚠️ *Use dev branch*
@@ -91,7 +91,7 @@ graph TD
 
 - [x] **R1**: Comprehensive error handling refactor - 🔴 High ✅ *Completed*
 - [x] **R2**: Thread safety hardening - 🔴 High ✅ *Completed*
-- [ ] **R3**: aiohttp session reuse - 🟡 Medium ⚠️ *Use dev branch*
+- [x] **R3**: aiohttp session reuse - 🟡 Medium ✅ *Completed (Phase 2)*
 - [x] **R4**: XSS protection - 🔴 High ✅ *Completed*
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
 
@@ -133,12 +133,12 @@ graph TD
 3. **R4** XSS protection
 4. **T1** API tests
 
-### Phase 2: Feature Enhancement (2-4 weeks)
+### Phase 2: Feature Enhancement (2-4 weeks) ✅ COMPLETED
 
-1. **F3** Workflow context
-2. **F1** History persistence
-3. **R3** Session reuse
-4. **F6** Provider quick switch
+1. **F3** Workflow context ✅
+2. **F1** History persistence ✅
+3. **R3** Session reuse ✅
+4. **F6** Provider quick switch ⏳ *Deferred to next cycle*
 
 ### Phase 3: Advanced Features (1-2 months)
 
@@ -274,6 +274,7 @@ sequenceDiagram
 #### New Endpoint: `POST /doctor/chat`
 
 **Request:**
+
 ```json
 {
   "messages": [
@@ -293,6 +294,7 @@ sequenceDiagram
 ```
 
 **Response (SSE):**
+
 ```
 data: {"delta": "If ", "done": false}
 data: {"delta": "--lowvram ", "done": false}
@@ -677,6 +679,7 @@ graph TD
 將目前的單次 AI 分析升級為完整的對話式除錯體驗，讓使用者能與 LLM 進行多輪對話來解決錯誤問題。
 
 **設計亮點**：
+
 - 📝 多輪對話：保持上下文的連續追問
 - ⚡ 串流輸出：即時顯示 AI 回應，提升體驗
 - 🎨 Markdown 渲染：支援程式碼區塊、列表、標題
@@ -761,6 +764,7 @@ graph TD
 #### 新端點：`POST /doctor/chat`
 
 **請求格式：**
+
 ```json
 {
   "messages": [
@@ -780,6 +784,7 @@ graph TD
 ```
 
 **回應格式（SSE）：**
+
 ```
 data: {"delta": "如果 ", "done": false}
 data: {"delta": "--lowvram ", "done": false}

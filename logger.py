@@ -8,11 +8,13 @@ import datetime
 import threading
 import queue
 import time
+import os
 from collections import deque
 from typing import Optional, Dict, Any, TextIO, List
 from weakref import finalize
 from .analyzer import ErrorAnalyzer
 from .config import CONFIG
+from .history_store import HistoryStore, HistoryEntry
 
 
 # Global state for API access
@@ -25,6 +27,18 @@ _last_analysis: Dict[str, Any] = {
 
 # P1: Error history buffer (ring buffer for last N errors)
 _analysis_history: deque = deque(maxlen=CONFIG.history_size)
+
+# F1: Persistent history store
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_history_file = os.path.join(_current_dir, "logs", "error_history.json")
+_history_store: Optional[HistoryStore] = None
+
+def _get_history_store() -> HistoryStore:
+    """Lazy initialization of history store."""
+    global _history_store
+    if _history_store is None:
+        _history_store = HistoryStore(_history_file, maxlen=CONFIG.history_size)
+    return _history_store
 
 # R2: Thread safety locks for shared mutable state
 _history_lock = threading.Lock()
@@ -39,8 +53,29 @@ def get_last_analysis() -> Dict[str, Any]:
 
 def get_analysis_history() -> List[Dict[str, Any]]:
     """Get the error analysis history (most recent first)."""
+    # Prefer persistent store, fallback to in-memory
+    try:
+        store = _get_history_store()
+        history = store.get_all()
+        if history:
+            return history
+    except Exception:
+        pass  # Fallback to in-memory
+    
     with _history_lock:
         return list(reversed(_analysis_history))
+
+
+def clear_analysis_history() -> bool:
+    """Clear all history (both persistent and in-memory)."""
+    try:
+        store = _get_history_store()
+        store.clear()
+        with _history_lock:
+            _analysis_history.clear()
+        return True
+    except Exception:
+        return False
 
 
 class AsyncFileWriter:
@@ -266,10 +301,11 @@ class SmartLogger:
         
         # Update global state for API access
         global _last_analysis
+        timestamp = datetime.datetime.now().isoformat()
         new_analysis = {
             "error": full_traceback,
             "suggestion": suggestion,
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": timestamp,
             "node_context": node_context.to_dict() if node_context else None,
         }
         
@@ -277,6 +313,19 @@ class SmartLogger:
         with _history_lock:
             _last_analysis = new_analysis
             _analysis_history.append(new_analysis.copy())
+        
+        # F1: Persist to history store
+        try:
+            store = _get_history_store()
+            entry = HistoryEntry(
+                timestamp=timestamp,
+                error=full_traceback,
+                suggestion=suggestion if suggestion else {},
+                node_context=node_context.to_dict() if node_context else None,
+            )
+            store.append(entry)
+        except Exception:
+            pass  # Persistence failure should not break error analysis
         
         # Only print if we have something useful to say (Context OR Suggestion)
         # This prevents empty boxes for unhandled system errors (like shutdown noise)
