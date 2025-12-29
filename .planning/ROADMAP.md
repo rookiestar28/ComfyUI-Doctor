@@ -14,21 +14,21 @@ graph TD
     B --> E[i18n.py]
     B --> F[config.py]
     B --> G[nodes.py]
-    
+
     C --> H[AsyncFileWriter]
     C --> I[SmartLogger]
-    
+
     D --> J[ErrorAnalyzer]
     D --> K[NodeContext]
-    
+
     B --> L[API Endpoints]
-    L --> M[/debugger/last_analysis]
-    L --> N[/debugger/history]
-    L --> O[/debugger/set_language]
-    L --> P[/doctor/analyze]
-    L --> Q[/doctor/verify_key]
-    L --> R[/doctor/list_models]
-    
+    L --> M["API: /debugger/last_analysis"]
+    L --> N["API: /debugger/history"]
+    L --> O["API: /debugger/set_language"]
+    L --> P["API: /doctor/analyze"]
+    L --> Q["API: /doctor/verify_key"]
+    L --> R["API: /doctor/list_models"]
+
     S[web/doctor.js] --> T[Settings Registration]
     U[web/doctor_ui.js] --> V[Sidebar Panel]
     U --> W[Error Cards]
@@ -86,6 +86,8 @@ graph TD
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F7**: One-click auto-fix for specific errors - 🟢 Low
+- [ ] **F8**: Integrate settings panel into sidebar interface - 🟡 Medium
+- [ ] **F9**: Expand language support (German, French, Italian, Spanish, Korean) - 🟡 Medium
 
 ### 3.2 Robustness
 
@@ -142,10 +144,12 @@ graph TD
 
 ### Phase 3: Advanced Features (1-2 months)
 
-1. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
-2. **F4** Statistics dashboard
-3. **T2** Frontend tests
-4. **A4-A5** Dataclass + Protocol refactoring
+1. **F8** Settings panel integration into sidebar
+2. **F9** Expand language support (de, fr, it, es, ko)
+3. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
+4. **F4** Statistics dashboard
+5. **T2** Frontend tests
+6. **A4-A5** Dataclass + Protocol refactoring
 
 ### Phase 4: Major Refactoring (2+ months)
 
@@ -336,21 +340,21 @@ graph TD
     B --> E[i18n.py]
     B --> F[config.py]
     B --> G[nodes.py]
-    
+
     C --> H[AsyncFileWriter]
     C --> I[SmartLogger]
-    
+
     D --> J[ErrorAnalyzer]
     D --> K[NodeContext]
-    
+
     B --> L[API Endpoints]
-    L --> M[/debugger/last_analysis]
-    L --> N[/debugger/history]
-    L --> O[/debugger/set_language]
-    L --> P[/doctor/analyze]
-    L --> Q[/doctor/verify_key]
-    L --> R[/doctor/list_models]
-    
+    L --> M["API: /debugger/last_analysis"]
+    L --> N["API: /debugger/history"]
+    L --> O["API: /debugger/set_language"]
+    L --> P["API: /doctor/analyze"]
+    L --> Q["API: /doctor/verify_key"]
+    L --> R["API: /doctor/list_models"]
+
     S[web/doctor.js] --> T[Settings Registration]
     U[web/doctor_ui.js] --> V[Sidebar Panel]
     U --> W[Error Cards]
@@ -489,6 +493,16 @@ graph TD
   - 需評估安全性風險
   - 優先級：🟢 Low
 
+- [ ] **F8: 設定面板整合至側邊欄介面**
+  - 將 ComfyUI 設定面板的 Doctor 配置項目移至側邊欄
+  - 提供更流暢的使用者體驗，無需切換分頁
+  - 優先級：🟡 Medium
+
+- [ ] **F9: 擴展多語系支援**
+  - 新增德語 (de)、法語 (fr)、義大利語 (it)、西班牙語 (es)、韓語 (ko) 辭典
+  - 更新 `i18n.py` 的 `SUGGESTIONS` 結構
+  - 優先級：🟡 Medium
+
 ### 3.2 穩健性改進（Robustness）
 
 - [ ] **R1: 全面的錯誤處理重構**
@@ -606,10 +620,12 @@ graph TD
 
 ### Phase 3: 進階功能（1-2 月）
 
-1. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
-2. **F4** 統計儀表板
-3. **T2** 前端測試
-4. **A4-A5** Dataclass + Protocol 重構
+1. **F8** 設定面板整合至側邊欄
+2. **F9** 擴展多語系支援（de, fr, it, es, ko）
+3. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
+4. **F4** 統計儀表板
+5. **T2** 前端測試
+6. **A4-A5** Dataclass + Protocol 重構
 
 ### Phase 4: 重大重構（2+ 月）
 

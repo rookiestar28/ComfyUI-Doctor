@@ -27,6 +27,7 @@ ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動
 ![AI 對話介面](assets/chat-ui.png)
 
 **核心特色：**
+
 - **情境感知**：自動包含錯誤詳情、節點資訊與工作流程上下文
 - **串流回應**：即時顯示 LLM 回應，並正確格式化
 - **多輪對話**：提出後續問題以深入探討問題
@@ -34,6 +35,7 @@ ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動
 - **支援 8+ 種 LLM 提供商**：OpenAI、DeepSeek、Groq、Gemini、Ollama、LMStudio 等
 
 **使用方式：**
+
 1. 當錯誤發生時，打開 Doctor 側邊欄（左側面板）
 2. 點擊錯誤上下文區域中的「✨ Analyze with AI」按鈕
 3. AI 會自動分析錯誤並提供建議
@@ -150,8 +152,6 @@ ComfyUI-Doctor 提供互動式側邊欄介面，用於即時錯誤監控和診�
 ## AI 智能錯誤分析
 
 ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的除錯建議。
-
-![Analyze with AI](./assets/Analyze%20with%20AI.png)
 
 ### 支援的 AI 提供商
 

@@ -153,8 +153,6 @@ Click the **🏥 Doctor** button in the ComfyUI menu (left sidebar) to open the 
 
 ComfyUI-Doctor integrates with popular LLM services to provide intelligent, context-aware debugging suggestions.
 
-![Analyze with AI](./assets/Analyze%20with%20AI.png)
-
 ### Supported AI Providers
 
 #### Cloud Services
