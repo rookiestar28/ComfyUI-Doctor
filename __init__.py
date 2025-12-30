@@ -355,10 +355,13 @@ try:
             if len(error_text) > MAX_ERROR_LENGTH:
                 error_text = error_text[:MAX_ERROR_LENGTH] + "\n\n[... truncated ...]"
             
-            # Truncate workflow context (F3)
-            MAX_WORKFLOW_LENGTH = 4000
-            if workflow and len(workflow) > MAX_WORKFLOW_LENGTH:
-                workflow = workflow[:MAX_WORKFLOW_LENGTH] + "\n[... truncated ...]"
+            # R8: Smart workflow truncation (preserves error-related nodes)
+            if workflow:
+                from .truncate_workflow import truncate_workflow_smart
+                error_node_id = node_context.get("id") if node_context else None
+                workflow, truncation_meta = truncate_workflow_smart(workflow, error_node_id, max_chars=4000)
+                if truncation_meta.get("truncation_method") != "none":
+                    logger.info(f"Workflow truncated: {truncation_meta}")
 
             # Construct Prompt - Enhanced for ComfyUI debugging
             system_prompt = (
@@ -501,9 +504,10 @@ try:
             if len(error_text) > MAX_ERROR_LENGTH:
                 error_text = error_text[:MAX_ERROR_LENGTH] + "\n[... truncated ...]"
             
-            MAX_WORKFLOW_LENGTH = 2000
-            if workflow and len(workflow) > MAX_WORKFLOW_LENGTH:
-                workflow = workflow[:MAX_WORKFLOW_LENGTH] + "\n[... truncated ...]"
+            # R8: Smart workflow truncation
+            if workflow:
+                from .truncate_workflow import truncate_workflow_smart
+                workflow, _ = truncate_workflow_smart(workflow, max_chars=2000)
             
             # Intent-aware system prompt
             if intent == "explain_node":

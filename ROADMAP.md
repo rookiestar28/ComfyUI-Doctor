@@ -105,7 +105,7 @@ graph TD
 - [x] **R9**: SSE streaming chunk framing (buffer `data:` lines) - 🔴 High ✅ *Completed*
 - [x] **R10**: Hot-sync LLM settings for chat (API key/base URL/model) - 🟡 Medium ✅ *Completed*
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
-- [ ] **R8**: Smart workflow truncation for large graphs - 🟡 Medium
+- [x] **R8**: Smart workflow truncation for large graphs - 🟡 Medium ✅ *Completed*
 - [ ] **R6**: Network retry logic with exponential backoff - 🟢 Low
 - [ ] **R7**: Rate limiting for LLM API calls - 🟢 Low
 
@@ -180,7 +180,7 @@ graph TD
 11. **T2** Frontend tests
 12. **F8** Settings panel integration into sidebar
 13. **F9** Expand language support (de, fr, it, es, ko)
-14. **R8** Smart workflow truncation for large graphs
+14. ✅ **R8** Smart workflow truncation for large graphs - *Completed*
 15. **A1-A3** Quick architecture wins (py.typed, ruff, pytest-cov)
 16. **F4** Statistics dashboard
 
@@ -493,7 +493,7 @@ graph TD
 - [x] **R9**: SSE 串流分塊重組（以換行緩衝 `data:` 行）- 🔴 High ✅ *已完成*
 - [x] **R10**: 聊天 LLM 設定熱同步（API Key/Base URL/Model）- 🟡 Medium ✅ *已完成*
 - [ ] **R5**: 前端錯誤邊界 - 🟡 Medium ⚠️ *使用 dev branch 開發*
-- [ ] **R8**: 大型工作流智能截斷 - 🟡 Medium
+- [x] **R8**: 大型工作流智能截斷 - 🟡 Medium ✅ *已完成*
 - [ ] **R6**: 網路重試邏輯（exponential backoff） - 🟢 Low
 - [ ] **R7**: LLM API 呼叫速率限制 - 🟢 Low
 
@@ -568,7 +568,7 @@ graph TD
 11. **T2** 前端測試
 12. **F8** 設定面板整合至側邊欄
 13. **F9** 擴展多語系支援（de, fr, it, es, ko）
-14. **R8** 大型工作流智能截斷
+14. ✅ **R8** 大型工作流智能截斷 - *已完成*
 15. **A1-A3** 快速架構優化（py.typed、ruff、pytest-cov）
 16. **F4** 統計儀表板
 
