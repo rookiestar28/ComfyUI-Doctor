@@ -21,6 +21,11 @@ const SUPPORTED_LANGUAGES = [
     { value: "zh_TW", text: "繁體中文" },
     { value: "zh_CN", text: "简体中文" },
     { value: "ja", text: "日本語" },
+    { value: "de", text: "Deutsch" },
+    { value: "fr", text: "Français" },
+    { value: "it", text: "Italiano" },
+    { value: "es", text: "Español" },
+    { value: "ko", text: "한국어" },
 ];
 
 /**
@@ -144,10 +149,8 @@ app.registerExtension({
         console.log("[ComfyUI-Doctor] 🟢 Frontend Extension Initialized");
 
         // ========================================
-        // Register Settings with ComfyUI Settings Panel
+        // Register Settings with ComfyUI Settings Panel (Simplified for F8)
         // ========================================
-
-        // --- General Settings ---
 
         // Enable/Disable Extension
         app.ui.settings.addSetting({
@@ -167,168 +170,39 @@ app.registerExtension({
             return;
         }
 
-        // Language Selection
+        // Initialize default values for backward compatibility
+        if (!app.ui.settings.getSettingValue("Doctor.General.Language")) {
+            app.ui.settings.setSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.Behavior.PollInterval")) {
+            app.ui.settings.setSettingValue("Doctor.Behavior.PollInterval", DEFAULTS.POLL_INTERVAL);
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError")) {
+            app.ui.settings.setSettingValue("Doctor.Behavior.AutoOpenOnError", DEFAULTS.AUTO_OPEN_ON_ERROR);
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.Behavior.EnableNotifications")) {
+            app.ui.settings.setSettingValue("Doctor.Behavior.EnableNotifications", DEFAULTS.ENABLE_NOTIFICATIONS);
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.LLM.Provider")) {
+            app.ui.settings.setSettingValue("Doctor.LLM.Provider", "openai");
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl")) {
+            app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.LLM.ApiKey")) {
+            app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", "");
+        }
+        if (!app.ui.settings.getSettingValue("Doctor.LLM.Model")) {
+            app.ui.settings.setSettingValue("Doctor.LLM.Model", "");
+        }
+
+        // Show info message directing users to sidebar
         app.ui.settings.addSetting({
-            id: "Doctor.General.Language",
-            name: "Suggestion Language",
-            type: "combo",
-            options: SUPPORTED_LANGUAGES,
-            defaultValue: DEFAULTS.LANGUAGE,
-            onChange: async (newVal, oldVal) => {
-                console.log(`[ComfyUI-Doctor] Language changed: ${oldVal} -> ${newVal}`);
-                // Sync with backend
-                try {
-                    await DoctorAPI.setLanguage(newVal);
-                } catch (e) {
-                    console.error("[ComfyUI-Doctor] Failed to sync language with backend:", e);
-                }
-            },
-        });
-
-        // --- Behavior Settings ---
-
-        // Poll Interval
-        app.ui.settings.addSetting({
-            id: "Doctor.Behavior.PollInterval",
-            name: "Error Check Interval (ms)",
-            type: "slider",
-            attrs: { min: 500, max: 10000, step: 500 },
-            defaultValue: DEFAULTS.POLL_INTERVAL,
-            onChange: (newVal, oldVal) => {
-                console.log(`[ComfyUI-Doctor] Poll interval changed: ${oldVal} -> ${newVal}`);
-                if (app.Doctor) {
-                    app.Doctor.updatePollInterval(newVal);
-                }
-            },
-        });
-
-        // Auto-open on Error
-        app.ui.settings.addSetting({
-            id: "Doctor.Behavior.AutoOpenOnError",
-            name: "Auto-open panel on error",
-            type: "boolean",
-            defaultValue: DEFAULTS.AUTO_OPEN_ON_ERROR,
-            onChange: (newVal, oldVal) => {
-                console.log(`[ComfyUI-Doctor] Auto-open changed: ${oldVal} -> ${newVal}`);
-                if (app.Doctor) {
-                    app.Doctor.autoOpenOnError = newVal;
-                }
-            },
-        });
-
-        // Enable Notifications
-        app.ui.settings.addSetting({
-            id: "Doctor.Behavior.EnableNotifications",
-            name: "Show error notifications",
-            type: "boolean",
-            defaultValue: DEFAULTS.ENABLE_NOTIFICATIONS,
-            onChange: (newVal, oldVal) => {
-                console.log(`[ComfyUI-Doctor] Notifications changed: ${oldVal} -> ${newVal}`);
-                if (app.Doctor) {
-                    app.Doctor.enableNotifications = newVal;
-                }
-            },
-        });
-
-        // --- LLM Settings ---
-
-        // LLM Provider Preset
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.Provider",
-            name: "AI Provider",
-            type: "combo",
-            options: [
-                { value: "openai", text: "OpenAI" },
-                { value: "deepseek", text: "DeepSeek" },
-                { value: "groq", text: "Groq Cloud (LPU)" },
-                { value: "gemini", text: "Google Gemini" },
-                { value: "xai", text: "xAI Grok" },
-                { value: "openrouter", text: "OpenRouter (Claude)" },
-                { value: "ollama", text: "Ollama (Local)" },
-                { value: "lmstudio", text: "LMStudio (Local)" },
-                { value: "custom", text: "Custom" },
-            ],
-            defaultValue: "openai",
-            tooltip: "Groq Cloud ≠ xAI Grok. OpenRouter supports Claude/Anthropic.",
-            onChange: async (newVal) => {
-                // Auto-fill Base URL
-                const urlMap = {
-                    "openai": "https://api.openai.com/v1",
-                    "deepseek": "https://api.deepseek.com/v1",
-                    "groq": "https://api.groq.com/openai/v1",
-                    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
-                    "xai": "https://api.x.ai/v1",
-                    "openrouter": "https://openrouter.ai/api/v1",
-                    "ollama": "http://localhost:11434/v1",
-                    "lmstudio": "http://localhost:1234/v1",
-                    "custom": ""
-                };
-                const newUrl = urlMap[newVal];
-                if (newUrl) {
-                    app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", newUrl);
-                }
-
-                // Auto-fetch and SHOW available models for local providers via custom dialog
-                const isLocal = newVal === "ollama" || newVal === "lmstudio";
-                if (isLocal && newUrl) {
-                    setTimeout(async () => {
-                        try {
-                            const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
-                            const response = await fetch('/doctor/list_models', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ base_url: newUrl, api_key: apiKey })
-                            });
-                            const result = await response.json();
-                            if (result.success && result.models.length > 0) {
-                                const modelNames = result.models.map(m => m.id).join('\n• ');
-                                showSelectableDialog(
-                                    `🤖 Available models (${result.models.length}):`,
-                                    `• ${modelNames}`,
-                                    `📋 Copy a model name to 'AI Model Name' field.`
-                                );
-                            } else if (!result.success) {
-                                showSelectableDialog(
-                                    '⚠️ Could not fetch models',
-                                    result.message,
-                                    'Make sure the service is running.'
-                                );
-                            }
-                        } catch (e) {
-                            showSelectableDialog(
-                                `⚠️ Failed to connect to ${newVal}`,
-                                e.message,
-                                `Make sure the service is running on ${newUrl}`
-                            );
-                        }
-                    }, 300);
-                }
-            }
-        });
-
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.BaseUrl",
-            name: "AI Base URL",
-            type: "text",
-            defaultValue: "https://api.openai.com/v1",
-            tooltip: "API Endpoint. Ollama: http://localhost:11434/v1, LMStudio: http://localhost:1234/v1"
-        });
-
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.ApiKey",
-            name: "AI API Key",
+            id: "Doctor.Info",
+            name: "ℹ️ Configure Doctor settings in the sidebar (left panel)",
             type: "text",
             defaultValue: "",
-            tooltip: "Your API Key. Leave empty for local LLMs (Ollama/LMStudio)."
-        });
-
-        // AI Model Name - simple text input
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.Model",
-            name: "AI Model Name",
-            type: "text",
-            defaultValue: "",
-            tooltip: "Enter model name. Switch provider to see available models."
+            attrs: { readonly: true, disabled: true }
         });
         // ========================================
 
@@ -479,18 +353,151 @@ app.registerExtension({
                         document.head.appendChild(style);
                     }
 
-                    // Create sidebar content - SIMPLIFIED STRUCTURE following ComfyUI-Copilot
+                    // Create sidebar content - SIMPLIFIED STRUCTURE with Settings Panel
                     container.innerHTML = '';
                     container.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--bg-color, #1a1a2e);';
 
-                    // HEADER
+                    // HEADER with Settings Toggle
                     const header = document.createElement('div');
-                    header.style.cssText = 'padding: 12px 15px; border-bottom: 1px solid var(--border-color, #444); display: flex; align-items: center; gap: 8px; flex-shrink: 0;';
+                    header.style.cssText = 'padding: 12px 15px; border-bottom: 1px solid var(--border-color, #444); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;';
                     header.innerHTML = `
-                        <span class="status-indicator" id="doctor-tab-status" style="width: 10px; height: 10px; border-radius: 50%; background: #4caf50; display: inline-block;"></span>
-                        <span style="font-size: 16px; font-weight: bold; color: var(--fg-color, #eee);">🏥 Doctor</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="status-indicator" id="doctor-tab-status" style="width: 10px; height: 10px; border-radius: 50%; background: #4caf50; display: inline-block;"></span>
+                            <span style="font-size: 16px; font-weight: bold; color: var(--fg-color, #eee);">🏥 Doctor</span>
+                        </div>
+                        <span id="doctor-settings-toggle" style="cursor: pointer; font-size: 18px; color: #888; user-select: none;" title="Toggle Settings">⚙️</span>
                     `;
                     container.appendChild(header);
+
+                    // SETTINGS PANEL (collapsible)
+                    const settingsExpanded = localStorage.getItem('doctor_settings_expanded') === 'true';
+                    const settingsPanel = document.createElement('div');
+                    settingsPanel.id = 'doctor-settings-panel';
+                    settingsPanel.style.cssText = `
+                        padding: 15px;
+                        border-bottom: 1px solid var(--border-color, #444);
+                        background: rgba(0,0,0,0.2);
+                        flex-shrink: 0;
+                        display: ${settingsExpanded ? 'block' : 'none'};
+                    `;
+
+                    // Get current settings values
+                    const currentLanguage = app.ui.settings.getSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
+                    const currentProvider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
+                    const currentBaseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
+                    const currentApiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
+                    const currentModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
+
+                    settingsPanel.innerHTML = `
+                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ddd;">Settings</h4>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Language</label>
+                                <select id="doctor-language-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
+                                    ${SUPPORTED_LANGUAGES.map(lang =>
+                                        `<option value="${lang.value}" ${lang.value === currentLanguage ? 'selected' : ''}>${lang.text}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">AI Provider</label>
+                                <select id="doctor-provider-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
+                                    <option value="openai" ${currentProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
+                                    <option value="deepseek" ${currentProvider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
+                                    <option value="groq" ${currentProvider === 'groq' ? 'selected' : ''}>Groq Cloud (LPU)</option>
+                                    <option value="gemini" ${currentProvider === 'gemini' ? 'selected' : ''}>Google Gemini</option>
+                                    <option value="xai" ${currentProvider === 'xai' ? 'selected' : ''}>xAI Grok</option>
+                                    <option value="openrouter" ${currentProvider === 'openrouter' ? 'selected' : ''}>OpenRouter (Claude)</option>
+                                    <option value="ollama" ${currentProvider === 'ollama' ? 'selected' : ''}>Ollama (Local)</option>
+                                    <option value="lmstudio" ${currentProvider === 'lmstudio' ? 'selected' : ''}>LMStudio (Local)</option>
+                                    <option value="custom" ${currentProvider === 'custom' ? 'selected' : ''}>Custom</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Base URL</label>
+                                <input type="text" id="doctor-baseurl-input" value="${currentBaseUrl}" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">API Key</label>
+                                <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="Leave empty for local LLMs" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Model Name</label>
+                                <input type="text" id="doctor-model-input" value="${currentModel}" placeholder="e.g., gpt-4o, deepseek-chat" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                            </div>
+                            <button id="doctor-save-settings-btn" style="width: 100%; padding: 8px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 13px; margin-top: 5px;">💾 Save Settings</button>
+                        </div>
+                    `;
+                    container.appendChild(settingsPanel);
+
+                    // Settings toggle functionality
+                    const settingsToggle = header.querySelector('#doctor-settings-toggle');
+                    const updateToggleIcon = (expanded) => {
+                        settingsToggle.style.color = expanded ? '#4caf50' : '#888';
+                    };
+                    updateToggleIcon(settingsExpanded);
+
+                    settingsToggle.onclick = () => {
+                        const isExpanded = settingsPanel.style.display === 'block';
+                        settingsPanel.style.display = isExpanded ? 'none' : 'block';
+                        localStorage.setItem('doctor_settings_expanded', !isExpanded);
+                        updateToggleIcon(!isExpanded);
+                    };
+
+                    // Provider change auto-fills Base URL
+                    const providerSelect = settingsPanel.querySelector('#doctor-provider-select');
+                    const baseUrlInput = settingsPanel.querySelector('#doctor-baseurl-input');
+                    providerSelect.onchange = () => {
+                        const urlMap = {
+                            "openai": "https://api.openai.com/v1",
+                            "deepseek": "https://api.deepseek.com/v1",
+                            "groq": "https://api.groq.com/openai/v1",
+                            "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+                            "xai": "https://api.x.ai/v1",
+                            "openrouter": "https://openrouter.ai/api/v1",
+                            "ollama": "http://localhost:11434/v1",
+                            "lmstudio": "http://localhost:1234/v1",
+                            "custom": ""
+                        };
+                        baseUrlInput.value = urlMap[providerSelect.value] || "";
+                    };
+
+                    // Save settings button
+                    const saveBtn = settingsPanel.querySelector('#doctor-save-settings-btn');
+                    saveBtn.onclick = async () => {
+                        const langSelect = settingsPanel.querySelector('#doctor-language-select');
+                        const apiKeyInput = settingsPanel.querySelector('#doctor-apikey-input');
+                        const modelInput = settingsPanel.querySelector('#doctor-model-input');
+
+                        try {
+                            // Save to ComfyUI Settings
+                            app.ui.settings.setSettingValue("Doctor.General.Language", langSelect.value);
+                            app.ui.settings.setSettingValue("Doctor.LLM.Provider", providerSelect.value);
+                            app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", baseUrlInput.value);
+                            app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", apiKeyInput.value);
+                            app.ui.settings.setSettingValue("Doctor.LLM.Model", modelInput.value);
+
+                            // Sync language with backend
+                            await DoctorAPI.setLanguage(langSelect.value);
+
+                            // Visual feedback
+                            const originalText = saveBtn.textContent;
+                            saveBtn.textContent = '✅ Saved!';
+                            saveBtn.style.background = '#4caf50';
+                            setTimeout(() => {
+                                saveBtn.textContent = originalText;
+                                saveBtn.style.background = '#4caf50';
+                            }, 2000);
+                        } catch (e) {
+                            console.error('[ComfyUI-Doctor] Failed to save settings:', e);
+                            saveBtn.textContent = '❌ Error';
+                            saveBtn.style.background = '#f44336';
+                            setTimeout(() => {
+                                saveBtn.textContent = '💾 Save Settings';
+                                saveBtn.style.background = '#4caf50';
+                            }, 2000);
+                        }
+                    };
 
                     // ERROR CONTEXT AREA (shows error details when available)
                     const errorContext = document.createElement('div');

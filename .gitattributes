@@ -1,5 +1,10 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
+
+# Configuration files
+*.toml text eol=lf
+.gitignore text eol=lf
+.gitkeep text eol=lf
 
 # JavaScript files should always use LF
 *.js text eol=lf

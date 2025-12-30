@@ -6,6 +6,37 @@ A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically int
 
 ---
 
+## 🆕 Latest Updates (30 Dec 2025)
+
+### F9: Multi-language Support Expansion
+We've expanded language support from 4 to 9 languages! ComfyUI-Doctor now provides error suggestions in:
+- **English** (en)
+- **繁體中文** Traditional Chinese (zh_TW)
+- **简体中文** Simplified Chinese (zh_CN)
+- **日本語** Japanese (ja)
+- **🆕 Deutsch** German (de)
+- **🆕 Français** French (fr)
+- **🆕 Italiano** Italian (it)
+- **🆕 Español** Spanish (es)
+- **🆕 한국어** Korean (ko)
+
+All 23 error patterns are fully translated across all languages, ensuring consistent diagnostic quality worldwide.
+
+### F8: Sidebar Settings Integration
+Settings have been streamlined! Configure Doctor directly from the sidebar:
+- Click the ⚙️ icon in the sidebar header to access all settings
+- Language selection (9 languages)
+- AI Provider quick-switch (OpenAI, DeepSeek, Groq, Gemini, Ollama, etc.)
+- Base URL auto-fill when changing providers
+- API Key management (password-protected input)
+- Model name configuration
+- Settings persist across sessions with localStorage
+- Visual feedback on save (✅ Saved! / ❌ Error)
+
+ComfyUI Settings panel now only shows the Enable/Disable toggle - all other settings moved to the sidebar for a cleaner, more integrated experience.
+
+---
+
 ## Features
 
 - **Automatic Error Monitoring**: Captures all terminal output and detects Python tracebacks in real-time

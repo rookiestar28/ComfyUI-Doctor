@@ -93,8 +93,8 @@ graph TD
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F7**: One-click auto-fix for specific errors - 🟢 Low
-- [ ] **F8**: Integrate settings panel into sidebar interface - 🟡 Medium
-- [ ] **F9**: Expand language support (German, French, Italian, Spanish, Korean) - 🟡 Medium
+- [x] **F8**: Integrate settings panel into sidebar interface - 🟡 Medium ✅ *Completed (2025-12-30)*
+- [x] **F9**: Expand language support (German, French, Italian, Spanish, Korean) - 🟡 Medium ✅ *Completed (2025-12-30)*
 
 ### 3.2 Robustness
 
@@ -481,8 +481,8 @@ graph TD
 - [ ] **F5**: 節點健康評分 - 🟢 Low
 - [ ] **F6**: 多 LLM Provider 快速切換 - 🟡 Medium ⚠️ *使用 dev branch 開發*
 - [ ] **F7**: 錯誤自動修復建議執行（一鍵修復） - 🟢 Low
-- [ ] **F8**: 設定面板整合至側邊欄介面 - 🟡 Medium
-- [ ] **F9**: 擴展多語系支援（德、法、義、西、韓語） - 🟡 Medium
+- [x] **F8**: 設定面板整合至側邊欄介面 - 🟡 Medium ✅ *已於 2025-12-30 完成*
+- [x] **F9**: 擴展多語系支援（德、法、義、西、韓語） - 🟡 Medium ✅ *已於 2025-12-30 完成*
 
 ### 3.2 穩健性改進（Robustness）
 
