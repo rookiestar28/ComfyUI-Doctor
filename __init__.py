@@ -398,20 +398,34 @@ try:
             
             # Normalize Base URL
             base_url = base_url.rstrip("/")
-            # Auto-append /v1 if missing and looks like a standard provider
-            if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
-                base_url += "/v1"
-            
-            url = f"{base_url}/chat/completions"
-            
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "temperature": 0.5
-            }
+
+            # Determine if this is Ollama or OpenAI-compatible API
+            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+
+            if is_ollama:
+                # Ollama uses /api/chat endpoint
+                url = f"{base_url}/api/chat"
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "stream": False
+                }
+            else:
+                # Auto-append /v1 if missing and looks like a standard provider
+                if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
+                    base_url += "/v1"
+                url = f"{base_url}/chat/completions"
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.5
+                }
 
             session = await SessionManager.get_session()
             async with session.post(url, json=payload, headers=headers) as response:
@@ -421,14 +435,18 @@ try:
                     if len(error_msg) > 500:
                         error_msg = error_msg[:500] + "..."
                     return web.json_response(
-                        {"error": f"LLM Provider Error ({response.status}): {error_msg}"}, 
+                        {"error": f"LLM Provider Error ({response.status}): {error_msg}"},
                         status=response.status
                     )
-                
+
                 # Safely parse JSON response
                 try:
                     result = await response.json()
-                    content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    # Handle both Ollama and OpenAI response formats
+                    if is_ollama:
+                        content = result.get('message', {}).get('content', '')
+                    else:
+                        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                     if not content:
                         return web.json_response({"error": "Empty response from LLM"}, status=502)
                     logger.info(f"Analysis successful, response length={len(content)}")
@@ -551,10 +569,19 @@ try:
             }
             
             base_url = base_url.rstrip("/")
-            if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
-                base_url += "/v1"
-            
-            url = f"{base_url}/chat/completions"
+
+            # Determine if this is Ollama or OpenAI-compatible API
+            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+
+            if is_ollama:
+                # Ollama uses /api/chat endpoint
+                url = f"{base_url}/api/chat"
+            else:
+                # OpenAI-compatible: auto-append /v1 if needed
+                if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
+                    base_url += "/v1"
+                url = f"{base_url}/chat/completions"
+
             logger.info(f"Connecting to LLM: {url}")
             
             payload = {
@@ -574,7 +601,11 @@ try:
                         return web.json_response({"error": f"LLM Error: {error_msg[:500]}"}, status=response.status)
                     
                     result = await response.json()
-                    content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    # Handle both Ollama and OpenAI response formats
+                    if is_ollama:
+                        content = result.get('message', {}).get('content', '')
+                    else:
+                        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                     logger.info(f"LLM response received (non-stream), length={len(content)}")
                     return web.json_response({"content": content, "done": True})
 
@@ -607,44 +638,46 @@ try:
                     stream_done = False
                     async for chunk in llm_response.content.iter_chunked(1024):
                         buffer += chunk.decode('utf-8', errors='ignore')
-                        
+
                         while '\n' in buffer:
                             line, buffer = buffer.split('\n', 1)
                             line = line.strip()
-                            if not line or not line.startswith('data:'):
+                            if not line:
                                 continue
-                            
-                            payload_str = line[5:].strip()
-                            if payload_str == '[DONE]':
-                                done_data = json.dumps({"delta": "", "done": True})
-                                await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                stream_done = True
-                                break
-                            
-                            if not payload_str:
-                                continue
-                            
-                            try:
-                                chunk_json = json.loads(payload_str)
-                                delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                                if delta:
-                                    chunk_data = json.dumps({"delta": delta, "done": False})
-                                    await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                            except json.JSONDecodeError:
-                                continue
-                        
-                        if stream_done:
-                            break
-                    
-                    # Process any remaining buffered line if stream ended without newline
-                    if not stream_done and buffer.strip():
-                        line = buffer.strip()
-                        if line.startswith('data:'):
-                            payload_str = line[5:].strip()
-                            if payload_str == '[DONE]':
-                                done_data = json.dumps({"delta": "", "done": True})
-                                await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+
+                            # Handle different streaming formats
+                            if is_ollama:
+                                # Ollama uses newline-delimited JSON (not SSE)
+                                try:
+                                    chunk_json = json.loads(line)
+                                    # Check if stream is done
+                                    if chunk_json.get('done', False):
+                                        done_data = json.dumps({"delta": "", "done": True})
+                                        await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                        stream_done = True
+                                        break
+                                    # Extract content delta
+                                    delta = chunk_json.get('message', {}).get('content', '')
+                                    if delta:
+                                        chunk_data = json.dumps({"delta": delta, "done": False})
+                                        await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                                except json.JSONDecodeError:
+                                    continue
                             else:
+                                # OpenAI uses SSE format
+                                if not line.startswith('data:'):
+                                    continue
+
+                                payload_str = line[5:].strip()
+                                if payload_str == '[DONE]':
+                                    done_data = json.dumps({"delta": "", "done": True})
+                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                    stream_done = True
+                                    break
+
+                                if not payload_str:
+                                    continue
+
                                 try:
                                     chunk_json = json.loads(payload_str)
                                     delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
@@ -652,7 +685,44 @@ try:
                                         chunk_data = json.dumps({"delta": delta, "done": False})
                                         await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
                                 except json.JSONDecodeError:
-                                    pass
+                                    continue
+
+                        if stream_done:
+                            break
+                    
+                    # Process any remaining buffered line if stream ended without newline
+                    if not stream_done and buffer.strip():
+                        line = buffer.strip()
+                        if is_ollama:
+                            # Ollama newline-delimited JSON
+                            try:
+                                chunk_json = json.loads(line)
+                                if chunk_json.get('done', False):
+                                    done_data = json.dumps({"delta": "", "done": True})
+                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                else:
+                                    delta = chunk_json.get('message', {}).get('content', '')
+                                    if delta:
+                                        chunk_data = json.dumps({"delta": delta, "done": False})
+                                        await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                            except json.JSONDecodeError:
+                                pass
+                        else:
+                            # OpenAI SSE format
+                            if line.startswith('data:'):
+                                payload_str = line[5:].strip()
+                                if payload_str == '[DONE]':
+                                    done_data = json.dumps({"delta": "", "done": True})
+                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                else:
+                                    try:
+                                        chunk_json = json.loads(payload_str)
+                                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                        if delta:
+                                            chunk_data = json.dumps({"delta": delta, "done": False})
+                                            await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                                    except json.JSONDecodeError:
+                                        pass
                 
             except Exception as stream_err:
                 error_data = json.dumps({"error": str(stream_err), "done": True})
@@ -809,9 +879,12 @@ try:
             base_url = base_url.rstrip("/")
             if is_local and not api_key:
                 api_key = "local-llm"
-            
+
+            # Determine if this is Ollama or OpenAI-compatible API
+            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+
             headers = {"Authorization": f"Bearer {api_key}"}
-            url = f"{base_url}/models"
+            url = f"{base_url}/api/tags" if is_ollama else f"{base_url}/models"
             
             session = await SessionManager.get_session()
             async with session.get(url, headers=headers) as response:

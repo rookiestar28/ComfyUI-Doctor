@@ -6,10 +6,12 @@ A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically int
 
 ---
 
-## 🆕 Latest Updates (30 Dec 2025)
+## Latest Updates (30 Dec 2025)
 
 ### F9: Multi-language Support Expansion
+
 We've expanded language support from 4 to 9 languages! ComfyUI-Doctor now provides error suggestions in:
+
 - **English** (en)
 - **繁體中文** Traditional Chinese (zh_TW)
 - **简体中文** Simplified Chinese (zh_CN)
@@ -23,7 +25,9 @@ We've expanded language support from 4 to 9 languages! ComfyUI-Doctor now provid
 All 23 error patterns are fully translated across all languages, ensuring consistent diagnostic quality worldwide.
 
 ### F8: Sidebar Settings Integration
+
 Settings have been streamlined! Configure Doctor directly from the sidebar:
+
 - Click the ⚙️ icon in the sidebar header to access all settings
 - Language selection (9 languages)
 - AI Provider quick-switch (OpenAI, DeepSeek, Groq, Gemini, Ollama, etc.)
@@ -58,6 +62,7 @@ The new interactive chat interface provides a conversational debugging experienc
 ![AI Chat Interface](assets/chat-ui.png)
 
 **Key Features:**
+
 - **Context-Aware**: Automatically includes error details, node information, and workflow context
 - **Streaming Responses**: Real-time LLM responses with proper formatting
 - **Multi-Turn Conversations**: Ask follow-up questions to dig deeper into issues
@@ -65,6 +70,7 @@ The new interactive chat interface provides a conversational debugging experienc
 - **Supports 8+ LLM Providers**: OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more
 
 **How to Use:**
+
 1. When an error occurs, open the Doctor sidebar (left panel)
 2. Click the "✨ Analyze with AI" button in the error context area
 3. The AI will automatically analyze the error and provide suggestions
