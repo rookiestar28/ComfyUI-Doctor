@@ -12,3 +12,4 @@ logs/*
 .claude/
 .env
 .pytest_cache/
+.venv/

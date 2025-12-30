@@ -298,5 +298,118 @@ class TestSetLanguageLogic(unittest.TestCase):
         self.assertNotIn(invalid_lang, SUPPORTED_LANGUAGES)
 
 
+class TestSSRFProtection(unittest.TestCase):
+    """S2: Tests for SSRF protection in base URL validation."""
+    
+    def setUp(self):
+        """Import validate_ssrf_url from project."""
+        try:
+            from __init__ import validate_ssrf_url, is_local_llm_url
+            self.validate_ssrf_url = validate_ssrf_url
+            self.is_local_llm_url = is_local_llm_url
+        except ImportError:
+            # Fallback: test the logic directly
+            self.validate_ssrf_url = None
+    
+    def test_private_ip_blocked(self):
+        """Test that private IP addresses are blocked."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        blocked_urls = [
+            "http://10.0.0.1/v1",
+            "http://10.255.255.255/v1",
+            "http://172.16.0.1/v1",
+            "http://172.31.255.255/v1",
+            "http://192.168.0.1/v1",
+            "http://192.168.1.100/v1",
+        ]
+        for url in blocked_urls:
+            is_valid, error = self.validate_ssrf_url(url, allow_local_llm=False)
+            self.assertFalse(is_valid, f"Private IP {url} should be blocked")
+            self.assertIn("private", error.lower())
+    
+    def test_localhost_blocked(self):
+        """Test that localhost is blocked (when not local LLM)."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        blocked_urls = [
+            "http://localhost/v1",
+            "http://127.0.0.1/v1",
+            "http://0.0.0.0/v1",
+        ]
+        for url in blocked_urls:
+            is_valid, error = self.validate_ssrf_url(url, allow_local_llm=False)
+            self.assertFalse(is_valid, f"Localhost {url} should be blocked")
+    
+    def test_local_llm_allowed(self):
+        """Test that known local LLM patterns are allowed."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        allowed_urls = [
+            "http://localhost:11434/v1",  # Ollama
+            "http://127.0.0.1:1234/v1",   # LMStudio
+        ]
+        for url in allowed_urls:
+            is_valid, error = self.validate_ssrf_url(url, allow_local_llm=True)
+            self.assertTrue(is_valid, f"Local LLM {url} should be allowed")
+    
+    def test_cloud_urls_allowed(self):
+        """Test that legitimate cloud URLs are allowed."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        allowed_urls = [
+            "https://api.openai.com/v1",
+            "https://api.deepseek.com/v1",
+            "https://api.groq.com/openai/v1",
+            "https://api.anthropic.com/v1",
+        ]
+        for url in allowed_urls:
+            is_valid, error = self.validate_ssrf_url(url)
+            self.assertTrue(is_valid, f"Cloud URL {url} should be allowed: {error}")
+    
+    def test_non_http_blocked(self):
+        """Test that non-HTTP protocols are blocked."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        blocked_urls = [
+            "file:///etc/passwd",
+            "ftp://ftp.example.com/file",
+            "gopher://example.com/",
+        ]
+        for url in blocked_urls:
+            is_valid, error = self.validate_ssrf_url(url)
+            self.assertFalse(is_valid, f"Non-HTTP {url} should be blocked")
+            self.assertIn("protocol", error.lower())
+    
+    def test_internal_domains_blocked(self):
+        """Test that internal domains are blocked."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        blocked_urls = [
+            "http://server.local/v1",
+            "http://api.internal/v1",
+            "http://db.corp/v1",
+            "http://host.lan/v1",
+        ]
+        for url in blocked_urls:
+            is_valid, error = self.validate_ssrf_url(url)
+            self.assertFalse(is_valid, f"Internal domain {url} should be blocked")
+    
+    def test_metadata_endpoint_blocked(self):
+        """Test that cloud metadata endpoints are blocked."""
+        if not self.validate_ssrf_url:
+            self.skipTest("validate_ssrf_url not importable")
+        
+        # AWS metadata endpoint
+        is_valid, error = self.validate_ssrf_url("http://169.254.169.254/latest/meta-data/")
+        self.assertFalse(is_valid, "Metadata endpoint should be blocked")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

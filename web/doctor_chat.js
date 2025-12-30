@@ -3,10 +3,14 @@ import { app } from "../../../scripts/app.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { doctorContext } from "./doctor_state.js";
 
-// CDN Links
-const MARKED_CDN = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
-const HIGHLIGHT_CDN = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js";
-const HIGHLIGHT_CSS = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css";
+// S5: Local bundled assets with CDN fallback (pinned versions)
+// Versions: marked@15.0.4, highlight.js@11.9.0
+const LOCAL_MARKED = "/extensions/ComfyUI-Doctor/lib/marked.min.js";
+const LOCAL_HIGHLIGHT = "/extensions/ComfyUI-Doctor/lib/highlight.min.js";
+const LOCAL_HIGHLIGHT_CSS = "/extensions/ComfyUI-Doctor/lib/github-dark.min.css";
+const CDN_MARKED = "https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js";
+const CDN_HIGHLIGHT = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js";
+const CDN_HIGHLIGHT_CSS = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css";
 
 export class ChatPanel {
     constructor(options = {}) {
@@ -180,29 +184,50 @@ export class ChatPanel {
     }
 
     async loadAssets() {
-        // Load CSS for Highlight.js
+        // S5: Load CSS - try local first, fallback to CDN
         if (!document.getElementById('hljs-style')) {
             const link = document.createElement('link');
             link.id = 'hljs-style';
             link.rel = 'stylesheet';
-            link.href = HIGHLIGHT_CSS;
+            link.href = LOCAL_HIGHLIGHT_CSS;
+            link.onerror = () => {
+                console.warn('[ChatPanel] Local highlight.js CSS failed, using CDN fallback');
+                link.href = CDN_HIGHLIGHT_CSS;
+            };
             document.head.appendChild(link);
+            console.log('[ChatPanel] Loading highlight.js CSS from:', link.href);
         }
 
-        // Load custom chat CSS - use direct path relative to extensions directory
+        // Load custom chat CSS
         if (!document.getElementById('doctor-chat-css')) {
             const chatCss = document.createElement('link');
             chatCss.id = 'doctor-chat-css';
             chatCss.rel = 'stylesheet';
-            // ComfyUI serves extension files from /extensions/ComfyUI-Doctor/
             chatCss.href = '/extensions/ComfyUI-Doctor/doctor_chat.css';
             document.head.appendChild(chatCss);
-            console.log('[ChatPanel] Loading CSS from:', chatCss.href);
+            console.log('[ChatPanel] Loading chat CSS from:', chatCss.href);
         }
 
-        // Load JS libraries
-        if (!window.marked) await this.loadScript(MARKED_CDN);
-        if (!window.hljs) await this.loadScript(HIGHLIGHT_CDN);
+        // S5: Load JS libraries - try local first, fallback to CDN
+        if (!window.marked) {
+            try {
+                await this.loadScript(LOCAL_MARKED);
+                console.log('[ChatPanel] ✅ Loaded marked.js from local bundle');
+            } catch (e) {
+                console.warn('[ChatPanel] Local marked.js failed, using CDN fallback');
+                await this.loadScript(CDN_MARKED);
+            }
+        }
+
+        if (!window.hljs) {
+            try {
+                await this.loadScript(LOCAL_HIGHLIGHT);
+                console.log('[ChatPanel] ✅ Loaded highlight.js from local bundle');
+            } catch (e) {
+                console.warn('[ChatPanel] Local highlight.js failed, using CDN fallback');
+                await this.loadScript(CDN_HIGHLIGHT);
+            }
+        }
     }
 
     loadScript(src) {

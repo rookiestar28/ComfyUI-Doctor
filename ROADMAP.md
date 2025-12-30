@@ -102,8 +102,8 @@ graph TD
 - [x] **R2**: Thread safety hardening - 🔴 High ✅ *Completed*
 - [x] **R3**: aiohttp session reuse - 🟡 Medium ✅ *Completed (Phase 2)*
 - [x] **R4**: XSS protection - 🔴 High ✅ *Completed*
-- [ ] **R9**: SSE streaming chunk framing (buffer `data:` lines) - 🔴 High
-- [ ] **R10**: Hot-sync LLM settings for chat (API key/base URL/model) - 🟡 Medium
+- [x] **R9**: SSE streaming chunk framing (buffer `data:` lines) - 🔴 High ✅ *Completed*
+- [x] **R10**: Hot-sync LLM settings for chat (API key/base URL/model) - 🟡 Medium ✅ *Completed*
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **R8**: Smart workflow truncation for large graphs - 🟡 Medium
 - [ ] **R6**: Network retry logic with exponential backoff - 🟢 Low
@@ -116,14 +116,14 @@ graph TD
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek) - 🟡 Medium
-- [ ] **T6**: Fix test import issues (relative import errors) - 🟢 Low
-- [ ] **T7**: SSE/chat safety tests (stream parser + sanitizer) - 🟡 Medium
+- [x] **T6**: Fix test import issues (relative import errors) - 🟢 Low ✅ *Resolved: use `run_tests.ps1`*
+- [x] **T7**: SSE/chat safety tests (stream parser + sanitizer) - 🟡 Medium ✅ *Completed*
 
 ### 3.4 Security Enhancements
 
-- [ ] **S4**: Sanitize chat markdown/HTML rendering (LLM + user output) - 🔴 High
-- [ ] **S2**: Add SSRF protection for Base URL validation - 🟡 Medium
-- [ ] **S5**: Bundle/pin markdown & highlight assets with local fallback (no CDN-only) - 🟡 Medium
+- [x] **S4**: Sanitize chat markdown/HTML rendering (LLM + user output) - 🔴 High ✅ *Completed*
+- [x] **S2**: Add SSRF protection for Base URL validation - 🟡 Medium ✅ *Completed*
+- [x] **S5**: Bundle/pin markdown & highlight assets with local fallback (no CDN-only) - 🟡 Medium ✅ *Completed*
 - [ ] **S1**: Add Content-Security-Policy headers - 🟢 Low
 - [ ] **S3**: Implement telemetry (opt-in, anonymous) - 🟢 Low
 
@@ -167,16 +167,16 @@ graph TD
 
 ### Phase 3: Advanced Features
 
-1. **S4** Chat markdown sanitization (sidebar/chat) - **PRIORITY**
-2. **S5** Local bundle/pinned versions for `marked`/`highlight.js` (CDN fallback)
-3. **R9** SSE stream framing for `/doctor/chat` (buffer `data:` lines)
-4. **R10** Live-sync LLM settings (API key/base URL/model) into chat sends
-5. **S2** SSRF protection for base URL validation
+1. ✅ **S4** Chat markdown sanitization (sidebar/chat) - *Completed*
+2. ✅ **S5** Local bundle/pinned versions for `marked`/`highlight.js` (CDN fallback) - *Completed*
+3. ✅ **R9** SSE stream framing for `/doctor/chat` (buffer `data:` lines) - *Completed*
+4. ✅ **R10** Live-sync LLM settings (API key/base URL/model) into chat sends - *Completed*
+5. ✅ **S2** SSRF protection for base URL validation - *Completed*
 6. **R6** Network retry logic (exponential backoff)
 7. **R7** Rate limiting for LLM API calls
-8. **T7** SSE/chat safety tests (stream parser + sanitizer)
+8. ✅ **T7** SSE/chat safety tests (stream parser + sanitizer) - *Completed*
 9. **T5** Online API integration tests (OpenAI, DeepSeek)
-10. **T6** Fix test import issues
+10. ✅ **T6** Fix test import issues - *Resolved: use `run_tests.ps1`*
 11. **T2** Frontend tests
 12. **F8** Settings panel integration into sidebar
 13. **F9** Expand language support (de, fr, it, es, ko)
@@ -460,7 +460,7 @@ graph TD
 - 🟡 **R10**: 聊天使用舊的 LLM 設定快照（API Key/Base URL/Model）直到重新整理 → 發送前需熱同步設定。
 - 🟢 **S5**: `marked`/`highlight.js` 只有 CDN 且未鎖定版本，也無本地 fallback → 供應鏈與離線風險。
 
-### 2.3 已修復問題 
+### 2.3 已修復問題
 
 - ✅ **P1**: `except Exception: pass` 過於寬泛 → *已於 Phase 1 (R1) 修復*
 - ✅ **P2**: `_analysis_history` deque 與 `SmartLogger._instances` 的競態條件 → *已於 Phase 1 (R2) 修復*
@@ -490,8 +490,8 @@ graph TD
 - [x] **R2**: 執行緒安全加固 - 🔴 High ✅ *已完成*
 - [x] **R3**: aiohttp session 複用 - 🟡 Medium ✅ *已於 Phase 2 完成*
 - [x] **R4**: XSS 防護 - 🔴 High ✅ *已完成*
-- [ ] **R9**: SSE 串流分塊重組（以換行緩衝 `data:` 行）- 🔴 High
-- [ ] **R10**: 聊天 LLM 設定熱同步（API Key/Base URL/Model）- 🟡 Medium
+- [x] **R9**: SSE 串流分塊重組（以換行緩衝 `data:` 行）- 🔴 High ✅ *已完成*
+- [x] **R10**: 聊天 LLM 設定熱同步（API Key/Base URL/Model）- 🟡 Medium ✅ *已完成*
 - [ ] **R5**: 前端錯誤邊界 - 🟡 Medium ⚠️ *使用 dev branch 開發*
 - [ ] **R8**: 大型工作流智能截斷 - 🟡 Medium
 - [ ] **R6**: 網路重試邏輯（exponential backoff） - 🟢 Low
@@ -504,14 +504,14 @@ graph TD
 - [ ] **T3**: 端對端整合測試 - 🟢 Low
 - [ ] **T4**: 壓力測試 - 🟢 Low
 - [ ] **T5**: 線上 API 整合測試（OpenAI、DeepSeek） - 🟡 Medium
-- [ ] **T6**: 修復測試導入問題 - 🟢 Low
-- [ ] **T7**: SSE/聊天安全測試（串流解析 + 淨化）- 🟡 Medium
+- [x] **T6**: 修復測試導入問題 - 🟢 Low ✅ *已解決：使用 `run_tests.ps1`*
+- [x] **T7**: SSE/聊天安全測試（串流解析 + 淨化）- 🟡 Medium ✅ *已完成*
 
 ### 3.4 安全性增強（Security）
 
-- [ ] **S4**: 聊天 Markdown/HTML 渲染淨化（LLM/用戶輸出）- 🔴 High
-- [ ] **S2**: SSRF 防護（Base URL 驗證） - 🟡 Medium
-- [ ] **S5**: `marked`/`highlight.js` 本地 bundle 或鎖版 + fallback（避免只靠 CDN）- 🟡 Medium
+- [x] **S4**: 聊天 Markdown/HTML 渲染淨化（LLM/用戶輸出）- 🔴 High ✅ *已完成*
+- [x] **S2**: SSRF 防護（Base URL 驗證） - 🟡 Medium ✅ *已完成*
+- [x] **S5**: `marked`/`highlight.js` 本地 bundle 或鎖版 + fallback（避免只靠 CDN）- 🟡 Medium ✅ *已完成*
 - [ ] **S1**: Content-Security-Policy 標頭 - 🟢 Low
 - [ ] **S3**: 遙測數據收集（匿名、可選） - 🟢 Low
 
@@ -555,16 +555,16 @@ graph TD
 
 ### Phase 3: 進階功能（1-2 月）
 
-1. **S4** 聊天 markdown 淨化（側邊欄/聊天）- **優先**
-2. **S5** `marked`/`highlight.js` 本地 bundle / 鎖版 + fallback（避免只靠 CDN）
-3. **R9** `/doctor/chat` SSE 串流換行重組（緩衝 `data:` 行）
-4. **R10** 聊天 LLM 設定熱同步（API Key/Base URL/Model）
-5. **S2** SSRF 防護（Base URL 驗證）
+1. ✅ **S4** 聊天 markdown 淨化（側邊欄/聊天）- *已完成*
+2. ✅ **S5** `marked`/`highlight.js` 本地 bundle / 鎖版 + fallback（避免只靠 CDN）- *已完成*
+3. ✅ **R9** `/doctor/chat` SSE 串流換行重組（緩衝 `data:` 行）- *已完成*
+4. ✅ **R10** 聊天 LLM 設定熱同步（API Key/Base URL/Model）- *已完成*
+5. ✅ **S2** SSRF 防護（Base URL 驗證）- *已完成*
 6. **R6** 網路重試邏輯（exponential backoff）
 7. **R7** LLM API 呼叫速率限制
-8. **T7** SSE/聊天安全測試（串流解析 + 淨化）
+8. ✅ **T7** SSE/聊天安全測試（串流解析 + 淨化）- *已完成*
 9. **T5** 線上 API 整合測試（OpenAI、DeepSeek）
-10. **T6** 修復測試導入問題
+10. ✅ **T6** 修復測試導入問題 - *已解決：使用 `run_tests.ps1`*
 11. **T2** 前端測試
 12. **F8** 設定面板整合至側邊欄
 13. **F9** 擴展多語系支援（de, fr, it, es, ko）
@@ -780,4 +780,4 @@ __init__.py             # 新增 /doctor/chat 串流端點
 1. **穩健性**：加強錯誤處理、執行緒安全、XSS 防護 ✅ 已完成
 2. **可測試性**：補齊 API 與前端測試
 3. **功能深度**：Workflow 上下文整合、歷史持久化
-4. **v2.0 核心功能**：LLM 除錯對話介面，提供多輪對話式除錯體驗 
+4. **v2.0 核心功能**：LLM 除錯對話介面，提供多輪對話式除錯體驗
