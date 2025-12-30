@@ -18,3 +18,109 @@ Documentation = "https://github.com/rookiestar28/ComfyUI-Doctor#readme"
 PublisherId = "rookiestar"
 DisplayName = "ComfyUI Doctor"
 Icon = "🏥"
+
+# ========================================
+# Development Tools Configuration
+# ========================================
+
+[tool.ruff]
+# Ruff replaces flake8, isort, and other linters
+target-version = "py310"
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+# Enable pycodestyle (E, W), Pyflakes (F), isort (I), and more
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Do not perform function call in argument defaults
+    "B904",   # Within an except clause, raise exceptions with from err
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"tests/*" = ["S101"]      # Allow assert statements in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Start lenient, can tighten later
+disallow_any_unimported = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+check_untyped_defs = true
+strict_equality = true
+
+# Paths to check
+files = ["*.py", "tests/**/*.py"]
+
+# Ignore missing imports for ComfyUI and external packages
+[[tool.mypy.overrides]]
+module = [
+    "aiohttp.*",
+    "server",
+    "folder_paths",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "**/test_*.py",
+    "**/__pycache__/*",
+    ".venv/*",
+    "venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

@@ -1,0 +1,16 @@
+# Development dependencies for ComfyUI-Doctor
+# Install with: pip install -r requirements-dev.txt
+
+# Linting and formatting
+ruff>=0.8.0
+
+# Type checking
+mypy>=1.13.0
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=6.0.0
+pytest-asyncio>=0.24.0
+
+# Optional: for better test output
+pytest-xdist>=3.6.0  # Parallel test execution

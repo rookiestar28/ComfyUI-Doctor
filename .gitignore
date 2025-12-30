@@ -7,9 +7,30 @@
 REFERENCE/*
 logs/*
 !logs/.gitkeep
+
 # Planning - private files
 .planning/
 .claude/
 .env
+
+# Testing
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+coverage.xml
+*.cover
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Virtual environments
 .venv/
+venv/
+env/
