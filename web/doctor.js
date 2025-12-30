@@ -453,7 +453,19 @@ app.registerExtension({
                             </div>
                             <div>
                                 <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Model Name</label>
-                                <input type="text" id="doctor-model-input" value="${currentModel}" placeholder="e.g., gpt-4o, deepseek-chat" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                                <div style="display: flex; gap: 5px; align-items: center;">
+                                    <select id="doctor-model-select" style="flex: 1; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;">
+                                        <option value="">Loading models...</option>
+                                    </select>
+                                    <button id="doctor-refresh-models-btn" style="padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 13px;" title="Refresh model list">🔄</button>
+                                </div>
+                                <div style="margin-top: 5px;">
+                                    <label style="font-size: 11px; color: #888; cursor: pointer;">
+                                        <input type="checkbox" id="doctor-manual-model-toggle" style="margin-right: 3px;">
+                                        Enter model name manually
+                                    </label>
+                                </div>
+                                <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="e.g., gpt-4o, deepseek-chat" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
                             </div>
                             <button id="doctor-save-settings-btn" style="width: 100%; padding: 8px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 13px; margin-top: 5px;">💾 Save Settings</button>
                         </div>
@@ -477,16 +489,108 @@ app.registerExtension({
                     // Provider change auto-fills Base URL (using backend defaults)
                     const providerSelect = settingsPanel.querySelector('#doctor-provider-select');
                     const baseUrlInput = settingsPanel.querySelector('#doctor-baseurl-input');
+                    const modelSelect = settingsPanel.querySelector('#doctor-model-select');
+                    const refreshModelsBtn = settingsPanel.querySelector('#doctor-refresh-models-btn');
+                    const manualToggle = settingsPanel.querySelector('#doctor-manual-model-toggle');
+                    const modelInputManual = settingsPanel.querySelector('#doctor-model-input-manual');
+                    const apiKeyInput = settingsPanel.querySelector('#doctor-apikey-input');
+
+                    // Load models from API
+                    const loadModels = async () => {
+                        const baseUrl = baseUrlInput.value;
+                        const apiKey = apiKeyInput.value;
+
+                        if (!baseUrl) {
+                            modelSelect.innerHTML = '<option value="">Please set Base URL first</option>';
+                            return;
+                        }
+
+                        // Show loading state
+                        refreshModelsBtn.textContent = '⏳';
+                        refreshModelsBtn.disabled = true;
+                        modelSelect.disabled = true;
+
+                        try {
+                            const result = await DoctorAPI.listModels(baseUrl, apiKey);
+
+                            if (result.success && result.models.length > 0) {
+                                // Populate dropdown
+                                modelSelect.innerHTML = '';
+                                result.models.forEach(model => {
+                                    const option = document.createElement('option');
+                                    option.value = model.id;
+                                    option.textContent = model.name;
+                                    modelSelect.appendChild(option);
+                                });
+
+                                // Restore current selection if available
+                                if (currentModel) {
+                                    const modelExists = result.models.find(m => m.id === currentModel);
+                                    if (modelExists) {
+                                        modelSelect.value = currentModel;
+                                    } else {
+                                        // Add current model as first option if not in list
+                                        const option = document.createElement('option');
+                                        option.value = currentModel;
+                                        option.textContent = `${currentModel} (current)`;
+                                        option.selected = true;
+                                        modelSelect.insertBefore(option, modelSelect.firstChild);
+                                    }
+                                }
+
+                                console.log(`[ComfyUI-Doctor] Loaded ${result.models.length} models from ${baseUrl}`);
+                            } else {
+                                modelSelect.innerHTML = '<option value="">No models found - use manual input</option>';
+                            }
+                        } catch (error) {
+                            console.error('[ComfyUI-Doctor] Failed to load models:', error);
+                            modelSelect.innerHTML = '<option value="">Error loading models - use manual input</option>';
+                        } finally {
+                            refreshModelsBtn.textContent = '🔄';
+                            refreshModelsBtn.disabled = false;
+                            modelSelect.disabled = false;
+                        }
+                    };
+
+                    // Refresh button click handler
+                    refreshModelsBtn.onclick = () => loadModels();
+
+                    // Manual input toggle
+                    manualToggle.onchange = () => {
+                        if (manualToggle.checked) {
+                            modelSelect.style.display = 'none';
+                            refreshModelsBtn.style.display = 'none';
+                            modelInputManual.style.display = 'block';
+                            modelInputManual.value = modelSelect.value || currentModel;
+                        } else {
+                            modelSelect.style.display = 'block';
+                            refreshModelsBtn.style.display = 'block';
+                            modelInputManual.style.display = 'none';
+                        }
+                    };
+
+                    // Provider change: auto-fill Base URL and reload models
                     providerSelect.onchange = () => {
                         baseUrlInput.value = PROVIDER_DEFAULTS[providerSelect.value] || "";
+                        if (baseUrlInput.value && !manualToggle.checked) {
+                            loadModels();
+                        }
                     };
+
+                    // Auto-load models on initialization
+                    if (currentBaseUrl && !manualToggle.checked) {
+                        loadModels();
+                    }
 
                     // Save settings button
                     const saveBtn = settingsPanel.querySelector('#doctor-save-settings-btn');
                     saveBtn.onclick = async () => {
                         const langSelect = settingsPanel.querySelector('#doctor-language-select');
-                        const apiKeyInput = settingsPanel.querySelector('#doctor-apikey-input');
-                        const modelInput = settingsPanel.querySelector('#doctor-model-input');
+
+                        // Get model value from either dropdown or manual input
+                        const modelValue = manualToggle.checked
+                            ? modelInputManual.value
+                            : modelSelect.value;
 
                         try {
                             // Save to ComfyUI Settings
@@ -494,7 +598,7 @@ app.registerExtension({
                             app.ui.settings.setSettingValue("Doctor.LLM.Provider", providerSelect.value);
                             app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", baseUrlInput.value);
                             app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", apiKeyInput.value);
-                            app.ui.settings.setSettingValue("Doctor.LLM.Model", modelInput.value);
+                            app.ui.settings.setSettingValue("Doctor.LLM.Model", modelValue);
 
                             // Sync language with backend
                             await DoctorAPI.setLanguage(langSelect.value);
