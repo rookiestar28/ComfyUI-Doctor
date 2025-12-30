@@ -15,6 +15,33 @@ const DEFAULTS = {
     ENABLE_NOTIFICATIONS: true,
 };
 
+// Provider default URLs (will be fetched from backend on init)
+let PROVIDER_DEFAULTS = {
+    "openai": "https://api.openai.com/v1",
+    "deepseek": "https://api.deepseek.com/v1",
+    "groq": "https://api.groq.com/openai/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "xai": "https://api.x.ai/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "ollama": "http://127.0.0.1:11434",
+    "lmstudio": "http://localhost:1234/v1",
+    "custom": ""
+};
+
+// Fetch provider defaults from backend (supports env vars)
+async function loadProviderDefaults() {
+    try {
+        const response = await fetch('/doctor/provider_defaults');
+        if (response.ok) {
+            const defaults = await response.json();
+            PROVIDER_DEFAULTS = { ...PROVIDER_DEFAULTS, ...defaults };
+            console.log('[ComfyUI-Doctor] Provider defaults loaded:', PROVIDER_DEFAULTS);
+        }
+    } catch (error) {
+        console.warn('[ComfyUI-Doctor] Failed to load provider defaults, using fallback:', error);
+    }
+}
+
 // Supported languages
 const SUPPORTED_LANGUAGES = [
     { value: "en", text: "English" },
@@ -147,6 +174,9 @@ app.registerExtension({
 
     async setup() {
         console.log("[ComfyUI-Doctor] 🟢 Frontend Extension Initialized");
+
+        // Load provider defaults from backend (supports env vars)
+        await loadProviderDefaults();
 
         // ========================================
         // Register Settings with ComfyUI Settings Panel (Simplified for F8)
@@ -444,22 +474,11 @@ app.registerExtension({
                         updateToggleIcon(!isExpanded);
                     };
 
-                    // Provider change auto-fills Base URL
+                    // Provider change auto-fills Base URL (using backend defaults)
                     const providerSelect = settingsPanel.querySelector('#doctor-provider-select');
                     const baseUrlInput = settingsPanel.querySelector('#doctor-baseurl-input');
                     providerSelect.onchange = () => {
-                        const urlMap = {
-                            "openai": "https://api.openai.com/v1",
-                            "deepseek": "https://api.deepseek.com/v1",
-                            "groq": "https://api.groq.com/openai/v1",
-                            "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
-                            "xai": "https://api.x.ai/v1",
-                            "openrouter": "https://openrouter.ai/api/v1",
-                            "ollama": "http://localhost:11434/v1",
-                            "lmstudio": "http://localhost:1234/v1",
-                            "custom": ""
-                        };
-                        baseUrlInput.value = urlMap[providerSelect.value] || "";
+                        baseUrlInput.value = PROVIDER_DEFAULTS[providerSelect.value] || "";
                     };
 
                     // Save settings button

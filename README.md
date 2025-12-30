@@ -203,8 +203,15 @@ ComfyUI-Doctor integrates with popular LLM services to provide intelligent, cont
 
 #### Local Services (No API Key Required)
 
-- **Ollama** (`http://localhost:11434/v1`) - Run Llama, Mistral, CodeLlama locally
+- **Ollama** (`http://127.0.0.1:11434`) - Run Llama, Mistral, CodeLlama locally
 - **LMStudio** (`http://localhost:1234/v1`) - Local model inference with GUI
+
+> **💡 Cross-Platform Compatibility**: Default URLs can be overridden via environment variables:
+>
+> - `OLLAMA_BASE_URL` - Custom Ollama endpoint (default: `http://127.0.0.1:11434`)
+> - `LMSTUDIO_BASE_URL` - Custom LMStudio endpoint (default: `http://localhost:1234/v1`)
+>
+> This prevents conflicts between Windows and WSL2 Ollama instances, or when running in Docker/custom setups.
 
 ### Configuration
 

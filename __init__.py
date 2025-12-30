@@ -29,6 +29,11 @@ DOCTOR_LLM_API_KEY = os.getenv("DOCTOR_LLM_API_KEY")
 DOCTOR_LLM_BASE_URL = os.getenv("DOCTOR_LLM_BASE_URL", "https://api.openai.com/v1")
 DOCTOR_LLM_MODEL = os.getenv("DOCTOR_LLM_MODEL", "gpt-4o")
 
+# --- Local LLM Service URLs (Environment Variable Support) ---
+# Allows cross-platform compatibility (Windows vs WSL2, Docker, etc.)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
+
 
 def is_local_llm_url(base_url: str) -> bool:
     """
@@ -403,7 +408,9 @@ try:
             is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
 
             if is_ollama:
-                # Ollama uses /api/chat endpoint
+                # Ollama uses /api/chat endpoint (remove /v1 if present)
+                if base_url.endswith("/v1"):
+                    base_url = base_url[:-3]
                 url = f"{base_url}/api/chat"
                 payload = {
                     "model": model,
@@ -574,7 +581,9 @@ try:
             is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
 
             if is_ollama:
-                # Ollama uses /api/chat endpoint
+                # Ollama uses /api/chat endpoint (remove /v1 if present)
+                if base_url.endswith("/v1"):
+                    base_url = base_url[:-3]
                 url = f"{base_url}/api/chat"
             else:
                 # OpenAI-compatible: auto-append /v1 if needed
@@ -764,6 +773,26 @@ try:
         except Exception as e:
             return web.json_response({"success": False, "message": str(e)}, status=500)
 
+    @server.PromptServer.instance.routes.get("/doctor/provider_defaults")
+    async def api_get_provider_defaults(request):
+        """
+        API endpoint to get default URLs for LLM providers.
+        Supports environment variable overrides for cross-platform compatibility.
+
+        Returns:
+            JSON with provider default URLs.
+        """
+        return web.json_response({
+            "ollama": OLLAMA_BASE_URL,
+            "lmstudio": LMSTUDIO_BASE_URL,
+            "openai": "https://api.openai.com/v1",
+            "deepseek": "https://api.deepseek.com/v1",
+            "groq": "https://api.groq.com/openai/v1",
+            "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "xai": "https://api.x.ai/v1",
+            "openrouter": "https://openrouter.ai/api/v1"
+        })
+
     @server.PromptServer.instance.routes.post("/doctor/verify_key")
     async def api_verify_key(request):
         """
@@ -883,8 +912,15 @@ try:
             # Determine if this is Ollama or OpenAI-compatible API
             is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
 
+            if is_ollama:
+                # Ollama uses /api/tags endpoint (remove /v1 if present)
+                if base_url.endswith("/v1"):
+                    base_url = base_url[:-3]
+                url = f"{base_url}/api/tags"
+            else:
+                url = f"{base_url}/models"
+
             headers = {"Authorization": f"Bearer {api_key}"}
-            url = f"{base_url}/api/tags" if is_ollama else f"{base_url}/models"
             
             session = await SessionManager.get_session()
             async with session.get(url, headers=headers) as response:
@@ -915,7 +951,8 @@ try:
                                 "id": model_name,
                                 "name": model_name
                             })
-                    
+
+                    logger.info(f"Retrieved {len(models)} models from {url}")
                     return web.json_response({
                         "success": True,
                         "models": models,

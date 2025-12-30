@@ -201,8 +201,15 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 #### 本地服務（無需 API Key）
 
-- **Ollama**（`http://localhost:11434/v1`）- 在本地執行 Llama、Mistral、CodeLlama
+- **Ollama**（`http://127.0.0.1:11434`）- 在本地執行 Llama、Mistral、CodeLlama
 - **LMStudio**（`http://localhost:1234/v1`）- 具備圖形介面的本地模型推理
+
+> **💡 跨平台相容性**：預設 URL 可透過環境變數覆蓋：
+>
+> - `OLLAMA_BASE_URL` - 自訂 Ollama 端點（預設：`http://127.0.0.1:11434`）
+> - `LMSTUDIO_BASE_URL` - 自訂 LMStudio 端點（預設：`http://localhost:1234/v1`）
+>
+> 這可避免 Windows 和 WSL2 Ollama 實例之間的衝突，或在 Docker/自訂環境中運行時的問題。
 
 ### 配置設定
 
