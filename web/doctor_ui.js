@@ -126,7 +126,6 @@ export class DoctorUI {
 
     /**
      * Update the modern sidebar tab content with error data.
-     * NEW SIMPLIFIED VERSION - Following ComfyUI-Copilot architecture
      */
     updateSidebarTab(data) {
         const errorContext = this.sidebarErrorContext;

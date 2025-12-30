@@ -299,7 +299,7 @@ export class ChatPanel {
         this.contextBadge = panel.querySelector('#doctor-context-badge');
         this.contextActions = panel.querySelector('#doctor-context-actions');
 
-        // Setup smart auto-scroll (ComfyUI-Copilot pattern)
+        // Setup smart auto-scroll
         this.setupAutoScroll();
 
         // Auto-resize
@@ -415,7 +415,7 @@ export class ChatPanel {
     // Let's implement a "streamUpdate" method.
 
     setupAutoScroll() {
-        // ComfyUI-Copilot pattern: Smart auto-scroll with ResizeObserver + MutationObserver
+        // Smart auto-scroll with ResizeObserver + MutationObserver
         // Only scrolls if user is already at bottom, preserves scroll position otherwise
         if (!this.messagesContainer) return;
 
@@ -446,7 +446,7 @@ export class ChatPanel {
     }
 
     updateLastMessage(content) {
-        // Content hashing for deduplication (ComfyUI-Copilot pattern)
+        // Content hashing for deduplication
         const contentHash = content.slice(0, 100);
         if (this.lastContentHash === contentHash) {
             return; // Skip duplicate renders

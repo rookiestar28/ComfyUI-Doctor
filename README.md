@@ -303,7 +303,11 @@ You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear i
 ### 9. AI Model Name
 
 **Function**: Specify which model to use for error analysis.
-**Usage**: Enter the model identifier (e.g., `gpt-4o`, `deepseek-chat`, `llama3.1:8b`). For local LLMs, switch provider to see available models in an alert dialog.
+**Usage**:
+- **Dropdown Mode** (default): Select a model from the automatically-populated dropdown list. Click the 🔄 refresh button to reload available models.
+- **Manual Input Mode**: Check "Enter model name manually" to type a custom model name (e.g., `gpt-4o`, `deepseek-chat`, `llama3.1:8b`).
+- Models are automatically fetched from your selected provider's API when you change providers or click refresh.
+- For local LLMs (Ollama/LMStudio), the dropdown displays all locally available models.
 
 ---
 
