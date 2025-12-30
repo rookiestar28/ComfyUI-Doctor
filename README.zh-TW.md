@@ -215,20 +215,15 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 ![設定面板](./assets/settings.png)
 
-在 **ComfyUI 設定** → **Doctor** → **LLM Settings** 中配置 AI 分析：
+在 **Doctor 側邊欄** → **Settings** 面板中配置 AI 分析：
 
 1. **AI Provider**：從下拉選單中選擇您偏好的 LLM 服務提供商。Base URL 會自動填入。
 2. **AI Base URL**：API 端點（自動填入，但可自訂）
 3. **AI API Key**：您的 API 金鑰（本地 LLM（如 Ollama/LMStudio）可留空）
-4. **AI Model Name**：輸入模型名稱（例如：`gpt-4o`、`deepseek-chat`、`llama3.1:8b`）
-
-#### 查詢本地 LLM 可用模型
-
-當您選擇 **Ollama** 或 **LMStudio** 作為 LLM 提供來源時，系統會自動顯示可用模型的彈出視窗：
-
-![模型列表警示](./assets/model%20list.png)
-
-只需複製所需的模型名稱並貼到 **AI Model Name** 欄位即可。
+4. **AI Model Name**：
+   - 從下拉選單中選擇模型（自動從您的提供商 API 取得）
+   - 點擊 🔄 重新整理按鈕可重新載入可用模型
+   - 或勾選「手動輸入模型名稱」以輸入自訂模型名稱
 
 ### 使用 AI 分析
 

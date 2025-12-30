@@ -217,20 +217,15 @@ ComfyUI-Doctor integrates with popular LLM services to provide intelligent, cont
 
 ![Settings Panel](./assets/settings.png)
 
-Configure AI analysis in **ComfyUI Settings** → **Doctor** → **LLM Settings**:
+Configure AI analysis in the **Doctor Sidebar** → **Settings** panel:
 
 1. **AI Provider**: Select from the dropdown menu. The Base URL will auto-fill.
 2. **AI Base URL**: The API endpoint (auto-populated, but customizable)
 3. **AI API Key**: Your API key (leave empty for local LLMs like Ollama/LMStudio)
-4. **AI Model Name**: Enter the model name (e.g., `gpt-4o`, `deepseek-chat`, `llama3.1:8b`)
-
-#### Finding Available Models for Local LLMs
-
-When you select **Ollama** or **LMStudio** as the provider and refresh the UI, a dialog box will automatically display available models:
-
-![Model List Alert](./assets/model%20list.png)
-
-Simply copy the desired model name and paste it into the **AI Model Name** field.
+4. **AI Model Name**:
+   - Select a model from the dropdown list (automatically populated from your provider's API)
+   - Click the 🔄 refresh button to reload available models
+   - Or check "Enter model name manually" to type a custom model name
 
 ### Using AI Analysis
 
