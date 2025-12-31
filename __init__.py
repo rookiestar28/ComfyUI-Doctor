@@ -142,6 +142,10 @@ def validate_ssrf_url(base_url: str, allow_local_llm: bool = True) -> tuple[bool
     
     return True, ""
 
+def is_anthropic(base_url: str) -> bool:
+    """Check if the base URL is for Anthropic API."""
+    return "anthropic.com" in base_url.lower()
+
 # --- 1. Setup Log Directory (Local to Node) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 log_dir = os.path.join(current_dir, "logs")
@@ -406,20 +410,37 @@ try:
                 logger.warning(f"Failed to collect environment info: {env_err}")
                 user_prompt += "[System environment info unavailable]\n\n"
             
-            # Prepare headers (API key is NOT logged)
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
             # Normalize Base URL
             base_url = base_url.rstrip("/")
 
-            # Determine if this is Ollama or OpenAI-compatible API
+            # Determine API type
             is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+            is_anthropic_api = is_anthropic(base_url)
 
-            if is_ollama:
+            # Prepare headers and payload based on API type
+            if is_anthropic_api:
+                # Anthropic API uses different format
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                }
+                url = f"{base_url}/v1/messages"
+                # Anthropic doesn't support system message in messages array
+                payload = {
+                    "model": model,
+                    "system": system_prompt,
+                    "messages": [
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": 4096
+                }
+            elif is_ollama:
                 # Ollama uses /api/chat endpoint (remove /v1 if present)
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
                 if base_url.endswith("/v1"):
                     base_url = base_url[:-3]
                 url = f"{base_url}/api/chat"
@@ -432,6 +453,11 @@ try:
                     "stream": False
                 }
             else:
+                # OpenAI-compatible APIs
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
                 # Auto-append /v1 if missing and looks like a standard provider
                 if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
                     base_url += "/v1"
@@ -460,8 +486,11 @@ try:
                 # Safely parse JSON response
                 try:
                     result = await response.json()
-                    # Handle both Ollama and OpenAI response formats
-                    if is_ollama:
+                    # Handle Anthropic, Ollama, and OpenAI response formats
+                    if is_anthropic_api:
+                        # Anthropic format: {"content": [{"text": "..."}]}
+                        content = result.get('content', [{}])[0].get('text', '')
+                    elif is_ollama:
                         content = result.get('message', {}).get('content', '')
                     else:
                         content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -580,44 +609,68 @@ try:
             except Exception as env_err:
                 logger.warning(f"Failed to collect environment info for chat: {env_err}")
 
-            # Build conversation with system prompt
-            api_messages = [{"role": "system", "content": system_prompt}]
-            
+            # Prepare request
+            base_url = base_url.rstrip("/")
+
+            # Determine API type
+            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+            is_anthropic_api = is_anthropic(base_url)
+
             # Limit conversation history to prevent token overflow
             MAX_HISTORY = 10
             recent_messages = messages[-MAX_HISTORY:] if len(messages) > MAX_HISTORY else messages
-            api_messages.extend(recent_messages)
-            
-            # Prepare request
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            base_url = base_url.rstrip("/")
 
-            # Determine if this is Ollama or OpenAI-compatible API
-            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
-
-            if is_ollama:
+            if is_anthropic_api:
+                # Anthropic uses different format
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                }
+                url = f"{base_url}/v1/messages"
+                payload = {
+                    "model": model,
+                    "system": system_prompt,
+                    "messages": recent_messages,
+                    "max_tokens": 4096,
+                    "temperature": 0.7,
+                    "stream": stream
+                }
+            elif is_ollama:
                 # Ollama uses /api/chat endpoint (remove /v1 if present)
                 if base_url.endswith("/v1"):
                     base_url = base_url[:-3]
                 url = f"{base_url}/api/chat"
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                api_messages = [{"role": "system", "content": system_prompt}]
+                api_messages.extend(recent_messages)
+                payload = {
+                    "model": model,
+                    "messages": api_messages,
+                    "temperature": 0.7,
+                    "stream": stream
+                }
             else:
                 # OpenAI-compatible: auto-append /v1 if needed
                 if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
                     base_url += "/v1"
                 url = f"{base_url}/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                api_messages = [{"role": "system", "content": system_prompt}]
+                api_messages.extend(recent_messages)
+                payload = {
+                    "model": model,
+                    "messages": api_messages,
+                    "temperature": 0.7,
+                    "stream": stream
+                }
 
             logger.info(f"Connecting to LLM: {url}")
-            
-            payload = {
-                "model": model,
-                "messages": api_messages,
-                "temperature": 0.7,
-                "stream": stream
-            }
             
             if not stream:
                 # Non-streaming fallback
@@ -629,8 +682,10 @@ try:
                         return web.json_response({"error": f"LLM Error: {error_msg[:500]}"}, status=response.status)
                     
                     result = await response.json()
-                    # Handle both Ollama and OpenAI response formats
-                    if is_ollama:
+                    # Handle Anthropic, Ollama, and OpenAI response formats
+                    if is_anthropic_api:
+                        content = result.get('content', [{}])[0].get('text', '')
+                    elif is_ollama:
                         content = result.get('message', {}).get('content', '')
                     else:
                         content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -674,7 +729,33 @@ try:
                                 continue
 
                             # Handle different streaming formats
-                            if is_ollama:
+                            if is_anthropic_api:
+                                # Anthropic uses SSE format with different event types
+                                if not line.startswith('data:'):
+                                    # Skip event: type lines
+                                    continue
+
+                                payload_str = line[5:].strip()
+                                if not payload_str:
+                                    continue
+
+                                try:
+                                    chunk_json = json.loads(payload_str)
+                                    event_type = chunk_json.get('type', '')
+
+                                    if event_type == 'message_stop':
+                                        done_data = json.dumps({"delta": "", "done": True})
+                                        await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                        stream_done = True
+                                        break
+                                    elif event_type == 'content_block_delta':
+                                        delta = chunk_json.get('delta', {}).get('text', '')
+                                        if delta:
+                                            chunk_data = json.dumps({"delta": delta, "done": False})
+                                            await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                                except json.JSONDecodeError:
+                                    continue
+                            elif is_ollama:
                                 # Ollama uses newline-delimited JSON (not SSE)
                                 try:
                                     chunk_json = json.loads(line)
@@ -805,6 +886,7 @@ try:
             "ollama": OLLAMA_BASE_URL,
             "lmstudio": LMSTUDIO_BASE_URL,
             "openai": "https://api.openai.com/v1",
+            "anthropic": "https://api.anthropic.com",
             "deepseek": "https://api.deepseek.com/v1",
             "groq": "https://api.groq.com/openai/v1",
             "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",

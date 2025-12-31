@@ -18,6 +18,7 @@ const DEFAULTS = {
 // Provider default URLs (will be fetched from backend on init)
 let PROVIDER_DEFAULTS = {
     "openai": "https://api.openai.com/v1",
+    "anthropic": "https://api.anthropic.com",
     "deepseek": "https://api.deepseek.com/v1",
     "groq": "https://api.groq.com/openai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -319,11 +320,12 @@ app.registerExtension({
                                 <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">AI Provider</label>
                                 <select id="doctor-provider-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
                                     <option value="openai" ${currentProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
+                                    <option value="anthropic" ${currentProvider === 'anthropic' ? 'selected' : ''}>Anthropic Claude</option>
                                     <option value="deepseek" ${currentProvider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
                                     <option value="groq" ${currentProvider === 'groq' ? 'selected' : ''}>Groq Cloud (LPU)</option>
                                     <option value="gemini" ${currentProvider === 'gemini' ? 'selected' : ''}>Google Gemini</option>
                                     <option value="xai" ${currentProvider === 'xai' ? 'selected' : ''}>xAI Grok</option>
-                                    <option value="openrouter" ${currentProvider === 'openrouter' ? 'selected' : ''}>OpenRouter (Claude)</option>
+                                    <option value="openrouter" ${currentProvider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
                                     <option value="ollama" ${currentProvider === 'ollama' ? 'selected' : ''}>Ollama (Local)</option>
                                     <option value="lmstudio" ${currentProvider === 'lmstudio' ? 'selected' : ''}>LMStudio (Local)</option>
                                     <option value="custom" ${currentProvider === 'custom' ? 'selected' : ''}>Custom</option>

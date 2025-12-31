@@ -46,10 +46,11 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - **Automatic Error Monitoring**: Captures all terminal output and detects Python tracebacks in real-time
 - **Intelligent Error Analysis**: 19+ built-in error patterns with actionable suggestions
 - **Node Context Extraction**: Identifies which node caused the error (Node ID, Name, Class)
+- **System Environment Context**: Automatically includes Python version, installed packages (pip list), and OS info in AI analysis
 - **Multi-language Support**: Current Language Support: English, Traditional Chinese, Simplified Chinese, Japanese (more coming soon).
 - **Debug Inspector Node**: Deep inspection of data flowing through your workflow
 - **Error History**: Maintains a buffer of recent errors via API
-- **RESTful API**: Six endpoints for frontend integration
+- **RESTful API**: Seven endpoints for frontend integration
 - **AI-Powered Analysis**: One-click LLM error analysis with support for 8+ providers (OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more)
 - **Interactive Chat Interface**: Multi-turn AI debugging assistant integrated into ComfyUI sidebar
 - **Interactive Sidebar UI**: Visual error panel with node location and instant diagnostics
@@ -64,10 +65,12 @@ The new interactive chat interface provides a conversational debugging experienc
 **Key Features:**
 
 - **Context-Aware**: Automatically includes error details, node information, and workflow context
+- **Environment-Aware**: Includes Python version, installed packages, and OS info for accurate debugging
 - **Streaming Responses**: Real-time LLM responses with proper formatting
 - **Multi-Turn Conversations**: Ask follow-up questions to dig deeper into issues
 - **Always Accessible**: Input area stays visible at the bottom with sticky positioning
 - **Supports 8+ LLM Providers**: OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more
+- **Smart Caching**: Package list cached for 24 hours to avoid performance impact
 
 **How to Use:**
 
