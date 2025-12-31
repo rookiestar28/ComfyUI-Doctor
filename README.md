@@ -171,21 +171,45 @@ Click the **🏥 Doctor** button in the ComfyUI menu (left sidebar) to open the 
 
 ### Interface Features
 
-![Doctor Error Report](./assets/error%20report.png)
+![Doctor Error Report](./assets/doctor-side-bar.png)
 
-- **Status Indicator**: A colored dot in the panel header
+The Doctor interface consists of two panels:
+
+#### Left Sidebar Panel (Doctor Sidebar)
+
+Click the **🏥 Doctor** icon in ComfyUI's left menu to access:
+
+- **Settings Panel** (⚙️ icon): Configure language, AI provider, API keys, and model selection
+- **Error Context Card**: When an error occurs, displays:
+  - **💡 Suggestion**: Concise, actionable advice (e.g., "Check input connections and ensure node requirements are met.")
+  - **Timestamp**: When the error occurred
+  - **Node Context**: Node ID and name (if applicable)
+  - **✨ Analyze with AI**: Launch interactive chat for detailed debugging
+- **AI Chat Interface**: Multi-turn conversation with your LLM for in-depth error analysis
+- **Sticky Input Area**: Always accessible at bottom for follow-up questions
+
+#### Right Error Panel (Latest Diagnosis)
+
+Real-time error notifications in the top-right corner:
+
+![Doctor Error Report](./assets/error-report.png)
+
+- **Status Indicator**: Colored dot showing system health
   - 🟢 **Green**: System running normally, no errors detected
   - 🔴 **Red (pulsing)**: Active error detected
-
 - **Latest Diagnosis Card**: Displays the most recent error with:
-  - Error message and timestamp
-  - Node context (Node ID, Name, Class)
+  - **Error Summary**: Brief error description (red-themed, collapsible for long errors)
+  - **💡 Suggestion**: Concise actionable advice (green-themed)
+  - **Timestamp**: When the error occurred
+  - **Node Context**: Node ID, name, and class
   - **🔍 Locate Node on Canvas**: Automatically centers and highlights the problematic node
-  - **✨ Analyze with AI**: Send error to configured LLM for intelligent debugging suggestions
 
-- **Real-time Updates**: The panel automatically updates when new errors occur via WebSocket events
+**Key Design Principles**:
 
-- **Auto-open on Error**: Enable in settings to automatically expand the panel when errors are detected
+- ✅ **Concise Suggestions**: Only the actionable advice is shown (e.g., "Check input connections...") instead of verbose error descriptions
+- ✅ **Visual Separation**: Error messages (red) and suggestions (green) are clearly distinguished
+- ✅ **Smart Truncation**: Long errors show first 3 + last 3 lines with collapsible full details
+- ✅ **Real-time Updates**: Both panels automatically update when new errors occur via WebSocket events
 
 ---
 

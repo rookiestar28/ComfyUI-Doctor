@@ -189,7 +189,34 @@ export class DoctorUI {
     }
 
     /**
-     * Update the modern sidebar tab content with error data.
+     * ═══════════════════════════════════════════════════════════════
+     * Update LEFT SIDEBAR Tab - Doctor Sidebar Error Context
+     * ═══════════════════════════════════════════════════════════════
+     *
+     * LOCATION: Left sidebar panel (web/doctor.js)
+     * DO NOT CONFUSE WITH: Right error panel (updateLogCard method)
+     *
+     * PURPOSE: Updates the error context card in the left sidebar
+     *
+     * DISPLAY STRATEGY:
+     * - Shows CONCISE SUGGESTION ONLY (actionable advice)
+     * - Extracts last sentence from full suggestion
+     * - Example: "Check input connections and ensure node requirements are met."
+     *
+     * BACKEND DATA:
+     * - Full error context is sent to LLM (unchanged)
+     * - Only frontend display is simplified
+     *
+     * EXTRACTION LOGIC:
+     * - Split suggestion by period ('. ')
+     * - Take last sentence as actionable advice
+     * - See Lines 240-258 for implementation
+     *
+     * RELATED:
+     * - Left sidebar structure: web/doctor.js Lines 540-559
+     * - Right panel display: updateLogCard() method
+     * - Documentation: .planning/ERROR_PANEL_UI_FIXES.md Issue 5
+     * ═══════════════════════════════════════════════════════════════
      */
     updateSidebarTab(data) {
         const errorContext = this.sidebarErrorContext;
@@ -234,12 +261,46 @@ export class DoctorUI {
             errorMessage = errorMessage.substring(colonIndex + 1).trim();
         }
 
-        // Show error context
+        // ═══════════════════════════════════════════════════════════════
+        // SUGGESTION EXTRACTION - Display CONCISE advice only
+        // ═══════════════════════════════════════════════════════════════
+        // DO NOT REMOVE OR MODIFY without consulting .planning/ERROR_PANEL_UI_FIXES.md Issue 5
+        //
+        // BACKEND SENDS: "Validation Error in KSampler: Return type mismatch... Check input connections and ensure node requirements are met."
+        // WE DISPLAY: "Check input connections and ensure node requirements are met."
+        //
+        // REASON: User needs actionable advice, not verbose error description
+        // IMPORTANT: Full context still sent to LLM for analysis
+        // ═══════════════════════════════════════════════════════════════
+
+        // Show error context - ONLY display suggestion if available
         errorContext.style.display = 'block';
+
+        // Extract suggestion (remove prefix if present)
+        let suggestion = data.suggestion
+            ? data.suggestion.replace("💡 SUGGESTION: ", "").trim()
+            : null;
+
+        // Extract only the actionable part (last sentence after final period)
+        if (suggestion) {
+            const sentences = suggestion.split('. ');
+            if (sentences.length > 1) {
+                // Take the last sentence (the actionable advice)
+                suggestion = sentences[sentences.length - 1].trim();
+                // Ensure it ends with a period
+                if (!suggestion.endsWith('.')) {
+                    suggestion += '.';
+                }
+            }
+        }
+
         errorContext.innerHTML = `
-            <div style="padding: 12px; background: rgba(255, 68, 68, 0.1); border-bottom: 1px solid #ff4444;">
-                <div style="font-weight: bold; color: #ff6b6b; margin-bottom: 5px;">⚠️ ${this.escapeHtml(errorType)}</div>
-                <div style="font-size: 13px; color: #ddd; word-break: break-word; margin-bottom: 8px;">${this.escapeHtml(errorMessage.substring(0, 200))}${errorMessage.length > 200 ? '...' : ''}</div>
+            <div style="padding: 12px; background: rgba(74, 170, 74, 0.1); border-bottom: 1px solid #4a4;">
+                <div style="font-weight: bold; color: #4a4; margin-bottom: 8px;">💡 Suggestion</div>
+                ${suggestion
+                    ? `<div style="font-size: 13px; color: #ddd; word-break: break-word; margin-bottom: 8px; line-height: 1.5;">${this.escapeHtml(suggestion)}</div>`
+                    : `<div style="font-size: 13px; color: #888; font-style: italic; margin-bottom: 8px;">No suggestion available yet</div>`
+                }
                 <div style="font-size: 11px; color: #888;">🕐 ${timestamp}</div>
                 ${nodeContext.node_id ? `
                     <div style="background: rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; margin-top: 8px; font-size: 12px;">
@@ -1024,16 +1085,35 @@ export class DoctorUI {
         };
 
         // ═══════════════════════════════════════════════════════════════
-        // EXTRACT SUGGESTION (ALREADY CLEANED BY BACKEND)
+        // EXTRACT SUGGESTION (ONLY ACTIONABLE ADVICE) - RIGHT ERROR PANEL
         // ═══════════════════════════════════════════════════════════════
-        // Backend regex (analyzer.py:112) ensures only minimal info:
-        //   - validation_error: "{node_name}: {error_detail}"
-        //   - Other errors: Use template from i18n.py
+        // DO NOT REMOVE OR MODIFY without consulting .planning/ERROR_PANEL_UI_FIXES.md Issue 5
         //
-        // DO NOT add error logs here - they're already excluded!
+        // USED BY: Right error panel (updateLogCard method)
+        // SAME LOGIC AS: Left sidebar (updateSidebarTab method, Lines 264-295)
+        //
+        // Backend provides full suggestion (e.g., "Validation Error in KSampler: ... Check input connections...")
+        // Frontend extracts ONLY the last sentence (actionable advice)
+        // Example: "Check input connections and ensure node requirements are met."
+        //
+        // REASON: Consistent UX - both panels show concise suggestions
+        // IMPORTANT: Full context still sent to LLM for analysis
         // ═══════════════════════════════════════════════════════════════
         if (data.suggestion) {
-            result.suggestion = data.suggestion.replace("💡 SUGGESTION: ", "").trim();
+            let suggestion = data.suggestion.replace("💡 SUGGESTION: ", "").trim();
+
+            // Extract only the actionable part (last sentence after final period)
+            const sentences = suggestion.split('. ');
+            if (sentences.length > 1) {
+                // Take the last sentence (the actionable advice)
+                suggestion = sentences[sentences.length - 1].trim();
+                // Ensure it ends with a period
+                if (!suggestion.endsWith('.')) {
+                    suggestion += '.';
+                }
+            }
+
+            result.suggestion = suggestion;
         }
 
         // ═══════════════════════════════════════════════════════════════
