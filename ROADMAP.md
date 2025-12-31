@@ -107,20 +107,22 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **S6**: PII Sanitization for LLM traceback - 🔴 High
-  - **Backend** (`analyzer.py` preprocessing):
-    - Remove user paths: `C:\Users\username\...` → `<USER_PATH>\...`
-    - Sanitize Linux/macOS home: `/home/username/` → `<USER_HOME>/`
-    - Optional: Email addresses, private IP addresses (regex-based)
-    - Configurable sanitization levels: `none`, `basic`, `strict`
-    - Zero runtime overhead, GDPR-friendly
+- [x] **S6**: PII Sanitization for LLM traceback - 🔴 High ✅ *Completed (2025-12-31)*
+  - **Backend** (`sanitizer.py` module):
+    - ✅ Remove user paths: `C:\Users\username\...` → `<USER_PATH>\...`
+    - ✅ Sanitize Linux/macOS home: `/home/username/` → `<USER_HOME>/`
+    - ✅ Email addresses, private IP addresses (regex-based)
+    - ✅ Configurable sanitization levels: `none`, `basic`, `strict`
+    - ✅ Zero runtime overhead, GDPR-friendly
   - **Frontend** (Privacy Controls):
-    - Settings panel: "Privacy Mode" toggle (default: ON)
-    - Visual indicator: 🔒 icon when sanitization active
-    - "Preview" button: Show diff before sending to LLM
-    - Audit log: Save sanitized requests to localStorage
+    - ✅ Settings panel: "Privacy Mode" dropdown with 3 levels
+    - ✅ Visual indicator: 🔒 icon in settings
+    - ✅ Multi-language support (9 languages)
+    - ⏸️ "Preview" button: Not implemented (deferred to future)
+    - ⏸️ Audit log UI: Not implemented (backend logging only)
   - **Critical for enterprise adoption** - blocks B2B market without this
   - **Foundation for**: A6 Pipeline Stage 1 (Sanitizer)
+  - **Documentation**: See `.planning/S6_PII_SANITIZATION.md`
 - [ ] **S7**: Quarterly Security Audits - 🟢 Low (recurring)
   - **Automated** (CI/CD):
     - OWASP ZAP penetration testing
@@ -321,12 +323,14 @@ graph TD
 
 **Priority**: Security → Features
 
-- [ ] **S6** PII Sanitization
-  - Critical for enterprise adoption (blocks B2B market)
-  - Backend: Regex-based path removal in `analyzer.py`
-  - Frontend: Privacy toggle, preview diff, audit log
-  - Zero risk, pure preprocessing
-  - Can implement on `main` branch
+- [x] **S6** PII Sanitization ✅ *Completed (2025-12-31)*
+  - ✅ Critical for enterprise adoption (blocks B2B market)
+  - ✅ Backend: `sanitizer.py` module with 3 sanitization levels
+  - ✅ Frontend: Privacy Mode dropdown in settings (9 languages)
+  - ✅ Zero risk, pure preprocessing
+  - ✅ Implemented on `main` branch
+  - ✅ Comprehensive unit tests (21 tests)
+  - See `.planning/S6_PII_SANITIZATION.md` for details
 - [ ] **F7** Smart Parameter Injection
   - Killer UX feature - one-click fixes in chat
   - LLM prompt engineering + frontend implementation
@@ -611,20 +615,22 @@ graph TD
 
 *按優先級排序（高 → 低）：*
 
-- [ ] **S6**: LLM traceback PII 淨化 - 🔴 High
-  - **後端**（`analyzer.py` 預處理）：
-    - 移除用戶路徑：`C:\Users\username\...` → `<USER_PATH>\...`
-    - 淨化 Linux/macOS 家目錄：`/home/username/` → `<USER_HOME>/`
-    - 可選：Email 地址、私有 IP 地址（基於正則表達式）
-    - 可配置淨化等級：`none`、`basic`、`strict`
-    - 零執行時開銷，符合 GDPR 規範
+- [x] **S6**: LLM traceback PII 淨化 - 🔴 High ✅ *已完成 (2025-12-31)*
+  - **後端**（`sanitizer.py` 模組）：
+    - ✅ 移除用戶路徑：`C:\Users\username\...` → `<USER_PATH>\...`
+    - ✅ 淨化 Linux/macOS 家目錄：`/home/username/` → `<USER_HOME>/`
+    - ✅ Email 地址、私有 IP 地址（基於正則表達式）
+    - ✅ 可配置淨化等級：`none`、`basic`、`strict`
+    - ✅ 零執行時開銷，符合 GDPR 規範
   - **前端**（隱私控制）：
-    - 設定面板："Privacy Mode" 開關（預設開啟）
-    - 視覺指示器：🔒 圖示（淨化啟用時）
-    - "Preview" 按鈕：發送前顯示 diff
-    - 審核日誌：將淨化請求存至 localStorage
+    - ✅ 設定面板："Privacy Mode" 下拉選單（3 種等級）
+    - ✅ 視覺指示器：🔒 圖示於設定中
+    - ✅ 多語系支援（9 語言）
+    - ⏸️ "Preview" 按鈕：未實作（延後至未來）
+    - ⏸️ 審核日誌 UI：未實作（僅後端記錄）
   - **企業採用關鍵** - 無此功能將阻擋 B2B 市場
   - **基礎支撐**：A6 Pipeline Stage 1（Sanitizer）
+  - **文件**：參見 `.planning/S6_PII_SANITIZATION.md`
 - [ ] **S7**: 季度安全稽核 - 🟢 Low（定期執行）
   - **自動化**（CI/CD）：
     - OWASP ZAP 滲透測試
@@ -825,12 +831,14 @@ graph TD
 
 **優先級**: 安全性 → 功能
 
-- [ ] **S6** PII 淨化
-  - 企業採用關鍵需求（阻擋 B2B 市場）
-  - 後端：`analyzer.py` 基於 Regex 的路徑移除
-  - 前端：隱私開關、預覽 diff、審核日誌
-  - 零風險，純預處理
-  - 可在 `main` 分支實作
+- [x] **S6** PII 淨化 ✅ *已完成 (2025-12-31)*
+  - ✅ 企業採用關鍵需求（移除 B2B 市場阻礙）
+  - ✅ 後端：`sanitizer.py` 模組（3 種淨化等級）
+  - ✅ 前端：隱私模式下拉選單（9 語言支援）
+  - ✅ 零風險，純預處理
+  - ✅ 已在 `main` 分支實作
+  - ✅ 完整的單元測試（21 項測試）
+  - 參見 `.planning/S6_PII_SANITIZATION.md` 了解詳情
 - [ ] **F7** 智慧參數注入
   - 殺手級 UX 功能 - 聊天內一鍵修復
   - LLM prompt 工程 + 前端實作

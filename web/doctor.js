@@ -331,6 +331,7 @@ app.registerExtension({
                     const currentBaseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
                     const currentApiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
                     const currentModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
+                    const currentPrivacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
 
                     settingsPanel.innerHTML = `
                         <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ddd;">Settings</h4>
@@ -381,6 +382,17 @@ app.registerExtension({
                                     </label>
                                 </div>
                                 <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="e.g., gpt-4o, deepseek-chat" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
+                            </div>
+                            <div style="border-top: 1px solid #444; padding-top: 10px; margin-top: 5px;">
+                                <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aaa; margin-bottom: 3px;">
+                                    🔒 <span id="doctor-privacy-label">Privacy Mode</span>
+                                </label>
+                                <select id="doctor-privacy-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
+                                    <option value="none" ${currentPrivacyMode === 'none' ? 'selected' : ''} id="privacy-none-option">None (No sanitization)</option>
+                                    <option value="basic" ${currentPrivacyMode === 'basic' ? 'selected' : ''} id="privacy-basic-option">Basic (Recommended)</option>
+                                    <option value="strict" ${currentPrivacyMode === 'strict' ? 'selected' : ''} id="privacy-strict-option">Strict (Maximum privacy)</option>
+                                </select>
+                                <div id="doctor-privacy-hint" style="font-size: 11px; color: #888; margin-top: 3px;">Controls what sensitive information is removed before sending to AI</div>
                             </div>
                             <button id="doctor-save-settings-btn" style="width: 100%; padding: 8px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 13px; margin-top: 5px;">💾 Save Settings</button>
                         </div>
@@ -497,6 +509,27 @@ app.registerExtension({
                         loadModels();
                     }
 
+                    // Privacy mode translations update
+                    const privacySelect = settingsPanel.querySelector('#doctor-privacy-select');
+                    const updatePrivacyTranslations = (lang) => {
+                        const privacyLabel = settingsPanel.querySelector('#doctor-privacy-label');
+                        const privacyHint = settingsPanel.querySelector('#doctor-privacy-hint');
+                        const noneOption = settingsPanel.querySelector('#privacy-none-option');
+                        const basicOption = settingsPanel.querySelector('#privacy-basic-option');
+                        const strictOption = settingsPanel.querySelector('#privacy-strict-option');
+
+                        fetch(`/doctor/ui_text?lang=${lang}`)
+                            .then(res => res.json())
+                            .then(text => {
+                                privacyLabel.textContent = text.privacy_mode || "Privacy Mode";
+                                privacyHint.textContent = text.privacy_mode_hint || "Controls what sensitive information is removed before sending to AI";
+                                noneOption.textContent = text.privacy_mode_none || "None (No sanitization)";
+                                basicOption.textContent = text.privacy_mode_basic || "Basic (Recommended)";
+                                strictOption.textContent = text.privacy_mode_strict || "Strict (Maximum privacy)";
+                            })
+                            .catch(err => console.error('[ComfyUI-Doctor] Failed to load privacy translations:', err));
+                    };
+
                     // Save settings button
                     const saveBtn = settingsPanel.querySelector('#doctor-save-settings-btn');
                     saveBtn.onclick = async () => {
@@ -514,6 +547,10 @@ app.registerExtension({
                             app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", baseUrlInput.value);
                             app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", apiKeyInput.value);
                             app.ui.settings.setSettingValue("Doctor.LLM.Model", modelValue);
+                            app.ui.settings.setSettingValue("Doctor.Privacy.Mode", privacySelect.value);
+
+                            // Update privacy translations on language change
+                            updatePrivacyTranslations(langSelect.value);
 
                             // Sync language with backend
                             await DoctorAPI.setLanguage(langSelect.value);

@@ -23,6 +23,7 @@ from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, 
 from .config import CONFIG
 from .session_manager import SessionManager
 from .system_info import get_system_environment, format_env_for_llm
+from .sanitizer import PIISanitizer, SanitizationLevel
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -357,8 +358,9 @@ try:
             base_url = data.get("base_url", "https://api.openai.com/v1")
             model = data.get("model", "gpt-4o")
             language = data.get("language", "en")
+            privacy_mode = data.get("privacy_mode", "basic")  # S6: PII sanitization level
 
-            logger.info(f"Analyze API called - error_length={len(error_text) if error_text else 0}, has_workflow={bool(workflow)}, model={model}")
+            logger.info(f"Analyze API called - error_length={len(error_text) if error_text else 0}, has_workflow={bool(workflow)}, model={model}, privacy={privacy_mode}")
 
             # S2: SSRF protection - validate base URL
             is_valid, ssrf_error = validate_ssrf_url(base_url)
@@ -377,11 +379,31 @@ try:
             if not error_text:
                 return web.json_response({"error": "No error text provided"}, status=400)
 
+            # S6: PII Sanitization - Remove sensitive info before sending to LLM
+            try:
+                sanitization_level = SanitizationLevel(privacy_mode)
+            except ValueError:
+                sanitization_level = SanitizationLevel.BASIC
+
+            sanitizer = PIISanitizer(sanitization_level)
+
+            # Sanitize error text
+            sanitization_result = sanitizer.sanitize(error_text)
+            error_text = sanitization_result.sanitized_text
+
+            # Log sanitization metadata (for audit)
+            if sanitization_result.pii_found:
+                logger.info(f"PII sanitized: {sanitization_result.replacements}")
+
+            # Sanitize node context (paths, custom_node_path)
+            if node_context:
+                node_context = sanitizer.sanitize_dict(node_context)
+
             # Truncate error text to prevent token overflow (roughly 8000 chars ≈ 2000 tokens)
             MAX_ERROR_LENGTH = 8000
             if len(error_text) > MAX_ERROR_LENGTH:
                 error_text = error_text[:MAX_ERROR_LENGTH] + "\n\n[... truncated ...]"
-            
+
             # R8: Smart workflow truncation (preserves error-related nodes)
             if workflow:
                 from .truncate_workflow import truncate_workflow_smart
@@ -559,8 +581,9 @@ try:
             stream = data.get("stream", True)
             intent = data.get("intent", "chat")  # New: intent parameter
             selected_nodes = data.get("selected_nodes", [])  # New: node selection context
-            
-            logger.info(f"Chat API called - model={model}, intent={intent}, messages={len(messages)}, stream={stream}")
+            privacy_mode = data.get("privacy_mode", "basic")  # S6: PII sanitization level
+
+            logger.info(f"Chat API called - model={model}, intent={intent}, messages={len(messages)}, stream={stream}, privacy={privacy_mode}")
             
             # S2: SSRF protection - validate base URL
             is_valid, ssrf_error = validate_ssrf_url(base_url)
@@ -575,12 +598,31 @@ try:
             
             if not messages:
                 return web.json_response({"error": "No messages provided"}, status=400)
-            
+
+            # S6: PII Sanitization - Remove sensitive info before sending to LLM
+            try:
+                sanitization_level = SanitizationLevel(privacy_mode)
+            except ValueError:
+                sanitization_level = SanitizationLevel.BASIC
+
+            sanitizer = PIISanitizer(sanitization_level)
+
             # Build system prompt with error context
             error_text = error_context.get("error", "")
             node_context = error_context.get("node_context", {})
             workflow = error_context.get("workflow", "")
-            
+
+            # Sanitize error context
+            if error_text:
+                error_text = sanitizer.sanitize(error_text).sanitized_text
+            if node_context:
+                node_context = sanitizer.sanitize_dict(node_context)
+
+            # Sanitize user messages (only user role, not assistant responses)
+            for msg in messages:
+                if msg.get("role") == "user" and isinstance(msg.get("content"), str):
+                    msg["content"] = sanitizer.sanitize(msg["content"]).sanitized_text
+
             # Truncate to prevent token overflow
             MAX_ERROR_LENGTH = 4000
             if len(error_text) > MAX_ERROR_LENGTH:

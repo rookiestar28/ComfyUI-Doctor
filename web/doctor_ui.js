@@ -435,6 +435,9 @@ export class DoctorUI {
 
             console.log('[Doctor] LLM Settings:', { baseUrl, model, language, hasApiKey: !!apiKey });
 
+            // S6: Get privacy mode from settings
+            const privacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
+
             const payload = {
                 messages: [{ role: 'user', content: text }],
                 error_context: this.currentErrorData || {},
@@ -443,7 +446,8 @@ export class DoctorUI {
                 api_key: apiKey,
                 base_url: baseUrl,
                 model: model,
-                language: language
+                language: language,
+                privacy_mode: privacyMode
             };
 
             console.log('[Doctor] Payload prepared:', payload);
@@ -668,6 +672,9 @@ export class DoctorUI {
             // F3: Capture workflow context
             const workflowContext = this.getWorkflowContext();
 
+            // S6: Get privacy mode from settings
+            const privacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
+
             const payload = {
                 error: data.last_error || "Unknown Error",
                 node_context: data.node_context,
@@ -675,7 +682,8 @@ export class DoctorUI {
                 api_key: apiKey,
                 base_url: baseUrl,
                 model: model,
-                language: language
+                language: language,
+                privacy_mode: privacyMode
             };
 
             const result = await DoctorAPI.analyzeError(payload);

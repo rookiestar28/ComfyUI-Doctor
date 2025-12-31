@@ -267,6 +267,38 @@ Configure AI analysis in the **Doctor Sidebar** → **Settings** panel:
 
 **Security Note**: Your API key is transmitted securely from frontend to backend for the analysis request only. It is never logged or stored persistently.
 
+### Privacy Mode (PII Sanitization)
+
+ComfyUI-Doctor includes automatic **PII (Personally Identifiable Information) sanitization** to protect your privacy when sending error messages to cloud AI services.
+
+**Three Privacy Levels**:
+
+| Level | Description | What is Removed | Recommended For |
+| ----- | ----------- | --------------- | --------------- |
+| **None** | No sanitization | Nothing | Local LLMs (Ollama, LMStudio) |
+| **Basic** (Default) | Standard protection | User paths, API keys, emails, IP addresses | Most users with cloud LLMs |
+| **Strict** | Maximum privacy | All of Basic + IPv6, SSH fingerprints | Enterprise/compliance requirements |
+
+**What is Sanitized** (Basic Level):
+
+- ✅ Windows user paths: `C:\Users\john\file.py` → `<USER_PATH>\file.py`
+- ✅ Linux/macOS home: `/home/alice/test.py` → `<USER_HOME>/test.py`
+- ✅ API keys: `sk-abc123...` → `<API_KEY>`
+- ✅ Email addresses: `user@example.com` → `<EMAIL>`
+- ✅ Private IPs: `192.168.1.1` → `<PRIVATE_IP>`
+- ✅ URL credentials: `https://user:pass@host` → `https://<USER>@host`
+
+**What is NOT Removed**:
+
+- ❌ Error messages (needed for debugging)
+- ❌ Model names, node names
+- ❌ Workflow structure
+- ❌ Public file paths (`/usr/bin/python`)
+
+**Configure Privacy Mode**: Open Doctor Sidebar → Settings → 🔒 Privacy Mode dropdown. Changes apply immediately to all AI analysis requests.
+
+**GDPR Compliance**: This feature supports GDPR Article 25 (Data Protection by Design) and is recommended for enterprise deployments.
+
 ### Example Providers Setup
 
 | Provider         | Base URL                                                   | Model Example                |
