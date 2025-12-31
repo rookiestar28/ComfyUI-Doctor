@@ -110,12 +110,20 @@ graph TD
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **F7**: One-click auto-fix for specific errors - 🟢 Low
+- [x] **F10**: System environment context for AI analysis - 🟡 Medium ✅ *Completed (2025-12-31)*
+  - Capture Python version, installed packages (`pip list`), OS info
+  - Include in `/doctor/analyze` and `/doctor/chat` payloads for better debugging
+  - Cache package list with 24h TTL to avoid performance impact
 
 ### 3.2 Robustness (Pending)
 
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **R6**: Network retry logic with exponential backoff - 🟢 Low
 - [ ] **R7**: Rate limiting for LLM API calls - 🟢 Low
+- [x] **R11**: Fix validation error capture to collect all failures - 🟢 Low ✅ *Completed (2025-12-31)*
+  - Modified logger to accumulate multiple "Failed to validate prompt" errors
+  - Use "Executing prompt:" as completion marker instead of resetting buffer
+  - Updated `is_complete_traceback()` to handle multi-error blocks
 
 ### 3.3 Testing (Pending)
 
@@ -424,12 +432,20 @@ graph TD
 - [ ] **F5**: 節點健康評分 - 🟢 Low
 - [ ] **F6**: 多 LLM Provider 快速切換 - 🟡 Medium ⚠️ *使用 dev branch*
 - [ ] **F7**: 錯誤自動修復建議執行（一鍵修復） - 🟢 Low
+- [x] **F10**: AI 分析的系統環境上下文 - 🟡 Medium ✅ *已完成 (2025-12-31)*
+  - 捕捉 Python 版本、已安裝套件（`pip list`）、作業系統資訊
+  - 在 `/doctor/analyze` 和 `/doctor/chat` 請求中包含環境資訊以提升偵錯準確度
+  - 套件列表快取（24小時 TTL）避免效能影響
 
 ### 3.2 穩健性改進（待實作）
 
 - [ ] **R5**: 前端錯誤邊界 - 🟡 Medium ⚠️ *使用 dev branch*
 - [ ] **R6**: 網路重試邏輯（exponential backoff） - 🟢 Low
 - [ ] **R7**: LLM API 呼叫速率限制 - 🟢 Low
+- [x] **R11**: 修正驗證錯誤捕獲以收集所有失敗項目 - 🟢 Low ✅ *已完成 (2025-12-31)*
+  - 修改 logger 累積多個 "Failed to validate prompt" 錯誤
+  - 使用 "Executing prompt:" 作為完成標記而非重置緩衝區
+  - 更新 `is_complete_traceback()` 處理多錯誤區塊
 
 ### 3.3 測試擴充（待實作）
 

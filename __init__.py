@@ -22,6 +22,7 @@ from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, SUPPORTED_LANGUAGES
 from .config import CONFIG
 from .session_manager import SessionManager
+from .system_info import get_system_environment, format_env_for_llm
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -390,10 +391,20 @@ try:
             user_prompt = f"Error:\n{error_text}\n\n"
             if node_context:
                 user_prompt += f"Node Context: {json.dumps(node_context, indent=2)}\n\n"
-            
+
             # F3: Include workflow context if available
             if workflow:
-                user_prompt += f"Workflow Structure (simplified):\n{workflow}\n"
+                user_prompt += f"Workflow Structure (simplified):\n{workflow}\n\n"
+
+            # F10: Include system environment context for better debugging
+            try:
+                env_info = get_system_environment()
+                env_text = format_env_for_llm(env_info, max_packages=30)
+                user_prompt += f"{env_text}\n\n"
+            except Exception as env_err:
+                # Don't fail the entire analysis if env collection fails
+                logger.warning(f"Failed to collect environment info: {env_err}")
+                user_prompt += "[System environment info unavailable]\n\n"
             
             # Prepare headers (API key is NOT logged)
             headers = {
@@ -560,7 +571,15 @@ try:
             
             if workflow:
                 system_prompt += f"**Workflow (simplified):** {workflow}\n\n"
-            
+
+            # F10: Include system environment context
+            try:
+                env_info = get_system_environment()
+                env_text = format_env_for_llm(env_info, max_packages=20)
+                system_prompt += f"{env_text}\n\n"
+            except Exception as env_err:
+                logger.warning(f"Failed to collect environment info for chat: {env_err}")
+
             # Build conversation with system prompt
             api_messages = [{"role": "system", "content": system_prompt}]
             
