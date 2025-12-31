@@ -2,6 +2,7 @@
 import { app } from "../../../scripts/app.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { doctorContext } from "./doctor_state.js";
+import { FixHandler } from "./doctor_fix_handler.js";  // F7: Parameter injection
 
 // S5: Local bundled assets with CDN fallback (pinned versions)
 // Versions: marked@15.0.4, highlight.js@11.9.0
@@ -26,6 +27,9 @@ export class ChatPanel {
         this.abortController = null; // For cancelling ongoing requests
         this.observers = null; // For ResizeObserver and MutationObserver
         this.lastContentHash = ''; // For content deduplication
+
+        // F7: Initialize fix handler
+        this.fixHandler = new FixHandler(app);
 
         // Load dependencies
         this.loadAssets();
@@ -387,6 +391,9 @@ export class ChatPanel {
         const content = msg.content;
 
         if (msg.role === 'assistant' || msg.role === 'system') {
+            // F7: Detect fixes BEFORE markdown rendering
+            const fixData = this.fixHandler.detectFixes(content);
+
             if (window.marked) {
                 const raw = window.marked.parse(content);
                 msgDiv.innerHTML = this.sanitizeHtml(raw);
@@ -396,6 +403,12 @@ export class ChatPanel {
                     });
                 }
                 this.addCopyButtons(msgDiv);
+
+                // F7: Render fix buttons if detected
+                if (fixData) {
+                    const i18n = app.Doctor?.uiText || {};
+                    this.fixHandler.renderFixButtons(msgDiv, fixData, i18n);
+                }
             } else {
                 msgDiv.textContent = content;
             }
@@ -543,7 +556,15 @@ export class ChatPanel {
             await DoctorAPI.streamChat(
                 payload,
                 (chunk) => {
-                    if (chunk.delta) {
+                    // F7: Handle fix suggestions from SSE
+                    if (chunk.type === 'fix_suggestion' && chunk.data) {
+                        // Find the last assistant message div and render fix buttons
+                        const lastMsg = this.messagesContainer.lastElementChild;
+                        if (lastMsg && lastMsg.classList.contains('assistant')) {
+                            const i18n = app.Doctor?.uiText || {};
+                            this.fixHandler.renderFixButtons(lastMsg, chunk.data, i18n);
+                        }
+                    } else if (chunk.delta) {
                         fullContent += chunk.delta;
                         this.updateLastMessage(fullContent);
                     }

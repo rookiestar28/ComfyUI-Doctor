@@ -282,6 +282,653 @@ def log_system_info() -> None:
 log_system_info()
 
 
+# --- F7: Parameter Fix Helper Functions ---
+def validate_fix_schema(fix_json):
+    """
+    Validate fix JSON structure for F7 parameter injection.
+
+    Args:
+        fix_json: Dictionary containing 'fixes' array
+
+    Returns:
+        bool: True if schema is valid, False otherwise
+    """
+    if "fixes" not in fix_json or not isinstance(fix_json["fixes"], list):
+        return False
+
+    required_keys = {"node_id", "widget", "from", "to", "reason"}
+    for fix in fix_json["fixes"]:
+        if not isinstance(fix, dict):
+            return False
+        if not required_keys.issubset(fix.keys()):
+            return False
+        # Basic type check: node_id should be convertible to string
+        if not isinstance(fix.get("node_id"), (str, int)):
+            return False
+    return True
+
+
+# --- Option B Phase 1: Enhanced Error Context & Multi-Language Templates ---
+
+def collect_error_context(error_data, workflow_data):
+    """
+    Collect comprehensive error context for LLM analysis (Option B Phase 1).
+
+    Returns enriched error data with:
+    - Python stack trace (if available)
+    - ComfyUI execution logs (last 50 lines)
+    - Failed node details (class, inputs, outputs)
+    - Workflow structure (upstream dependencies, missing connections)
+
+    Args:
+        error_data: Error information dict (exception_message, exception_type, node_id, traceback)
+        workflow_data: Full workflow dict mapping node_id -> node_info
+
+    Returns:
+        dict: Enriched context with error details, logs, node info, and workflow structure
+    """
+    context = {
+        "error_message": error_data.get("exception_message", "") if error_data else "",
+        "error_type": error_data.get("exception_type", "Unknown") if error_data else "Unknown",
+        "traceback": None,
+        "execution_logs": [],
+        "failed_node": None,
+        "workflow_structure": {
+            "upstream_nodes": [],
+            "missing_connections": []
+        }
+    }
+
+    if not error_data:
+        return context
+
+    # 1. Extract Python traceback (if available)
+    if "traceback" in error_data:
+        context["traceback"] = error_data["traceback"]
+
+    # 2. Get recent ComfyUI logs (last 50 lines)
+    # Try to read from ComfyUI's logger buffer
+    try:
+        comfy_logger = logging.getLogger("comfyui")
+        if hasattr(comfy_logger, 'handlers'):
+            for handler in comfy_logger.handlers:
+                if hasattr(handler, 'buffer'):
+                    # Get last 50 log entries
+                    context["execution_logs"] = handler.buffer[-50:]
+                    break
+    except Exception:
+        # Fallback: No logs available
+        pass
+
+    # 3. Get failed node details
+    node_id = error_data.get("node_id")
+    if node_id and workflow_data:
+        node = workflow_data.get(str(node_id))
+        if node:
+            context["failed_node"] = {
+                "id": node_id,
+                "class_type": node.get("class_type"),
+                "inputs": node.get("inputs", {}),
+                "title": node.get("_meta", {}).get("title", "")
+            }
+
+            # 4. Analyze workflow structure around failed node
+            # Find upstream nodes (nodes that feed into this one)
+            upstream = []
+            for input_key, input_value in node.get("inputs", {}).items():
+                if isinstance(input_value, list) and len(input_value) == 2:
+                    # This is a connection: [source_node_id, output_index]
+                    source_node_id = str(input_value[0])
+                    if source_node_id in workflow_data:
+                        upstream.append({
+                            "id": source_node_id,
+                            "class_type": workflow_data[source_node_id].get("class_type"),
+                            "connection": input_key
+                        })
+
+            context["workflow_structure"]["upstream_nodes"] = upstream
+
+            # 5. Check for missing required connections
+            # This requires ComfyUI's node definition API
+            try:
+                from nodes import NODE_CLASS_MAPPINGS
+                node_class = NODE_CLASS_MAPPINGS.get(node.get("class_type"))
+                if node_class and hasattr(node_class, "INPUT_TYPES"):
+                    required_inputs = node_class.INPUT_TYPES().get("required", {})
+                    for req_input in required_inputs.keys():
+                        if req_input not in node.get("inputs", {}):
+                            context["workflow_structure"]["missing_connections"].append({
+                                "input": req_input,
+                                "type": str(required_inputs[req_input])
+                            })
+            except Exception:
+                pass
+
+    return context
+
+
+# Multi-language error analysis prompt templates (Option B Phase 1)
+# System prompts are written in English with explicit language directives
+ERROR_ANALYSIS_TEMPLATES = {
+    "en": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: English
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "zh_TW": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: 繁體中文
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "zh_CN": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: 简体中文
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "ja": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: 日本語
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "de": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: Deutsch
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "fr": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: Français
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "it": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: Italiano
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "es": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: Español
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    },
+
+    "ko": {
+        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: 한국어
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+    }
+}
+
+
+def get_error_analysis_prompt(user_language: str) -> str:
+    """
+    Get error analysis system prompt in English with language directive.
+
+    This follows the Option B design principle:
+    - System prompts written in English (for LLM consistency)
+    - Explicit language directive for responses
+    - Maintains prompt quality across all languages
+
+    Args:
+        user_language: User's preferred language (en/zh_TW/zh_CN/ja/de/fr/it/es/ko)
+
+    Returns:
+        System prompt in English with explicit language directive
+    """
+    template = ERROR_ANALYSIS_TEMPLATES.get(user_language, ERROR_ANALYSIS_TEMPLATES["en"])
+    return template["system_instruction"]
+
+
+def parse_language_code(accept_language: str) -> str:
+    """
+    Parse Accept-Language header to extract primary language code.
+
+    Examples:
+        "zh-TW,zh;q=0.9,en;q=0.8" → "zh_TW"
+        "en-US,en;q=0.9" → "en"
+        "ja" → "ja"
+
+    Args:
+        accept_language: HTTP Accept-Language header value
+
+    Returns:
+        Normalized language code (e.g., "zh_TW", "en", "ja")
+    """
+    if not accept_language:
+        return "en"
+
+    # Extract first language code (before comma)
+    primary_lang = accept_language.split(',')[0].strip()
+
+    # Normalize separators: "zh-TW" → "zh_TW"
+    normalized = primary_lang.replace('-', '_')
+
+    # Map to supported languages
+    supported_map = {
+        "zh_TW": "zh_TW",
+        "zh_CN": "zh_CN",
+        "zh_HK": "zh_TW",  # Fallback: Hong Kong → Traditional Chinese
+        "zh": "zh_CN",      # Fallback: Generic Chinese → Simplified
+        "ja": "ja",
+        "de": "de",
+        "fr": "fr",
+        "it": "it",
+        "es": "es",
+        "ko": "ko",
+        "en": "en"
+    }
+
+    # Try exact match first
+    if normalized in supported_map:
+        return supported_map[normalized]
+
+    # Try base language (e.g., "en_US" → "en")
+    base_lang = normalized.split('_')[0]
+    if base_lang in supported_map:
+        return supported_map[base_lang]
+
+    # Default to English
+    return "en"
+
+
+# --- Option B Phase 2: Error Categorization ---
+
+def categorize_error(error_data):
+    """
+    Classify error type using keyword matching (Option B Phase 2).
+
+    This helps the LLM focus on the right fix strategy by pre-categorizing
+    errors into one of 5 common types.
+
+    Args:
+        error_data: Error information (can be dict, string, or any object with str() representation)
+
+    Returns:
+        dict: {
+            "category": str (connection_error|model_missing|validation_error|type_error|execution_error),
+            "confidence": float (0.0-1.0),
+            "keywords_matched": list[str],
+            "suggested_approach": str
+        }
+    """
+    # Convert error_data to searchable string
+    if isinstance(error_data, dict):
+        error_text = json.dumps(error_data).lower()
+    else:
+        error_text = str(error_data).lower()
+
+    # Define keyword patterns for each error category
+    # Inspired by ComfyUI-Copilot's debug_agent.py pattern matching
+    patterns = {
+        "connection_error": {
+            "keywords": [
+                "missing input", "required input", "not connected",
+                "connection", "disconnected", "input is required",
+                "missing required", "no input provided"
+            ],
+            "weight": 1.0,
+            "approach": "Check node connections. Ensure all required inputs are connected to upstream nodes."
+        },
+        "model_missing": {
+            "keywords": [
+                ".safetensors", ".ckpt", ".pth", ".pt", ".bin",
+                "model not found", "file not found", "no such file",
+                "checkpoint", "filenotfounderror", "path does not exist"
+            ],
+            "weight": 1.0,
+            "approach": "Check model files in your models directory. Verify the model name matches an existing file."
+        },
+        "validation_error": {
+            "keywords": [
+                "value not in list", "invalid value", "not found in list",
+                "invalid parameter", "value error", "not a valid",
+                "must be one of", "not in allowed values", "invalid choice"
+            ],
+            "weight": 0.9,
+            "approach": "Use fuzzy matching to find the correct parameter value from available options."
+        },
+        "type_error": {
+            "keywords": [
+                "type mismatch", "expected", "but received",
+                "cannot convert", "dtype", "typeerror",
+                "incompatible type", "wrong type", "type error"
+            ],
+            "weight": 0.8,
+            "approach": "Check data type conversions. May need a conversion node (e.g., ImageToTensor)."
+        }
+    }
+
+    # Count keyword matches for each category
+    matches = {}
+    for category, config in patterns.items():
+        matched_keywords = [kw for kw in config["keywords"] if kw in error_text]
+        count = len(matched_keywords)
+
+        if count > 0:
+            # Calculate confidence: (matches / total_keywords) * weight
+            # Cap at 1.0 to prevent over-confidence
+            confidence = min(count / len(config["keywords"]) * config["weight"], 1.0)
+
+            matches[category] = {
+                "count": count,
+                "confidence": confidence,
+                "matched_keywords": matched_keywords,
+                "approach": config["approach"]
+            }
+
+    # Return category with highest confidence
+    if matches:
+        best_category, best_match = max(matches.items(), key=lambda x: x[1]["confidence"])
+        return {
+            "category": best_category,
+            "confidence": best_match["confidence"],
+            "keywords_matched": best_match["matched_keywords"],
+            "suggested_approach": best_match["approach"]
+        }
+    else:
+        # Default: Generic execution error
+        return {
+            "category": "execution_error",
+            "confidence": 0.5,
+            "keywords_matched": [],
+            "suggested_approach": "General error analysis needed. Check Python stack trace for details."
+        }
+
+
 # --- 6. API Registration ---
 try:
     import server
@@ -633,8 +1280,47 @@ try:
                 from .truncate_workflow import truncate_workflow_smart
                 workflow, _ = truncate_workflow_smart(workflow, max_chars=2000)
             
+            # Option B Phase 1: Parse workflow data for enhanced error context
+            workflow_data = None
+            if workflow:
+                try:
+                    # If workflow is a JSON string, parse it
+                    if isinstance(workflow, str):
+                        workflow_data = json.loads(workflow)
+                    elif isinstance(workflow, dict):
+                        workflow_data = workflow
+                except json.JSONDecodeError:
+                    logger.warning("Failed to parse workflow JSON for enhanced context")
+
+            # Option B Phase 1: Collect enhanced error context
+            enriched_context = None
+            if error_context and error_context.get("error"):
+                # Build error_data dict from error_context
+                error_data = {
+                    "exception_message": error_context.get("error", ""),
+                    "exception_type": error_context.get("error_type", "Unknown"),
+                    "node_id": node_context.get("node_id") if node_context else None,
+                    "traceback": error_context.get("traceback")
+                }
+                enriched_context = collect_error_context(error_data, workflow_data)
+
+            # Option B Phase 2: Categorize error type using keyword matching
+            error_category = None
+            if error_context and error_context.get("error"):
+                # Categorize using the full error_context dict for better keyword matching
+                error_category = categorize_error(error_context)
+                logger.info(f"Error categorized as: {error_category['category']} (confidence: {error_category['confidence']:.0%})")
+
+            # Option B Phase 1: Detect user's preferred language from request headers or data
+            user_lang_code = language  # Default to language parameter
+            if not user_lang_code or user_lang_code not in ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"]:
+                # Try to parse from Accept-Language header if available
+                accept_lang = request.headers.get("Accept-Language", "en")
+                user_lang_code = parse_language_code(accept_lang)
+
             # Intent-aware system prompt
             if intent == "explain_node":
+                # Node explanation mode - use simple prompt
                 system_prompt = (
                     "You are an expert ComfyUI node documentation assistant. ComfyUI is a node-based Stable Diffusion workflow editor.\n\n"
                     "Your task is to explain how specific nodes work, their inputs/outputs, and best practices for using them.\n"
@@ -644,27 +1330,72 @@ try:
                 if selected_nodes:
                     system_prompt += f"**Selected Node(s):** {json.dumps(selected_nodes)}\n\n"
             else:
-                # Default chat/debug intent
-                system_prompt = (
-                    "You are an expert ComfyUI debugger. ComfyUI is a node-based Stable Diffusion workflow editor.\n\n"
-                    "You are helping the user debug an error. Be concise, helpful, and provide actionable solutions.\n"
-                    f"Respond in {language}.\n\n"
-                )
-            
-            if error_text:
-                system_prompt += f"**Current Error:**\n```\n{error_text}\n```\n\n"
-            
-            if node_context:
-                system_prompt += f"**Node Context:** {json.dumps(node_context)}\n\n"
-            
-            if workflow:
-                system_prompt += f"**Workflow (simplified):** {workflow}\n\n"
+                # Option B Phase 1: Error analysis mode - use enhanced multi-language template
+                if enriched_context and enriched_context.get("error_message"):
+                    # Use enhanced error analysis template with language directive
+                    system_prompt = get_error_analysis_prompt(user_lang_code)
+
+                    # Add enriched error context
+                    system_prompt += f"\n\n**ERROR CONTEXT**:\n"
+                    system_prompt += f"Error Type: {enriched_context['error_type']}\n"
+                    system_prompt += f"Error Message: {enriched_context['error_message']}\n"
+
+                    # Option B Phase 2: Add error category with suggested approach
+                    if error_category:
+                        system_prompt += f"\n**ERROR CATEGORY** (auto-detected):\n"
+                        system_prompt += f"Category: {error_category['category']}\n"
+                        system_prompt += f"Confidence: {error_category['confidence']:.0%}\n"
+                        system_prompt += f"Suggested Approach: {error_category['suggested_approach']}\n"
+                        if error_category['keywords_matched']:
+                            matched_kw_str = ', '.join(error_category['keywords_matched'][:5])  # Limit to 5
+                            system_prompt += f"Matched Keywords: {matched_kw_str}\n"
+
+                    if enriched_context.get('traceback'):
+                        # Truncate traceback to prevent token overflow
+                        traceback_text = str(enriched_context['traceback'])
+                        if len(traceback_text) > 2000:
+                            traceback_text = traceback_text[:2000] + "\n[... truncated ...]"
+                        system_prompt += f"\nPython Stack Trace:\n```\n{traceback_text}\n```\n"
+
+                    if enriched_context.get('failed_node'):
+                        node = enriched_context['failed_node']
+                        system_prompt += f"\nFailed Node: {node['class_type']} (ID: {node['id']})\n"
+                        if node.get('title'):
+                            system_prompt += f"Node Title: {node['title']}\n"
+                        system_prompt += f"Node Inputs: {json.dumps(node['inputs'], indent=2)}\n"
+
+                    if enriched_context['workflow_structure'].get('upstream_nodes'):
+                        upstream_nodes = enriched_context['workflow_structure']['upstream_nodes']
+                        system_prompt += f"\nUpstream Nodes: {len(upstream_nodes)} connected\n"
+                        for up in upstream_nodes[:5]:  # Limit to 5 to prevent token overflow
+                            system_prompt += f"  - {up['class_type']} → {up['connection']}\n"
+
+                    if enriched_context['workflow_structure'].get('missing_connections'):
+                        system_prompt += f"\n⚠️ Missing Required Connections:\n"
+                        for missing in enriched_context['workflow_structure']['missing_connections']:
+                            system_prompt += f"  - {missing['input']} (type: {missing['type']})\n"
+                else:
+                    # Fallback to simple chat/debug prompt
+                    system_prompt = (
+                        "You are an expert ComfyUI debugger. ComfyUI is a node-based Stable Diffusion workflow editor.\n\n"
+                        "You are helping the user debug an error. Be concise, helpful, and provide actionable solutions.\n"
+                        f"Respond in {language}.\n\n"
+                    )
+
+                    if error_text:
+                        system_prompt += f"**Current Error:**\n```\n{error_text}\n```\n\n"
+
+                    if node_context:
+                        system_prompt += f"**Node Context:** {json.dumps(node_context)}\n\n"
+
+                    if workflow:
+                        system_prompt += f"**Workflow (simplified):** {workflow}\n\n"
 
             # F10: Include system environment context
             try:
                 env_info = get_system_environment()
                 env_text = format_env_for_llm(env_info, max_packages=20)
-                system_prompt += f"{env_text}\n\n"
+                system_prompt += f"\n{env_text}\n\n"
             except Exception as env_err:
                 logger.warning(f"Failed to collect environment info for chat: {env_err}")
 
@@ -778,6 +1509,8 @@ try:
                     # Stream chunks with newline buffering to handle partial lines
                     buffer = ""
                     stream_done = False
+                    # F7: Accumulate full content for fix detection
+                    full_content = ""
                     async for chunk in llm_response.content.iter_chunked(1024):
                         buffer += chunk.decode('utf-8', errors='ignore')
 
@@ -810,6 +1543,7 @@ try:
                                     elif event_type == 'content_block_delta':
                                         delta = chunk_json.get('delta', {}).get('text', '')
                                         if delta:
+                                            full_content += delta  # F7: Accumulate
                                             chunk_data = json.dumps({"delta": delta, "done": False})
                                             await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
                                 except json.JSONDecodeError:
@@ -827,6 +1561,7 @@ try:
                                     # Extract content delta
                                     delta = chunk_json.get('message', {}).get('content', '')
                                     if delta:
+                                        full_content += delta  # F7: Accumulate
                                         chunk_data = json.dumps({"delta": delta, "done": False})
                                         await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
                                 except json.JSONDecodeError:
@@ -850,6 +1585,7 @@ try:
                                     chunk_json = json.loads(payload_str)
                                     delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
                                     if delta:
+                                        full_content += delta  # F7: Accumulate
                                         chunk_data = json.dumps({"delta": delta, "done": False})
                                         await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
                                 except json.JSONDecodeError:
@@ -887,11 +1623,31 @@ try:
                                         chunk_json = json.loads(payload_str)
                                         delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
                                         if delta:
+                                            full_content += delta  # F7: Accumulate
                                             chunk_data = json.dumps({"delta": delta, "done": False})
                                             await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
                                     except json.JSONDecodeError:
                                         pass
-                
+
+                    # F7: Detect and send fix suggestions after stream completes
+                    if full_content:
+                        import re
+                        FIX_PATTERN = re.compile(r'```json\s*(\{[^`]*?"fixes"[^`]*?\})\s*```', re.DOTALL)
+                        fix_match = FIX_PATTERN.search(full_content)
+
+                        if fix_match:
+                            try:
+                                fix_json = json.loads(fix_match.group(1))
+                                if validate_fix_schema(fix_json):
+                                    # Send as separate SSE event
+                                    fix_data = json.dumps({
+                                        "type": "fix_suggestion",
+                                        "data": fix_json
+                                    })
+                                    await response.write(f"data: {fix_data}\n\n".encode('utf-8'))
+                            except json.JSONDecodeError:
+                                pass  # Invalid JSON, ignore
+
             except Exception as stream_err:
                 error_data = json.dumps({"error": str(stream_err), "done": True})
                 await response.write(f"data: {error_data}\n\n".encode('utf-8'))

@@ -52,6 +52,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "Basic (Recommended)",
         "privacy_mode_strict": "Strict (Maximum privacy)",
         "privacy_mode_hint": "Controls what sensitive information is removed before sending to AI",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ Apply",
+        "fix_apply_tooltip": "Apply parameter fix",
+        "fix_applying": "Applying...",
+        "fix_applied": "✓ Applied",
+        "fix_error_node_not_found": "Node not found",
+        "fix_error_widget_not_found": "Widget not found",
+        "fix_error_unsafe_type": "Unsafe widget type",
+        "fix_error_invalid_number": "Invalid number value",
     },
     "zh_TW": {
         "info_title": "資訊",
@@ -66,6 +75,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "基本（建議）",
         "privacy_mode_strict": "嚴格（最大隱私）",
         "privacy_mode_hint": "控制發送給 AI 前移除哪些敏感資訊",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ 套用",
+        "fix_apply_tooltip": "套用參數修正",
+        "fix_applying": "套用中...",
+        "fix_applied": "✓ 已套用",
+        "fix_error_node_not_found": "找不到節點",
+        "fix_error_widget_not_found": "找不到小工具",
+        "fix_error_unsafe_type": "不安全的小工具類型",
+        "fix_error_invalid_number": "無效的數值",
     },
     "zh_CN": {
         "info_title": "信息",
@@ -80,6 +98,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "基本（推荐）",
         "privacy_mode_strict": "严格（最大隐私）",
         "privacy_mode_hint": "控制发送给 AI 前移除哪些敏感信息",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ 应用",
+        "fix_apply_tooltip": "应用参数修正",
+        "fix_applying": "应用中...",
+        "fix_applied": "✓ 已应用",
+        "fix_error_node_not_found": "找不到节点",
+        "fix_error_widget_not_found": "找不到小工具",
+        "fix_error_unsafe_type": "不安全的小工具类型",
+        "fix_error_invalid_number": "无效的数值",
     },
     "ja": {
         "info_title": "情報",
@@ -94,6 +121,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "基本（推奨）",
         "privacy_mode_strict": "厳格（最大プライバシー）",
         "privacy_mode_hint": "AI に送信する前に削除される機密情報を制御",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ 適用",
+        "fix_apply_tooltip": "パラメータ修正を適用",
+        "fix_applying": "適用中...",
+        "fix_applied": "✓ 適用済み",
+        "fix_error_node_not_found": "ノードが見つかりません",
+        "fix_error_widget_not_found": "ウィジェットが見つかりません",
+        "fix_error_unsafe_type": "安全でないウィジェットタイプ",
+        "fix_error_invalid_number": "無効な数値",
     },
     "de": {
         "info_title": "INFO",
@@ -108,6 +144,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "Grundlegend (Empfohlen)",
         "privacy_mode_strict": "Streng (Maximaler Datenschutz)",
         "privacy_mode_hint": "Steuert, welche sensiblen Informationen vor dem Senden an die KI entfernt werden",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ Anwenden",
+        "fix_apply_tooltip": "Parameterkorrektur anwenden",
+        "fix_applying": "Wird angewendet...",
+        "fix_applied": "✓ Angewendet",
+        "fix_error_node_not_found": "Knoten nicht gefunden",
+        "fix_error_widget_not_found": "Widget nicht gefunden",
+        "fix_error_unsafe_type": "Unsicherer Widget-Typ",
+        "fix_error_invalid_number": "Ungültiger Zahlenwert",
     },
     "fr": {
         "info_title": "INFO",
@@ -122,6 +167,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "De base (Recommandé)",
         "privacy_mode_strict": "Strict (Confidentialité maximale)",
         "privacy_mode_hint": "Contrôle quelles informations sensibles sont supprimées avant l'envoi à l'IA",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ Appliquer",
+        "fix_apply_tooltip": "Appliquer la correction",
+        "fix_applying": "Application...",
+        "fix_applied": "✓ Appliqué",
+        "fix_error_node_not_found": "Nœud introuvable",
+        "fix_error_widget_not_found": "Widget introuvable",
+        "fix_error_unsafe_type": "Type de widget non sécurisé",
+        "fix_error_invalid_number": "Valeur numérique invalide",
     },
     "it": {
         "info_title": "INFO",
@@ -136,6 +190,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "Base (Consigliato)",
         "privacy_mode_strict": "Rigorosa (Privacy massima)",
         "privacy_mode_hint": "Controlla quali informazioni sensibili vengono rimosse prima dell'invio all'IA",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ Applica",
+        "fix_apply_tooltip": "Applica correzione parametro",
+        "fix_applying": "Applicazione...",
+        "fix_applied": "✓ Applicato",
+        "fix_error_node_not_found": "Nodo non trovato",
+        "fix_error_widget_not_found": "Widget non trovato",
+        "fix_error_unsafe_type": "Tipo di widget non sicuro",
+        "fix_error_invalid_number": "Valore numerico non valido",
     },
     "es": {
         "info_title": "INFO",
@@ -150,6 +213,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "Básico (Recomendado)",
         "privacy_mode_strict": "Estricto (Privacidad máxima)",
         "privacy_mode_hint": "Controla qué información sensible se elimina antes de enviar a la IA",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ Aplicar",
+        "fix_apply_tooltip": "Aplicar corrección de parámetro",
+        "fix_applying": "Aplicando...",
+        "fix_applied": "✓ Aplicado",
+        "fix_error_node_not_found": "Nodo no encontrado",
+        "fix_error_widget_not_found": "Widget no encontrado",
+        "fix_error_unsafe_type": "Tipo de widget no seguro",
+        "fix_error_invalid_number": "Valor numérico inválido",
     },
     "ko": {
         "info_title": "정보",
@@ -164,6 +236,15 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "privacy_mode_basic": "기본 (권장)",
         "privacy_mode_strict": "엄격 (최대 개인정보 보호)",
         "privacy_mode_hint": "AI로 전송하기 전에 제거할 민감한 정보 제어",
+        # F7: Smart Parameter Injection
+        "fix_apply_button": "⚡ 적용",
+        "fix_apply_tooltip": "매개변수 수정 적용",
+        "fix_applying": "적용 중...",
+        "fix_applied": "✓ 적용됨",
+        "fix_error_node_not_found": "노드를 찾을 수 없음",
+        "fix_error_widget_not_found": "위젯을 찾을 수 없음",
+        "fix_error_unsafe_type": "안전하지 않은 위젯 유형",
+        "fix_error_invalid_number": "잘못된 숫자 값",
     },
 }
 

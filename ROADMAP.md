@@ -163,15 +163,20 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **F7**: Smart Parameter Injection (One-Click Fix) - 🔴 High
-  - LLM suggests parameter fixes in structured JSON format
-  - Frontend displays `[Apply Fix]` button in chat interface
-  - Direct widget value modification via `app.graph.getNodeById(id).widgets[index].value`
-  - **Scope limitation**: Parameter fixes ONLY (no node reconnection for safety)
-  - **Examples**: CFG Scale 100 → 7, seed -1 → 42, steps 1 → 20
-  - **Killer feature** - fix errors without leaving chat
-  - **Security**: Whitelist allowed widget types, add undo/redo support
-  - **LLM Response Format**: `{"fixes": [{"node_id": "42", "widget": "cfg", "from": 100, "to": 7, "reason": "..."}]}`
+- [x] **F7**: Enhanced Error Analysis (Multi-Language + Categorization) - 🔴 High ✅ *Completed (2026-01-01)*
+  - **Phase 1**: Enhanced Error Context Collection
+    - Python stack traces, execution logs (last 50 lines)
+    - Failed node details (class_type, inputs, title)
+    - Workflow structure analysis (upstream nodes, missing connections)
+    - Multi-language prompt templates (9 languages: en, zh_TW, zh_CN, ja, de, fr, it, es, ko)
+    - **Design principle**: System prompts in English + explicit language directive
+  - **Phase 2**: Automatic Error Categorization
+    - Keyword-based classification (5 categories: connection/model/validation/type/execution)
+    - Confidence scoring with matched keywords
+    - Suggested fix approach for each category
+  - **Impact**: Better LLM root cause analysis through richer context
+  - **Implementation**: `.planning/OPTION_B_PHASE1_RECORD.md`, `OPTION_B_PHASE2_RECORD.md`
+  - **Code Added**: ~752 lines (5 new functions + 9 language templates + integration)
 - [ ] **F12**: Expand offline error pattern coverage to 50+ - 🟡 Medium
   - **Current**: 20 patterns, **Target**: 50+ patterns
   - Add 30+ new patterns: ControlNet, LoRA, VAE, AnimateDiff, IP-Adapter, Upscaler, etc.
@@ -331,11 +336,11 @@ graph TD
   - ✅ Implemented on `main` branch
   - ✅ Comprehensive unit tests (21 tests)
   - See `.planning/S6_PII_SANITIZATION.md` for details
-- [ ] **F7** Smart Parameter Injection
-  - Killer UX feature - one-click fixes in chat
-  - LLM prompt engineering + frontend implementation
-  - Develop on `feature/parameter-injection` branch
-  - **Security**: Whitelist widget types, undo/redo support
+- [x] **F7** Enhanced Error Analysis (Multi-Language + Categorization) ✅ *Completed (2026-01-01)*
+  - Phase 1: Enhanced error context (stack traces, logs, workflow structure)
+  - Phase 2: Automatic error categorization (5 categories with confidence scoring)
+  - Multi-language prompt templates (9 languages)
+  - See `.planning/OPTION_B_PHASE1_RECORD.md` and `OPTION_B_PHASE2_RECORD.md`
 
 #### Phase 4B: Robustness & Cost Optimization
 
@@ -671,15 +676,20 @@ graph TD
 
 *按優先級排序（高 → 低）：*
 
-- [ ] **F7**: 智慧參數注入（一鍵修復） - 🔴 High
-  - LLM 以結構化 JSON 格式建議參數修復
-  - 前端在聊天介面顯示 `[套用修復]` 按鈕
-  - 透過 `app.graph.getNodeById(id).widgets[index].value` 直接修改 widget 值
-  - **範圍限制**：僅限參數修復（基於安全考量不重連節點）
-  - **範例**：CFG Scale 100 → 7、seed -1 → 42、steps 1 → 20
-  - **殺手級功能** - 無需離開聊天即可修復錯誤
-  - **安全性**：白名單允許的 widget 類型，新增復原/重做支援
-  - **LLM 回應格式**：`{"fixes": [{"node_id": "42", "widget": "cfg", "from": 100, "to": 7, "reason": "..."}]}`
+- [x] **F7**: 增強錯誤分析（多語言 + 分類） - 🔴 High ✅ *已完成 (2026-01-01)*
+  - **階段 1**：增強錯誤上下文收集
+    - Python 堆疊追蹤、執行日誌（最近 50 行）
+    - 失敗節點詳情（class_type、inputs、title）
+    - 工作流程結構分析（上游節點、缺失連接）
+    - 多語言提示模板（9 種語言：en、zh_TW、zh_CN、ja、de、fr、it、es、ko）
+    - **設計原則**：系統提示使用英文 + 明確語言指令
+  - **階段 2**：自動錯誤分類
+    - 基於關鍵字的分類（5 個類別：connection/model/validation/type/execution）
+    - 信心評分與匹配關鍵字
+    - 每個類別的建議修復方法
+  - **影響**：透過更豐富的上下文改善 LLM 根本原因分析
+  - **實作文件**：`.planning/OPTION_B_PHASE1_RECORD.md`、`OPTION_B_PHASE2_RECORD.md`
+  - **新增程式碼**：約 752 行（5 個新函數 + 9 個語言模板 + 整合）
 - [ ] **F12**: 擴充離線錯誤模式至 50+ 種 - 🟡 Medium
   - **當前**：20 種模式，**目標**：50+ 種模式
   - 新增 30+ 種模式：ControlNet、LoRA、VAE、AnimateDiff、IP-Adapter、Upscaler 等
@@ -839,11 +849,11 @@ graph TD
   - ✅ 已在 `main` 分支實作
   - ✅ 完整的單元測試（21 項測試）
   - 參見 `.planning/S6_PII_SANITIZATION.md` 了解詳情
-- [ ] **F7** 智慧參數注入
-  - 殺手級 UX 功能 - 聊天內一鍵修復
-  - LLM prompt 工程 + 前端實作
-  - 於 `feature/parameter-injection` 分支開發
-  - **安全性**：白名單 widget 類型、復原/重做支援
+- [x] **F7** 增強錯誤分析（多語言 + 分類） ✅ *已完成 (2026-01-01)*
+  - 階段 1：增強錯誤上下文（堆疊追蹤、日誌、工作流程結構）
+  - 階段 2：自動錯誤分類（5 個類別與信心評分）
+  - 多語言提示模板（9 種語言）
+  - 參見 `.planning/OPTION_B_PHASE1_RECORD.md` 與 `OPTION_B_PHASE2_RECORD.md`
 
 #### Phase 4B: 穩健性與成本優化
 
