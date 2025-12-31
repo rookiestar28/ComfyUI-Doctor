@@ -19,7 +19,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
-from .i18n import set_language, get_language, SUPPORTED_LANGUAGES
+from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
 from .config import CONFIG
 from .session_manager import SessionManager
 from .system_info import get_system_environment, format_env_for_llm
@@ -311,7 +311,7 @@ try:
     async def api_set_language(request):
         """
         API endpoint to change the suggestion language.
-        
+
         Body: {"language": "zh_TW"}
         """
         try:
@@ -322,6 +322,23 @@ try:
             return web.json_response({"success": False, "message": "Missing language parameter"}, status=400)
         except Exception as e:
             return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/ui_text")
+    async def api_get_ui_text(request):
+        """
+        API endpoint to get all UI text translations for current language.
+
+        Query params (optional): ?lang=zh_TW
+        """
+        try:
+            lang = request.query.get("lang", get_language())
+            ui_text = UI_TEXT.get(lang, UI_TEXT["en"])
+            return web.json_response({
+                "language": lang,
+                "text": ui_text
+            })
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/analyze")
     async def api_analyze_error(request):

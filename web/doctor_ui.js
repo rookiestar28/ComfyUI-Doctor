@@ -23,6 +23,10 @@ export class DoctorUI {
         this.lastErrorTimestamp = 0;
         this.ERROR_DEBOUNCE_MS = 1000;  // Ignore duplicate errors within 1 second
 
+        // UI text translations
+        this.uiText = {};
+        this.loadUIText();
+
         this.createStyles();
         this.createSidebar();
         this.createMenuButton();
@@ -34,6 +38,66 @@ export class DoctorUI {
         this.startErrorMonitor();
 
         // Note: LLM settings are registered in doctor.js
+    }
+
+    /**
+     * Load UI text translations from backend
+     */
+    async loadUIText() {
+        try {
+            const response = await fetch(`/doctor/ui_text?lang=${this.language}`);
+            const data = await response.json();
+            this.uiText = data.text || {};
+            console.log(`[ComfyUI-Doctor] Loaded UI text for language: ${data.language}`);
+
+            // Update UI if already created
+            if (this.panel) {
+                this.updateUILanguage();
+            }
+        } catch (error) {
+            console.error("[ComfyUI-Doctor] Failed to load UI text:", error);
+            // Fallback to English defaults
+            this.uiText = {
+                "info_title": "INFO",
+                "settings_hint": "Settings available in",
+                "settings_path": "ComfyUI Settings → Doctor",
+                "sidebar_hint": "Open the Doctor sidebar (left panel) to analyze with AI",
+                "locate_node_btn": "Locate Node on Canvas",
+                "no_errors": "No active errors detected.",
+            };
+        }
+    }
+
+    /**
+     * Get translated UI text by key
+     */
+    getUIText(key) {
+        return this.uiText[key] || `[Missing: ${key}]`;
+    }
+
+    /**
+     * Update UI language when language changes
+     */
+    updateUILanguage() {
+        // This will be called when language changes
+        // For now, we'll implement the specific UI updates in the relevant methods
+        this.updateInfoCard();
+        this.updateLogCard();
+    }
+
+    /**
+     * Update INFO card with current language
+     */
+    updateInfoCard() {
+        const infoCard = document.querySelector('#doctor-content-area .doctor-card:first-child');
+        if (infoCard) {
+            infoCard.innerHTML = `
+                <div class="doctor-card-title">${this.getUIText('info_title')}</div>
+                <div class="doctor-card-body" style="font-size:12px;color:#888;line-height:1.6;">
+                    ${this.getUIText('info_message')}
+                </div>
+            `;
+        }
     }
 
     /**
@@ -735,6 +799,27 @@ export class DoctorUI {
         document.head.appendChild(style);
     }
 
+    /**
+     * Creates the Doctor sidebar panel with INFO card and LATEST DIAGNOSIS card
+     *
+     * UI STRUCTURE (DO NOT MODIFY):
+     * ┌─────────────────────────────────────┐
+     * │ ComfyUI Doctor            [×]       │ <- Header
+     * ├─────────────────────────────────────┤
+     * │ INFO                                │ <- Info Card (guides user to use AI)
+     * │ Click 🏥 Doctor button...           │    - Title: i18n 'info_title'
+     * │                                     │    - Message: i18n 'info_message'
+     * ├─────────────────────────────────────┤
+     * │ LATEST DIAGNOSIS                    │ <- Log Card (updated by updateLogCard)
+     * │ [Error/Suggestion/Node/Button]      │    - ID: 'doctor-latest-log'
+     * └─────────────────────────────────────┘
+     *
+     * IMPORTANT NOTES:
+     * - INFO card content uses i18n keys: 'info_title', 'info_message'
+     * - INFO card is updated by updateInfoCard() on language change
+     * - LATEST DIAGNOSIS card is updated by updateLogCard(data)
+     * - DO NOT remove #doctor-latest-log ID (required by updateLogCard)
+     */
     createSidebar() {
         this.panel = document.createElement('div');
         this.panel.id = 'doctor-sidebar';
@@ -757,23 +842,56 @@ export class DoctorUI {
         content.className = 'doctor-content';
         content.id = 'doctor-content-area';
 
-        // Info Card - Settings are now in ComfyUI Settings Panel
+        // ═══════════════════════════════════════════════════════════════
+        // INFO CARD - Guide users to use left sidebar for AI debugging
+        // ═══════════════════════════════════════════════════════════════
+        // STRUCTURE:
+        //   <div class="doctor-card">
+        //     <div class="doctor-card-title">INFO</div>
+        //     <div class="doctor-card-body">Click 🏥 Doctor button...</div>
+        //   </div>
+        //
+        // I18N KEYS USED:
+        //   - info_title: "INFO" (or localized equivalent)
+        //   - info_message: "Click 🏥 Doctor button (left sidebar)..."
+        //
+        // UPDATED BY: updateInfoCard() when language changes
+        // ═══════════════════════════════════════════════════════════════
         const infoCard = document.createElement('div');
         infoCard.className = 'doctor-card';
         infoCard.innerHTML = `
-            <div class="doctor-card-title">INFO</div>
-            <div class="doctor-card-body" style="font-size:12px;color:#888">
-                ⚙️ Settings available in<br>
-                <strong>ComfyUI Settings → Doctor</strong>
+            <div class="doctor-card-title">${this.getUIText('info_title')}</div>
+            <div class="doctor-card-body" style="font-size:12px;color:#888;line-height:1.6;">
+                ${this.getUIText('info_message')}
             </div>
         `;
         content.appendChild(infoCard);
 
-        // Initial Loading State for Logs
+        // ═══════════════════════════════════════════════════════════════
+        // LATEST DIAGNOSIS CARD - Shows error analysis results
+        // ═══════════════════════════════════════════════════════════════
+        // INITIAL STATE: Shows "no errors" message
+        // UPDATED BY: updateLogCard(data) when new error detected
+        //
+        // ID REQUIRED: 'doctor-latest-log' (DO NOT CHANGE)
+        //
+        // FINAL STRUCTURE (after updateLogCard):
+        //   <div class="doctor-card error" id="doctor-latest-log">
+        //     <div class="doctor-card-title">LATEST DIAGNOSIS</div>
+        //     <div class="doctor-card-body">
+        //       <!-- Error Summary Section -->
+        //       <!-- Collapsible Full Error Details -->
+        //       <!-- Suggestion Section (green theme) -->
+        //       <!-- Timestamp -->
+        //       <!-- Node Context -->
+        //       <!-- Locate Node on Canvas Button -->
+        //     </div>
+        //   </div>
+        // ═══════════════════════════════════════════════════════════════
         const logCard = document.createElement('div');
         logCard.className = 'doctor-card';
-        logCard.innerHTML = `<div class="doctor-card-body" style="color:#777;text-align:center">No active errors detected.</div>`;
-        logCard.id = 'doctor-latest-log';
+        logCard.innerHTML = `<div class="doctor-card-body" style="color:#777;text-align:center">${this.getUIText('no_errors')}</div>`;
+        logCard.id = 'doctor-latest-log';  // REQUIRED ID - DO NOT REMOVE
         content.appendChild(logCard);
 
         this.panel.appendChild(content);
@@ -864,29 +982,330 @@ export class DoctorUI {
         }, this.pollInterval);
     }
 
+    /**
+     * Extract error summary and suggestion from raw error data
+     *
+     * SEPARATES ERROR AND SUGGESTION (CRITICAL - DO NOT MERGE THEM AGAIN)
+     *
+     * PURPOSE:
+     *   Prevents information overload by separating concerns:
+     *   - errorSummary: Brief 1-2 line summary for quick scanning
+     *   - fullError: Complete error traceback (may be truncated)
+     *   - suggestion: AI-generated fix recommendation (already cleaned by backend)
+     *
+     * RETURNS: {
+     *   errorSummary: string,   // Brief error summary (red theme in UI)
+     *   fullError: string,       // Full error text (collapsible in UI)
+     *   suggestion: string,      // AI suggestion (green theme in UI)
+     *   hasLongError: boolean    // Whether to show collapse UI
+     * }
+     *
+     * ERROR SUMMARY LOGIC:
+     *   - Validation errors: Extract first "* NodeName" + "- ErrorDetail"
+     *   - Other errors: Use last line (usually "Exception: Message")
+     *   - Fallback: "Unknown Error"
+     *
+     * SUGGESTION HANDLING:
+     *   - Backend already cleaned via regex fix (analyzer.py:112)
+     *   - Only removes "💡 SUGGESTION: " prefix here
+     *   - NO error log pollution (fixed 2025-12-31)
+     *
+     * RELATED FIXES:
+     *   - Issue 1: Error panel information overload (2025-12-31)
+     *   - Issue 4: Suggestion message contains error logs (2025-12-31)
+     *   - See: .planning/ERROR_PANEL_UI_FIXES.md
+     */
+    extractErrorInfo(data) {
+        const result = {
+            errorSummary: null,
+            fullError: null,
+            suggestion: null,
+            hasLongError: false
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // EXTRACT SUGGESTION (ALREADY CLEANED BY BACKEND)
+        // ═══════════════════════════════════════════════════════════════
+        // Backend regex (analyzer.py:112) ensures only minimal info:
+        //   - validation_error: "{node_name}: {error_detail}"
+        //   - Other errors: Use template from i18n.py
+        //
+        // DO NOT add error logs here - they're already excluded!
+        // ═══════════════════════════════════════════════════════════════
+        if (data.suggestion) {
+            result.suggestion = data.suggestion.replace("💡 SUGGESTION: ", "").trim();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // EXTRACT ERROR SUMMARY (BRIEF 1-2 LINE VERSION)
+        // ═══════════════════════════════════════════════════════════════
+        if (data.last_error) {
+            const fullError = data.last_error.trim();
+            result.fullError = fullError;
+            const lines = fullError.split('\n');
+
+            // --- Validation Errors ---
+            // Extract first node error (not all 12+ repeated errors)
+            if (fullError.includes('Failed to validate prompt')) {
+                // Look for lines starting with "* " (node error details)
+                const nodeErrorLine = lines.find(line => line.trim().startsWith('* '));
+                const detailLine = lines.find(line => line.trim().startsWith('- '));
+
+                if (nodeErrorLine && detailLine) {
+                    result.errorSummary = `${nodeErrorLine.trim()}\n${detailLine.trim()}`;
+                } else if (nodeErrorLine) {
+                    result.errorSummary = nodeErrorLine.trim();
+                } else {
+                    // Count validation errors
+                    const errorCount = (fullError.match(/Failed to validate prompt for output/g) || []).length;
+                    result.errorSummary = `Validation failed for ${errorCount} output(s)`;
+                }
+
+                // Check if error is too long (more than 500 characters)
+                result.hasLongError = fullError.length > 500;
+            } else if (lines.length > 0) {
+                // --- Other Errors ---
+                // Use last line (usually Exception: Message)
+                result.errorSummary = lines[lines.length - 1];
+                result.hasLongError = fullError.length > 500;
+            }
+        }
+
+        if (!result.errorSummary) result.errorSummary = "Unknown Error";
+
+        return result;
+    }
+
+    /**
+     * Truncate long error text for display (show first and last parts)
+     *
+     * PREVENTS INFORMATION OVERLOAD (Issue 1: Fixed 2025-12-31)
+     *
+     * STRATEGY:
+     *   - Short text (≤500 chars): Show in full, no truncation
+     *   - Few lines but long (≤10 lines): Character-based truncation
+     *   - Many lines (>10 lines): Show first 3 + last 3, omit middle
+     *
+     * RETURNS: {
+     *   truncated: string,   // Truncated text for display
+     *   isTruncated: boolean // Whether truncation was applied
+     * }
+     *
+     * EXAMPLE OUTPUT (many lines):
+     *   Line 1
+     *   Line 2
+     *   Line 3
+     *
+     *   ... (47 lines omitted) ...
+     *
+     *   Line 48
+     *   Line 49
+     *   Line 50
+     *
+     * USED BY: updateLogCard() when hasLongError === true
+     * DISPLAY: Inside <details> element (collapsible)
+     *
+     * DO NOT MODIFY: Carefully tuned thresholds (500 chars, 10 lines, 3+3)
+     */
+    truncateError(text, maxLength = 500) {
+        if (text.length <= maxLength) {
+            return { truncated: text, isTruncated: false };
+        }
+
+        const lines = text.split('\n');
+
+        // ═══════════════════════════════════════════════════════════════
+        // CASE 1: Few lines but long (≤10 lines, >500 chars)
+        // ═══════════════════════════════════════════════════════════════
+        // Example: Single-line error with 1000+ character message
+        // Strategy: Character-based split (first half + last half)
+        // ═══════════════════════════════════════════════════════════════
+        if (lines.length <= 10) {
+            const halfLength = Math.floor(maxLength / 2);
+            return {
+                truncated: text.substring(0, halfLength) + '\n\n... (truncated) ...\n\n' + text.substring(text.length - halfLength),
+                isTruncated: true
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CASE 2: Many lines (>10 lines)
+        // ═══════════════════════════════════════════════════════════════
+        // Example: 50-line validation error with 12 repeated errors
+        // Strategy: Show first 3 + last 3, omit middle
+        // Result: User sees start/end context, avoids scroll fatigue
+        // ═══════════════════════════════════════════════════════════════
+        const firstLines = lines.slice(0, 3).join('\n');
+        const lastLines = lines.slice(-3).join('\n');
+        const omittedCount = lines.length - 6;
+
+        return {
+            truncated: `${firstLines}\n\n... (${omittedCount} lines omitted) ...\n\n${lastLines}`,
+            isTruncated: true
+        };
+    }
+
+    /**
+     * Update LATEST DIAGNOSIS card with error analysis results
+     *
+     * ═══════════════════════════════════════════════════════════════════════════
+     * CRITICAL UI COMPONENT - STRUCTURE DOCUMENTATION
+     * ═══════════════════════════════════════════════════════════════════════════
+     *
+     * VISUAL LAYOUT (DO NOT MODIFY STRUCTURE):
+     *
+     * ┌─────────────────────────────────────────────────────────────────────┐
+     * │ LATEST DIAGNOSIS                                     <- Title       │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ Error                                                <- Section 1    │
+     * │ KSampler 25: Return type mismatch...  (RED #ff8888)                 │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ ▶ Show full error details                           <- Section 2    │
+     * │   (Collapsible <details> with full traceback)                       │
+     * │   - Only shown if hasLongError === true                             │
+     * │   - Truncated using truncateError() (first 3 + last 3 lines)        │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ 💡 Suggestion                                        <- Section 3    │
+     * │ Validation Error in KSampler: Return type...  (GREEN #afa)          │
+     * │   - Background: #1a3a1a (dark green)                                │
+     * │   - Border-left: 3px solid #4a4                                     │
+     * │   - SEPARATED from error (Issue 2: Fixed 2025-12-31)                │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ 2:30:45 PM                                           <- Timestamp   │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ Node #25: KSampler                                   <- Node Context│
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ [🔍 Locate Node on Canvas]                           <- Action Btn  │
+     * │   - ID: doctor-locate-btn                                           │
+     * │   - data-node attribute: node_id                                    │
+     * │   - onClick: locateNodeOnCanvas(nodeId)                             │
+     * │   - i18n: 'locate_node_btn'                                         │
+     * ├─────────────────────────────────────────────────────────────────────┤
+     * │ 💡 Open the Doctor sidebar (left panel) to analyze... <- Hint       │
+     * │   - i18n: 'sidebar_hint'                                            │
+     * └─────────────────────────────────────────────────────────────────────┘
+     *
+     * ═══════════════════════════════════════════════════════════════════════════
+     * COLOR SCHEME (DO NOT CHANGE):
+     * ═══════════════════════════════════════════════════════════════════════════
+     * - Error Summary: #ff8888 (light red) - Bold, prominent
+     * - Full Error Details: #ccc on #1a1a1a - Monospace, scrollable
+     * - Suggestion Box: #afa on #1a3a1a - Green theme, distinct
+     * - Suggestion Border: 3px solid #4a4 - Left accent
+     * - Timestamp: #666 - Subtle
+     * - Node Context: #222 background - Monospace
+     * - Hint Text: #888 - Italic, centered
+     *
+     * ═══════════════════════════════════════════════════════════════════════════
+     * I18N KEYS USED:
+     * ═══════════════════════════════════════════════════════════════════════════
+     * - locate_node_btn: "Locate Node on Canvas" (button text)
+     * - sidebar_hint: "Open the Doctor sidebar..." (bottom hint)
+     *
+     * ═══════════════════════════════════════════════════════════════════════════
+     * IMPORTANT FIXES APPLIED (DO NOT REVERT):
+     * ═══════════════════════════════════════════════════════════════════════════
+     * 1. Error and suggestion SEPARATED (Issue 2: 2025-12-31)
+     *    - Before: Mixed in one block, hard to distinguish
+     *    - After: Separate sections with color coding
+     *
+     * 2. Long errors TRUNCATED (Issue 1: 2025-12-31)
+     *    - Before: 12+ repeated validation errors shown in full
+     *    - After: Collapsible <details> with smart truncation
+     *
+     * 3. Suggestion NO LONGER contains error logs (Issue 4: 2025-12-31)
+     *    - Before: Massive error block polluted suggestion
+     *    - After: Backend regex fix ensures only minimal info
+     *
+     * SEE: .planning/ERROR_PANEL_UI_FIXES.md for full documentation
+     * ═══════════════════════════════════════════════════════════════════════════
+     */
     updateLogCard(data) {
         const container = document.getElementById('doctor-latest-log');
         if (!container) return;
 
-        let errorText = data.suggestion ? data.suggestion.replace("💡 SUGGESTION: ", "") : null;
-
-        // Fallback: If no suggestion, try to extract the exception message from raw error
-        if (!errorText && data.last_error) {
-            const lines = data.last_error.trim().split('\n');
-            if (lines.length > 0) {
-                errorText = lines[lines.length - 1]; // Use last line (usually Exception: Message)
-            }
-        }
-
-        if (!errorText) errorText = "Unknown Error";
+        const { errorSummary, fullError, suggestion, hasLongError } = this.extractErrorInfo(data);
 
         let html = `
             <div class="doctor-card-title">LATEST DIAGNOSIS</div>
             <div class="doctor-card-body">
-                <div style="font-weight:bold;color:#ff8888;margin-bottom:8px">${this.escapeHtml(errorText)}</div>
-                <div style="font-size:11px;color:#888;margin-bottom:8px">${new Date(data.timestamp).toLocaleTimeString()}</div>
         `;
 
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION 1: ERROR SUMMARY (Brief, bold, red theme)
+        // ═══════════════════════════════════════════════════════════════
+        // Purpose: Quick scanning - user sees key error in 1-2 lines
+        // Color: #ff8888 (light red) for error indication
+        // Font: Bold, 12px for prominence
+        // DO NOT merge with suggestion section (Issue 2 fix)
+        // ═══════════════════════════════════════════════════════════════
+        html += `
+            <div style="margin-bottom:12px;">
+                <div style="font-size:10px;color:#999;text-transform:uppercase;margin-bottom:4px;">Error</div>
+                <div style="font-weight:bold;color:#ff8888;font-size:12px;line-height:1.4;">${this.escapeHtml(errorSummary)}</div>
+            </div>
+        `;
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION 2: FULL ERROR DETAILS (Collapsible if long)
+        // ═══════════════════════════════════════════════════════════════
+        // Shown only if: hasLongError === true (>500 chars)
+        // Display: HTML <details> element (native collapse/expand)
+        // Truncation: First 3 + last 3 lines via truncateError()
+        // Style: Monospace <pre>, dark background #1a1a1a
+        // Purpose: Avoid information overload (Issue 1 fix)
+        // ═══════════════════════════════════════════════════════════════
+        if (hasLongError && fullError) {
+            const { truncated, isTruncated } = this.truncateError(fullError);
+            html += `
+                <details style="margin-bottom:12px;">
+                    <summary style="cursor:pointer;color:#aaa;font-size:11px;user-select:none;">
+                        ${isTruncated ? '▶ Show full error details' : '▶ Show error details'}
+                    </summary>
+                    <pre style="background:#1a1a1a;padding:8px;border-radius:4px;font-size:10px;color:#ccc;overflow-x:auto;margin-top:6px;white-space:pre-wrap;word-wrap:break-word;">${this.escapeHtml(fullError)}</pre>
+                </details>
+            `;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION 3: SUGGESTION (Green theme, SEPARATED from error)
+        // ═══════════════════════════════════════════════════════════════
+        // CRITICAL: DO NOT merge with error section (Issue 2 fix)
+        // Background: #1a3a1a (dark green) - distinct from error
+        // Border: 3px solid #4a4 on left - visual accent
+        // Text: #afa (light green) - easy to read
+        // Content: Already cleaned by backend regex (analyzer.py:112)
+        //          - validation_error: Only node name + error detail
+        //          - Other errors: Use i18n template
+        // NO error log pollution (Issue 4 fix - 2025-12-31)
+        // ═══════════════════════════════════════════════════════════════
+        if (suggestion) {
+            html += `
+                <div style="margin-bottom:12px;padding:8px;background:#1a3a1a;border-left:3px solid #4a4;border-radius:4px;">
+                    <div style="font-size:10px;color:#8f8;text-transform:uppercase;margin-bottom:4px;">💡 Suggestion</div>
+                    <div style="color:#afa;font-size:11px;line-height:1.5;">${this.escapeHtml(suggestion)}</div>
+                </div>
+            `;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION 4: TIMESTAMP
+        // ═══════════════════════════════════════════════════════════════
+        // Format: Local time (e.g., "2:30:45 PM")
+        // Color: #666 (subtle, non-intrusive)
+        // ═══════════════════════════════════════════════════════════════
+        html += `<div style="font-size:11px;color:#666;margin-bottom:8px;">${new Date(data.timestamp).toLocaleTimeString()}</div>`;
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION 5: NODE CONTEXT + LOCATE BUTTON
+        // ═══════════════════════════════════════════════════════════════
+        // Node Info: "Node #25: KSampler" (monospace, dark bg)
+        // Button: "🔍 Locate Node on Canvas"
+        //   - ID: doctor-locate-btn (required for event binding)
+        //   - data-node: node_id (used by locateNodeOnCanvas)
+        //   - i18n: 'locate_node_btn'
+        // Event: Re-bound after innerHTML update (see below)
+        // ═══════════════════════════════════════════════════════════════
         if (data.node_context && data.node_context.node_id) {
             const safeNodeId = this.escapeHtml(String(data.node_context.node_id));
             const safeNodeName = this.escapeHtml(data.node_context.node_name || 'Unknown');
@@ -895,16 +1314,21 @@ export class DoctorUI {
                     Node #${safeNodeId}: ${safeNodeName}
                 </div>
                 <button class="doctor-action-btn" id="doctor-locate-btn" data-node="${safeNodeId}">
-                    🔍 Locate Node on Canvas
+                    🔍 ${this.getUIText('locate_node_btn')}
                 </button>
-             `;
+            `;
         }
 
-        // Removed: Old AI Analysis Button - now use sidebar instead
-        // Add hint to use sidebar
+        // ═══════════════════════════════════════════════════════════════
+        // SECTION 6: SIDEBAR HINT (Bottom guidance text)
+        // ═══════════════════════════════════════════════════════════════
+        // Purpose: Guide users to open left sidebar for AI analysis
+        // i18n: 'sidebar_hint'
+        // Style: Italic, centered, subtle gray
+        // ═══════════════════════════════════════════════════════════════
         html += `
             <div style="margin-top:10px;font-size:11px;color:#888;text-align:center;font-style:italic;">
-                💡 Open the Doctor sidebar (left panel) to analyze with AI
+                💡 ${this.getUIText('sidebar_hint')}
             </div>
         `;
 
@@ -913,7 +1337,13 @@ export class DoctorUI {
         container.innerHTML = html;
         container.classList.add('error');
 
-        // Re-bind locate button using the class method
+        // ═══════════════════════════════════════════════════════════════
+        // RE-BIND LOCATE BUTTON EVENT (Required after innerHTML update)
+        // ═══════════════════════════════════════════════════════════════
+        // Why: innerHTML wipes event listeners, must re-attach
+        // Button ID: doctor-locate-btn
+        // Event: Click → locateNodeOnCanvas(nodeId)
+        // ═══════════════════════════════════════════════════════════════
         const btn = container.querySelector('#doctor-locate-btn');
         if (btn) {
             btn.onclick = () => {
@@ -921,7 +1351,5 @@ export class DoctorUI {
                 this.locateNodeOnCanvas(nodeId);
             };
         }
-
-        // Removed: Old AI button binding - now handled in sidebar
     }
 }

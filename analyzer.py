@@ -108,8 +108,8 @@ PATTERNS: List[Tuple[str, str, bool]] = [
      ERROR_KEYS["FILE_NOT_FOUND"], True),
 
     # ComfyUI Validation Error (Dynamic inputs mismatch)
-    # Be robust: capture the specific error message block
-    (r"Failed to validate prompt for output \d+:(?:[\s\S]+?)([\-*]\s+(?:Return type mismatch|Input type mismatch|Required input missing)[\s\S]+)",
+    # Capture only the first error line, not the entire block
+    (r"Failed to validate prompt for output \d+:[\s\S]*?\*\s+([^\n]+)\s+\d+:\s*\n\s*-\s+([^\n]+)",
      ERROR_KEYS["VALIDATION_ERROR"], True),
 
     # Debug Node: Tensor NaN/Inf
@@ -123,24 +123,27 @@ PATTERNS: List[Tuple[str, str, bool]] = [
 
 # ComfyUI-specific patterns for extracting node context
 NODE_CONTEXT_PATTERNS = [
+    # Pattern: Validation error format "* NodeName NodeID:" (highest priority)
+    r"\*\s+([A-Za-z0-9_]+)\s+(\d+):",
+
     # Pattern: "Error occurred in node #123: NodeName" (common format)
     r"(?:ERROR|error)\s*(?:occurred\s*)?(?:on|in)\s*node\s*[#:]?\s*(\d+)(?:\s*[:\-]\s*(.+?))?(?:\s*\n|\s*$)",
-    
+
     # Pattern: execution.py logs like "got prompt 123" with node info
     r"Executing node (\d+),?\s*[tT]itle:\s*(.+?)(?:,|\n|$)",
-    
+
     # Pattern: "!!! Exception during processing node #123 !!!"
     r"Exception during processing.*?node\s*[#:]?\s*(\d+)",
-    
+
     # Pattern: ComfyUI prompt error format
     r"Prompt executed.*?node\s*[#:]?\s*(\d+)(?:\s*[:\-]\s*(.+?))?(?:\)|$)",
-    
+
     # Pattern: Node class from traceback File path
     r"custom_nodes[/\\]([^/\\]+)[/\\].*?\.py",
-    
+
     # Pattern: Class name in traceback (self.<method> in <ClassName>)
     r"in\s+(\w+Node)\.",
-    
+
     # Pattern: ComfyUI internal node class detection
     r"class\s+'([^']+Node)'",
 ]
@@ -182,26 +185,34 @@ class ErrorAnalyzer:
             return context
         
         # Try to extract node ID and name
-        for pattern in NODE_CONTEXT_PATTERNS[:4]:
+        for idx, pattern in enumerate(NODE_CONTEXT_PATTERNS[:5]):
             match = re.search(pattern, traceback_text, re.IGNORECASE)
             if match:
                 groups = match.groups()
                 if groups:
-                    # First group is usually node ID
-                    if groups[0] and groups[0].isdigit():
-                        context.node_id = groups[0]
-                    # Second group (if exists) is usually node name
-                    if len(groups) > 1 and groups[1]:
-                        context.node_name = groups[1].strip()
+                    # First pattern (* NodeName NodeID:) has reversed order
+                    if idx == 0:
+                        # First group is node name, second is node ID
+                        if len(groups) > 0 and groups[0]:
+                            context.node_name = groups[0].strip()
+                        if len(groups) > 1 and groups[1] and groups[1].isdigit():
+                            context.node_id = groups[1]
+                    else:
+                        # Other patterns: First group is usually node ID
+                        if groups[0] and groups[0].isdigit():
+                            context.node_id = groups[0]
+                        # Second group (if exists) is usually node name
+                        if len(groups) > 1 and groups[1]:
+                            context.node_name = groups[1].strip()
                 break
         
         # Extract custom node folder name
-        custom_node_match = re.search(NODE_CONTEXT_PATTERNS[4], traceback_text)
+        custom_node_match = re.search(NODE_CONTEXT_PATTERNS[5], traceback_text)
         if custom_node_match:
             context.custom_node_path = custom_node_match.group(1)
-        
+
         # Extract node class name
-        for pattern in NODE_CONTEXT_PATTERNS[5:]:
+        for pattern in NODE_CONTEXT_PATTERNS[6:]:
             class_match = re.search(pattern, traceback_text)
             if class_match:
                 context.node_class = class_match.group(1)

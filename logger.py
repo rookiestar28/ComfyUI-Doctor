@@ -295,13 +295,18 @@ class SmartLogger:
                 full_traceback = "".join(self.buffer)
 
                 # Special handling for validation errors: "Executing prompt:" marks the end
-                if "Failed to validate prompt for output" in full_traceback and "Executing prompt:" in message:
-                    suggestion = ErrorAnalyzer.analyze(full_traceback)
-                    self._record_analysis(full_traceback, suggestion)
+                # BUT we need to include it in the buffer first, then analyze
+                if "Failed to validate prompt for output" in full_traceback:
+                    if "Executing prompt:" in message:
+                        # This is the completion marker, analyze the full block now
+                        suggestion = ErrorAnalyzer.analyze(full_traceback)
+                        self._record_analysis(full_traceback, suggestion)
 
-                    # Reset state
-                    self.in_traceback = False
-                    self.buffer = []
+                        # Reset state
+                        self.in_traceback = False
+                        self.buffer = []
+                        return
+                    # Otherwise, keep accumulating (message already appended above)
                     return
 
                 # Check for completeness (normal tracebacks)
