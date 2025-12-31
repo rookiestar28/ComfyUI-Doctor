@@ -270,11 +270,32 @@ app.registerExtension({
                         document.head.appendChild(style);
                     }
 
+                    // ═══════════════════════════════════════════════════════════════
+                    // LEFT SIDEBAR PANEL - Doctor Sidebar (Main UI)
+                    // ═══════════════════════════════════════════════════════════════
+                    // LOCATION: Left side of ComfyUI (accessed via 🏥 Doctor icon)
+                    // DO NOT CONFUSE WITH: Right error panel (doctor_ui.js)
+                    //
+                    // STRUCTURE:
+                    // 1. Header (🏥 Doctor + ⚙️ Settings toggle)
+                    // 2. Settings Panel (collapsible)
+                    // 3. Error Context Card (shows suggestion when error occurs)
+                    // 4. Messages Area (AI chat interface)
+                    // 5. Input Area (sticky at bottom)
+                    //
+                    // IMPORTANT NOTES:
+                    // - Error Context Card displays CONCISE SUGGESTION ONLY
+                    // - Suggestion extraction logic in doctor_ui.js:updateSidebarTab()
+                    // - Full error details sent to LLM, only actionable advice shown here
+                    // ═══════════════════════════════════════════════════════════════
+
                     // Create sidebar content - SIMPLIFIED STRUCTURE with Settings Panel
                     container.innerHTML = '';
                     container.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--bg-color, #1a1a2e);';
 
-                    // HEADER with Settings Toggle
+                    // ═══════════════════════════════════════════════════════════════
+                    // SECTION 1: HEADER with Settings Toggle
+                    // ═══════════════════════════════════════════════════════════════
                     const header = document.createElement('div');
                     header.style.cssText = 'padding: 12px 15px; border-bottom: 1px solid var(--border-color, #444); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;';
                     header.innerHTML = `
@@ -286,7 +307,13 @@ app.registerExtension({
                     `;
                     container.appendChild(header);
 
-                    // SETTINGS PANEL (collapsible)
+                    // ═══════════════════════════════════════════════════════════════
+                    // SECTION 2: SETTINGS PANEL (collapsible)
+                    // ═══════════════════════════════════════════════════════════════
+                    // Contains: Language, AI Provider, Base URL, API Key, Model Name
+                    // Toggle: Click ⚙️ icon in header
+                    // State: Persisted in localStorage ('doctor_settings_expanded')
+                    // ═══════════════════════════════════════════════════════════════
                     const settingsExpanded = localStorage.getItem('doctor_settings_expanded') === 'true';
                     const settingsPanel = document.createElement('div');
                     settingsPanel.id = 'doctor-settings-panel';
@@ -510,13 +537,34 @@ app.registerExtension({
                         }
                     };
 
-                    // ERROR CONTEXT AREA (shows error details when available)
+                    // ═══════════════════════════════════════════════════════════════
+                    // SECTION 3: ERROR CONTEXT AREA
+                    // ═══════════════════════════════════════════════════════════════
+                    // PURPOSE: Shows error suggestion when an error occurs
+                    // UPDATED BY: doctor_ui.js:updateSidebarTab()
+                    //
+                    // DISPLAY CONTENT:
+                    // - 💡 Suggestion: CONCISE actionable advice ONLY (last sentence)
+                    // - Timestamp: When error occurred
+                    // - Node Context: Node ID and name
+                    // - ✨ Analyze with AI button
+                    //
+                    // IMPORTANT: Suggestion is extracted to show ONLY actionable part
+                    // Full error context is sent to LLM but NOT displayed here
+                    // See: doctor_ui.js Lines 240-258 for extraction logic
+                    // ═══════════════════════════════════════════════════════════════
                     const errorContext = document.createElement('div');
                     errorContext.id = 'doctor-error-context';
                     errorContext.style.cssText = 'flex-shrink: 0; border-bottom: 1px solid var(--border-color, #444); display: none;';
                     container.appendChild(errorContext);
 
-                    // MESSAGES AREA (flex-1 to fill remaining space)
+                    // ═══════════════════════════════════════════════════════════════
+                    // SECTION 4: MESSAGES AREA (AI Chat Interface)
+                    // ═══════════════════════════════════════════════════════════════
+                    // PURPOSE: Display AI chat messages and conversation history
+                    // UPDATED BY: doctor_ui.js chat methods
+                    // LAYOUT: flex-1 to fill remaining space, scrollable
+                    // ═══════════════════════════════════════════════════════════════
                     const messages = document.createElement('div');
                     messages.id = 'doctor-messages';
                     messages.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; min-height: 0;';
@@ -529,7 +577,13 @@ app.registerExtension({
                     `;
                     container.appendChild(messages);
 
-                    // INPUT AREA (fixed at bottom using sticky positioning)
+                    // ═══════════════════════════════════════════════════════════════
+                    // SECTION 5: INPUT AREA (Sticky at Bottom)
+                    // ═══════════════════════════════════════════════════════════════
+                    // PURPOSE: User input for AI chat questions
+                    // LAYOUT: Fixed at bottom using sticky positioning
+                    // CONTROLS: Textarea + Send/Clear buttons
+                    // ═══════════════════════════════════════════════════════════════
                     const inputArea = document.createElement('div');
                     inputArea.id = 'doctor-input-area';
                     inputArea.style.cssText = 'border-top: 1px solid var(--border-color, #444); background: var(--bg-color, #252525); padding: 10px; position: sticky; bottom: 0; flex-shrink: 0;';
