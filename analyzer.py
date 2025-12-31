@@ -244,27 +244,47 @@ class ErrorAnalyzer:
     def is_complete_traceback(text: str) -> bool:
         """
         Check if the text contains a complete Python traceback.
-        
+
         A complete traceback starts with "Traceback (most recent call last):"
         and ends with an Exception/Error line.
-        
+
         Args:
             text: The text to check.
-            
+
         Returns:
             True if a complete traceback is detected.
         """
-        if "Traceback (most recent call last):" not in text:
-            return False
-        
-        # Check for standard Python error/exception ending
-        # Pattern: ErrorType: message (at the end of a line, not indented)
-        error_pattern = r'\n([A-Z][a-zA-Z0-9]*(?:Error|Exception|Warning|Interrupt)):.*'
-        
-        has_python_error = bool(re.search(error_pattern, text))
-        
-        # Also check for ComfyUI Validation Errors (require details line starting with * or -)
-        has_validation_error = "Failed to validate prompt for output" in text and ("\n* " in text or "\n- " in text or "\n  -" in text)
-        
-        return has_python_error or has_validation_error
+        # For standard Python tracebacks
+        if "Traceback (most recent call last):" in text:
+            # Check for standard Python error/exception ending
+            # Pattern: ErrorType: message (at the end of a line, not indented)
+            error_pattern = r'\n([A-Z][a-zA-Z0-9]*(?:Error|Exception|Warning|Interrupt)):.*'
+            has_python_error = bool(re.search(error_pattern, text))
+            if has_python_error:
+                return True
+
+        # For ComfyUI Validation Errors - check if we've reached a completion marker
+        if "Failed to validate prompt for output" in text:
+            # Validation errors end with "Executing prompt:" or continue with another "Failed to validate"
+            # Count how many validation errors we have vs how many completion markers
+            validation_count = text.count("Failed to validate prompt for output")
+            executing_marker = "Executing prompt:" in text
+
+            # If we see "Executing prompt:", the validation error block is complete
+            if executing_marker:
+                return True
+
+            # If we have validation errors with details, consider complete when we have at least one
+            # with details (* or -) and no new validation error is starting
+            has_details = bool(re.search(r'\n[*\-] ', text))
+            if has_details and validation_count >= 1:
+                # Check if the last line looks like a conclusion (not a new error starting)
+                lines = text.strip().split('\n')
+                if lines:
+                    last_line = lines[-1].strip()
+                    # Complete if last line is "Output will be ignored" or similar
+                    if "Output will be ignored" in last_line or "Prompt executed" in last_line:
+                        return True
+
+        return False
 

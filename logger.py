@@ -250,10 +250,23 @@ class SmartLogger:
              return
         
         # Detect start of error block (Traceback OR Validation Error)
-        if "Traceback (most recent call last):" in message or "Failed to validate prompt for output" in message:
+        if "Traceback (most recent call last):" in message:
             self.in_traceback = True
             self.buffer = [message]
             self._last_buffer_time = current_time
+            return
+
+        # Handle validation errors differently - accumulate all related errors
+        if "Failed to validate prompt for output" in message:
+            if not self.in_traceback:
+                # Start new validation error block
+                self.in_traceback = True
+                self.buffer = [message]
+                self._last_buffer_time = current_time
+            else:
+                # Continue accumulating validation errors (don't reset buffer)
+                self.buffer.append(message)
+                self._last_buffer_time = current_time
             return
 
         if self.in_traceback:
@@ -261,35 +274,45 @@ class SmartLogger:
             if current_time - self._last_buffer_time > CONFIG.traceback_timeout_seconds:
                  # P2 Fix: Try to analyze buffer before discarding (for non-standard errors)
                  full_traceback = "".join(self.buffer)
-                 
+
                  # Analyze without requiring strict completeness check first
                  suggestion = ErrorAnalyzer.analyze(full_traceback)
-                 
+
                  # Only record if we found something useful or it strongly looks like an error
                  if suggestion or "Failed to validate" in full_traceback:
                      self._record_analysis(full_traceback, suggestion)
-                 
+
                  self.in_traceback = False
                  self.buffer = []
-                 # Don't return here, technically current message could be start of new error, 
+                 # Don't return here, technically current message could be start of new error,
                  # but for simplicity we treat it as normal log if we just timed out.
-            
+
             else:
                 self.buffer.append(message)
                 self._last_buffer_time = current_time
-                
+
                 # Build full text for analysis
                 full_traceback = "".join(self.buffer)
-                
-                # Check for completeness
-                if ErrorAnalyzer.is_complete_traceback(full_traceback):
+
+                # Special handling for validation errors: "Executing prompt:" marks the end
+                if "Failed to validate prompt for output" in full_traceback and "Executing prompt:" in message:
                     suggestion = ErrorAnalyzer.analyze(full_traceback)
                     self._record_analysis(full_traceback, suggestion)
-                    
+
                     # Reset state
                     self.in_traceback = False
                     self.buffer = []
-                
+                    return
+
+                # Check for completeness (normal tracebacks)
+                if ErrorAnalyzer.is_complete_traceback(full_traceback):
+                    suggestion = ErrorAnalyzer.analyze(full_traceback)
+                    self._record_analysis(full_traceback, suggestion)
+
+                    # Reset state
+                    self.in_traceback = False
+                    self.buffer = []
+
                 # Safety: Prevent buffer from growing too large
                 elif len(self.buffer) > CONFIG.buffer_limit:
                     self.in_traceback = False
