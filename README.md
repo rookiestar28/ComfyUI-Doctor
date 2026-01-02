@@ -1,12 +1,57 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | English | [📋 Roadmap & Development Status](ROADMAP.md)
+[繁體中文](README.zh-TW.md) | English | [Roadmap & Development Status](ROADMAP.md)
 
-A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Features 19+ error pattern recognition, i18n support for Multilingual, persistent log history, and RESTful API for frontend integration.
+A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now features 57+ error patterns (22 builtin + 35 community patterns), JSON-based pattern management with hot-reload, allowing users to maintain and manage other error types themselves. i18n support for 9 languages currently, persistent log history, and RESTful API for frontend integration.
 
 ---
 
-## Latest Updates (Dec 2025)
+## Latest Updates (Jan 2026)
+
+<details>
+<summary><strong>Phase 4B: Pattern System Overhaul (STAGE 1-3 Complete)</strong> - Click to expand</summary>
+
+ComfyUI-Doctor has undergone a major architecture upgrade with **57+ error patterns** and **JSON-based pattern management**!
+
+**STAGE 1: Logger Architecture Fix**
+
+- Implemented SafeStreamWrapper with queue-based background processing
+- Eliminated deadlock risks and race conditions
+- Fixed log interception conflicts with ComfyUI's LogInterceptor
+
+**STAGE 2: JSON Pattern Management (F2)**
+
+- New PatternLoader with hot-reload capability (no restart needed!)
+- Patterns now defined in JSON files under `patterns/` directory
+- 22 builtin patterns in `patterns/builtin/core.json`
+- Easy to extend and maintain
+
+**STAGE 3: Community Pattern Expansion (F12)**
+
+- **35 new community patterns** covering popular extensions:
+  - **ControlNet** (8 patterns): Model loading, preprocessing, image sizing
+  - **LoRA** (6 patterns): Loading errors, compatibility, weight issues
+  - **VAE** (5 patterns): Encoding/decoding failures, precision, tiling
+  - **AnimateDiff** (4 patterns): Model loading, frame count, context length
+  - **IPAdapter** (4 patterns): Model loading, image encoding, compatibility
+  - **FaceRestore** (3 patterns): CodeFormer/GFPGAN models, detection
+  - **Miscellaneous** (5 patterns): Checkpoints, samplers, schedulers, CLIP
+- Full i18n support for English, Traditional Chinese, and Simplified Chinese
+- Total: **57 error patterns** (22 builtin + 35 community)
+
+**Benefits**:
+
+- ✅ More comprehensive error coverage
+- ✅ Hot-reload patterns without restarting ComfyUI
+- ✅ Community can contribute patterns via JSON files
+- ✅ Cleaner, more maintainable codebase
+
+</details>
+
+---
+
+<details>
+<summary><strong>Previous Updates (Dec 2025)</strong> - Click to expand</summary>
 
 ### F9: Multi-language Support Expansion
 
@@ -22,7 +67,7 @@ We've expanded language support from 4 to 9 languages! ComfyUI-Doctor now provid
 - **🆕 Español** Spanish (es)
 - **🆕 한국어** Korean (ko)
 
-All 23 error patterns are fully translated across all languages, ensuring consistent diagnostic quality worldwide.
+All 57 error patterns are fully translated across all languages, ensuring consistent diagnostic quality worldwide.
 
 ### F8: Sidebar Settings Integration
 
@@ -39,15 +84,19 @@ Settings have been streamlined! Configure Doctor directly from the sidebar:
 
 ComfyUI Settings panel now only shows the Enable/Disable toggle - all other settings moved to the sidebar for a cleaner, more integrated experience.
 
+</details>
+
 ---
 
 ## Features
 
 - **Automatic Error Monitoring**: Captures all terminal output and detects Python tracebacks in real-time
-- **Intelligent Error Analysis**: 19+ built-in error patterns with actionable suggestions
+- **Intelligent Error Analysis**: 57+ error patterns (22 builtin + 35 community) with actionable suggestions
 - **Node Context Extraction**: Identifies which node caused the error (Node ID, Name, Class)
 - **System Environment Context**: Automatically includes Python version, installed packages (pip list), and OS info in AI analysis
-- **Multi-language Support**: Current Language Support: English, Traditional Chinese, Simplified Chinese, Japanese (more coming soon).
+- **Multi-language Support**: 9 languages supported (English, 繁體中文, 简体中文, 日本語, Deutsch, Français, Italiano, Español, 한국어)
+- **JSON-based Pattern Management**: Hot-reload error patterns without restarting ComfyUI
+- **Community Pattern Support**: Covers ControlNet, LoRA, VAE, AnimateDiff, IPAdapter, FaceRestore, and more
 - **Debug Inspector Node**: Deep inspection of data flowing through your workflow
 - **Error History**: Maintains a buffer of recent errors via API
 - **RESTful API**: Seven endpoints for frontend integration
@@ -81,6 +130,8 @@ The new interactive chat interface provides a conversational debugging experienc
 3. The AI will automatically analyze the error and provide suggestions
 4. Continue the conversation by typing follow-up questions in the input box
 5. Press Enter or click "Send" to submit your message
+
+> **💡 Free API Tip**: [Google AI Studio](https://aistudio.google.com/app/apikey) (Gemini) offers a generous free tier with no credit card required. Perfect for getting started with AI-powered debugging without any costs!
 
 ---
 
