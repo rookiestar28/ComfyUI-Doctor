@@ -1,0 +1,215 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "safetensors_error",
+      "regex": "safetensors_rust.SafetensorError: Error while deserializing header",
+      "error_key": "SAFETENSORS_ERROR",
+      "has_groups": false,
+      "priority": 85,
+      "category": "model_loading",
+      "tags": ["safetensors", "model", "loading"],
+      "notes": "SafeTensors deserialization error, usually corrupted model file"
+    },
+    {
+      "id": "cudnn_execution_failed",
+      "regex": "RuntimeError: cuDNN error: CUDNN_STATUS_EXECUTION_FAILED",
+      "error_key": "CUDNN_ERROR",
+      "has_groups": false,
+      "priority": 90,
+      "category": "framework",
+      "tags": ["cudnn", "gpu", "runtime"],
+      "notes": "Common with mismatched CUDA/cuDNN versions"
+    },
+    {
+      "id": "missing_insightface",
+      "regex": "ModuleNotFoundError: No module named 'insightface'",
+      "error_key": "MISSING_INSIGHTFACE",
+      "has_groups": false,
+      "priority": 80,
+      "category": "custom_nodes",
+      "tags": ["insightface", "module", "dependency"],
+      "notes": "InsightFace module required for face-related nodes"
+    },
+    {
+      "id": "model_vae_mismatch",
+      "regex": "RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn",
+      "error_key": "MODEL_VAE_MISMATCH",
+      "has_groups": false,
+      "priority": 75,
+      "category": "workflow",
+      "tags": ["autograd", "vae", "model"],
+      "notes": "Usually model/VAE compatibility issue"
+    },
+    {
+      "id": "mps_oom",
+      "regex": "MPS backend out of memory",
+      "error_key": "MPS_OOM",
+      "has_groups": false,
+      "priority": 90,
+      "category": "memory",
+      "tags": ["mps", "apple", "memory"],
+      "notes": "Apple Silicon (MPS) out of memory"
+    },
+    {
+      "id": "invalid_prompt_json",
+      "regex": "json.decoder.JSONDecodeError",
+      "error_key": "INVALID_PROMPT",
+      "has_groups": false,
+      "priority": 70,
+      "category": "workflow",
+      "tags": ["json", "prompt", "syntax"],
+      "notes": "Invalid JSON in prompt/workflow"
+    },
+    {
+      "id": "type_mismatch",
+      "regex": "RuntimeError: expected scalar type (\\w+) but found (\\w+)",
+      "error_key": "TYPE_MISMATCH",
+      "has_groups": true,
+      "priority": 65,
+      "category": "data_type",
+      "tags": ["dtype", "type", "mismatch"],
+      "notes": "Tensor data type mismatch"
+    },
+    {
+      "id": "dimension_mismatch",
+      "regex": "RuntimeError: The size of tensor ([a-z]) \\((\\d+)\\) must match the size of tensor ([a-z]) \\((\\d+)\\) at non-singleton dimension (\\d+)",
+      "error_key": "DIMENSION_MISMATCH",
+      "has_groups": true,
+      "priority": 65,
+      "category": "data_type",
+      "tags": ["dimension", "shape", "tensor"],
+      "notes": "Tensor dimension mismatch"
+    },
+    {
+      "id": "cuda_oom_classic",
+      "regex": "CUDA out of memory",
+      "error_key": "OOM",
+      "has_groups": false,
+      "priority": 90,
+      "category": "memory",
+      "tags": ["cuda", "gpu", "memory", "oom"],
+      "notes": "Most common ComfyUI error - CUDA out of memory"
+    },
+    {
+      "id": "torch_oom",
+      "regex": "torch\\.OutOfMemoryError",
+      "error_key": "TORCH_OOM",
+      "has_groups": false,
+      "priority": 90,
+      "category": "memory",
+      "tags": ["pytorch", "memory", "oom"],
+      "notes": "PyTorch out of memory (newer format)"
+    },
+    {
+      "id": "matrix_mult",
+      "regex": "mat1 and mat2 shapes cannot be multiplied",
+      "error_key": "MATRIX_MULT",
+      "has_groups": false,
+      "priority": 70,
+      "category": "data_type",
+      "tags": ["matrix", "shape", "multiplication"],
+      "notes": "Matrix multiplication shape incompatibility"
+    },
+    {
+      "id": "device_type_mismatch",
+      "regex": "Input type \\((\\w+)\\) and weight type \\((\\w+)\\) should be the same",
+      "error_key": "DEVICE_TYPE",
+      "has_groups": true,
+      "priority": 70,
+      "category": "data_type",
+      "tags": ["device", "dtype", "mismatch"],
+      "notes": "Device or data type mismatch between tensors"
+    },
+    {
+      "id": "missing_module",
+      "regex": "(?:ModuleNotFoundError|ImportError): No module named ['\"]?([\\w.]+)['\"]?",
+      "error_key": "MISSING_MODULE",
+      "has_groups": true,
+      "priority": 75,
+      "category": "custom_nodes",
+      "tags": ["import", "module", "dependency"],
+      "notes": "Generic missing Python module error"
+    },
+    {
+      "id": "assertion_error",
+      "regex": "AssertionError: (.+)",
+      "error_key": "ASSERTION",
+      "has_groups": true,
+      "priority": 50,
+      "category": "generic",
+      "tags": ["assertion", "logic"],
+      "notes": "Generic assertion failure"
+    },
+    {
+      "id": "key_error",
+      "regex": "KeyError: ['\"](.+)['\"]",
+      "error_key": "KEY_ERROR",
+      "has_groups": true,
+      "priority": 50,
+      "category": "generic",
+      "tags": ["dict", "key", "missing"],
+      "notes": "Dictionary key not found"
+    },
+    {
+      "id": "attribute_error",
+      "regex": "AttributeError: '(.+)' object has no attribute '(.+)'",
+      "error_key": "ATTRIBUTE_ERROR",
+      "has_groups": true,
+      "priority": 50,
+      "category": "generic",
+      "tags": ["attribute", "object", "missing"],
+      "notes": "Object attribute not found"
+    },
+    {
+      "id": "shape_mismatch",
+      "regex": "ValueError: (.+) shape (.+) doesn't match (.+)",
+      "error_key": "SHAPE_MISMATCH",
+      "has_groups": true,
+      "priority": 60,
+      "category": "data_type",
+      "tags": ["shape", "value", "mismatch"],
+      "notes": "Generic shape mismatch error"
+    },
+    {
+      "id": "file_not_found",
+      "regex": "FileNotFoundError: \\[Errno 2\\] No such file or directory: '(.+)'",
+      "error_key": "FILE_NOT_FOUND",
+      "has_groups": true,
+      "priority": 70,
+      "category": "model_loading",
+      "tags": ["file", "missing", "path"],
+      "notes": "File or directory not found"
+    },
+    {
+      "id": "validation_error",
+      "regex": "Failed to validate prompt for output \\d+:[\\s\\S]*?\\*\\s+([^\\n]+)\\s+\\d+:\\s*\\n\\s*-\\s+([^\\n]+)",
+      "error_key": "VALIDATION_ERROR",
+      "has_groups": true,
+      "priority": 80,
+      "category": "workflow",
+      "tags": ["validation", "prompt", "workflow"],
+      "notes": "ComfyUI workflow validation error"
+    },
+    {
+      "id": "tensor_nan_inf",
+      "regex": "❌ CRITICAL: Tensor contains (NaN|Inf)",
+      "error_key": "TENSOR_NAN_INF",
+      "has_groups": true,
+      "priority": 95,
+      "category": "data_type",
+      "tags": ["nan", "inf", "debug", "critical"],
+      "notes": "Debug node detected NaN/Inf in tensor"
+    },
+    {
+      "id": "meta_tensor",
+      "regex": "⚠️ Meta Tensor",
+      "error_key": "META_TENSOR",
+      "has_groups": false,
+      "priority": 85,
+      "category": "data_type",
+      "tags": ["meta", "tensor", "debug"],
+      "notes": "Debug node detected meta tensor"
+    }
+  ]
+}
