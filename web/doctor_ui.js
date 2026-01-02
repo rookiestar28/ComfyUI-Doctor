@@ -5,6 +5,32 @@ import { app } from "../../../scripts/app.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { ChatPanel } from "./doctor_chat.js";
 
+/**
+ * CRITICAL INITIALIZATION WARNING (Added 2026-01-03)
+ * ===================================================
+ * This class uses ASYNC initialization via loadUIText().
+ *
+ * DO NOT call doctorUI.getUIText() BEFORE the DoctorUI instance is created!
+ *
+ * Problem Pattern (INCORRECT):
+ * ```javascript
+ * app.ui.settings.addSetting({
+ *     name: doctorUI.getUIText('some_key'),  // ❌ ERROR: doctorUI doesn't exist yet!
+ * });
+ * const doctorUI = new DoctorUI({...});  // Created AFTER usage
+ * ```
+ *
+ * Correct Pattern:
+ * ```javascript
+ * const doctorUI = new DoctorUI({...});  // Create FIRST
+ * // Then use getUIText() in code that runs AFTER initialization
+ * ```
+ *
+ * For code that runs BEFORE DoctorUI creation (e.g., ComfyUI settings registration),
+ * use hardcoded fallback strings instead of getUIText().
+ *
+ * See: web/doctor.js lines 75, 119 for examples of correct hardcoded fallbacks.
+ */
 export class DoctorUI {
     constructor(options = {}) {
         // Configuration from ComfyUI settings
@@ -24,6 +50,8 @@ export class DoctorUI {
         this.ERROR_DEBOUNCE_MS = 1000;  // Ignore duplicate errors within 1 second
 
         // UI text translations
+        // IMPORTANT: this.uiText starts as empty object {}
+        // loadUIText() is ASYNC and will populate it later
         this.uiText = {};
         this.loadUIText();
 
@@ -42,6 +70,15 @@ export class DoctorUI {
 
     /**
      * Load UI text translations from backend
+     *
+     * ⚠️ ASYNC WARNING (Added 2026-01-03):
+     * This method is asynchronous and does NOT block the constructor.
+     * this.uiText will be empty {} until this promise resolves.
+     *
+     * This means:
+     * - getUIText() will return "[Missing: key]" if called before this completes
+     * - UI elements created in constructor may initially show fallback text
+     * - Language updates happen via updateUILanguage() after loading
      */
     async loadUIText() {
         try {
@@ -59,17 +96,43 @@ export class DoctorUI {
             // Fallback to English defaults
             this.uiText = {
                 "info_title": "INFO",
+                "info_message": "Click 🏥 Doctor button (left sidebar) to analyze errors with AI",
                 "settings_hint": "Settings available in",
                 "settings_path": "ComfyUI Settings → Doctor",
                 "sidebar_hint": "Open the Doctor sidebar (left panel) to analyze with AI",
                 "locate_node_btn": "Locate Node on Canvas",
                 "no_errors": "No active errors detected.",
+                "analyze_with_ai": "✨ Analyze with AI",
+                "ai_analysis_title": "AI Analysis:",
+                "thinking": "Thinking...",
+                "missing_api_key_title": "Missing API Key",
+                "connecting_to_ai": "Connecting to AI...",
+                "connecting_to_local_llm": "Connecting to local LLM...",
+                "system_running_smoothly": "System running smoothly",
+                "no_errors_detected": "No errors detected",
+                "node_label": "Node",
+                "ask_ai_placeholder": "Ask AI about this error...",
+                "send_btn": "Send",
+                "clear_btn": "Clear",
+                "doctor_ai_title": "🤖 Doctor AI",
+                "expand_btn": "Expand",
+                "regenerate_btn": "Regenerate Last",
+                "stop_btn": "Stop Generating",
+                "confirm_clear": "Clear conversation?",
+                "clear_history": "Clear History",
             };
         }
     }
 
     /**
      * Get translated UI text by key
+     *
+     * ⚠️ TIMING WARNING (Added 2026-01-03):
+     * This method can only be called AFTER the DoctorUI instance is created.
+     * If this.uiText hasn't loaded yet, it returns "[Missing: key]".
+     *
+     * DO NOT use this in code that runs before DoctorUI instantiation!
+     * Use hardcoded fallback strings instead for early initialization code.
      */
     getUIText(key) {
         return this.uiText[key] || `[Missing: ${key}]`;
@@ -239,8 +302,8 @@ export class DoctorUI {
             messages.innerHTML = `
                 <div style="text-align: center; padding: 40px 20px; color: #888;">
                     <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
-                    <div>No errors detected</div>
-                    <div style="margin-top: 5px; font-size: 12px;">System running smoothly</div>
+                    <div>${this.getUIText('no_errors_detected')}</div>
+                    <div style="margin-top: 5px; font-size: 12px;">${this.getUIText('system_running_smoothly')}</div>
                 </div>
             `;
             return;
@@ -296,18 +359,18 @@ export class DoctorUI {
 
         errorContext.innerHTML = `
             <div style="padding: 12px; background: rgba(74, 170, 74, 0.1); border-bottom: 1px solid #4a4;">
-                <div style="font-weight: bold; color: #4a4; margin-bottom: 8px;">💡 Suggestion</div>
+                <div style="font-weight: bold; color: #4a4; margin-bottom: 8px;">${this.getUIText('suggestion_label')}</div>
                 ${suggestion
-                    ? `<div style="font-size: 13px; color: #ddd; word-break: break-word; margin-bottom: 8px; line-height: 1.5;">${this.escapeHtml(suggestion)}</div>`
-                    : `<div style="font-size: 13px; color: #888; font-style: italic; margin-bottom: 8px;">No suggestion available yet</div>`
-                }
+                ? `<div style="font-size: 13px; color: #ddd; word-break: break-word; margin-bottom: 8px; line-height: 1.5;">${this.escapeHtml(suggestion)}</div>`
+                : `<div style="font-size: 13px; color: #888; font-style: italic; margin-bottom: 8px;">${this.getUIText('no_suggestion_available')}</div>`
+            }
                 <div style="font-size: 11px; color: #888;">🕐 ${timestamp}</div>
                 ${nodeContext.node_id ? `
                     <div style="background: rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; margin-top: 8px; font-size: 12px;">
-                        <div><strong>Node:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${nodeContext.node_id})</div>
+                        <div><strong>${this.getUIText('node_label')}:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${nodeContext.node_id})</div>
                     </div>
                 ` : ''}
-                <button id="doctor-analyze-btn" style="width: 100%; background: #2563eb; color: white; border: none; border-radius: 4px; padding: 8px; margin-top: 8px; cursor: pointer; font-weight: bold;">✨ Analyze with AI</button>
+                <button id="doctor-analyze-btn" style="width: 100%; background: #2563eb; color: white; border: none; border-radius: 4px; padding: 8px; margin-top: 8px; cursor: pointer; font-weight: bold;">${this.getUIText('analyze_with_ai')}</button>
             </div>
         `;
 
@@ -315,7 +378,7 @@ export class DoctorUI {
         messages.innerHTML = `
             <div style="text-align: center; padding: 20px; color: #888;">
                 <div style="font-size: 32px; margin-bottom: 10px;">🤖</div>
-                <div>Click "Analyze with AI" to start debugging</div>
+                <div>${this.getUIText('click_to_start_debugging')}</div>
             </div>
         `;
 
@@ -387,8 +450,8 @@ export class DoctorUI {
         msgDiv.style.cssText = role === 'user'
             ? 'background: #2b5c92; color: white; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; align-self: flex-end; max-width: 80%;'
             : role === 'assistant'
-            ? 'background: #333; color: #eee; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; align-self: flex-start; max-width: 90%; border: 1px solid #444;'
-            : 'background: transparent; color: #888; font-size: 11px; font-style: italic; padding: 4px; text-align: center; margin-bottom: 10px;';
+                ? 'background: #333; color: #eee; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; align-self: flex-start; max-width: 90%; border: 1px solid #444;'
+                : 'background: transparent; color: #888; font-size: 11px; font-style: italic; padding: 4px; text-align: center; margin-bottom: 10px;';
 
         msgDiv.textContent = content;
         msgDiv.dataset.role = role;
@@ -493,7 +556,7 @@ export class DoctorUI {
         this.sidebarMessages.innerHTML = `
             <div style="text-align: center; padding: 20px; color: #888;">
                 <div style="font-size: 32px; margin-bottom: 10px;">🤖</div>
-                <div>Chat cleared. Click "Analyze with AI" to start again</div>
+                <div>${this.getUIText('chat_cleared')}</div>
             </div>
         `;
     }
@@ -1159,7 +1222,7 @@ export class DoctorUI {
             }
         }
 
-        if (!result.errorSummary) result.errorSummary = "Unknown Error";
+        if (!result.errorSummary) result.errorSummary = this.getUIText('unknown_error');
 
         return result;
     }
@@ -1211,7 +1274,7 @@ export class DoctorUI {
         if (lines.length <= 10) {
             const halfLength = Math.floor(maxLength / 2);
             return {
-                truncated: text.substring(0, halfLength) + '\n\n... (truncated) ...\n\n' + text.substring(text.length - halfLength),
+                truncated: text.substring(0, halfLength) + `\n\n${this.getUIText('truncated')}\n\n` + text.substring(text.length - halfLength),
                 isTruncated: true
             };
         }
@@ -1228,7 +1291,7 @@ export class DoctorUI {
         const omittedCount = lines.length - 6;
 
         return {
-            truncated: `${firstLines}\n\n... (${omittedCount} lines omitted) ...\n\n${lastLines}`,
+            truncated: `${firstLines}\n\n... (${this.getUIText('lines_omitted').replace('{0}', omittedCount)}) ...\n\n${lastLines}`,
             isTruncated: true
         };
     }
@@ -1315,7 +1378,7 @@ export class DoctorUI {
         const { errorSummary, fullError, suggestion, hasLongError } = this.extractErrorInfo(data);
 
         let html = `
-            <div class="doctor-card-title">LATEST DIAGNOSIS</div>
+            <div class="doctor-card-title">${this.getUIText('latest_diagnosis_title')}</div>
             <div class="doctor-card-body">
         `;
 
@@ -1329,7 +1392,7 @@ export class DoctorUI {
         // ═══════════════════════════════════════════════════════════════
         html += `
             <div style="margin-bottom:12px;">
-                <div style="font-size:10px;color:#999;text-transform:uppercase;margin-bottom:4px;">Error</div>
+                <div style="font-size:10px;color:#999;text-transform:uppercase;margin-bottom:4px;">${this.getUIText('error_label')}</div>
                 <div style="font-weight:bold;color:#ff8888;font-size:12px;line-height:1.4;">${this.escapeHtml(errorSummary)}</div>
             </div>
         `;
@@ -1348,7 +1411,7 @@ export class DoctorUI {
             html += `
                 <details style="margin-bottom:12px;">
                     <summary style="cursor:pointer;color:#aaa;font-size:11px;user-select:none;">
-                        ${isTruncated ? '▶ Show full error details' : '▶ Show error details'}
+                        ${isTruncated ? this.getUIText('show_full_error') : this.getUIText('show_error_details')}
                     </summary>
                     <pre style="background:#1a1a1a;padding:8px;border-radius:4px;font-size:10px;color:#ccc;overflow-x:auto;margin-top:6px;white-space:pre-wrap;word-wrap:break-word;">${this.escapeHtml(fullError)}</pre>
                 </details>
@@ -1370,7 +1433,7 @@ export class DoctorUI {
         if (suggestion) {
             html += `
                 <div style="margin-bottom:12px;padding:8px;background:#1a3a1a;border-left:3px solid #4a4;border-radius:4px;">
-                    <div style="font-size:10px;color:#8f8;text-transform:uppercase;margin-bottom:4px;">💡 Suggestion</div>
+                    <div style="font-size:10px;color:#8f8;text-transform:uppercase;margin-bottom:4px;">${this.getUIText('suggestion_label')}</div>
                     <div style="color:#afa;font-size:11px;line-height:1.5;">${this.escapeHtml(suggestion)}</div>
                 </div>
             `;
@@ -1399,7 +1462,7 @@ export class DoctorUI {
             const safeNodeName = this.escapeHtml(data.node_context.node_name || 'Unknown');
             html += `
                 <div style="background:#222;padding:6px;border-radius:4px;margin-bottom:8px;font-family:monospace;font-size:11px;">
-                    Node #${safeNodeId}: ${safeNodeName}
+                    ${this.getUIText('node_label')} #${safeNodeId}: ${safeNodeName}
                 </div>
                 <button class="doctor-action-btn" id="doctor-locate-btn" data-node="${safeNodeId}">
                     🔍 ${this.getUIText('locate_node_btn')}

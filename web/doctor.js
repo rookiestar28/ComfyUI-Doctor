@@ -72,7 +72,7 @@ app.registerExtension({
         // Enable/Disable Extension
         app.ui.settings.addSetting({
             id: "Doctor.General.Enable",
-            name: "Enable Doctor (requires restart)",
+            name: "Enable Doctor (requires restart)",  // Hardcoded: doctorUI not created yet (fixed 2026-01-03)
             type: "boolean",
             defaultValue: true,
             onChange: (newVal, oldVal) => {
@@ -116,7 +116,7 @@ app.registerExtension({
         // Show info message directing users to sidebar
         app.ui.settings.addSetting({
             id: "Doctor.Info",
-            name: "ℹ️ Configure Doctor settings in the sidebar (left panel)",
+            name: "ℹ️ Configure Doctor settings in the sidebar (left panel)",  // Hardcoded: doctorUI not created yet (fixed 2026-01-03)
             type: "text",
             defaultValue: "",
             attrs: { readonly: true, disabled: true }
@@ -149,8 +149,8 @@ app.registerExtension({
             app.extensionManager.registerSidebarTab({
                 id: "comfyui-doctor",
                 icon: "pi pi-heart-fill",  // PrimeVue icon
-                title: "Doctor",
-                tooltip: "ComfyUI Doctor - Error Diagnostics",
+                title: doctorUI.getUIText('sidebar_doctor_title'),
+                tooltip: doctorUI.getUIText('sidebar_doctor_tooltip'),
                 type: "custom",
                 render: (container) => {
                     // Add styles for the sidebar content if not already added
@@ -301,7 +301,7 @@ app.registerExtension({
                     header.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span class="status-indicator" id="doctor-tab-status" style="width: 10px; height: 10px; border-radius: 50%; background: #4caf50; display: inline-block;"></span>
-                            <span style="font-size: 16px; font-weight: bold; color: var(--fg-color, #eee);">🏥 Doctor</span>
+                            <span style="font-size: 16px; font-weight: bold; color: var(--fg-color, #eee);">🏥 ${app.Doctor.getUIText('sidebar_doctor_title')}</span>
                         </div>
                         <span id="doctor-settings-toggle" style="cursor: pointer; font-size: 18px; color: #888; user-select: none;" title="Toggle Settings">⚙️</span>
                     `;
@@ -334,18 +334,18 @@ app.registerExtension({
                     const currentPrivacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
 
                     settingsPanel.innerHTML = `
-                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ddd;">Settings</h4>
+                        <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #ddd;">${app.Doctor.getUIText('settings_title')}</h4>
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <div>
-                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Language</label>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">${app.Doctor.getUIText('language_label')}</label>
                                 <select id="doctor-language-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
                                     ${SUPPORTED_LANGUAGES.map(lang =>
-                                        `<option value="${lang.value}" ${lang.value === currentLanguage ? 'selected' : ''}>${lang.text}</option>`
-                                    ).join('')}
+                        `<option value="${lang.value}" ${lang.value === currentLanguage ? 'selected' : ''}>${lang.text}</option>`
+                    ).join('')}
                                 </select>
                             </div>
                             <div>
-                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">AI Provider</label>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">${app.Doctor.getUIText('ai_provider_label')}</label>
                                 <select id="doctor-provider-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
                                     <option value="openai" ${currentProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
                                     <option value="anthropic" ${currentProvider === 'anthropic' ? 'selected' : ''}>Anthropic Claude</option>
@@ -360,41 +360,41 @@ app.registerExtension({
                                 </select>
                             </div>
                             <div>
-                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Base URL</label>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">${app.Doctor.getUIText('base_url_label')}</label>
                                 <input type="text" id="doctor-baseurl-input" value="${currentBaseUrl}" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
                             </div>
                             <div>
-                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">API Key</label>
-                                <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="Leave empty for local LLMs" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">${app.Doctor.getUIText('api_key_label')}</label>
+                                <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="${app.Doctor.getUIText('api_key_placeholder')}" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
                             </div>
                             <div>
-                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">Model Name</label>
+                                <label style="display: block; font-size: 12px; color: #aaa; margin-bottom: 3px;">${app.Doctor.getUIText('model_name_label')}</label>
                                 <div style="display: flex; gap: 5px; align-items: center;">
                                     <select id="doctor-model-select" style="flex: 1; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;">
-                                        <option value="">Loading models...</option>
+                                        <option value="">${app.Doctor.getUIText('loading_models')}</option>
                                     </select>
                                     <button id="doctor-refresh-models-btn" style="padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 13px;" title="Refresh model list">🔄</button>
                                 </div>
                                 <div style="margin-top: 5px;">
                                     <label style="font-size: 11px; color: #888; cursor: pointer;">
                                         <input type="checkbox" id="doctor-manual-model-toggle" style="margin-right: 3px;">
-                                        Enter model name manually
+                                        ${app.Doctor.getUIText('enter_model_manually')}
                                     </label>
                                 </div>
-                                <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="e.g., gpt-4o, deepseek-chat" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
+                                <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="${app.Doctor.getUIText('model_manual_placeholder')}" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
                             </div>
                             <div style="border-top: 1px solid #444; padding-top: 10px; margin-top: 5px;">
                                 <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aaa; margin-bottom: 3px;">
-                                    🔒 <span id="doctor-privacy-label">Privacy Mode</span>
+                                    🔒 <span id="doctor-privacy-label">${app.Doctor.getUIText('privacy_mode')}</span>
                                 </label>
                                 <select id="doctor-privacy-select" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
-                                    <option value="none" ${currentPrivacyMode === 'none' ? 'selected' : ''} id="privacy-none-option">None (No sanitization)</option>
-                                    <option value="basic" ${currentPrivacyMode === 'basic' ? 'selected' : ''} id="privacy-basic-option">Basic (Recommended)</option>
-                                    <option value="strict" ${currentPrivacyMode === 'strict' ? 'selected' : ''} id="privacy-strict-option">Strict (Maximum privacy)</option>
+                                    <option value="none" ${currentPrivacyMode === 'none' ? 'selected' : ''} id="privacy-none-option">${app.Doctor.getUIText('privacy_mode_none')}</option>
+                                    <option value="basic" ${currentPrivacyMode === 'basic' ? 'selected' : ''} id="privacy-basic-option">${app.Doctor.getUIText('privacy_mode_basic')}</option>
+                                    <option value="strict" ${currentPrivacyMode === 'strict' ? 'selected' : ''} id="privacy-strict-option">${app.Doctor.getUIText('privacy_mode_strict')}</option>
                                 </select>
-                                <div id="doctor-privacy-hint" style="font-size: 11px; color: #888; margin-top: 3px;">Controls what sensitive information is removed before sending to AI</div>
+                                <div id="doctor-privacy-hint" style="font-size: 11px; color: #888; margin-top: 3px;">${app.Doctor.getUIText('privacy_mode_hint')}</div>
                             </div>
-                            <button id="doctor-save-settings-btn" style="width: 100%; padding: 8px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 13px; margin-top: 5px;">💾 Save Settings</button>
+                            <button id="doctor-save-settings-btn" style="width: 100%; padding: 8px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 13px; margin-top: 5px;">💾 ${app.Doctor.getUIText('save_settings_btn')}</button>
                         </div>
                     `;
                     container.appendChild(settingsPanel);

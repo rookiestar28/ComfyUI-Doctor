@@ -252,12 +252,12 @@ export class ChatPanel {
         panel.innerHTML = `
             <div class="doctor-chat-header">
                 <div class="header-main">
-                    <span>🤖 Doctor AI</span>
-                    <span class="doctor-context-badge" id="doctor-context-badge" style="display:none">0 nodes</span>
+                    <span>${app.Doctor.getUIText('doctor_ai_title')}</span>
+                    <span class="doctor-context-badge" id="doctor-context-badge" style="display:none">0 ${app.Doctor.getUIText('nodes_count').split(' ').pop()}</span>
                 </div>
                 <div class="doctor-chat-controls">
-                    <button id="doctor-chat-clear" title="Clear History">🗑️</button>
-                    <button id="doctor-chat-expand" title="Expand">⤢</button>
+                    <button id="doctor-chat-clear" title="${app.Doctor.getUIText('clear_history')}">🗑️</button>
+                    <button id="doctor-chat-expand" title="${app.Doctor.getUIText('expand_btn')}">⤢</button>
                 </div>
             </div>
 
@@ -271,14 +271,14 @@ export class ChatPanel {
 
             <div class="doctor-chat-input-area">
                 <div class="doctor-input-wrapper">
-                    <textarea class="doctor-chat-input" placeholder="Ask AI..." rows="1"></textarea>
+                    <textarea class="doctor-chat-input" placeholder="${app.Doctor.getUIText('chat_ask_ai_placeholder')}" rows="1"></textarea>
                     <div class="doctor-input-actions">
-                         <button class="doctor-chat-send-btn" title="Send">➤</button>
+                         <button class="doctor-chat-send-btn" title="${app.Doctor.getUIText('send_btn')}">➤</button>
                     </div>
                 </div>
                 <div class="doctor-chat-toolbar">
-                     <button class="tool-btn" data-intent="regenerate" title="Regenerate Last">🔄</button>
-                     <button class="tool-btn dangerous" data-intent="stop" title="Stop Generating" style="display:none">⏹️</button>
+                     <button class="tool-btn" data-intent="regenerate" title="${app.Doctor.getUIText('regenerate_btn')}">🔄</button>
+                     <button class="tool-btn dangerous" data-intent="stop" title="${app.Doctor.getUIText('stop_btn')}" style="display:none">⏹️</button>
                 </div>
             </div>
         `;
@@ -324,7 +324,7 @@ export class ChatPanel {
 
         clearBtn.addEventListener('click', () => {
             // Logic to clear context
-            if (confirm("Clear conversation?")) {
+            if (confirm(app.Doctor.getUIText('confirm_clear'))) {
                 doctorContext.clearMessages();
                 this.messagesContainer.innerHTML = '';
                 if (this.initialError) {
