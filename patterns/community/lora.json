@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "lora_not_found",
+      "regex": "LoRA.*not found|Could not find lora|lora_name.*does not exist",
+      "error_key": "LORA_NOT_FOUND",
+      "has_groups": false,
+      "priority": 80,
+      "category": "model_loading",
+      "tags": ["lora", "model", "missing"],
+      "notes": "LoRA model file not found in loras directory"
+    },
+    {
+      "id": "lora_incompatible",
+      "regex": "LoRA.*incompatible|LoRA.*does not match|LoRA keys.*don't align",
+      "error_key": "LORA_INCOMPATIBLE",
+      "has_groups": false,
+      "priority": 85,
+      "category": "model_loading",
+      "tags": ["lora", "compatibility", "model"],
+      "notes": "LoRA incompatible with current base model architecture"
+    },
+    {
+      "id": "lora_corrupted",
+      "regex": "LoRA.*corrupted|LoRA.*invalid format|Error loading LoRA",
+      "error_key": "LORA_CORRUPTED",
+      "has_groups": false,
+      "priority": 80,
+      "category": "model_loading",
+      "tags": ["lora", "corrupted", "format"],
+      "notes": "LoRA file corrupted or has invalid format"
+    },
+    {
+      "id": "lora_strength_invalid",
+      "regex": "LoRA strength.*invalid|lora_strength.*out of range",
+      "error_key": "LORA_STRENGTH_INVALID",
+      "has_groups": false,
+      "priority": 60,
+      "category": "workflow",
+      "tags": ["lora", "parameter", "strength"],
+      "notes": "LoRA strength/weight value is invalid"
+    },
+    {
+      "id": "lora_oom",
+      "regex": "Out of memory.*LoRA|OOM.*loading LoRA|CUDA out of memory.*lora",
+      "error_key": "LORA_OOM",
+      "has_groups": false,
+      "priority": 90,
+      "category": "memory",
+      "tags": ["lora", "oom", "memory"],
+      "notes": "Out of memory when loading or applying LoRA"
+    },
+    {
+      "id": "lora_key_mismatch",
+      "regex": "LoRA key.*mismatch|LoRA.*unexpected keys|missing keys in LoRA",
+      "error_key": "LORA_KEY_MISMATCH",
+      "has_groups": false,
+      "priority": 75,
+      "category": "model_loading",
+      "tags": ["lora", "keys", "structure"],
+      "notes": "LoRA weight keys don't match model structure"
+    }
+  ]
+}

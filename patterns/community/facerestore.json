@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "facerestore_model_not_found",
+      "regex": "FaceRestore.*model not found|face_model.*not found|CodeFormer.*not found|GFPGAN.*not found",
+      "error_key": "FACERESTORE_MODEL_NOT_FOUND",
+      "has_groups": false,
+      "priority": 80,
+      "category": "model_loading",
+      "tags": ["facerestore", "model", "missing"],
+      "notes": "Face restoration model (CodeFormer/GFPGAN) not found"
+    },
+    {
+      "id": "facerestore_detection_failed",
+      "regex": "No faces detected|face detection.*failed|Could not detect.*face",
+      "error_key": "FACERESTORE_DETECTION_FAILED",
+      "has_groups": false,
+      "priority": 70,
+      "category": "workflow",
+      "tags": ["facerestore", "detection", "faces"],
+      "notes": "No faces detected in input image"
+    },
+    {
+      "id": "facerestore_oom",
+      "regex": "Out of memory.*face.*restore|OOM.*FaceRestore|CUDA out of memory.*face",
+      "error_key": "FACERESTORE_OOM",
+      "has_groups": false,
+      "priority": 90,
+      "category": "memory",
+      "tags": ["facerestore", "oom", "memory"],
+      "notes": "Out of memory during face restoration"
+    }
+  ]
+}

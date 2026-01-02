@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "vae_decode_failed",
+      "regex": "VAE decode.*failed|Error during VAE decode|VAEDecode.*error",
+      "error_key": "VAE_DECODE_FAILED",
+      "has_groups": false,
+      "priority": 80,
+      "category": "framework",
+      "tags": ["vae", "decode", "latent"],
+      "notes": "VAE latent decode operation failed"
+    },
+    {
+      "id": "vae_encode_failed",
+      "regex": "VAE encode.*failed|Error during VAE encode|VAEEncode.*error",
+      "error_key": "VAE_ENCODE_FAILED",
+      "has_groups": false,
+      "priority": 80,
+      "category": "framework",
+      "tags": ["vae", "encode", "image"],
+      "notes": "VAE image encode operation failed"
+    },
+    {
+      "id": "vae_tiling_error",
+      "regex": "VAE tiling.*error|VAE tile size.*invalid|tiled_size.*too",
+      "error_key": "VAE_TILING_ERROR",
+      "has_groups": false,
+      "priority": 70,
+      "category": "workflow",
+      "tags": ["vae", "tiling", "size"],
+      "notes": "VAE tiling size configuration error"
+    },
+    {
+      "id": "vae_fp16_issue",
+      "regex": "VAE.*fp16.*error|VAE precision.*mismatch|VAE.*half precision",
+      "error_key": "VAE_FP16_ISSUE",
+      "has_groups": false,
+      "priority": 85,
+      "category": "data_type",
+      "tags": ["vae", "precision", "fp16"],
+      "notes": "VAE precision issue, likely fp16/fp32 mismatch"
+    },
+    {
+      "id": "vae_batch_size_error",
+      "regex": "VAE batch size.*too large|VAE.*out of memory.*batch",
+      "error_key": "VAE_BATCH_SIZE_ERROR",
+      "has_groups": false,
+      "priority": 75,
+      "category": "memory",
+      "tags": ["vae", "batch", "memory"],
+      "notes": "VAE batch size too large for available memory"
+    }
+  ]
+}
