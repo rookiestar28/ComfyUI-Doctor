@@ -5,13 +5,17 @@ Analyzes Python tracebacks and provides human-readable suggestions for common er
 
 import re
 import functools
+import logging
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, Any
+
 try:
     from .i18n import get_suggestion, ERROR_KEYS
+    from .pattern_loader import get_pattern_loader
 except ImportError:
     # Fallback for direct execution (tests)
     from i18n import get_suggestion, ERROR_KEYS
+    from pattern_loader import get_pattern_loader
 
 
 @dataclass
@@ -228,16 +232,39 @@ class ErrorAnalyzer:
     def analyze(traceback_text: str) -> Optional[str]:
         """
         Scans the traceback for known error patterns and returns a suggestion.
-        
+
+        Architecture (v1.3.0+):
+        - Try PatternLoader first (JSON-based patterns with hot-reload)
+        - Fallback to hardcoded PATTERNS if PatternLoader fails
+        - Ensures error analysis always works even if JSON loading fails
+
         Args:
             traceback_text: The full traceback text to analyze.
-            
+
         Returns:
             A formatted suggestion string, or None if no pattern matched.
         """
         if not traceback_text:
             return None
 
+        # Try PatternLoader first (JSON-based patterns)
+        try:
+            loader = get_pattern_loader()
+            result = loader.match(traceback_text)
+            if result:
+                error_key, groups = result
+                try:
+                    if groups:
+                        return get_suggestion(error_key, *groups)
+                    else:
+                        return get_suggestion(error_key)
+                except Exception:
+                    return get_suggestion(error_key)
+        except Exception as e:
+            # Log warning but continue to fallback
+            logging.warning(f"[ErrorAnalyzer] PatternLoader failed, using fallback: {e}")
+
+        # Fallback to hardcoded PATTERNS (for reliability)
         for pattern, error_key, has_groups in PATTERNS:
             match = _compile_pattern(pattern).search(traceback_text)
             if match:
@@ -248,11 +275,11 @@ class ErrorAnalyzer:
                         return get_suggestion(error_key)
                 except Exception:
                     return get_suggestion(error_key)
-        
+
         # Generic hints for unmatched errors
         if "grad_fn" in traceback_text:
             return get_suggestion(ERROR_KEYS["AUTOGRAD"])
-            
+
         return None
     
     @staticmethod
@@ -302,4 +329,21 @@ class ErrorAnalyzer:
                         return True
 
         return False
+
+    @staticmethod
+    def reload_patterns() -> bool:
+        """
+        Reload patterns from JSON files if they have changed.
+
+        Useful for hot-reload during development or runtime pattern updates.
+
+        Returns:
+            True if patterns were reloaded, False otherwise
+        """
+        try:
+            loader = get_pattern_loader()
+            return loader.reload_if_changed()
+        except Exception as e:
+            logging.warning(f"[ErrorAnalyzer] Failed to reload patterns: {e}")
+            return False
 

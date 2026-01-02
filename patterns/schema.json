@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ComfyUI-Doctor Error Pattern Schema",
+  "description": "JSON schema for error pattern definitions",
+  "type": "object",
+  "required": ["version", "patterns"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version (semver)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "patterns": {
+      "type": "array",
+      "description": "Array of error pattern definitions",
+      "items": {
+        "type": "object",
+        "required": ["id", "regex", "error_key", "priority", "category"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique pattern identifier (lowercase, alphanumeric + underscore)",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "regex": {
+            "type": "string",
+            "description": "Python regex pattern to match error messages"
+          },
+          "error_key": {
+            "type": "string",
+            "description": "Translation key in i18n.py (e.g., 'CUDA_OOM')"
+          },
+          "has_groups": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether regex contains capture groups for dynamic data"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Match priority (higher = checked first). 80-100: high, 50-79: medium, 0-49: low"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "model_loading",
+              "custom_nodes",
+              "framework",
+              "workflow",
+              "data_type",
+              "generic"
+            ],
+            "description": "Error category for statistics and filtering"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Searchable tags (e.g., ['cudnn', 'gpu', 'runtime'])"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Developer notes (not shown to users, for documentation)"
+          }
+        }
+      }
+    }
+  }
+}
