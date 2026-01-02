@@ -13,6 +13,7 @@ SUPPORTED_LANGUAGES = ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko
 
 # Error pattern keys (used as identifiers)
 ERROR_KEYS = {
+    # Core patterns
     "TYPE_MISMATCH": "type_mismatch",
     "DIMENSION_MISMATCH": "dimension_mismatch",
     "OOM": "oom",
@@ -36,6 +37,48 @@ ERROR_KEYS = {
     "TENSOR_NAN_INF": "tensor_nan_inf",
     "META_TENSOR": "meta_tensor",
     "MISSING_INPUT": "missing_input",
+    # ControlNet patterns
+    "CONTROLNET_MODEL_NOT_FOUND": "controlnet_model_not_found",
+    "CONTROLNET_PREPROCESSOR_FAILED": "controlnet_preprocessor_failed",
+    "CONTROLNET_SIZE_MISMATCH": "controlnet_size_mismatch",
+    "CONTROLNET_UNSUPPORTED_MODEL": "controlnet_unsupported_model",
+    "CONTROLNET_INVALID_STRENGTH": "controlnet_invalid_strength",
+    "CONTROLNET_MISSING_PREPROCESSOR": "controlnet_missing_preprocessor",
+    "CONTROLNET_CHANNEL_MISMATCH": "controlnet_channel_mismatch",
+    "CONTROLNET_DEVICE_MISMATCH": "controlnet_device_mismatch",
+    # LoRA patterns
+    "LORA_NOT_FOUND": "lora_not_found",
+    "LORA_INCOMPATIBLE": "lora_incompatible",
+    "LORA_CORRUPTED": "lora_corrupted",
+    "LORA_STRENGTH_INVALID": "lora_strength_invalid",
+    "LORA_OOM": "lora_oom",
+    "LORA_KEY_MISMATCH": "lora_key_mismatch",
+    # VAE patterns
+    "VAE_DECODE_FAILED": "vae_decode_failed",
+    "VAE_ENCODE_FAILED": "vae_encode_failed",
+    "VAE_TILING_ERROR": "vae_tiling_error",
+    "VAE_FP16_ISSUE": "vae_fp16_issue",
+    "VAE_BATCH_SIZE_ERROR": "vae_batch_size_error",
+    # AnimateDiff patterns
+    "ANIMATEDIFF_MODEL_NOT_FOUND": "animatediff_model_not_found",
+    "ANIMATEDIFF_FRAME_MISMATCH": "animatediff_frame_mismatch",
+    "ANIMATEDIFF_CONTEXT_ERROR": "animatediff_context_error",
+    "ANIMATEDIFF_OOM": "animatediff_oom",
+    # IPAdapter patterns
+    "IPADAPTER_MODEL_NOT_FOUND": "ipadapter_model_not_found",
+    "IPADAPTER_IMAGE_ENCODING_FAILED": "ipadapter_image_encoding_failed",
+    "IPADAPTER_INCOMPATIBLE": "ipadapter_incompatible",
+    "IPADAPTER_WEIGHT_ERROR": "ipadapter_weight_error",
+    # FaceRestore patterns
+    "FACERESTORE_MODEL_NOT_FOUND": "facerestore_model_not_found",
+    "FACERESTORE_DETECTION_FAILED": "facerestore_detection_failed",
+    "FACERESTORE_OOM": "facerestore_oom",
+    # Misc patterns
+    "CHECKPOINT_CORRUPTED": "checkpoint_corrupted",
+    "IMAGE_FORMAT_UNSUPPORTED": "image_format_unsupported",
+    "SAMPLER_NOT_FOUND": "sampler_not_found",
+    "SCHEDULER_ERROR": "scheduler_error",
+    "CLIP_ENCODING_ERROR": "clip_encoding_error",
 }
 
 # Multi-language UI text for frontend
@@ -275,6 +318,48 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "tensor_nan_inf": "Data Anomaly: Detected {0} in the tensor. This often causes black images. Check your model precision (FP16/FP32), VAE config, or CFG scale.",
         "meta_tensor": "Empty Data: Detected a 'Meta Tensor' which contains shape info but no actual data. This usually happens before model execution. If this persists during execution, check upstream nodes.",
         "missing_input": "Missing Input: Required input '{0}' is not provided. Check if the upstream node output is connected correctly.",
+        # ControlNet
+        "controlnet_model_not_found": "ControlNet Model Not Found: The specified ControlNet model could not be found. Check if the model file exists in models/controlnet/ directory.",
+        "controlnet_preprocessor_failed": "ControlNet Preprocessor Failed: The preprocessor execution failed. Verify the preprocessor is correctly installed and the input image is valid.",
+        "controlnet_size_mismatch": "ControlNet Size Mismatch: The control image dimensions don't match the base image. Ensure both images have the same resolution.",
+        "controlnet_unsupported_model": "Unsupported ControlNet Model: This ControlNet model type is not supported. Try using a different model or updating your ControlNet nodes.",
+        "controlnet_invalid_strength": "Invalid ControlNet Strength: The control strength value must be between 0 and 1. Adjust the strength parameter.",
+        "controlnet_missing_preprocessor": "Missing ControlNet Preprocessor: Required preprocessor not installed. Install the missing preprocessor via ComfyUI-Manager.",
+        "controlnet_channel_mismatch": "ControlNet Channel Mismatch: The control image channel count doesn't match expectations. Ensure correct image format (RGB/Grayscale).",
+        "controlnet_device_mismatch": "ControlNet Device Mismatch: ControlNet model is on a different device than the base model. Ensure all models are on the same device (GPU/CPU).",
+        # LoRA
+        "lora_not_found": "LoRA Not Found: The specified LoRA model file could not be found. Check if the file exists in models/loras/ directory.",
+        "lora_incompatible": "Incompatible LoRA: This LoRA is incompatible with the current base model architecture. Ensure you're using the correct LoRA for your model (SD1.5/SDXL).",
+        "lora_corrupted": "Corrupted LoRA File: The LoRA file appears to be corrupted or has an invalid format. Try re-downloading the file.",
+        "lora_strength_invalid": "Invalid LoRA Strength: The LoRA strength value is invalid. Typical range is -2.0 to 2.0, with 1.0 being normal strength.",
+        "lora_oom": "LoRA Out of Memory: Out of memory when loading or applying LoRA. Try reducing batch size or using fewer LoRAs simultaneously.",
+        "lora_key_mismatch": "LoRA Key Mismatch: LoRA weight keys don't match the model structure. This LoRA may be for a different model architecture.",
+        # VAE
+        "vae_decode_failed": "VAE Decode Failed: VAE latent decode operation failed. Check VAE model compatibility and ensure latent dimensions are correct.",
+        "vae_encode_failed": "VAE Encode Failed: VAE image encode operation failed. Verify input image format and VAE model compatibility.",
+        "vae_tiling_error": "VAE Tiling Error: VAE tiling configuration is invalid. Adjust the tile size parameters or disable tiling.",
+        "vae_fp16_issue": "VAE Precision Issue: VAE has precision issues, likely fp16/fp32 mismatch. Try using --force-fp32 or switch to a fp32 VAE.",
+        "vae_batch_size_error": "VAE Batch Size Too Large: Batch size is too large for VAE processing. Reduce batch size or use tiled VAE.",
+        # AnimateDiff
+        "animatediff_model_not_found": "AnimateDiff Model Not Found: The AnimateDiff motion model file could not be found. Check models/animatediff/ directory.",
+        "animatediff_frame_mismatch": "AnimateDiff Frame Mismatch: Frame count doesn't match expectations. Ensure consistent frame count throughout the workflow.",
+        "animatediff_context_error": "AnimateDiff Context Error: Context length is invalid or out of range. Adjust the context_length parameter.",
+        "animatediff_oom": "AnimateDiff Out of Memory: Out of memory during animation generation. Reduce frame count, resolution, or batch size.",
+        # IPAdapter
+        "ipadapter_model_not_found": "IPAdapter Model Not Found: The IPAdapter model file could not be found. Check models/ipadapter/ directory.",
+        "ipadapter_image_encoding_failed": "IPAdapter Image Encoding Failed: Failed to encode image with CLIP vision model. Verify image format and model compatibility.",
+        "ipadapter_incompatible": "Incompatible IPAdapter: This IPAdapter is incompatible with the current base model. Ensure correct IPAdapter version (SD1.5/SDXL).",
+        "ipadapter_weight_error": "Invalid IPAdapter Weight: IPAdapter weight value is invalid. Typical range is 0.0 to 2.0.",
+        # FaceRestore
+        "facerestore_model_not_found": "Face Restoration Model Not Found: CodeFormer or GFPGAN model not found. Install via ComfyUI-Manager or check models/facerestore/.",
+        "facerestore_detection_failed": "Face Detection Failed: No faces detected in the input image. Ensure the image contains visible faces.",
+        "facerestore_oom": "Face Restoration Out of Memory: Out of memory during face restoration. Reduce image resolution or batch size.",
+        # Misc
+        "checkpoint_corrupted": "Corrupted Checkpoint: Model checkpoint file is corrupted or invalid. Try re-downloading the checkpoint.",
+        "image_format_unsupported": "Unsupported Image Format: The image file format is not supported. Use common formats like PNG, JPG, or WEBP.",
+        "sampler_not_found": "Sampler Not Found: The specified sampler is not available. Check sampler name or update ComfyUI to the latest version.",
+        "scheduler_error": "Scheduler Configuration Error: The scheduler configuration is invalid. Verify scheduler parameters and compatibility.",
+        "clip_encoding_error": "CLIP Text Encoding Failed: CLIP failed to encode the text prompt. Check for special characters or try simplifying the prompt.",
     },
     "zh_TW": {
         "type_mismatch": "類型不匹配：模型預期 {0}（例如 fp16）但收到 {1}（例如 float32）。嘗試使用「Cast Tensor」節點或檢查 VAE/模型載入精度。",
@@ -300,6 +385,48 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "tensor_nan_inf": "數據異常：在 Tensor 中偵測到 {0}。這通常會導致黑圖或崩壞。請檢查模型精度 (FP16/FP32)、VAE 設定或 CFG 數值。",
         "meta_tensor": "空數據：偵測到 'Meta Tensor'（只有形狀無數據）。這在模型執行前是正常的。若在執行階段出現，請檢查上游節點是否有實作錯誤。",
         "missing_input": "輸入源資訊遺失：{0}。請檢查上游節點輸出是否正常連接。",
+        # ControlNet
+        "controlnet_model_not_found": "找不到 ControlNet 模型：找不到指定的 ControlNet 模型檔案。請檢查 models/controlnet/ 目錄中是否存在該檔案。",
+        "controlnet_preprocessor_failed": "ControlNet 前處理器失敗：前處理器執行失敗。請確認前處理器已正確安裝且輸入圖像有效。",
+        "controlnet_size_mismatch": "ControlNet 尺寸不匹配：控制圖像的尺寸與基底圖像不符。請確保兩張圖像解析度相同。",
+        "controlnet_unsupported_model": "不支援的 ControlNet 模型：此 ControlNet 模型類型不被支援。請嘗試使用其他模型或更新 ControlNet 節點。",
+        "controlnet_invalid_strength": "ControlNet 強度無效：控制強度值必須介於 0 到 1 之間。請調整強度參數。",
+        "controlnet_missing_preprocessor": "缺少 ControlNet 前處理器：所需的前處理器未安裝。請透過 ComfyUI-Manager 安裝缺少的前處理器。",
+        "controlnet_channel_mismatch": "ControlNet 通道數不匹配：控制圖像的通道數與預期不符。請確保使用正確的圖像格式（RGB/灰階）。",
+        "controlnet_device_mismatch": "ControlNet 裝置不匹配：ControlNet 模型與基底模型在不同裝置上。請確保所有模型都在同一裝置（GPU/CPU）。",
+        # LoRA
+        "lora_not_found": "找不到 LoRA：找不到指定的 LoRA 模型檔案。請檢查 models/loras/ 目錄中是否存在該檔案。",
+        "lora_incompatible": "LoRA 不相容：此 LoRA 與當前基底模型架構不相容。請確保使用正確的 LoRA（SD1.5/SDXL）。",
+        "lora_corrupted": "LoRA 檔案損壞：LoRA 檔案似乎已損壞或格式無效。請嘗試重新下載檔案。",
+        "lora_strength_invalid": "LoRA 強度無效：LoRA 強度值無效。典型範圍為 -2.0 到 2.0，正常強度為 1.0。",
+        "lora_oom": "LoRA 記憶體不足：載入或套用 LoRA 時記憶體不足。請嘗試減少批次大小或同時使用較少的 LoRA。",
+        "lora_key_mismatch": "LoRA 鍵值不匹配：LoRA 權重鍵值與模型結構不符。此 LoRA 可能適用於不同的模型架構。",
+        # VAE
+        "vae_decode_failed": "VAE 解碼失敗：VAE 潛在空間解碼操作失敗。請檢查 VAE 模型相容性並確保潛在空間維度正確。",
+        "vae_encode_failed": "VAE 編碼失敗：VAE 圖像編碼操作失敗。請驗證輸入圖像格式和 VAE 模型相容性。",
+        "vae_tiling_error": "VAE 分塊錯誤：VAE 分塊配置無效。請調整分塊大小參數或停用分塊功能。",
+        "vae_fp16_issue": "VAE 精度問題：VAE 有精度問題，可能是 fp16/fp32 不匹配。請嘗試使用 --force-fp32 或切換到 fp32 VAE。",
+        "vae_batch_size_error": "VAE 批次大小過大：批次大小對 VAE 處理而言過大。請減少批次大小或使用分塊 VAE。",
+        # AnimateDiff
+        "animatediff_model_not_found": "找不到 AnimateDiff 模型：找不到 AnimateDiff 動態模型檔案。請檢查 models/animatediff/ 目錄。",
+        "animatediff_frame_mismatch": "AnimateDiff 幀數不匹配：幀數與預期不符。請確保整個工作流程中幀數一致。",
+        "animatediff_context_error": "AnimateDiff 上下文錯誤：上下文長度無效或超出範圍。請調整 context_length 參數。",
+        "animatediff_oom": "AnimateDiff 記憶體不足：動畫生成時記憶體不足。請減少幀數、解析度或批次大小。",
+        # IPAdapter
+        "ipadapter_model_not_found": "找不到 IPAdapter 模型：找不到 IPAdapter 模型檔案。請檢查 models/ipadapter/ 目錄。",
+        "ipadapter_image_encoding_failed": "IPAdapter 圖像編碼失敗：無法使用 CLIP 視覺模型編碼圖像。請驗證圖像格式和模型相容性。",
+        "ipadapter_incompatible": "IPAdapter 不相容：此 IPAdapter 與當前基底模型不相容。請確保使用正確的 IPAdapter 版本（SD1.5/SDXL）。",
+        "ipadapter_weight_error": "IPAdapter 權重無效：IPAdapter 權重值無效。典型範圍為 0.0 到 2.0。",
+        # FaceRestore
+        "facerestore_model_not_found": "找不到臉部修復模型：找不到 CodeFormer 或 GFPGAN 模型。請透過 ComfyUI-Manager 安裝或檢查 models/facerestore/。",
+        "facerestore_detection_failed": "臉部偵測失敗：輸入圖像中未偵測到臉部。請確保圖像包含可見的臉部。",
+        "facerestore_oom": "臉部修復記憶體不足：臉部修復時記憶體不足。請減少圖像解析度或批次大小。",
+        # Misc
+        "checkpoint_corrupted": "Checkpoint 損壞：模型 checkpoint 檔案已損壞或無效。請嘗試重新下載 checkpoint。",
+        "image_format_unsupported": "不支援的圖像格式：不支援該圖像檔案格式。請使用常見格式如 PNG、JPG 或 WEBP。",
+        "sampler_not_found": "找不到取樣器：指定的取樣器不可用。請檢查取樣器名稱或將 ComfyUI 更新至最新版本。",
+        "scheduler_error": "排程器配置錯誤：排程器配置無效。請驗證排程器參數和相容性。",
+        "clip_encoding_error": "CLIP 文字編碼失敗：CLIP 無法編碼文字提示。請檢查特殊字元或嘗試簡化提示。",
     },
     "zh_CN": {
         "type_mismatch": "类型不匹配：模型预期 {0}（例如 fp16）但收到 {1}（例如 float32）。尝试使用「Cast Tensor」节点或检查 VAE/模型加载精度。",
@@ -325,6 +452,48 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "tensor_nan_inf": "数据异常：在 Tensor 中检测到 {0}。这通常会导致黑图或崩坏。请检查模型精度 (FP16/FP32)、VAE 设置或 CFG 数值。",
         "meta_tensor": "空数据：检测到 'Meta Tensor'（只有形状无数据）。这在模型执行前是正常的。若在执行阶段出现，请检查上游节点是否有实现错误。",
         "missing_input": "输入源信息缺失：{0}。请检查上游节点输出是否正常连接。",
+        # ControlNet
+        "controlnet_model_not_found": "找不到 ControlNet 模型：找不到指定的 ControlNet 模型文件。请检查 models/controlnet/ 目录中是否存在该文件。",
+        "controlnet_preprocessor_failed": "ControlNet 预处理器失败：预处理器执行失败。请确认预处理器已正确安装且输入图像有效。",
+        "controlnet_size_mismatch": "ControlNet 尺寸不匹配：控制图像的尺寸与基底图像不符。请确保两张图像分辨率相同。",
+        "controlnet_unsupported_model": "不支持的 ControlNet 模型：此 ControlNet 模型类型不被支持。请尝试使用其他模型或更新 ControlNet 节点。",
+        "controlnet_invalid_strength": "ControlNet 强度无效：控制强度值必须介于 0 到 1 之间。请调整强度参数。",
+        "controlnet_missing_preprocessor": "缺少 ControlNet 预处理器：所需的预处理器未安装。请通过 ComfyUI-Manager 安装缺少的预处理器。",
+        "controlnet_channel_mismatch": "ControlNet 通道数不匹配：控制图像的通道数与预期不符。请确保使用正确的图像格式（RGB/灰阶）。",
+        "controlnet_device_mismatch": "ControlNet 设备不匹配：ControlNet 模型与基底模型在不同设备上。请确保所有模型都在同一设备（GPU/CPU）。",
+        # LoRA
+        "lora_not_found": "找不到 LoRA：找不到指定的 LoRA 模型文件。请检查 models/loras/ 目录中是否存在该文件。",
+        "lora_incompatible": "LoRA 不兼容：此 LoRA 与当前基底模型架构不兼容。请确保使用正确的 LoRA（SD1.5/SDXL）。",
+        "lora_corrupted": "LoRA 文件损坏：LoRA 文件似乎已损坏或格式无效。请尝试重新下载文件。",
+        "lora_strength_invalid": "LoRA 强度无效：LoRA 强度值无效。典型范围为 -2.0 到 2.0，正常强度为 1.0。",
+        "lora_oom": "LoRA 内存不足：载入或套用 LoRA 时内存不足。请尝试减少批次大小或同时使用较少的 LoRA。",
+        "lora_key_mismatch": "LoRA 键值不匹配：LoRA 权重键值与模型结构不符。此 LoRA 可能适用于不同的模型架构。",
+        # VAE
+        "vae_decode_failed": "VAE 解码失败：VAE 潜在空间解码操作失败。请检查 VAE 模型兼容性并确保潜在空间维度正确。",
+        "vae_encode_failed": "VAE 编码失败：VAE 图像编码操作失败。请验证输入图像格式和 VAE 模型兼容性。",
+        "vae_tiling_error": "VAE 分块错误：VAE 分块配置无效。请调整分块大小参数或停用分块功能。",
+        "vae_fp16_issue": "VAE 精度问题：VAE 有精度问题，可能是 fp16/fp32 不匹配。请尝试使用 --force-fp32 或切换到 fp32 VAE。",
+        "vae_batch_size_error": "VAE 批次大小过大：批次大小对 VAE 处理而言过大。请减少批次大小或使用分块 VAE。",
+        # AnimateDiff
+        "animatediff_model_not_found": "找不到 AnimateDiff 模型：找不到 AnimateDiff 动态模型文件。请检查 models/animatediff/ 目录。",
+        "animatediff_frame_mismatch": "AnimateDiff 帧数不匹配：帧数与预期不符。请确保整个工作流程中帧数一致。",
+        "animatediff_context_error": "AnimateDiff 上下文错误：上下文长度无效或超出范围。请调整 context_length 参数。",
+        "animatediff_oom": "AnimateDiff 内存不足：动画生成时内存不足。请减少帧数、分辨率或批次大小。",
+        # IPAdapter
+        "ipadapter_model_not_found": "找不到 IPAdapter 模型：找不到 IPAdapter 模型文件。请检查 models/ipadapter/ 目录。",
+        "ipadapter_image_encoding_failed": "IPAdapter 图像编码失败：无法使用 CLIP 视觉模型编码图像。请验证图像格式和模型兼容性。",
+        "ipadapter_incompatible": "IPAdapter 不兼容：此 IPAdapter 与当前基底模型不兼容。请确保使用正确的 IPAdapter 版本（SD1.5/SDXL）。",
+        "ipadapter_weight_error": "IPAdapter 权重无效：IPAdapter 权重值无效。典型范围为 0.0 到 2.0。",
+        # FaceRestore
+        "facerestore_model_not_found": "找不到脸部修复模型：找不到 CodeFormer 或 GFPGAN 模型。请通过 ComfyUI-Manager 安装或检查 models/facerestore/。",
+        "facerestore_detection_failed": "脸部侦测失败：输入图像中未侦测到脸部。请确保图像包含可见的脸部。",
+        "facerestore_oom": "脸部修复内存不足：脸部修复时内存不足。请减少图像分辨率或批次大小。",
+        # Misc
+        "checkpoint_corrupted": "Checkpoint 损坏：模型 checkpoint 文件已损坏或无效。请尝试重新下载 checkpoint。",
+        "image_format_unsupported": "不支持的图像格式：不支持该图像文件格式。请使用常见格式如 PNG、JPG 或 WEBP。",
+        "sampler_not_found": "找不到采样器：指定的采样器不可用。请检查采样器名称或将 ComfyUI 更新至最新版本。",
+        "scheduler_error": "调度器配置错误：调度器配置无效。请验证调度器参数和兼容性。",
+        "clip_encoding_error": "CLIP 文字编码失败：CLIP 无法编码文字提示。请检查特殊字符或尝试简化提示。",
     },
     "ja": {
         "type_mismatch": "型不一致：モデルは {0}（例：fp16）を想定していますが、{1}（例：float32）を受け取りました。「Cast Tensor」ノードの使用または VAE/モデルのロード精度を確認してください。",

@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "ipadapter_model_not_found",
+      "regex": "IPAdapter.*model not found|ip-adapter.*not found|Could not find IPAdapter",
+      "error_key": "IPADAPTER_MODEL_NOT_FOUND",
+      "has_groups": false,
+      "priority": 80,
+      "category": "model_loading",
+      "tags": ["ipadapter", "model", "missing"],
+      "notes": "IPAdapter model file not found"
+    },
+    {
+      "id": "ipadapter_image_encoding_failed",
+      "regex": "IPAdapter.*encoding failed|image_embeds.*failed|CLIP.*vision.*error",
+      "error_key": "IPADAPTER_IMAGE_ENCODING_FAILED",
+      "has_groups": false,
+      "priority": 75,
+      "category": "framework",
+      "tags": ["ipadapter", "encoding", "clip"],
+      "notes": "IPAdapter image encoding failed"
+    },
+    {
+      "id": "ipadapter_incompatible",
+      "regex": "IPAdapter.*incompatible|IPAdapter.*doesn't match.*model",
+      "error_key": "IPADAPTER_INCOMPATIBLE",
+      "has_groups": false,
+      "priority": 85,
+      "category": "model_loading",
+      "tags": ["ipadapter", "compatibility", "model"],
+      "notes": "IPAdapter incompatible with current base model"
+    },
+    {
+      "id": "ipadapter_weight_error",
+      "regex": "IPAdapter.*weight.*invalid|ip_adapter_weight.*out of range",
+      "error_key": "IPADAPTER_WEIGHT_ERROR",
+      "has_groups": false,
+      "priority": 65,
+      "category": "workflow",
+      "tags": ["ipadapter", "weight", "parameter"],
+      "notes": "IPAdapter weight value invalid or out of range"
+    }
+  ]
+}

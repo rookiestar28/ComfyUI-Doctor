@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "checkpoint_corrupted",
+      "regex": "Checkpoint.*corrupted|checkpoint.*invalid|Error loading checkpoint",
+      "error_key": "CHECKPOINT_CORRUPTED",
+      "has_groups": false,
+      "priority": 85,
+      "category": "model_loading",
+      "tags": ["checkpoint", "corrupted", "model"],
+      "notes": "Model checkpoint file corrupted or invalid"
+    },
+    {
+      "id": "image_format_unsupported",
+      "regex": "Unsupported image format|Image format.*not supported|cannot identify image file",
+      "error_key": "IMAGE_FORMAT_UNSUPPORTED",
+      "has_groups": false,
+      "priority": 70,
+      "category": "data_type",
+      "tags": ["image", "format", "file"],
+      "notes": "Image file format not supported"
+    },
+    {
+      "id": "sampler_not_found",
+      "regex": "Sampler.*not found|Unknown sampler|sampler_name.*invalid",
+      "error_key": "SAMPLER_NOT_FOUND",
+      "has_groups": false,
+      "priority": 75,
+      "category": "workflow",
+      "tags": ["sampler", "missing", "workflow"],
+      "notes": "Specified sampler not found or invalid"
+    },
+    {
+      "id": "scheduler_error",
+      "regex": "Scheduler.*error|Invalid scheduler|scheduler.*configuration",
+      "error_key": "SCHEDULER_ERROR",
+      "has_groups": false,
+      "priority": 70,
+      "category": "workflow",
+      "tags": ["scheduler", "configuration", "workflow"],
+      "notes": "Scheduler configuration error"
+    },
+    {
+      "id": "clip_encoding_error",
+      "regex": "CLIP.*encoding failed|text_encode.*failed|CLIPTextEncode.*error",
+      "error_key": "CLIP_ENCODING_ERROR",
+      "has_groups": false,
+      "priority": 80,
+      "category": "framework",
+      "tags": ["clip", "encoding", "text"],
+      "notes": "CLIP text encoding failed"
+    }
+  ]
+}

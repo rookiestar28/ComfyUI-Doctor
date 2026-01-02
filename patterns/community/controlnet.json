@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "controlnet_model_not_found",
+      "regex": "ControlNet model.*not found|Could not find ControlNet model",
+      "error_key": "CONTROLNET_MODEL_NOT_FOUND",
+      "has_groups": false,
+      "priority": 80,
+      "category": "model_loading",
+      "tags": ["controlnet", "model", "missing"],
+      "notes": "ControlNet model file not found in models directory"
+    },
+    {
+      "id": "controlnet_preprocessor_failed",
+      "regex": "ControlNet preprocessor.*failed|Preprocessor.*execution failed",
+      "error_key": "CONTROLNET_PREPROCESSOR_FAILED",
+      "has_groups": false,
+      "priority": 75,
+      "category": "custom_nodes",
+      "tags": ["controlnet", "preprocessor", "execution"],
+      "notes": "ControlNet preprocessor execution failed"
+    },
+    {
+      "id": "controlnet_size_mismatch",
+      "regex": "ControlNet.*size mismatch|control image size.*doesn't match",
+      "error_key": "CONTROLNET_SIZE_MISMATCH",
+      "has_groups": false,
+      "priority": 70,
+      "category": "data_type",
+      "tags": ["controlnet", "size", "dimension"],
+      "notes": "Control image dimensions don't match base image"
+    },
+    {
+      "id": "controlnet_unsupported_model",
+      "regex": "Unsupported ControlNet model|ControlNet.*not supported",
+      "error_key": "CONTROLNET_UNSUPPORTED_MODEL",
+      "has_groups": false,
+      "priority": 75,
+      "category": "model_loading",
+      "tags": ["controlnet", "compatibility", "model"],
+      "notes": "ControlNet model type not supported by current implementation"
+    },
+    {
+      "id": "controlnet_invalid_strength",
+      "regex": "Invalid ControlNet strength|control_strength.*out of range",
+      "error_key": "CONTROLNET_INVALID_STRENGTH",
+      "has_groups": false,
+      "priority": 65,
+      "category": "workflow",
+      "tags": ["controlnet", "parameter", "strength"],
+      "notes": "ControlNet strength value outside valid range (0-1)"
+    },
+    {
+      "id": "controlnet_missing_preprocessor",
+      "regex": "ControlNet preprocessor.*not installed|Missing preprocessor",
+      "error_key": "CONTROLNET_MISSING_PREPROCESSOR",
+      "has_groups": false,
+      "priority": 80,
+      "category": "custom_nodes",
+      "tags": ["controlnet", "preprocessor", "dependency"],
+      "notes": "Required ControlNet preprocessor not installed"
+    },
+    {
+      "id": "controlnet_channel_mismatch",
+      "regex": "ControlNet.*channel mismatch|control image channels.*expected",
+      "error_key": "CONTROLNET_CHANNEL_MISMATCH",
+      "has_groups": false,
+      "priority": 70,
+      "category": "data_type",
+      "tags": ["controlnet", "channels", "format"],
+      "notes": "Channel count mismatch between control and base image"
+    },
+    {
+      "id": "controlnet_device_mismatch",
+      "regex": "ControlNet model.*different device|control.*device mismatch",
+      "error_key": "CONTROLNET_DEVICE_MISMATCH",
+      "has_groups": false,
+      "priority": 75,
+      "category": "framework",
+      "tags": ["controlnet", "device", "cuda"],
+      "notes": "ControlNet model on different device than base model"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "animatediff_model_not_found",
+      "regex": "AnimateDiff.*model not found|motion_model.*not found|Could not find motion module",
+      "error_key": "ANIMATEDIFF_MODEL_NOT_FOUND",
+      "has_groups": false,
+      "priority": 80,
+      "category": "model_loading",
+      "tags": ["animatediff", "motion", "model"],
+      "notes": "AnimateDiff motion model file not found"
+    },
+    {
+      "id": "animatediff_frame_mismatch",
+      "regex": "AnimateDiff.*frame.*mismatch|video_frames.*expected.*got|frame count.*doesn't match",
+      "error_key": "ANIMATEDIFF_FRAME_MISMATCH",
+      "has_groups": false,
+      "priority": 75,
+      "category": "workflow",
+      "tags": ["animatediff", "frames", "video"],
+      "notes": "Frame count mismatch in AnimateDiff workflow"
+    },
+    {
+      "id": "animatediff_context_error",
+      "regex": "AnimateDiff.*context.*invalid|context_length.*out of range",
+      "error_key": "ANIMATEDIFF_CONTEXT_ERROR",
+      "has_groups": false,
+      "priority": 70,
+      "category": "workflow",
+      "tags": ["animatediff", "context", "parameter"],
+      "notes": "AnimateDiff context length invalid or out of range"
+    },
+    {
+      "id": "animatediff_oom",
+      "regex": "Out of memory.*AnimateDiff|OOM.*motion.*generation|CUDA out of memory.*animate",
+      "error_key": "ANIMATEDIFF_OOM",
+      "has_groups": false,
+      "priority": 90,
+      "category": "memory",
+      "tags": ["animatediff", "oom", "memory"],
+      "notes": "Out of memory during AnimateDiff generation"
+    }
+  ]
+}
