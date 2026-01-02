@@ -346,11 +346,43 @@ graph TD
 
 **Priority**: Medium
 
+**Status**: 🚧 In Progress (2026-01-02)
+
+- [ ] **STAGE 1: Logger Architecture Fix** - 🔴 CRITICAL ⚠️ *Use dev branch*
+  - **Problem**: Previous F12/F2/T8 implementation caused complete error capture failure
+  - **Root Cause**: ComfyUI's LogInterceptor.flush() clears `_logs_since_flush` after first callback
+  - **Solution**: SafeStreamWrapper + Queue-based processing (independent of on_flush callbacks)
+  - **Architecture**:
+    - SafeStreamWrapper wraps stdout/stderr (after LogInterceptor)
+    - Immediate pass-through + queue.put_nowait() (non-blocking)
+    - DoctorLogProcessor background thread handles error analysis
+  - **Benefits**:
+    - ✅ Zero deadlock risk (write() holds no locks)
+    - ✅ Complete independence from LogInterceptor bugs
+    - ✅ Backward compatible API
+  - **Timeline**: ~1.5 working days (11 hours)
+  - **Testing**: Unit tests + manual tests + 1-hour stability run
+  - **Detailed Plan**: `.planning/STAGE1_LOGGER_FIX_PLAN.md`
+  - **Failure Analysis**: `.planning/FAILURE-ERROR_CAPTURE_FAILURE_ANALYSIS.md`
+  - **Branch**: `dev` (merge to main after 3 days stable operation)
+  - **Prerequisite**: STAGE 1 completion required before F2/F12/T8 continuation
+- [ ] **STAGE 2: F2 Integration (PatternLoader)** - 🟡 Medium ⚠️ *Use dev branch*
+  - Integrate PatternLoader into analyzer.py
+  - Keep fallback to hardcoded PATTERNS on JSON failure
+  - Test hot-reload functionality
+  - **Prerequisite**: STAGE 1 stable for 3 days
+  - **Timeline**: 3 days
+- [ ] **STAGE 3: F12 Pattern Expansion** - 🟡 Medium ⚠️ *Use dev branch*
+  - Add 35+ community patterns (21 → 57 total)
+  - Focus on ControlNet, LoRA, VAE, AnimateDiff errors
+  - **Prerequisite**: STAGE 1+2 stable for 1 week
+  - **Timeline**: 2 weeks
 - [ ] **T8** Regex Pattern Compatibility CI
   - Daily automated testing vs PyTorch/ComfyUI nightly builds
   - Prevents silent pattern regression
   - Foundation for F2, F12
   - Can implement immediately (GitHub Actions)
+  - **NOTE**: Test strategy needs redesign (no static fixtures)
 - [ ] **R12** Smart Token Budget Management
   - 50-67% cost reduction for LLM calls
   - Requires `tiktoken` integration
@@ -859,11 +891,43 @@ graph TD
 
 **優先級**: 中
 
+**狀態**: 🚧 進行中 (2026-01-02)
+
+- [ ] **階段 1: Logger 架構修復** - 🔴 關鍵 ⚠️ *使用 dev 分支*
+  - **問題**：先前 F12/F2/T8 實作導致錯誤捕捉完全失效
+  - **根本原因**：ComfyUI 的 LogInterceptor.flush() 在第一個 callback 後清空 `_logs_since_flush`
+  - **解決方案**：SafeStreamWrapper + Queue-based 處理（完全獨立於 on_flush callbacks）
+  - **架構**：
+    - SafeStreamWrapper 包裝 stdout/stderr（在 LogInterceptor 之後）
+    - 立即 pass-through + queue.put_nowait()（非阻塞）
+    - DoctorLogProcessor 背景執行緒處理錯誤分析
+  - **優勢**：
+    - ✅ 零 deadlock 風險（write() 不持有任何 lock）
+    - ✅ 完全獨立於 LogInterceptor bugs
+    - ✅ 向後相容 API
+  - **時程**：約 1.5 工作天（11 小時）
+  - **測試**：單元測試 + 手動測試 + 1 小時穩定性測試
+  - **詳細計畫**：`.planning/STAGE1_LOGGER_FIX_PLAN.md`
+  - **失敗分析**：`.planning/FAILURE-ERROR_CAPTURE_FAILURE_ANALYSIS.md`
+  - **分支**：`dev`（穩定運行 3 天後合併到 main）
+  - **前提條件**：必須完成階段 1 才能繼續 F2/F12/T8
+- [ ] **階段 2: F2 整合（PatternLoader）** - 🟡 中 ⚠️ *使用 dev 分支*
+  - 將 PatternLoader 整合到 analyzer.py
+  - JSON 失敗時保留 fallback 到 hardcoded PATTERNS
+  - 測試 hot-reload 功能
+  - **前提條件**：階段 1 穩定運行 3 天
+  - **時程**：3 天
+- [ ] **階段 3: F12 Pattern 擴充** - 🟡 中 ⚠️ *使用 dev 分支*
+  - 新增 35+ 社群 patterns（21 → 57 總數）
+  - 專注於 ControlNet、LoRA、VAE、AnimateDiff 錯誤
+  - **前提條件**：階段 1+2 穩定運行 1 週
+  - **時程**：2 週
 - [ ] **T8** Regex Pattern 相容性 CI
   - 每日自動測試 PyTorch/ComfyUI nightly builds
   - 防止靜默 pattern 回歸
   - F2、F12 基礎
   - 可立即實作（GitHub Actions）
+  - **注意**：測試策略需要重新設計（不用 static fixtures）
 - [ ] **R12** 智慧 Token 預算管理
   - LLM 呼叫成本減少 50-67%
   - 需要 `tiktoken` 整合

@@ -7,7 +7,11 @@ import re
 import functools
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, Any
-from .i18n import get_suggestion, ERROR_KEYS
+try:
+    from .i18n import get_suggestion, ERROR_KEYS
+except ImportError:
+    # Fallback for direct execution (tests)
+    from i18n import get_suggestion, ERROR_KEYS
 
 
 @dataclass
