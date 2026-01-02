@@ -1,6 +1,18 @@
 """
 Smart Logger for ComfyUI Runtime Diagnostics.
 Intercepts stdout/stderr to capture logs and provide real-time error analysis.
+
+ARCHITECTURE (v1.3.0):
+- SafeStreamWrapper: Wraps sys.stdout/stderr (after ComfyUI's LogInterceptor if present)
+- DoctorLogProcessor: Background thread that processes queued messages
+- Zero deadlock risk: write() holds no locks, only enqueues messages
+
+Previous issues (v1.2.x):
+- Used SmartLogger with AsyncFileWriter
+- Attempted to use ComfyUI's on_flush callbacks (failed due to callback ordering)
+- Had potential deadlock risks with nested stream wrapping
+
+See: .planning/STAGE1_LOGGER_FIX_PLAN.md for full design details
 """
 
 import sys
@@ -9,15 +21,24 @@ import threading
 import queue
 import time
 import os
+import logging
 from collections import deque
-from typing import Optional, Dict, Any, TextIO, List
-from weakref import finalize
-from .analyzer import ErrorAnalyzer
-from .config import CONFIG
-from .history_store import HistoryStore, HistoryEntry
+from typing import Optional, Dict, Any, List
+try:
+    from .analyzer import ErrorAnalyzer
+    from .config import CONFIG
+    from .history_store import HistoryStore, HistoryEntry
+except ImportError:
+    # Fallback for direct execution (tests)
+    from analyzer import ErrorAnalyzer
+    from config import CONFIG
+    from history_store import HistoryStore, HistoryEntry
 
 
-# Global state for API access
+# ==============================================================================
+# Global State for API Access
+# ==============================================================================
+
 _last_analysis: Dict[str, Any] = {
     "error": None,
     "suggestion": None,
@@ -42,8 +63,11 @@ def _get_history_store() -> HistoryStore:
 
 # R2: Thread safety locks for shared mutable state
 _history_lock = threading.Lock()
-_instances_lock = threading.Lock()
 
+
+# ==============================================================================
+# API Functions (preserved from original implementation)
+# ==============================================================================
 
 def get_last_analysis() -> Dict[str, Any]:
     """Get the last error analysis result for API access."""
@@ -61,7 +85,7 @@ def get_analysis_history() -> List[Dict[str, Any]]:
             return history
     except Exception:
         pass  # Fallback to in-memory
-    
+
     with _history_lock:
         return list(reversed(_analysis_history))
 
@@ -78,270 +102,205 @@ def clear_analysis_history() -> bool:
         return False
 
 
-class AsyncFileWriter:
+# ==============================================================================
+# New Architecture: SafeStreamWrapper + DoctorLogProcessor
+# ==============================================================================
+
+class SafeStreamWrapper:
     """
-    Asynchronous file writer using a background thread.
-    Batches writes to reduce I/O overhead and prevent main thread blocking.
+    Safe stream wrapper that avoids deadlock with ComfyUI's LogInterceptor.
+
+    Design principles:
+    1. write() immediately pass-through (holds NO locks)
+    2. Message is enqueued for background processing
+    3. All other attributes are proxied to original stream
+
+    This avoids conflicts with ComfyUI's LogInterceptor because:
+    - We don't hold any locks during write()
+    - We call original_stream.write() FIRST, then enqueue
+    - Background thread is completely decoupled
     """
-    
-    def __init__(self, filepath: str):
-        self._queue: queue.Queue = queue.Queue()
-        self._file = open(filepath, "a", encoding="utf-8")
-        self._running = True
-        self._thread = threading.Thread(target=self._writer_loop, daemon=True)
-        self._thread.start()
-        self._finalizer = finalize(self, self._cleanup, self._file, self._queue)
-    
-    @staticmethod
-    def _cleanup(file_handle, write_queue):
-        """Safe cleanup: flush remaining queue and close file."""
+
+    def __init__(self, original_stream, message_queue):
+        """
+        Initialize wrapper.
+
+        Args:
+            original_stream: Original stream (may be LogInterceptor or raw stdout/stderr)
+            message_queue: Queue for background processing
+        """
+        self._original_stream = original_stream
+        self._queue = message_queue
+
+    def write(self, data):
+        """
+        Write data: immediate pass-through + enqueue for analysis.
+
+        CRITICAL: This method holds NO locks to avoid deadlock.
+        """
+        # 1. Immediately write to original stream (may be LogInterceptor)
         try:
-            # Drain remaining messages
-            batch = []
-            while True:
-                try:
-                    batch.append(write_queue.get_nowait())
-                except queue.Empty:
-                    break
-            if batch and file_handle and not file_handle.closed:
-                file_handle.writelines(batch)
-                file_handle.flush()
-                file_handle.close()
-        except OSError:
-            pass  # Silently ignore I/O errors during cleanup
-    
-    def write(self, message: str) -> None:
-        """Non-blocking write: enqueue message for background processing."""
-        if self._running:
-            self._queue.put(message)
-    
-    def _writer_loop(self) -> None:
-        """Background thread: batch dequeue and write to file."""
+            self._original_stream.write(data)
+        except (OSError, AttributeError):
+            pass  # Stream may be closed during shutdown
+
+        # 2. Enqueue for background processing (non-blocking)
+        try:
+            self._queue.put_nowait(data)
+        except queue.Full:
+            # Queue full: discard message (extreme case, avoid blocking)
+            pass
+
+    def flush(self):
+        """Flush original stream."""
+        try:
+            self._original_stream.flush()
+        except (OSError, AttributeError):
+            pass
+
+    def __getattr__(self, name):
+        """Proxy all other attributes to original stream (encoding, isatty, fileno, etc)."""
+        return getattr(self._original_stream, name)
+
+
+class DoctorLogProcessor(threading.Thread):
+    """
+    Background thread for log analysis.
+
+    Functionality:
+    1. Read messages from queue
+    2. Assemble traceback buffer (same logic as old SmartLogger._analyze_stream)
+    3. Call ErrorAnalyzer.analyze()
+    4. Update history store
+
+    This runs completely independently from the main thread.
+    """
+
+    def __init__(self, message_queue):
+        super().__init__(daemon=True, name="DoctorLogProcessor")
+        self._queue = message_queue
+        self._running = True
+
+        # Traceback buffer state (migrated from SmartLogger)
+        self.buffer = []
+        self.in_traceback = False
+        self.last_buffer_time = 0
+
+    def run(self):
+        """Main loop: process queued messages."""
         while self._running:
             try:
-                # Block until at least one message is available
-                first_msg = self._queue.get(timeout=0.5)
-                batch = [first_msg]
-                
-                # Drain additional messages (non-blocking)
-                while True:
-                    try:
-                        batch.append(self._queue.get_nowait())
-                    except queue.Empty:
-                        break
-                
-                # Batch write
-                self._file.writelines(batch)
-                self._file.flush()
-                
+                # Use timeout to allow periodic buffer timeout checks
+                message = self._queue.get(timeout=0.5)
+                self._process_message(message)
+
             except queue.Empty:
-                continue
-            except OSError:
-                pass  # Background thread: suppress I/O errors silently
-    
-    def flush(self) -> None:
-        """Force flush: wait for queue to drain (with timeout)."""
-        deadline = time.time() + 1.0  # 1 second max wait
-        while not self._queue.empty() and time.time() < deadline:
-            time.sleep(0.01)
-    
-    def close(self) -> None:
-        """Stop the writer thread and close the file."""
-        self._running = False
-        self._thread.join(timeout=2.0)  # Wait for background thread to complete
-        self._finalizer()
+                # Timeout: check if buffer needs flushing
+                self._check_buffer_timeout()
 
+            except Exception as e:
+                # Log error but don't crash the thread
+                logging.error(f"[Doctor] LogProcessor error: {e}", exc_info=True)
 
-class SmartLogger:
-    """
-    A smart logger that intercepts stdout/stderr, writes to file,
-    and provides real-time error analysis with suggestions.
-    Uses async file writing to prevent main thread I/O blocking.
-    """
-    
-    _original_stdout = None
-    _original_stderr = None
-    _instances = []
-    _async_writer: Optional[AsyncFileWriter] = None
-
-    def __init__(self, filepath: str, stream: TextIO):
+    def _process_message(self, message):
         """
-        Initialize the SmartLogger.
-        
-        Args:
-            filepath: Path to the log file.
-            stream: Original stream to forward output to (stdout or stderr).
-        """
-        self.stream = stream
-        self.filepath = filepath
-        
-        # Use shared async writer for all instances
-        if SmartLogger._async_writer is None:
-            SmartLogger._async_writer = AsyncFileWriter(filepath)
-        
-        self.buffer: list[str] = []
-        self.in_traceback = False
-        self._last_buffer_time = 0.0
-        self.lock = threading.Lock()  # Only for traceback buffer, not for I/O
-        
-        with _instances_lock:
-            SmartLogger._instances.append(self)
-
-    @classmethod
-    def install(cls, log_path: str):
-        """Safely install the logger, preventing multiple hooks."""
-        if cls._original_stdout is None:
-            cls._original_stdout = sys.stdout
-        if cls._original_stderr is None:
-            cls._original_stderr = sys.stderr
-        
-        # Prevent double wrapping
-        if not isinstance(sys.stdout, cls):
-            sys.stdout = cls(log_path, cls._original_stdout)
-        
-        if not isinstance(sys.stderr, cls):
-            sys.stderr = cls(log_path, cls._original_stderr)
-
-    @classmethod
-    def uninstall(cls):
-        """Restore original streams and close async writer."""
-        if cls._original_stdout:
-            sys.stdout = cls._original_stdout
-        if cls._original_stderr:
-            sys.stderr = cls._original_stderr
-            
-        # Close shared async writer
-        if cls._async_writer:
-            cls._async_writer.close()
-            cls._async_writer = None
-        
-        with _instances_lock:
-            cls._instances.clear()
-
-    def write(self, message: str) -> None:
-        """Write message to both console and log file, analyzing for errors."""
-        # 1. Output to original stream (Console) - synchronous for immediate feedback
-        try:
-            self.stream.write(message)
-            self.stream.flush()
-        except (OSError, AttributeError):
-            pass  # Stream may be closed or invalid during shutdown
-        
-        # 2. Write to log file - async (non-blocking)
-        if SmartLogger._async_writer:
-            SmartLogger._async_writer.write(message)
-
-        # 3. Analyze for errors (uses lock only for traceback buffer)
-        with self.lock:
-            self._analyze_stream(message)
-
-    def _analyze_stream(self, message: str) -> None:
-        """
-        Analyze the stream for Python tracebacks and provide suggestions.
-        Uses improved detection logic to ensure complete tracebacks.
+        Process a single message (migrated from SmartLogger._analyze_stream).
         """
         current_time = time.time()
-        
-        # P3 Fix: Urgent single-line warnings from Debug Node (Immediate analysis)
+
+        # P3: Urgent single-line warnings (immediate analysis)
         if "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message:
-             suggestion = ErrorAnalyzer.analyze(message)
-             if suggestion:
-                 self._record_analysis(message, suggestion)
-             return
-        
-        # Detect start of error block (Traceback OR Validation Error)
+            suggestion = ErrorAnalyzer.analyze(message)
+            if suggestion:
+                self._record_analysis(message, suggestion)
+            return
+
+        # Detect traceback start
         if "Traceback (most recent call last):" in message:
             self.in_traceback = True
             self.buffer = [message]
-            self._last_buffer_time = current_time
+            self.last_buffer_time = current_time
             return
 
-        # Handle validation errors differently - accumulate all related errors
+        # Handle validation errors
         if "Failed to validate prompt for output" in message:
             if not self.in_traceback:
-                # Start new validation error block
                 self.in_traceback = True
                 self.buffer = [message]
-                self._last_buffer_time = current_time
+                self.last_buffer_time = current_time
             else:
-                # Continue accumulating validation errors (don't reset buffer)
                 self.buffer.append(message)
-                self._last_buffer_time = current_time
+                self.last_buffer_time = current_time
             return
 
         if self.in_traceback:
-            # P0 Fix: Check timeout BEFORE updating timestamp
-            if current_time - self._last_buffer_time > CONFIG.traceback_timeout_seconds:
-                 # P2 Fix: Try to analyze buffer before discarding (for non-standard errors)
-                 full_traceback = "".join(self.buffer)
-
-                 # Analyze without requiring strict completeness check first
-                 suggestion = ErrorAnalyzer.analyze(full_traceback)
-
-                 # Only record if we found something useful or it strongly looks like an error
-                 if suggestion or "Failed to validate" in full_traceback:
-                     self._record_analysis(full_traceback, suggestion)
-
-                 self.in_traceback = False
-                 self.buffer = []
-                 # Don't return here, technically current message could be start of new error,
-                 # but for simplicity we treat it as normal log if we just timed out.
-
+            # Check timeout
+            if current_time - self.last_buffer_time > CONFIG.traceback_timeout_seconds:
+                full_traceback = "".join(self.buffer)
+                suggestion = ErrorAnalyzer.analyze(full_traceback)
+                if suggestion or "Failed to validate" in full_traceback:
+                    self._record_analysis(full_traceback, suggestion)
+                self.in_traceback = False
+                self.buffer = []
             else:
                 self.buffer.append(message)
-                self._last_buffer_time = current_time
-
-                # Build full text for analysis
+                self.last_buffer_time = current_time
                 full_traceback = "".join(self.buffer)
 
-                # Special handling for validation errors: "Executing prompt:" marks the end
-                # BUT we need to include it in the buffer first, then analyze
+                # Validation error completion marker
                 if "Failed to validate prompt for output" in full_traceback:
                     if "Executing prompt:" in message:
-                        # This is the completion marker, analyze the full block now
                         suggestion = ErrorAnalyzer.analyze(full_traceback)
                         self._record_analysis(full_traceback, suggestion)
-
-                        # Reset state
                         self.in_traceback = False
                         self.buffer = []
                         return
-                    # Otherwise, keep accumulating (message already appended above)
                     return
 
-                # Check for completeness (normal tracebacks)
+                # Normal traceback completion
                 if ErrorAnalyzer.is_complete_traceback(full_traceback):
                     suggestion = ErrorAnalyzer.analyze(full_traceback)
                     self._record_analysis(full_traceback, suggestion)
-
-                    # Reset state
                     self.in_traceback = False
                     self.buffer = []
 
-                # Safety: Prevent buffer from growing too large
+                # Buffer limit safety
                 elif len(self.buffer) > CONFIG.buffer_limit:
                     self.in_traceback = False
                     self.buffer = []
 
+    def _check_buffer_timeout(self):
+        """Check if buffer has timed out (called on queue.Empty)."""
+        if self.in_traceback and self.buffer:
+            current_time = time.time()
+            if current_time - self.last_buffer_time > CONFIG.traceback_timeout_seconds:
+                full_traceback = "".join(self.buffer)
+                suggestion = ErrorAnalyzer.analyze(full_traceback)
+                if suggestion or "Failed to validate" in full_traceback:
+                    self._record_analysis(full_traceback, suggestion)
+                self.in_traceback = False
+                self.buffer = []
+
     def _record_analysis(self, full_traceback, suggestion):
-        """Helper to record analysis result and print formatted output."""
+        """
+        Record analysis result (migrated from SmartLogger._record_analysis).
+        """
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
-        
-        # Update global state for API access
-        global _last_analysis
         timestamp = datetime.datetime.now().isoformat()
+
         new_analysis = {
             "error": full_traceback,
             "suggestion": suggestion,
             "timestamp": timestamp,
             "node_context": node_context.to_dict() if node_context else None,
         }
-        
+
         # R2: Thread-safe update of shared state
         with _history_lock:
+            global _last_analysis
             _last_analysis = new_analysis
             _analysis_history.append(new_analysis.copy())
-        
+
         # F1: Persist to history store
         try:
             store = _get_history_store()
@@ -354,16 +313,15 @@ class SmartLogger:
             store.append(entry)
         except Exception:
             pass  # Persistence failure should not break error analysis
-        
-        # Only print if we have something useful to say (Context OR Suggestion)
-        # This prevents empty boxes for unhandled system errors (like shutdown noise)
+
+        # Only print if we have something useful (context OR suggestion)
         if not suggestion and (not node_context or not node_context.is_valid()):
             return
 
         # Build formatted output
         output_parts = []
         output_parts.append(f"\n{'-'*40}")
-        
+
         # Add node context if available
         if node_context and node_context.is_valid():
             node_info = []
@@ -375,51 +333,118 @@ class SmartLogger:
                 node_info.append(f"Class: {node_context.node_class}")
             if node_context.custom_node_path:
                 node_info.append(f"Source: {node_context.custom_node_path}")
-            
+
             output_parts.append("🎯 ERROR LOCATION: " + " | ".join(node_info))
-        
+
         # Add suggestion
         if suggestion:
             output_parts.append(suggestion)
-        
-        output_parts.append(f"{'-'*40}\n")
-        
-        formatted_output = "\n".join(output_parts)
-        
-        # Write format box to both streams (Raw error was already written)
-        try:
-            self.stream.write(formatted_output)
-            if SmartLogger._async_writer:
-                SmartLogger._async_writer.write(formatted_output)
-        except (OSError, AttributeError):
-            pass  # Stream may be closed during shutdown
 
-    def flush(self) -> None:
-        """Flush both streams."""
+        output_parts.append(f"{'-'*40}\n")
+
+        formatted_output = "\n".join(output_parts)
+
+        # Print to stdout (will be captured by our wrapper and ComfyUI's LogInterceptor)
         try:
-            self.stream.flush()
-            if SmartLogger._async_writer:
-                SmartLogger._async_writer.flush()
-        except (OSError, AttributeError):
-            pass  # Stream may be closed during shutdown
-            
-    def close(self) -> None:
-        """Close is handled by class-level uninstall."""
-        pass  # No-op: async writer is shared and closed via uninstall()
-    
-    # Required for proper stream compatibility
-    @property
-    def encoding(self) -> Optional[str]:
-        """Return the encoding of the underlying stream."""
-        return getattr(self.stream, 'encoding', 'utf-8')
-    
-    def isatty(self) -> bool:
-        """Check if the stream is a TTY."""
-        return getattr(self.stream, 'isatty', lambda: False)()
-    
-    def fileno(self) -> int:
-        """Return the file descriptor of the underlying stream."""
-        try:
-            return self.stream.fileno()
+            print(formatted_output, file=sys.__stdout__)
         except Exception:
-            return -1
+            pass  # Silently fail if stdout is unavailable
+
+    def stop(self):
+        """Gracefully stop the processor thread."""
+        self._running = False
+
+
+# ==============================================================================
+# Installation API (preserved interface, new implementation)
+# ==============================================================================
+
+# Global state for installation
+_message_queue = None
+_log_processor = None
+_original_stdout = None
+_original_stderr = None
+
+
+def install(log_path: str):
+    """
+    Install Doctor logger (new architecture).
+
+    Args:
+        log_path: Log file path (currently unused, kept for API compatibility)
+
+    Architecture:
+    - Creates message queue and background processor thread
+    - Wraps sys.stdout/stderr with SafeStreamWrapper
+    - Background thread handles all error analysis
+
+    Note: This completely avoids the on_flush callback issues from v1.2.x
+    """
+    global _message_queue, _log_processor, _original_stdout, _original_stderr
+
+    # Avoid duplicate installation
+    if _message_queue is not None:
+        logging.warning("[Doctor] Logger already installed, skipping")
+        return
+
+    # Create queue and background processor
+    _message_queue = queue.Queue(maxsize=1000)
+    _log_processor = DoctorLogProcessor(_message_queue)
+    _log_processor.start()
+
+    # Save original streams (may already be ComfyUI's LogInterceptor)
+    _original_stdout = sys.stdout
+    _original_stderr = sys.stderr
+
+    # Wrap stdout/stderr
+    sys.stdout = SafeStreamWrapper(_original_stdout, _message_queue)
+    sys.stderr = SafeStreamWrapper(_original_stderr, _message_queue)
+
+    logging.info("[Doctor] Logger installed (SafeStreamWrapper mode)")
+    logging.info(f"[Doctor] Original stdout type: {type(_original_stdout).__name__}")
+    logging.info(f"[Doctor] Original stderr type: {type(_original_stderr).__name__}")
+
+
+def uninstall():
+    """Uninstall logger and restore original streams."""
+    global _log_processor, _original_stdout, _original_stderr, _message_queue
+
+    # Restore streams
+    if _original_stdout:
+        sys.stdout = _original_stdout
+    if _original_stderr:
+        sys.stderr = _original_stderr
+
+    # Stop background thread
+    if _log_processor:
+        _log_processor.stop()
+        _log_processor.join(timeout=2.0)
+        _log_processor = None
+
+    # Clear queue
+    _message_queue = None
+
+    logging.info("[Doctor] Logger uninstalled")
+
+
+# ==============================================================================
+# Backward Compatibility
+# ==============================================================================
+
+class SmartLogger:
+    """
+    Backward compatibility class.
+
+    The old SmartLogger interface is preserved for existing code that may
+    reference it, but internally it now uses the new architecture.
+    """
+
+    @classmethod
+    def install(cls, log_path: str):
+        """Install logger (delegates to new install())."""
+        install(log_path)
+
+    @classmethod
+    def uninstall(cls):
+        """Uninstall logger (delegates to new uninstall())."""
+        uninstall()
