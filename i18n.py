@@ -35,6 +35,7 @@ ERROR_KEYS = {
     "VALIDATION_ERROR": "validation_error",
     "TENSOR_NAN_INF": "tensor_nan_inf",
     "META_TENSOR": "meta_tensor",
+    "MISSING_INPUT": "missing_input",
 }
 
 # Multi-language UI text for frontend
@@ -273,6 +274,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "Validation Error in {0}: {1}. Check input connections and ensure node requirements are met.",
         "tensor_nan_inf": "Data Anomaly: Detected {0} in the tensor. This often causes black images. Check your model precision (FP16/FP32), VAE config, or CFG scale.",
         "meta_tensor": "Empty Data: Detected a 'Meta Tensor' which contains shape info but no actual data. This usually happens before model execution. If this persists during execution, check upstream nodes.",
+        "missing_input": "Missing Input: Required input '{0}' is not provided. Check if the upstream node output is connected correctly.",
     },
     "zh_TW": {
         "type_mismatch": "類型不匹配：模型預期 {0}（例如 fp16）但收到 {1}（例如 float32）。嘗試使用「Cast Tensor」節點或檢查 VAE/模型載入精度。",
@@ -297,6 +299,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "驗證錯誤於 {0}：{1}。請檢查輸入連接並確保符合節點要求。",
         "tensor_nan_inf": "數據異常：在 Tensor 中偵測到 {0}。這通常會導致黑圖或崩壞。請檢查模型精度 (FP16/FP32)、VAE 設定或 CFG 數值。",
         "meta_tensor": "空數據：偵測到 'Meta Tensor'（只有形狀無數據）。這在模型執行前是正常的。若在執行階段出現，請檢查上游節點是否有實作錯誤。",
+        "missing_input": "輸入源資訊遺失：{0}。請檢查上游節點輸出是否正常連接。",
     },
     "zh_CN": {
         "type_mismatch": "类型不匹配：模型预期 {0}（例如 fp16）但收到 {1}（例如 float32）。尝试使用「Cast Tensor」节点或检查 VAE/模型加载精度。",
@@ -321,6 +324,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "验证错误于 {0}：{1}。请检查输入连接并确保符合节点要求。",
         "tensor_nan_inf": "数据异常：在 Tensor 中检测到 {0}。这通常会导致黑图或崩坏。请检查模型精度 (FP16/FP32)、VAE 设置或 CFG 数值。",
         "meta_tensor": "空数据：检测到 'Meta Tensor'（只有形状无数据）。这在模型执行前是正常的。若在执行阶段出现，请检查上游节点是否有实现错误。",
+        "missing_input": "输入源信息缺失：{0}。请检查上游节点输出是否正常连接。",
     },
     "ja": {
         "type_mismatch": "型不一致：モデルは {0}（例：fp16）を想定していますが、{1}（例：float32）を受け取りました。「Cast Tensor」ノードの使用または VAE/モデルのロード精度を確認してください。",
@@ -345,6 +349,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "{0} の検証エラー：{1}。入力接続を確認し、ノード要件を満たしているか確認してください。",
         "tensor_nan_inf": "データ異常：Tensor 内に {0} が検出されました。これは通常、黒い画像の原因となります。モデルの精度 (FP16/FP32)、VAE 設定、または CFG 値を確認してください。",
         "meta_tensor": "空データ：'Meta Tensor'（形状のみでデータなし）が検出されました。これはモデル実行前には正常です。実行中に発生した場合は、上流ノードを確認してください。",
+        "missing_input": "入力不足：必須入力 '{0}' が提供されていません。上流ノードの出力が正しく接続されているか確認してください。",
     },
     "de": {
         "type_mismatch": "Typkonflikt: Das Modell erwartet {0} (z.B. fp16), hat aber {1} (z.B. float32) erhalten. Versuchen Sie einen 'Cast Tensor'-Knoten zu verwenden oder überprüfen Sie die Ladepräzision Ihres VAE/Modells.",
@@ -369,6 +374,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "Validierungsfehler in {0}: {1}. Überprüfen Sie Eingabeverbindungen und stellen Sie sicher, dass Knotenanforderungen erfüllt sind.",
         "tensor_nan_inf": "Datenanomalie: {0} im Tensor erkannt. Dies führt oft zu schwarzen Bildern. Überprüfen Sie Ihre Modellpräzision (FP16/FP32), VAE-Konfiguration oder CFG-Skalierung.",
         "meta_tensor": "Leere Daten: 'Meta Tensor' erkannt, der Forminformationen enthält, aber keine tatsächlichen Daten. Dies ist vor der Modellausführung normal. Wenn dies während der Ausführung fortbesteht, überprüfen Sie vorgelagerte Knoten.",
+        "missing_input": "Fehlende Eingabe: Erforderliche Eingabe '{0}' wird nicht bereitgestellt. Überprüfen Sie, ob die Ausgabe des vorgelagerten Knotens korrekt verbunden ist.",
     },
     "fr": {
         "type_mismatch": "Incompatibilité de type : Le modèle attend {0} (par ex. fp16) mais a reçu {1} (par ex. float32). Essayez d'utiliser un nœud 'Cast Tensor' ou vérifiez la précision de chargement de votre VAE/Modèle.",
@@ -393,6 +399,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "Erreur de validation dans {0} : {1}. Vérifiez les connexions d'entrée et assurez-vous que les exigences du nœud sont respectées.",
         "tensor_nan_inf": "Anomalie de données : {0} détecté dans le tenseur. Cela cause souvent des images noires. Vérifiez la précision de votre modèle (FP16/FP32), la configuration VAE ou l'échelle CFG.",
         "meta_tensor": "Données vides : 'Meta Tensor' détecté qui contient des informations de forme mais pas de données réelles. C'est normal avant l'exécution du modèle. Si cela persiste pendant l'exécution, vérifiez les nœuds en amont.",
+        "missing_input": "Entrée manquante : L'entrée requise '{0}' n'est pas fournie. Vérifiez si la sortie du nœud en amont est correctement connectée.",
     },
     "it": {
         "type_mismatch": "Tipo non corrispondente: Il modello si aspetta {0} (es. fp16) ma ha ricevuto {1} (es. float32). Prova a usare un nodo 'Cast Tensor' o controlla la precisione di caricamento del tuo VAE/Modello.",
@@ -417,6 +424,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "Errore di validazione in {0}: {1}. Controlla le connessioni di input e assicurati che i requisiti del nodo siano soddisfatti.",
         "tensor_nan_inf": "Anomalia dati: {0} rilevato nel tensore. Questo spesso causa immagini nere. Controlla la precisione del tuo modello (FP16/FP32), configurazione VAE o scala CFG.",
         "meta_tensor": "Dati vuoti: Rilevato 'Meta Tensor' che contiene info sulla forma ma nessun dato effettivo. Questo è normale prima dell'esecuzione del modello. Se persiste durante l'esecuzione, controlla i nodi a monte.",
+        "missing_input": "Input mancante: L'input richiesto '{0}' non è fornito. Controlla se l'output del nodo a monte è collegato correttamente.",
     },
     "es": {
         "type_mismatch": "Tipo no coincidente: El modelo espera {0} (ej. fp16) pero recibió {1} (ej. float32). Intenta usar un nodo 'Cast Tensor' o verifica la precisión de carga de tu VAE/Modelo.",
@@ -441,6 +449,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "Error de validación en {0}: {1}. Verifica las conexiones de entrada y asegúrate de que se cumplan los requisitos del nodo.",
         "tensor_nan_inf": "Anomalía de datos: {0} detectado en el tensor. Esto a menudo causa imágenes negras. Verifica la precisión de tu modelo (FP16/FP32), configuración VAE o escala CFG.",
         "meta_tensor": "Datos vacíos: Detectado 'Meta Tensor' que contiene info de forma pero sin datos reales. Esto es normal antes de la ejecución del modelo. Si persiste durante la ejecución, verifica los nodos anteriores.",
+        "missing_input": "Entrada faltante: La entrada requerida '{0}' no está proporcionada. Verifica si la salida del nodo anterior está conectada correctamente.",
     },
     "ko": {
         "type_mismatch": "타입 불일치: 모델은 {0}(예: fp16)을 예상했지만 {1}(예: float32)을 받았습니다. 'Cast Tensor' 노드를 사용하거나 VAE/모델 로딩 정밀도를 확인하세요.",
@@ -465,6 +474,7 @@ SUGGESTIONS: Dict[str, Dict[str, str]] = {
         "validation_error": "{0} 검증 오류: {1}. 입력 연결을 확인하고 노드 요구 사항이 충족되는지 확인하세요.",
         "tensor_nan_inf": "데이터 이상: 텐서에서 {0}이(가) 감지되었습니다. 이는 종종 검은색 이미지를 유발합니다. 모델 정밀도(FP16/FP32), VAE 구성 또는 CFG 스케일을 확인하세요.",
         "meta_tensor": "빈 데이터: 형상 정보는 포함하지만 실제 데이터는 없는 'Meta Tensor'가 감지되었습니다. 이는 모델 실행 전에는 정상입니다. 실행 중에 지속되면 업스트림 노드를 확인하세요.",
+        "missing_input": "입력 누락: 필수 입력 '{0}'이(가) 제공되지 않았습니다. 업스트림 노드의 출력이 올바르게 연결되어 있는지 확인하세요.",
     },
 }
 

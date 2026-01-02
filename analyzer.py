@@ -253,13 +253,15 @@ class ErrorAnalyzer:
             result = loader.match(traceback_text)
             if result:
                 error_key, groups = result
+                # Map error_key (e.g., "MISSING_INPUT") to suggestion key (e.g., "missing_input")
+                suggestion_key = ERROR_KEYS.get(error_key, error_key)
                 try:
                     if groups:
-                        return get_suggestion(error_key, *groups)
+                        return get_suggestion(suggestion_key, *groups)
                     else:
-                        return get_suggestion(error_key)
+                        return get_suggestion(suggestion_key)
                 except Exception:
-                    return get_suggestion(error_key)
+                    return get_suggestion(suggestion_key)
         except Exception as e:
             # Log warning but continue to fallback
             logging.warning(f"[ErrorAnalyzer] PatternLoader failed, using fallback: {e}")

@@ -210,6 +210,16 @@
       "category": "data_type",
       "tags": ["meta", "tensor", "debug"],
       "notes": "Debug node detected meta tensor"
+    },
+    {
+      "id": "missing_input",
+      "regex": "Required input is missing: (.+)",
+      "error_key": "MISSING_INPUT",
+      "has_groups": true,
+      "priority": 80,
+      "category": "workflow",
+      "tags": ["input", "missing", "workflow", "connection"],
+      "notes": "Required input not provided, upstream node may not be connected"
     }
   ]
 }
