@@ -5,8 +5,28 @@ Provides multi-language support for error suggestions.
 
 from typing import Dict, Optional
 
-# Current language setting
-_current_language = "zh_TW"
+# ═══════════════════════════════════════════════════════════════════════════
+# CRITICAL: Default Language Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+# ⚠️ WARNING: DO NOT change this default to any language other than "en"
+#
+# This is the FALLBACK language used when:
+#   1. ComfyUI first loads (before user settings are applied)
+#   2. The frontend hasn't called /debugger/set_language yet
+#   3. Automatic error pattern matching (non-AI suggestions)
+#
+# WHY "en" (NOT "zh_TW" or other languages):
+#   - International users expect English as the default
+#   - Prevents confusion when users haven't configured language yet
+#   - Matches frontend DEFAULTS.LANGUAGE in web/doctor.js
+#
+# If you want to change the default language for YOUR installation:
+#   → Update the user's ComfyUI settings (Doctor.General.Language)
+#   → DO NOT modify this hardcoded value
+#
+# Last Modified: 2026-01-03 (Fixed from "zh_TW" to "en")
+# ═══════════════════════════════════════════════════════════════════════════
+_current_language = "en"
 
 # Supported languages
 SUPPORTED_LANGUAGES = ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"]

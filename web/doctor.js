@@ -7,9 +7,30 @@ import { api } from "../../../scripts/api.js";
 import { DoctorUI } from "./doctor_ui.js";
 import { DoctorAPI } from "./doctor_api.js";
 
-// Default values
+// ═══════════════════════════════════════════════════════════════════════════
+// CRITICAL: Frontend Default Configuration
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ WARNING: LANGUAGE must always be "en" (English)
+//
+// This default is used when:
+//   1. User first installs ComfyUI-Doctor (no settings saved yet)
+//   2. ComfyUI settings are reset/corrupted
+//   3. DoctorUI constructor receives no language option
+//
+// MUST MATCH backend default in i18n.py (_current_language = "en")
+//
+// If these don't match:
+//   ❌ Backend suggestions will be in different language than UI
+//   ❌ Confusing experience for international users
+//
+// To change default for your installation:
+//   → Modify ComfyUI Settings → Doctor → Language
+//   → DO NOT change this hardcoded value
+//
+// Last Modified: 2026-01-03 (Fixed from "zh_TW" to "en")
+// ═══════════════════════════════════════════════════════════════════════════
 const DEFAULTS = {
-    LANGUAGE: "zh_TW",
+    LANGUAGE: "en",  // ⚠️ DO NOT CHANGE - Must match i18n.py backend default
     POLL_INTERVAL: 2000,
     AUTO_OPEN_ON_ERROR: false,
     ENABLE_NOTIFICATIONS: true,

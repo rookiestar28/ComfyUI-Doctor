@@ -33,8 +33,19 @@ import { ChatPanel } from "./doctor_chat.js";
  */
 export class DoctorUI {
     constructor(options = {}) {
-        // Configuration from ComfyUI settings
-        this.language = options.language || 'zh_TW';
+        // ═══════════════════════════════════════════════════════════════
+        // CRITICAL: Language Fallback Configuration
+        // ═══════════════════════════════════════════════════════════════
+        // ⚠️ WARNING: Fallback must be 'en' (NOT 'zh_TW' or other languages)
+        //
+        // This fallback is used when options.language is undefined/null
+        // MUST MATCH:
+        //   - Backend: i18n.py (_current_language = "en")
+        //   - Frontend: doctor.js (DEFAULTS.LANGUAGE = "en")
+        //
+        // Last Modified: 2026-01-03 (Fixed from 'zh_TW' to 'en')
+        // ═══════════════════════════════════════════════════════════════
+        this.language = options.language || 'en';  // ⚠️ DO NOT CHANGE fallback
         this.pollInterval = options.pollInterval || 2000;
         this.autoOpenOnError = options.autoOpenOnError || false;
         this.enableNotifications = options.enableNotifications || true;
@@ -49,15 +60,40 @@ export class DoctorUI {
         this.lastErrorTimestamp = 0;
         this.ERROR_DEBOUNCE_MS = 1000;  // Ignore duplicate errors within 1 second
 
-        // UI text translations
-        // IMPORTANT: this.uiText starts as empty object {}
-        // loadUIText() is ASYNC and will populate it later
+        // ═══════════════════════════════════════════════════════════════
+        // CRITICAL: UI Text Loading Order
+        // ═══════════════════════════════════════════════════════════════
+        // ⚠️ WARNING: this.uiText MUST be loaded BEFORE createSidebar()
+        //
+        // Common Bug Pattern (INCORRECT):
+        //   this.uiText = {};
+        //   this.loadUIText();        // ❌ Async, doesn't wait
+        //   this.createSidebar();     // ❌ Creates UI before translations load
+        //   Result: All UI text shows "[Missing: key_name]"
+        //
+        // Correct Pattern (CURRENT):
+        //   this.uiText = {};
+        //   this.loadUIText().then(() => {  // ✅ Wait for translations
+        //       this.createSidebar();       // ✅ Create UI after load
+        //   });
+        //
+        // Why This Matters:
+        //   - Sidebar uses getUIText() extensively (save_settings_btn, etc.)
+        //   - If uiText is empty {}, getUIText() returns "[Missing: ...]"
+        //   - Users see broken UI with missing translations
+        //
+        // Last Modified: 2026-01-03 (Fixed race condition)
+        // ═══════════════════════════════════════════════════════════════
         this.uiText = {};
-        this.loadUIText();
 
         this.createStyles();
-        this.createSidebar();
         this.createMenuButton();
+
+        // ⚠️ CRITICAL: Load UI text FIRST, then create sidebar
+        // DO NOT move createSidebar() before loadUIText() completes!
+        this.loadUIText().then(() => {
+            this.createSidebar();
+        });
 
         // Subscribe to ComfyUI execution_error events (instant, more accurate)
         this.subscribeToExecutionErrors();
