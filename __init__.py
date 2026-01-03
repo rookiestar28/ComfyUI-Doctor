@@ -7,6 +7,30 @@ Features:
 - System environment snapshot
 - Error analysis with suggestions
 - API endpoint for frontend integration
+
+═══════════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: Relative Import Warning for Test Maintainers
+═══════════════════════════════════════════════════════════════════════════
+This module uses RELATIVE IMPORTS (from .logger import ...) which is REQUIRED
+for ComfyUI custom node extensions.
+
+DO NOT change to absolute imports (from logger import ...) as this will:
+  ❌ Break ComfyUI's module loading system
+  ❌ Cause "ModuleNotFoundError" when ComfyUI tries to load this extension
+
+IMPORTANT FOR TESTING:
+  - pytest CANNOT directly import this file due to relative imports
+  - See tests/conftest.py for the workaround (temporary __init__.py renaming)
+  - See pytest.ini for import-mode configuration
+  - See .planning/260103-ci_pytest_fix.md for detailed explanation
+
+If pytest fails with "attempted relative import with no known parent package":
+  1. Check that pytest.ini has "addopts = --import-mode=importlib"
+  2. Check that tests/conftest.py has pytest_configure/unconfigure hooks
+  3. Do NOT modify these imports - the issue is in test configuration
+
+Last Modified: 2026-01-03 (Added CI testing compatibility notes)
+═══════════════════════════════════════════════════════════════════════════
 """
 
 import sys
@@ -17,6 +41,11 @@ import platform
 import json
 import logging
 from logging.handlers import RotatingFileHandler
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⚠️ CRITICAL: DO NOT change these to absolute imports
+# These MUST be relative imports for ComfyUI compatibility
+# ═══════════════════════════════════════════════════════════════════════════
 from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT

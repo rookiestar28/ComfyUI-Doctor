@@ -286,13 +286,19 @@ graph TD
     - i18n completeness check (all 57 patterns translated in 9 languages) ✅
     - Pattern metadata validation (priority ranges, valid categories, unique IDs) ✅
     - GitHub Actions workflow (triggered on push/PR) ✅
+    - **CI Import Error Fix** (2026-01-03): pytest configuration optimized ✅
+      - Problem: pytest tried to import `__init__.py` as test module, causing "no known parent package" error
+      - Solution: `pytest.ini` + `conftest.py` hooks to temporarily rename `__init__.py` during tests
+      - Result: All 8 validation tests pass in CI environment
   - **Deliverable**: PR checks fail if validation errors found
   - **Cost**: $0 (GitHub Actions free tier)
   - **Execution time**: < 10 seconds (actual: ~3 seconds)
-  - **Test Results**: 100% pass rate (57/57 patterns, 9/9 languages)
+  - **Test Results**: 100% pass rate (57/57 patterns, 9/9 languages, 8/8 validation tests)
   - **Foundation for**: Community pattern contributions
   - **Limitation**: Does NOT test if patterns match real errors (community feedback + hot-reload for fixes)
-  - **Implementation Record**: `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+  - **Implementation Record**:
+    - `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+    - `.planning/260103-ci_pytest_fix.md` (CI troubleshooting)
 - [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek, Anthropic) - 🟡 Medium
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
@@ -903,13 +909,19 @@ graph TD
     - i18n 完整性檢查（57 個 patterns 在 9 種語言完整翻譯）✅
     - Pattern metadata 驗證（priority 範圍、有效 categories、唯一 IDs）✅
     - GitHub Actions workflow（push/PR 時觸發）✅
+    - **CI 導入錯誤修正** (2026-01-03)：pytest 配置優化 ✅
+      - 問題：pytest 嘗試將 `__init__.py` 作為測試模塊導入，導致「無已知父包」錯誤
+      - 解決：`pytest.ini` + `conftest.py` 鉤子在測試期間臨時重命名 `__init__.py`
+      - 結果：所有 8 個驗證測試在 CI 環境中通過
   - **交付物**：驗證錯誤時 PR 檢查失敗
   - **成本**：$0（GitHub Actions 免費額度）
   - **執行時間**：< 10 秒（實際：~3 秒）
-  - **測試結果**：100% 通過率（57/57 patterns，9/9 語言）
+  - **測試結果**：100% 通過率（57/57 patterns，9/9 語言，8/8 驗證測試）
   - **基礎支撐**：社群 pattern 貢獻
   - **限制**：無法測試 patterns 是否匹配真實錯誤（依賴社群回報 + 熱重載修復）
-  - **實作記錄**：`.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+  - **實作記錄**：
+    - `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+    - `.planning/260103-ci_pytest_fix.md`（CI 問題排查）
 - [ ] **T2**: 前端互動測試（Playwright） - 🟡 Medium ⚠️ *使用 dev branch*
 - [ ] **T5**: 線上 API 整合測試（OpenAI、DeepSeek、Anthropic） - 🟡 Medium
 - [ ] **T3**: 端對端整合測試 - 🟢 Low

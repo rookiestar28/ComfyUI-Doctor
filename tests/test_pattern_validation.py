@@ -5,6 +5,25 @@ Tests to ensure all error patterns are syntactically correct and complete.
 Validates JSON schema, regex syntax, i18n completeness, and metadata.
 
 Run: pytest tests/test_pattern_validation.py -v
+
+═══════════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: Field Name Consistency Warning
+═══════════════════════════════════════════════════════════════════════════
+This test suite validates JSON pattern files against the schema.
+
+IMPORTANT: JSON Schema Field Names (DO NOT CHANGE):
+  - patterns/schema.json uses "regex" (NOT "pattern")
+  - patterns/schema.json uses "error_key" (NOT "suggestion_key")
+
+Common Mistake:
+  ❌ required_fields = ["id", "pattern", "suggestion_key", ...]
+  ✅ required_fields = ["id", "regex", "error_key", ...]
+
+If tests fail with "missing required field", check that test expectations
+match the actual schema definition in patterns/schema.json.
+
+Last Modified: 2026-01-03 (Fixed field name mismatch)
+═══════════════════════════════════════════════════════════════════════════
 """
 
 import json
@@ -51,28 +70,34 @@ def load_pattern_file(file_path: Path) -> Dict:
         return json.load(f)
 
 
-def extract_error_keys_from_i18n() -> Set[str]:
-    """Extract all ERROR_KEYS from i18n.py"""
+def extract_error_keys_from_i18n() -> Dict[str, str]:
+    """
+    Extract ERROR_KEYS mapping from i18n.py.
+
+    Returns:
+        Dict mapping uppercase keys to lowercase suggestion keys.
+        Example: {"TYPE_MISMATCH": "type_mismatch", "CUDNN_ERROR": "cudnn_error", ...}
+    """
     with open(I18N_PATH, "r", encoding="utf-8") as f:
         content = f.read()
-    
+
     # Find ERROR_KEYS dictionary
-    start = content.find("ERROR_KEYS")
+    start = content.find("ERROR_KEYS = {")
     if start == -1:
-        return set()
-    
-    # Extract keys (simplified parsing)
-    keys = set()
+        return {}
+
+    # Extract key-value pairs (simplified parsing)
+    error_keys_dict = {}
     lines = content[start:].split("\n")
     for line in lines:
         if '"' in line and ":" in line:
-            # Extract key from line like: "oom": "oom",
-            match = re.search(r'"([^"]+)":\s*"', line)
+            # Extract key-value from line like: "TYPE_MISMATCH": "type_mismatch",
+            match = re.search(r'"([^"]+)":\s*"([^"]+)"', line)
             if match:
-                keys.add(match.group(1))
+                error_keys_dict[match.group(1)] = match.group(2)
         if line.strip() == "}":
             break
-    return keys
+    return error_keys_dict
 
 
 def extract_suggestions_from_i18n() -> Dict[str, Set[str]]:
@@ -152,8 +177,11 @@ class TestPatternValidation:
     
     def test_all_patterns_have_required_fields(self, all_patterns):
         """Test 2: All patterns have required fields"""
-        required_fields = ["id", "pattern", "priority", "category", "suggestion_key"]
-        
+        # ⚠️ CRITICAL: These field names MUST match patterns/schema.json
+        # DO NOT change "regex" to "pattern" or "error_key" to "suggestion_key"
+        # See file docstring for detailed explanation
+        required_fields = ["id", "regex", "error_key", "priority", "category"]
+
         for pattern in all_patterns:
             for field in required_fields:
                 assert field in pattern, (
@@ -165,8 +193,9 @@ class TestPatternValidation:
         """Test 3: All regex patterns compile successfully"""
         for pattern in all_patterns:
             pattern_id = pattern.get("id", "UNKNOWN")
-            regex_str = pattern.get("pattern", "")
-            
+            # ⚠️ CRITICAL: Use "regex" (schema field name), NOT "pattern"
+            regex_str = pattern.get("regex", "")
+
             try:
                 re.compile(regex_str)
             except re.error as e:
@@ -174,34 +203,36 @@ class TestPatternValidation:
                     f"Pattern {pattern_id} in {pattern['_source_file']} "
                     f"has invalid regex: {e}"
                 )
-    
+
     def test_all_suggestions_exist(self, all_patterns, error_keys, suggestions):
-        """Test 4: All suggestion_key values exist in i18n.py"""
+        """Test 4: All error_key values exist in i18n.py ERROR_KEYS and SUGGESTIONS"""
         # Check ERROR_KEYS mapping
         for pattern in all_patterns:
             pattern_id = pattern.get("id", "UNKNOWN")
-            suggestion_key = pattern.get("suggestion_key", "")
-            
-            assert suggestion_key in error_keys, (
+            # ⚠️ CRITICAL: Use "error_key" (schema field name), NOT "suggestion_key"
+            error_key = pattern.get("error_key", "")
+
+            assert error_key in error_keys, (
                 f"Pattern {pattern_id} in {pattern['_source_file']} "
-                f"has suggestion_key '{suggestion_key}' not found in ERROR_KEYS"
+                f"has error_key '{error_key}' not found in ERROR_KEYS"
             )
-        
+
         # Check all languages have translations
         for lang in SUPPORTED_LANGUAGES:
             assert lang in suggestions, f"Language '{lang}' not found in SUGGESTIONS"
-            
+
             for pattern in all_patterns:
                 pattern_id = pattern.get("id", "UNKNOWN")
-                suggestion_key = pattern.get("suggestion_key", "")
-                
-                # Map through ERROR_KEYS to get the actual key
-                if suggestion_key in error_keys:
-                    # For simplicity, assume suggestion_key IS the final key
-                    # (in reality, ERROR_KEYS maps pattern keys to suggestion keys)
-                    assert suggestion_key in suggestions[lang], (
-                        f"Pattern {pattern_id} missing {lang} translation for '{suggestion_key}'"
-                    )
+                error_key = pattern.get("error_key", "")
+
+                # Get the suggestion key from ERROR_KEYS mapping
+                # Example: error_key="CUDNN_ERROR" -> suggestion_key="cudnn_error"
+                suggestion_key = error_keys.get(error_key, "")
+
+                assert suggestion_key in suggestions[lang], (
+                    f"Pattern {pattern_id} (error_key: {error_key}) missing {lang} translation. "
+                    f"Expected suggestion key '{suggestion_key}' in SUGGESTIONS['{lang}']"
+                )
     
     def test_priority_ranges(self, all_patterns):
         """Test 5: All priorities are within valid range 50-95"""
