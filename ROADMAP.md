@@ -442,11 +442,13 @@ graph TD
 
 **Pending UI i18n Completion** (from Phase 4B):
 
-- [ ] **i18n-UI-1**: Complete UI_TEXT translations for zh_CN, ja - 🟢 Low (5 keys each)
-  - Missing keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
-  - Impact: Settings panel partially in English for Chinese/Japanese users
-  - Estimated effort: 10 minutes
-- [ ] **i18n-UI-2**: Complete UI_TEXT translations for de, fr, it, es, ko - 🟡 Medium (27 keys each)
+- [x] **i18n-UI-1**: Complete UI_TEXT translations for zh_CN, ja - 🟢 Low ✅ *Completed (2026-01-03)*
+  - Added 5 keys each: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
+  - Impact: Settings panel now fully localized for Chinese/Japanese users
+  - Implementation: `.planning/260103-i18n_UI_COMPLETION_RECORD.md`
+- [x] **i18n-UI-2**: Complete UI_TEXT translations for de, fr, it, es, ko - 🟡 Medium ✅ *Completed (2026-01-03)*
+  - Added 27 keys each (135 total) via automated script
+  - Keys: All settings panel, chat interface, and AI provider labels
   - Missing keys: `ai_provider_label`, `analyze_prompt_label`, `analyzing_error_label`, `api_key_label`, `base_url_label`, `chat_ask_ai_placeholder`, etc.
   - Impact: Settings panel ~31% in English for European/Korean users
   - Estimated effort: 1-2 hours (can leverage LLM translation)
@@ -1051,9 +1053,23 @@ graph TD
   - 於 `feature/token-budget` 分支開發
   - **前提條件**：A/B 測試框架
 
-#### Phase 4C: 分析與多提供商
+#### Phase 4C: UX 優化 & 分析
 
 **優先級**: 低-中
+
+**UI 本地化完成** (從 Phase 4B 繼承):
+
+- [x] **i18n-UI-1**: 完成 zh_CN, ja 的 UI_TEXT 翻譯 - 🟢 低 ✅ *已完成 (2026-01-03)*
+  - 新增 5 個 keys：`api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
+  - 影響：設定面板現已完全本地化為中文/日文
+  - 實作記錄：`.planning/260103-i18n_UI_COMPLETION_RECORD.md`
+- [x] **i18n-UI-2**: 完成 de, fr, it, es, ko 的 UI_TEXT 翻譯 - 🟡 中 ✅ *已完成 (2026-01-03)*
+  - 新增每種語言 27 個 keys（總計 135 個）透過自動化腳本
+  - Keys：全部設定面板、對話界面、AI 提供商標籤
+  - 影響：所有歐洲語言和韓文現已 100% UI 本地化
+  - 實作記錄：`.planning/260103-i18n_UI_COMPLETION_RECORD.md`
+
+**其他功能**:
 
 - [ ] **F12** 擴充離線 patterns 至 50+
 - [ ] **F6** 多 LLM Provider 快速切換

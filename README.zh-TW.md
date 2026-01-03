@@ -9,6 +9,49 @@
 ## 最新更新（2026 年 1 月）
 
 <details>
+<summary><strong>T8：Pattern 驗證 CI </strong> - 點擊展開</summary>
+
+**自動化品質檢查現在保護 pattern 完整性！**
+
+ComfyUI-Doctor 現在包含**持續整合測試**，用於所有錯誤模式，確保零缺陷貢獻。
+
+**T8 驗證項目**：
+
+- ✅ **JSON 格式**：全部 8 個 pattern 檔案正確編譯
+- ✅ **Regex 語法**：全部 57 個 patterns 具有有效的正則表達式
+- ✅ **i18n 完整性**：100% 翻譯覆蓋率（57 patterns × 9 語言 = 513 項檢查）
+- ✅ **Schema 符合性**：必填欄位（`id`、`regex`、`error_key`、`priority`、`category`）
+- ✅ **Metadata 品質**：有效的 priority 範圍（50-95）、唯一 ID、正確的類別
+
+**GitHub Actions 整合**：
+
+- 在每次 push/PR 影響 `patterns/`、`i18n.py` 或測試時觸發
+- 約 3 秒內執行，成本為 $0（GitHub Actions 免費額度）
+- 如果驗證失敗則阻止合併
+
+**對於貢獻者**：
+
+```bash
+# 在 commit 前本地驗證
+python run_pattern_tests.py
+
+# 輸出：
+✅ All 57 patterns have required fields
+✅ All 57 regex patterns compile successfully
+✅ en: All 57 patterns have translations
+✅ zh_TW: All 57 patterns have translations
+... (共 9 種語言)
+```
+
+**測試結果**：所有檢查均以 100% 通過率通過
+
+**實作細節**：見 `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+
+</details>
+
+---
+
+<details>
 <summary><strong>Phase 4B：模式系統全面升級（階段 1-3 完成）</strong> - 點擊展開</summary>
 
 ComfyUI-Doctor 完成重大架構升級，具備 **57+ 錯誤模式**與 **JSON 熱重載模式管理**！

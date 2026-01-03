@@ -9,6 +9,49 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Jan 2026)
 
 <details>
+<summary><strong>T8: Pattern Validation CI </strong> - Click to expand</summary>
+
+**Automated quality checks now protect pattern integrity!**
+
+ComfyUI-Doctor now includes **continuous integration testing** for all error patterns, ensuring zero-defect contributions.
+
+**What T8 Validates**:
+
+- ✅ **JSON Format**: All 8 pattern files compile correctly
+- ✅ **Regex Syntax**: All 57 patterns have valid regular expressions  
+- ✅ **i18n Completeness**: 100% translation coverage (57 patterns × 9 languages = 513 checks)
+- ✅ **Schema Compliance**: Required fields (`id`, `regex`, `error_key`, `priority`, `category`)
+- ✅ **Metadata Quality**: Valid priority ranges (50-95), unique IDs, correct categories
+
+**GitHub Actions Integration**:
+
+- Triggers on every push/PR affecting `patterns/`, `i18n.py`, or tests
+- Runs in ~3 seconds with $0 cost (GitHub Actions free tier)
+- Blocks merges if validation fails
+
+**For Contributors**:
+
+```bash
+# Local validation before commit
+python run_pattern_tests.py
+
+# Output:
+✅ All 57 patterns have required fields
+✅ All 57 regex patterns compile successfully
+✅ en: All 57 patterns have translations
+✅ zh_TW: All 57 patterns have translations
+... (9 languages total)
+```
+
+**Test Results**: 100% pass rate across all checks
+
+**Implementation Details**: See `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+
+</details>
+
+---
+
+<details>
 <summary><strong>Phase 4B: Pattern System Overhaul (STAGE 1-3 Complete)</strong> - Click to expand</summary>
 
 ComfyUI-Doctor has undergone a major architecture upgrade with **57+ error patterns** and **JSON-based pattern management**!
