@@ -1,0 +1,44 @@
+name: Pattern Validation
+
+on:
+  push:
+    paths:
+      - 'patterns/**/*.json'
+      - 'i18n.py'
+      - 'tests/test_pattern_validation.py'
+      - '.github/workflows/pattern-validation.yml'
+  pull_request:
+    paths:
+      - 'patterns/**/*.json'
+      - 'i18n.py'
+      - 'tests/test_pattern_validation.py'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install jsonschema pytest
+      
+      - name: Run pattern validation tests
+        run: |
+          pytest tests/test_pattern_validation.py -v -s
+      
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ All pattern validation checks passed!"
+          echo "- JSON format correctness"
+          echo "- Regex syntax validation"
+          echo "- i18n completeness (9 languages)"
+          echo "- Pattern metadata validation"

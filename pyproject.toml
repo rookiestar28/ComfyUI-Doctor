@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-doctor"
-description = "A continuous, real-time runtime diagnostics suite for ComfyUI. Automatic error interception, intelligent fix suggestions, and deep data flow inspection."
+description = "A real-time runtime diagnostics suite for ComfyUI, featuring interactive debugging chat, and 50+ fix patterns. Automatically intercepts terminal output from startup, and delivers prioritized fix suggestions with node-level context extraction. Now supports JSON-based pattern management with hot-reload and full i18n support for 9 languages."
 version = "1.3.0"
 license = {text = "MIT"}
 readme = "README.md"
@@ -86,17 +86,19 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+norecursedirs = [".git", ".tox", "dist", "build", "*.egg", "patterns"]
 addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov=.",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
+    "--ignore=__init__.py",
+    # "--cov=.",
+    # "--cov-report=term-missing",
+    # "--cov-report=html",
+    # "--cov-report=xml",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

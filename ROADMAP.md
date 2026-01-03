@@ -61,11 +61,11 @@ graph TD
 | Module | Lines | Function |
 |--------|-------|----------|
 | `prestartup_script.py` | 102 | Earliest log interception hook (before custom_nodes load) |
-| `__init__.py` | 891 | Main entry: full Logger install, 9 API endpoints, LLM integration, env var support |
+| `__init__.py` | 1900+ | Main entry: full Logger install, 9 API endpoints, LLM integration, env var support |
 | `logger.py` | 400+ | SafeStreamWrapper + queue-based processing, DoctorLogProcessor background thread, async writes |
 | `analyzer.py` | 320+ | Error analyzer: 57+ patterns (PatternLoader integration), node context extraction |
-| `pattern_loader.py` | 150+ | JSON-based pattern management with hot-reload capability |
-| `i18n.py` | 1500+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
+| `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
+| `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
 | `config.py` | 65 | Config management: dataclass + JSON persistence |
 | `nodes.py` | 179 | Smart Debug Node: deep data inspection |
 | `patterns/builtin/core.json` | - | 22 builtin error patterns (PyTorch, CUDA, Memory, etc.) |
@@ -135,7 +135,7 @@ graph TD
 
 ## 3. Extension Todo-List
 
-### 3.1 Security (Pending)
+### 3.1 Security (in progress)
 
 *Sorted by priority (High → Low):*
 
@@ -170,7 +170,7 @@ graph TD
 - [ ] **S1**: Add Content-Security-Policy headers - 🟢 Low
 - [ ] **S3**: Implement telemetry (opt-in, anonymous) - 🟢 Low
 
-### 3.2 Robustness (Pending)
+### 3.2 Robustness (in progress)
 
 *Sorted by priority (High → Low):*
 
@@ -191,7 +191,7 @@ graph TD
   - Use "Executing prompt:" as completion marker instead of resetting buffer
   - Updated `is_complete_traceback()` to handle multi-error blocks
 
-### 3.3 Features (Pending)
+### 3.3 Features (in progress)
 
 *Sorted by priority (High → Low):*
 
@@ -241,7 +241,7 @@ graph TD
   - Handle streaming with event types (`content_block_delta`, `message_stop`)
   - 9+ LLM providers now supported
 
-### 3.4 Architecture Improvements (Pending)
+### 3.4 Architecture Improvements (in progress)
 
 *Sorted by complexity and priority (High → Low):*
 
@@ -273,28 +273,31 @@ graph TD
 - [x] **A2**: Integrate ruff linter (replace flake8/isort) - 🟢 Low ✅ *Completed (Phase 3A)*
 - [x] **A3**: Add pytest-cov with `--cov-report=term-missing` - 🟢 Low ✅ *Completed (Phase 3A)*
 
-### 3.5 Testing (Pending)
+### 3.5 Testing (in progress)
 
 *Sorted by priority (High → Low):*
 
-- [ ] **T8**: Regex Pattern Compatibility CI - 🔴 High
-  - **Problem**: PyTorch/ComfyUI updates may silently break regex patterns
-  - **Solution**: Daily automated testing against nightly builds
+- [ ] **T8**: Pattern Validation CI - 🟡 Medium
+  - **Problem**: Pattern format errors and i18n gaps can break the system
+  - **Solution**: Automated static validation on every pattern change
   - **Implementation**:
-    - Error simulation suite (trigger 50+ real errors: OOM, dimension mismatch, missing modules)
-    - Test against multiple versions: PyTorch 2.0/2.1/2.2/nightly, ComfyUI stable/latest
-    - Alert if pattern match rate drops below 80%
-    - GitHub Actions workflow (cron: daily at 2 AM UTC)
-  - **Deliverable**: Auto-created GitHub Issues for broken patterns
-  - **Cost**: ~$5/month (GitHub Actions free tier)
-  - **Foundation for**: F2 (pattern hot-reload), F12 (pattern expansion)
-  - **Critical**: Prevents silent regression when dependencies update error messages
+    - JSON schema validation (format correctness)
+    - Regex syntax validation (all patterns compile successfully)
+    - i18n completeness check (all 58 patterns translated in 9 languages)
+    - Pattern metadata validation (priority ranges, valid categories, unique IDs)
+    - GitHub Actions workflow (triggered on push/PR)
+  - **Deliverable**: PR checks fail if validation errors found
+  - **Cost**: $0 (GitHub Actions free tier)
+  - **Execution time**: < 10 seconds
+  - **Foundation for**: Community pattern contributions
+  - **Limitation**: Does NOT test if patterns match real errors (community feedback + hot-reload for fixes)
+  - **Implementation Plan**: `.planning/260103-T8_PATTERN_VALIDATION_PLAN.md`
 - [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek, Anthropic) - 🟡 Medium
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
 
-### 3.6 Documentation (Pending)
+### 3.6 Documentation (in progress)
 
 - [ ] **D1**: OpenAPI/Swagger spec - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **D2**: Architecture documentation - 🟢 Low
@@ -348,7 +351,7 @@ graph TD
 - ✅ **F9** Multi-language support (9 languages)
 - ✅ **T6** Test infrastructure fixes
 
-#### Phase 3D: Cross-Platform Support (2025-12-30)
+#### Phase 3D: Cross-Platform Support
 
 - ✅ **Environment Variable Configuration** for local LLM URLs
   - `OLLAMA_BASE_URL` - Custom Ollama endpoint
@@ -387,7 +390,7 @@ graph TD
 
 **Final Analysis Report**: [`.planning/260103-F12_F2_T8_FINAL_ANALYSIS.md`](.planning/260103-F12_F2_T8_FINAL_ANALYSIS.md)
 
-- [x] **STAGE 1: Logger Architecture Fix** - 🔴 CRITICAL ✅ *Completed (2026-01-02)*
+- [x] **STAGE 1: Logger Architecture Fix** - 🔴 CRITICAL ✅ *Completed*
   - **Problem**: Previous F12/F2/T8 implementation caused complete error capture failure
   - **Root Cause**: ComfyUI's LogInterceptor.flush() clears `_logs_since_flush` after first callback
   - **Solution**: SafeStreamWrapper + Queue-based processing (independent of on_flush callbacks)
@@ -437,6 +440,7 @@ graph TD
 **Priority**: Low-Medium
 
 **Pending UI i18n Completion** (from Phase 4B):
+
 - [ ] **i18n-UI-1**: Complete UI_TEXT translations for zh_CN, ja - 🟢 Low (5 keys each)
   - Missing keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
   - Impact: Settings panel partially in English for Chinese/Japanese users
@@ -448,12 +452,14 @@ graph TD
   - **Note**: Error diagnosis fully functional in all languages (58 patterns 100% translated)
 
 **UX Enhancements**:
+
 - [ ] **F6** Multi-LLM provider quick switch
 - [ ] **F4** Statistics dashboard
 - [ ] **R6-R7** Network reliability improvements
 - [ ] **T2-T5** Comprehensive testing suite
 
 **Chat Interface Improvements**:
+
 - [ ] Session persistence (localStorage)
 - [ ] Response regeneration button
 - [ ] Chat history export
@@ -669,11 +675,11 @@ graph TD
 | 模組 | 行數 | 功能 |
 |------|------|------|
 | `prestartup_script.py` | 102 | 最早的日誌攔截 Hook（在 custom_nodes 載入前） |
-| `__init__.py` | 891 | 主入口：完整 Logger 安裝、9 個 API 端點、LLM 整合、環境變數支援 |
+| `__init__.py` | 1900+ | 主入口：完整 Logger 安裝、9 個 API 端點、LLM 整合、環境變數支援 |
 | `logger.py` | 400+ | SafeStreamWrapper + queue-based 處理、DoctorLogProcessor 背景執行緒、非同步寫入 |
 | `analyzer.py` | 320+ | 錯誤分析器：57+ 模式（PatternLoader 整合）、節點上下文擷取 |
 | `pattern_loader.py` | 150+ | JSON-based pattern 管理，支援熱重載 |
-| `i18n.py` | 1500+ | 國際化：9 語言（en, zh_TW, zh_CN, ja, de, fr, it, es, ko）、57 個 pattern 翻譯 |
+| `i18n.py` | 1400+ | 國際化：9 語言（en, zh_TW, zh_CN, ja, de, fr, it, es, ko）、57 個 pattern 翻譯 |
 | `config.py` | 65 | 配置管理：dataclass + JSON 持久化 |
 | `nodes.py` | 179 | Smart Debug Node：深度數據檢查 |
 | `patterns/builtin/core.json` | - | 22 個內建錯誤模式（PyTorch、CUDA、Memory 等） |
@@ -743,7 +749,7 @@ graph TD
 
 ## 三、延伸擴展項目
 
-### 3.1 安全性（待實作）
+### 3.1 安全性（進行中）
 
 *按優先級排序（高 → 低）：*
 
@@ -778,7 +784,7 @@ graph TD
 - [ ] **S1**: Content-Security-Policy 標頭 - 🟢 Low
 - [ ] **S3**: 遙測數據收集（匿名、可選） - 🟢 Low
 
-### 3.2 穩健性改進（待實作）
+### 3.2 穩健性改進（進行中）
 
 *按優先級排序（高 → 低）：*
 
@@ -799,7 +805,7 @@ graph TD
   - 使用 "Executing prompt:" 作為完成標記而非重置緩衝區
   - 更新 `is_complete_traceback()` 處理多錯誤區塊
 
-### 3.3 功能擴展（待實作）
+### 3.3 功能擴展（進行中）
 
 *按優先級排序（高 → 低）：*
 
@@ -849,7 +855,7 @@ graph TD
   - 處理串流事件類型（`content_block_delta`、`message_stop`）
   - 現已支援 9+ LLM Providers
 
-### 3.4 架構改進（待實作）
+### 3.4 架構改進（進行中）
 
 *按複雜度與優先級排序（高 → 低）：*
 
@@ -881,28 +887,31 @@ graph TD
 - [x] **A2**: 整合 ruff linter - 🟢 Low ✅ *已於 Phase 3A 完成*
 - [x] **A3**: pytest-cov 覆蓋率報告 - 🟢 Low ✅ *已於 Phase 3A 完成*
 
-### 3.5 測試擴充（待實作）
+### 3.5 測試擴充（進行中）
 
 *按優先級排序（高 → 低）：*
 
-- [ ] **T8**: Regex Pattern 相容性 CI - 🔴 High
-  - **問題**：PyTorch/ComfyUI 更新可能靜默破壞 regex patterns
-  - **解決方案**：每日自動測試 nightly builds
+- [ ] **T8**: Pattern 驗證 CI - 🟡 Medium
+  - **問題**：Pattern 格式錯誤與 i18n 缺失會破壞系統
+  - **解決方案**：每次 pattern 變更時自動靜態驗證
   - **實作**：
-    - 錯誤模擬套件（觸發 50+ 真實錯誤：OOM、維度不匹配、缺少模組）
-    - 針對多版本測試：PyTorch 2.0/2.1/2.2/nightly、ComfyUI stable/latest
-    - 若 pattern 匹配率 < 80% 發出警報
-    - GitHub Actions workflow（cron：每日凌晨 2 點 UTC）
-  - **交付物**：自動建立 GitHub Issues 報告損壞的 patterns
-  - **成本**：約 $5/月（GitHub Actions 免費額度）
-  - **基礎支撐**：F2（pattern 熱更新）、F12（pattern 擴充）
-  - **關鍵性**：防止依賴更新錯誤訊息時的靜默回歸
+    - JSON schema 驗證（格式正確性）
+    - Regex 語法驗證（所有 patterns 成功編譯）
+    - i18n 完整性檢查（58 個 patterns 在 9 種語言完整翻譯）
+    - Pattern metadata 驗證（priority 範圍、有效 categories、唯一 IDs）
+    - GitHub Actions workflow（push/PR 時觸發）
+  - **交付物**：驗證錯誤時 PR 檢查失敗
+  - **成本**：$0（GitHub Actions 免費額度）
+  - **執行時間**：< 10 秒
+  - **基礎支撐**：社群 pattern 貢獻
+  - **限制**：無法測試 patterns 是否匹配真實錯誤（依賴社群回報 + 熱重載修復）
+  - **實作計畫**：`.planning/260103-T8_PATTERN_VALIDATION_PLAN.md`
 - [ ] **T2**: 前端互動測試（Playwright） - 🟡 Medium ⚠️ *使用 dev branch*
 - [ ] **T5**: 線上 API 整合測試（OpenAI、DeepSeek、Anthropic） - 🟡 Medium
 - [ ] **T3**: 端對端整合測試 - 🟢 Low
 - [ ] **T4**: 壓力測試 - 🟢 Low
 
-### 3.6 文件（待實作）
+### 3.6 文件（進行中）
 
 - [ ] **D1**: OpenAPI/Swagger 規格文件 - 🟡 Medium ⚠️ *使用 dev branch*
 - [ ] **D2**: 架構文件 - 🟢 Low
@@ -956,7 +965,7 @@ graph TD
 - ✅ **F9** 多語系支援（9 語言）
 - ✅ **T6** 測試基礎設施修復
 
-#### Phase 3D: 跨平台支援（2025-12-30）
+#### Phase 3D: 跨平台支援
 
 - ✅ **環境變數配置**本地 LLM URL
   - `OLLAMA_BASE_URL` - 自訂 Ollama 端點
@@ -969,7 +978,7 @@ graph TD
 
 **重點**: 企業採用、成本優化、殺手級 UX 功能
 
-#### Phase 4A: 安全性與 UX（快速勝利）
+#### Phase 4A: 安全性與 UX
 
 **優先級**: 安全性 → 功能
 
@@ -991,7 +1000,7 @@ graph TD
 
 **優先級**: 中
 
-**狀態**: ✅ **階段 1-3 完成** (2026-01-03)
+**狀態**: ✅ **階段 1-3 完成**
 
 **最終分析報告**: [`.planning/260103-F12_F2_T8_FINAL_ANALYSIS.md`](.planning/260103-F12_F2_T8_FINAL_ANALYSIS.md)
 

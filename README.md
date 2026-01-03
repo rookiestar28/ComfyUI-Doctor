@@ -2,7 +2,7 @@
 
 [繁體中文](README.zh-TW.md) | English | [Roadmap & Development Status](ROADMAP.md)
 
-A continuous, real-time runtime diagnostics suite for ComfyUI. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now features 57+ error patterns (22 builtin + 35 community patterns), JSON-based pattern management with hot-reload, allowing users to maintain and manage other error types themselves. i18n support for 9 languages currently, persistent log history, and RESTful API for frontend integration.
+A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
 ---
 
@@ -413,6 +413,7 @@ You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear i
 
 **Function**: Specify which model to use for error analysis.
 **Usage**:
+
 - **Dropdown Mode** (default): Select a model from the automatically-populated dropdown list. Click the 🔄 refresh button to reload available models.
 - **Manual Input Mode**: Check "Enter model name manually" to type a custom model name (e.g., `gpt-4o`, `deepseek-chat`, `llama3.1:8b`).
 - Models are automatically fetched from your selected provider's API when you change providers or click refresh.
