@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ComfyUI Doctor - Test Harness</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e1e1e;
+      color: #fff;
+    }
+
+    #test-status {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 10px 20px;
+      background: #2d2d2d;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 10000;
+    }
+
+    #test-status.ready {
+      background: #0f4c0f;
+    }
+
+    #comfy-root {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <div id="test-status">Loading...</div>
+  <div id="comfy-root"></div>
+
+  <script type="module">
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Test Harness for ComfyUI Doctor UI
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This HTML file provides a minimal ComfyUI environment for testing Doctor UI
+    // in isolation without requiring a full ComfyUI installation.
+    //
+    // It mocks the ComfyUI `app` and `api` objects and loads the Doctor UI modules.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    import { createMockComfyUIApp, createMockComfyUIAPI } from './mocks/comfyui-app.js';
+
+    // Create mock ComfyUI environment
+    window.app = createMockComfyUIApp();
+    window.api = createMockComfyUIAPI();
+
+    // Signal that mocks are ready
+    window.__doctorTestReady = false;
+
+    console.log('[Test Harness] ComfyUI mocks initialized');
+    console.log('[Test Harness] Loading Doctor UI...');
+
+    // Import Doctor UI - adjust path to point to actual web/ directory
+    // Note: In Playwright tests, we serve from tests/e2e/ directory,
+    // so we need to reference ../../web/ to get to the actual source
+    try {
+      // Dynamically import Doctor UI
+      const doctorModule = await import('../../web/doctor.js');
+
+      console.log('[Test Harness] Doctor UI loaded successfully');
+
+      // Wait a bit for async initialization
+      setTimeout(() => {
+        window.__doctorTestReady = true;
+        document.getElementById('test-status').textContent = '✓ Ready for Testing';
+        document.getElementById('test-status').className = 'ready';
+        console.log('[Test Harness] UI initialization complete');
+
+        // Dispatch custom event for Playwright to detect
+        window.dispatchEvent(new CustomEvent('doctor-ready'));
+      }, 500);
+
+    } catch (error) {
+      console.error('[Test Harness] Failed to load Doctor UI:', error);
+      document.getElementById('test-status').textContent = '✗ Load Failed';
+      document.getElementById('test-status').style.background = '#4c0f0f';
+
+      // Expose error for testing
+      window.__doctorTestError = error;
+    }
+
+    // Expose mocks for test access
+    window.__testMocks = {
+      app: window.app,
+      api: window.api,
+    };
+  </script>
+</body>
+</html>
