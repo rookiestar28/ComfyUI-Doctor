@@ -1,0 +1,17 @@
+{
+  "en": {
+    "sidebar_doctor_title": "ComfyUI Doctor",
+    "tab_errors": "Errors",
+    "tab_chat": "Chat",
+    "tab_settings": "Settings",
+    "no_errors": "No errors detected",
+    "analyze_error": "Analyze Error",
+    "chat_placeholder": "Ask about errors or ComfyUI usage...",
+    "chat_send": "Send",
+    "save_settings_btn": "Save Settings",
+    "language_label": "Language",
+    "api_key_label": "API Key",
+    "model_label": "Model",
+    "provider_label": "Provider"
+  }
+}

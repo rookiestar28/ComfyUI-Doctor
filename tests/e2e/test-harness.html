@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ComfyUI Doctor - Test Harness</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e1e1e;
+      color: #fff;
+    }
+
+    #test-status {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 10px 20px;
+      background: #2d2d2d;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 10000;
+    }
+
+    #test-status.ready {
+      background: #0f4c0f;
+    }
+
+    #comfy-root {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <div id="test-status">Loading...</div>
+  <div id="mock-sidebar-tabs" style="width: 300px; height: 100vh; background: #1a1a2e; border-right: 1px solid #444; float: left;"></div>
+  <div id="comfy-root" style="margin-left: 300px;"></div>
+
+  <script type="module">
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Test Harness for ComfyUI Doctor UI
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This HTML file provides a minimal ComfyUI environment for testing Doctor UI
+    // in isolation without requiring a full ComfyUI installation.
+    //
+    // It mocks the ComfyUI `app` and `api` objects and loads the Doctor UI modules.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    import { createMockComfyUIApp, createMockComfyUIAPI } from './mocks/comfyui-app.js';
+
+    // Create mock ComfyUI environment BEFORE importing Doctor modules
+    window.app = createMockComfyUIApp();
+    window.api = createMockComfyUIAPI();
+
+    // Signal that mocks are ready
+    window.__doctorTestReady = false;
+    window.__doctorTestError = null;
+
+    console.log('[Test Harness] ComfyUI mocks initialized');
+    console.log('[Test Harness] Loading Doctor UI modules...');
+
+    try {
+      // Import the full doctor.js extension which will register everything
+      // This includes the left sidebar tab with settings, chat, etc.
+      await import('../../web/doctor.js');
+
+      console.log('[Test Harness] Doctor extension loaded and registered');
+
+      // Wait for extension setup to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Wait a bit for async initialization (i18n loading, etc.)
+      setTimeout(() => {
+        window.__doctorTestReady = true;
+        document.getElementById('test-status').textContent = '✓ Ready for Testing';
+        document.getElementById('test-status').className = 'ready';
+        console.log('[Test Harness] UI initialization complete');
+
+        // Dispatch custom event for Playwright to detect
+        window.dispatchEvent(new CustomEvent('doctor-ready'));
+      }, 1000); // Increased timeout for i18n loading
+
+    } catch (error) {
+      console.error('[Test Harness] Failed to load Doctor UI:', error);
+      document.getElementById('test-status').textContent = '✗ Load Failed: ' + error.message;
+      document.getElementById('test-status').style.background = '#4c0f0f';
+
+      // Expose error for testing
+      window.__doctorTestError = error;
+    }
+
+    // Expose mocks for test access
+    window.__testMocks = {
+      app: window.app,
+      api: window.api,
+    };
+  </script>
+</body>
+</html>

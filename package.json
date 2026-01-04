@@ -1,0 +1,27 @@
+{
+  "name": "comfyui-doctor",
+  "version": "1.3.0",
+  "description": "A real-time runtime diagnostics suite for ComfyUI",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "install-browsers": "playwright install chromium"
+  },
+  "keywords": [
+    "comfyui",
+    "diagnostics",
+    "testing"
+  ],
+  "author": "rookiestar",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
