@@ -495,15 +495,15 @@ graph TD
 
 **Pending UI i18n Completion** (from Phase 4B):
 
-- [ ] **i18n-UI-1**: Complete UI_TEXT translations for zh_CN, ja - 🟢 Low (5 keys each)
-  - Missing keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
-  - Impact: Settings panel partially in English for Chinese/Japanese users
-  - Estimated effort: 10 minutes
-- [ ] **i18n-UI-2**: Complete UI_TEXT translations for de, fr, it, es, ko - 🟡 Medium (27 keys each)
-  - Missing keys: `ai_provider_label`, `analyze_prompt_label`, `analyzing_error_label`, `api_key_label`, `base_url_label`, `chat_ask_ai_placeholder`, etc.
-  - Impact: Settings panel ~31% in English for European/Korean users
-  - Estimated effort: 1-2 hours (can leverage LLM translation)
-  - **Note**: Error diagnosis fully functional in all languages (58 patterns 100% translated)
+- [x] **i18n-UI-1**: Complete UI_TEXT translations for zh_CN, ja - 🟢 Low ✅ *Completed (2026-01-04)*
+  - Added 5 translation keys for zh_CN and ja languages
+  - Keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
+  - Impact: Settings panel now fully localized for Chinese/Japanese users
+- [x] **i18n-UI-2**: Complete UI_TEXT translations for de, fr, it, es, ko - 🟡 Medium ✅ *Completed (2026-01-04)*
+  - Added 27 translation keys for each language (de, fr, it, es, ko)
+  - Keys: `ai_provider_label`, `analyze_prompt_label`, `analyzing_error_label`, `api_key_label`, `base_url_label`, `chat_ask_ai_placeholder`, `chat_error`, `enable_doctor_label`, `enter_model_manually`, `error_loading_models`, `error_message`, `generation_stopped_user`, `language_label`, `loading_models`, `model_manual_placeholder`, `model_name_label`, `no_models_found`, `no_user_msg_to_regenerate`, `nodes_count`, `refresh_model_list`, `save_settings_btn`, `saved_message`, `set_base_url_first`, `settings_title`, `sidebar_config_hint`, `stream_error`, `analyzing_error_label`
+  - Impact: Settings panel and chat interface now fully localized for all 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko)
+  - **Achievement**: 100% UI_TEXT coverage across all 9 supported languages
 
 **UX Enhancements**:
 
@@ -1163,15 +1163,15 @@ graph TD
 
 **待完成的 UI 國際化**（來自 Phase 4B）:
 
-- [ ] **i18n-UI-1**: 完成 zh_CN、ja 的 UI_TEXT 翻譯 - 🟢 Low（各 5 個 keys）
-  - 缺失 keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
-  - 影響：中文/日文使用者的設定面板部分為英文
-  - 預估工作量：10 分鐘
-- [ ] **i18n-UI-2**: 完成 de, fr, it, es, ko 的 UI_TEXT 翻譯 - 🟡 Medium（各 27 個 keys）
-  - 缺失 keys: `ai_provider_label`, `analyze_prompt_label`, `analyzing_error_label`, `api_key_label`, `base_url_label`, `chat_ask_ai_placeholder` 等
-  - 影響：歐洲/韓文使用者的設定面板約 31% 為英文
-  - 預估工作量：1-2 小時（可利用 LLM 翻譯）
-  - **注意**：錯誤診斷功能在所有語言完全正常（58 個 patterns 100% 翻譯）
+- [x] **i18n-UI-1**: 完成 zh_CN、ja 的 UI_TEXT 翻譯 - 🟢 Low ✅ *已完成 (2026-01-04)*
+  - 已新增 zh_CN 和 ja 語言的 5 個翻譯 keys
+  - Keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
+  - 影響：中文/日文使用者的設定面板現已完全在地化
+- [x] **i18n-UI-2**: 完成 de, fr, it, es, ko 的 UI_TEXT 翻譯 - 🟡 Medium ✅ *已完成 (2026-01-04)*
+  - 已為每種語言新增 27 個翻譯 keys (de, fr, it, es, ko)
+  - Keys: `ai_provider_label`, `analyze_prompt_label`, `analyzing_error_label`, `api_key_label`, `base_url_label`, `chat_ask_ai_placeholder`, `chat_error`, `enable_doctor_label`, `enter_model_manually`, `error_loading_models`, `error_message`, `generation_stopped_user`, `language_label`, `loading_models`, `model_manual_placeholder`, `model_name_label`, `no_models_found`, `no_user_msg_to_regenerate`, `nodes_count`, `refresh_model_list`, `save_settings_btn`, `saved_message`, `set_base_url_first`, `settings_title`, `sidebar_config_hint`, `stream_error`, `analyzing_error_label`
+  - 影響：設定面板與聊天介面現已完全在地化，支援全部 9 種語言 (en, zh_TW, zh_CN, ja, de, fr, it, es, ko)
+  - **成就**：全部 9 種支援語言的 UI_TEXT 達到 100% 覆蓋率
 
 **UX 增強**:
 
