@@ -1,0 +1,453 @@
+/**
+ * Statistics Dashboard Tests (F4)
+ *
+ * Tests the Doctor statistics panel functionality:
+ * - Statistics panel visibility and toggle
+ * - Statistics data loading and display
+ * - Top patterns rendering
+ * - Category breakdown visualization
+ * - Resolution rate display
+ * - Empty state handling
+ * - API error handling
+ * - i18n support
+ */
+
+import { test, expect } from '@playwright/test';
+import { waitForDoctorReady, waitForI18nLoaded, clearStorage } from '../utils/helpers.js';
+
+// Mock statistics data
+const MOCK_STATISTICS = {
+  success: true,
+  statistics: {
+    total_errors: 42,
+    pattern_frequency: {
+      'cuda_oom_classic': 15,
+      'missing_module': 10,
+      'type_mismatch': 8,
+      'model_not_found': 6,
+      'invalid_workflow': 3
+    },
+    category_breakdown: {
+      'memory': 20,
+      'workflow': 12,
+      'model_loading': 8,
+      'framework': 2
+    },
+    top_patterns: [
+      { pattern_id: 'cuda_oom_classic', count: 15, category: 'memory' },
+      { pattern_id: 'missing_module', count: 10, category: 'framework' },
+      { pattern_id: 'type_mismatch', count: 8, category: 'workflow' },
+      { pattern_id: 'model_not_found', count: 6, category: 'model_loading' },
+      { pattern_id: 'invalid_workflow', count: 3, category: 'workflow' }
+    ],
+    resolution_rate: {
+      resolved: 20,
+      unresolved: 18,
+      ignored: 4
+    },
+    trend: {
+      last_24h: 3,
+      last_7d: 12,
+      last_30d: 42
+    }
+  }
+};
+
+const EMPTY_STATISTICS = {
+  success: true,
+  statistics: {
+    total_errors: 0,
+    pattern_frequency: {},
+    category_breakdown: {},
+    top_patterns: [],
+    resolution_rate: { resolved: 0, unresolved: 0, ignored: 0 },
+    trend: { last_24h: 0, last_7d: 0, last_30d: 0 }
+  }
+};
+
+// Complete UI text mock (English)
+const MOCK_UI_TEXT_EN = {
+  // Base UI keys
+  sidebar_doctor_title: 'Doctor',
+  sidebar_doctor_tooltip: 'ComfyUI Doctor - Error Diagnostics',
+  info_title: 'INFO',
+  info_message: 'Click 🏥 Doctor button to analyze errors',
+  no_errors: 'No active errors detected.',
+  system_running_smoothly: 'System running smoothly',
+  no_errors_detected: 'No errors detected',
+  settings_title: 'Settings',
+  language_label: 'Language',
+  ai_provider_label: 'AI Provider',
+  base_url_label: 'Base URL',
+  api_key_label: 'API Key',
+  model_name_label: 'Model Name',
+  save_settings_btn: 'Save Settings',
+  analyze_with_ai: '✨ Analyze with AI',
+  ask_ai_placeholder: 'Ask AI about this error...',
+  send_btn: 'Send',
+  clear_btn: 'Clear',
+  // F4 Statistics keys
+  statistics_title: 'Error Statistics',
+  stats_total_errors: 'Total (30d)',
+  stats_last_24h: 'Last 24h',
+  stats_last_7d: 'Last 7d',
+  stats_last_30d: 'Last 30d',
+  stats_top_patterns: 'Top Error Patterns',
+  stats_resolution_rate: 'Resolution Rate',
+  stats_error: 'Failed to load statistics',
+  stats_categories: 'Categories',
+  stats_categories: 'Categories',
+  stats_loading: 'Loading...',
+  stats_no_data: 'No data yet',
+  stats_resolved: 'Resolved',
+  stats_unresolved: 'Unresolved',
+  stats_ignored: 'Ignored',
+  category_memory: 'Memory',
+  category_workflow: 'Workflow',
+  category_model_loading: 'Model Loading',
+  category_framework: 'Framework',
+  category_generic: 'Generic',
+};
+
+// Japanese UI text for i18n test
+const MOCK_UI_TEXT_JA = {
+  sidebar_doctor_title: 'Doctor',
+  sidebar_doctor_tooltip: 'ComfyUI Doctor - エラー診断',
+  info_title: '情報',
+  info_message: '🏥 Doctor ボタンをクリックしてエラーを分析',
+  no_errors: 'アクティブなエラーは検出されていません。',
+  system_running_smoothly: 'システムは正常に動作しています',
+  no_errors_detected: 'エラーは検出されませんでした',
+  settings_title: '設定',
+  analyze_with_ai: '✨ AIで分析',
+  ask_ai_placeholder: 'AIに質問...',
+  send_btn: '送信',
+  clear_btn: 'クリア',
+  statistics_title: 'エラー統計',
+  stats_total_errors: '合計 (30日)',
+  stats_last_24h: '過去24時間',
+  stats_last_7d: '過去7日間',
+  stats_last_30d: '過去30日間',
+  stats_top_patterns: 'よくあるエラーパターン',
+  stats_resolution_rate: '解決率',
+  stats_error: '統計の読み込みに失敗しました',
+  stats_categories: 'カテゴリ',
+  stats_loading: '読み込み中...',
+  stats_no_data: 'データなし',
+  stats_resolved: '解決済',
+  stats_unresolved: '未解決',
+  stats_ignored: '無視',
+  category_memory: 'メモリ',
+  category_workflow: 'ワークフロー',
+  category_model_loading: 'モデル読込',
+  category_framework: 'フレームワーク',
+  category_generic: '一般',
+};
+
+/**
+ * Setup all required mocks for Doctor statistics
+ * IMPORTANT: Call this BEFORE page.goto() to ensure routes intercept requests
+ * Each test gets a fresh page instance, so no need to clear previous routes
+ */
+async function setupMocks(page, options = {}) {
+  const uiText = options.uiText || MOCK_UI_TEXT_EN;
+  const statistics = options.statistics || MOCK_STATISTICS;
+
+  await page.route('**/scripts/app.js', route => {
+    route.fulfill({ status: 200, contentType: 'application/javascript', body: 'export const app = window.app;' });
+  });
+
+  await page.route('**/scripts/api.js', route => {
+    route.fulfill({ status: 200, contentType: 'application/javascript', body: 'export const api = window.api;' });
+  });
+
+  await page.route('**/doctor/provider_defaults', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ openai: 'https://api.openai.com/v1', deepseek: 'https://api.deepseek.com/v1' }),
+    });
+  });
+
+  await page.route('**/doctor/ui_text*', route => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ language: 'en', text: uiText }) });
+  });
+
+  await page.route('**/doctor/statistics*', route => {
+    if (options.statisticsError) {
+      route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'Internal server error' }) });
+    } else {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(statistics) });
+    }
+  });
+
+  await page.route('**/doctor/mark_resolved', route => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, message: 'Status updated' }) });
+  });
+}
+
+test.describe('Statistics Dashboard', () => {
+  test.beforeEach(async ({ page }) => {
+    // Setup all mocks using shared helper
+    await setupMocks(page);
+
+    await page.goto('/tests/e2e/test-harness.html');
+    await clearStorage(page);
+    await waitForDoctorReady(page);
+    await waitForI18nLoaded(page); // Wait for UI text to load
+  });
+
+  test('should display statistics panel', async ({ page }) => {
+    const statsPanel = page.locator('#doctor-statistics-panel');
+    await expect(statsPanel).toBeVisible();
+  });
+
+  test('should have collapsible details element', async ({ page }) => {
+    const statsPanel = page.locator('#doctor-statistics-panel');
+
+    // Should be a <details> element
+    const tagName = await statsPanel.evaluate(el => el.tagName.toLowerCase());
+    expect(tagName).toBe('details');
+  });
+
+  test('should display statistics title in summary', async ({ page }) => {
+    const summary = page.locator('#doctor-statistics-panel > summary');
+    await expect(summary).toBeVisible();
+
+    const text = await summary.textContent();
+    expect(text).toContain('Error Statistics');
+  });
+
+  test('should toggle panel open/closed', async ({ page }) => {
+    const statsPanel = page.locator('#doctor-statistics-panel');
+    const summary = page.locator('#doctor-statistics-panel > summary');
+
+    // Initially closed
+    let isOpen = await statsPanel.evaluate(el => el.open);
+    expect(isOpen).toBe(false);
+
+    // Click to open
+    await summary.click();
+    isOpen = await statsPanel.evaluate(el => el.open);
+    expect(isOpen).toBe(true);
+
+    // Click to close
+    await summary.click();
+    isOpen = await statsPanel.evaluate(el => el.open);
+    expect(isOpen).toBe(false);
+  });
+
+  test('should display total errors stat card', async ({ page }) => {
+    // Open panel
+    await page.click('#doctor-statistics-panel > summary');
+
+    // Wait for content to load
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    await expect(statsContent).toBeVisible();
+
+    // Check for total errors display
+    const totalText = await statsContent.textContent();
+    expect(totalText).toContain('Total');
+    expect(totalText).toContain('42'); // From MOCK_STATISTICS
+  });
+
+  test('should display last 24h stat card', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    expect(text).toContain('Last 24h');
+    expect(text).toContain('3'); // From MOCK_STATISTICS.trend.last_24h
+  });
+
+  test('should display top 5 error patterns', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    // Should show "Top Error Patterns" header
+    expect(text).toContain('Top Error Patterns');
+
+    // Should display pattern names (formatted)
+    expect(text).toMatch(/CUDA OOM/i);
+    expect(text).toMatch(/Missing Module/i);
+  });
+
+  test('should limit top patterns to 5 items', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    // Count pattern items in the list
+    const patternItems = page.locator('.pattern-item');
+    const count = await patternItems.count();
+
+    // Should show exactly 5 patterns (or less if fewer exist)
+    expect(count).toBeLessThanOrEqual(5);
+    expect(count).toBe(5); // Our mock has exactly 5
+  });
+
+  test('should display pattern counts', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    // Should show counts for top patterns
+    expect(text).toContain('15'); // cuda_oom_classic count
+    expect(text).toContain('10'); // missing_module count
+  });
+
+  test('should display category breakdown section', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    // Should show "Categories" header
+    expect(text).toContain('Categories');
+
+    // Should show category names
+    expect(text).toContain('Memory');
+    expect(text).toContain('Workflow');
+  });
+
+  test('should display category progress bars', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    // Look for category bar elements
+    const categoryBars = page.locator('.category-bar');
+    const count = await categoryBars.count();
+
+    // Should have 4 categories from MOCK_STATISTICS
+    expect(count).toBe(4);
+  });
+
+  test('should handle empty statistics gracefully', async ({ page }) => {
+    // Setup mocks with empty statistics before reload
+    await setupMocks(page, { statistics: EMPTY_STATISTICS });
+
+    // Reload to apply new mocks
+    await page.reload();
+    await waitForDoctorReady(page);
+
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    // Should show "No data yet" message
+    expect(text).toContain('No data yet');
+  });
+
+  test('should handle API error gracefully', async ({ page }) => {
+    // Setup mocks with statistics error before reload
+    await setupMocks(page, { statisticsError: true });
+
+    // Reload to apply new mocks
+    await page.reload();
+    await waitForDoctorReady(page);
+
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    // Should still render without crashing
+    const statsContent = page.locator('#doctor-stats-content');
+    await expect(statsContent).toBeVisible();
+
+    // Should show error message
+    const text = await statsContent.textContent();
+    expect(text).toMatch(/0|No data|Failed/i);
+  });
+
+  test('should persist panel open/closed state', async ({ page }) => {
+    const statsPanel = page.locator('#doctor-statistics-panel');
+
+    // Open panel
+    await page.click('#doctor-statistics-panel > summary');
+
+    // Verify it's open
+    let isOpen = await statsPanel.evaluate(el => el.open);
+    expect(isOpen).toBe(true);
+
+    // Setup mocks before reload
+    await setupMocks(page);
+
+    // Reload page
+    await page.reload();
+    await waitForDoctorReady(page);
+
+    // Check localStorage was set
+    const storedState = await page.evaluate(() => {
+      return localStorage.getItem('doctor_stats_expanded');
+    });
+    expect(storedState).toBe('true');
+  });
+
+  test('should support i18n (multilingual UI)', async ({ page }) => {
+    // Setup mocks with Japanese UI text before reload
+    await setupMocks(page, { uiText: MOCK_UI_TEXT_JA });
+
+    // Reload with Japanese text
+    await page.reload();
+    await waitForDoctorReady(page);
+
+    const summary = page.locator('#doctor-statistics-panel > summary');
+    const text = await summary.textContent();
+
+    // Should display Japanese text
+    expect(text).toContain('エラー統計');
+  });
+
+  test('should format pattern names correctly', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    // "cuda_oom_classic" should be formatted to "CUDA OOM Classic"
+    // Check for capital letters and spaces
+    expect(text).toMatch(/CUDA/);
+    expect(text).toMatch(/OOM/);
+
+    // Should not contain raw underscores in pattern names
+    expect(text).not.toMatch(/cuda_oom_classic/);
+  });
+
+  test('should calculate category percentages', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    // Memory: 20/42 = 47.6%
+    // Workflow: 12/42 = 28.6%
+    // Check that progress bars have width styles
+    const categoryBars = page.locator('.category-bar .bar-fill');
+    const firstBarWidth = await categoryBars.first().evaluate(el => el.style.width);
+
+    // Should have a percentage width
+    expect(firstBarWidth).toMatch(/%/);
+  });
+
+  test('should display resolution rate statistics', async ({ page }) => {
+    await page.click('#doctor-statistics-panel > summary');
+    await page.waitForTimeout(100);
+
+    const statsContent = page.locator('#doctor-stats-content');
+    const text = await statsContent.textContent();
+
+    // Should show resolution status counts
+    expect(text).toContain('20'); // Resolved count
+    expect(text).toContain('18'); // Unresolved count
+    expect(text).toContain('4');  // Ignored count
+  });
+});

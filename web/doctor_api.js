@@ -203,5 +203,55 @@ export const DoctorAPI = {
             console.error('[ComfyUI-Doctor] Chat failed:', error);
             throw error;
         }
+    },
+
+    /**
+     * F4: Get error statistics for dashboard
+     * @param {number} timeRangeDays - Number of days to include (default: 30)
+     * @returns {Promise<{success: boolean, statistics: Object}>}
+     */
+    async getStatistics(timeRangeDays = 30) {
+        try {
+            const response = await fetch(`/doctor/statistics?time_range_days=${timeRangeDays}`);
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                throw new Error(err.error || `HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to fetch statistics:', error);
+            return {
+                success: false,
+                error: error.message,
+                statistics: {
+                    total_errors: 0,
+                    pattern_frequency: {},
+                    category_breakdown: {},
+                    top_patterns: [],
+                    resolution_rate: { resolved: 0, unresolved: 0, ignored: 0 },
+                    trend: { last_24h: 0, last_7d: 0, last_30d: 0 }
+                }
+            };
+        }
+    },
+
+    /**
+     * F4: Mark an error as resolved/unresolved/ignored
+     * @param {string} timestamp - Error timestamp
+     * @param {string} status - Status: 'resolved', 'unresolved', or 'ignored'
+     * @returns {Promise<{success: boolean, message: string}>}
+     */
+    async markResolved(timestamp, status = 'resolved') {
+        try {
+            const response = await fetch('/doctor/mark_resolved', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timestamp, status })
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to mark error:', error);
+            return { success: false, message: error.message };
+        }
     }
 };

@@ -287,6 +287,107 @@ app.registerExtension({
                                 margin: 0 0 8px 0;
                                 color: #60a5fa;
                             }
+                            /* F4: Statistics Dashboard Styles */
+                            .doctor-sidebar-content .stats-panel {
+                                background: rgba(0,0,0,0.2);
+                                border-radius: 8px;
+                                padding: 12px;
+                                margin: 10px 0;
+                            }
+                            .doctor-sidebar-content .stats-panel summary {
+                                cursor: pointer;
+                                font-weight: bold;
+                                font-size: 13px;
+                                color: #ddd;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                            }
+                            .doctor-sidebar-content .stats-grid {
+                                display: grid;
+                                grid-template-columns: 1fr 1fr;
+                                gap: 8px;
+                                margin-top: 10px;
+                            }
+                            .doctor-sidebar-content .stat-card {
+                                background: rgba(255,255,255,0.05);
+                                border: 1px solid #444;
+                                border-radius: 6px;
+                                padding: 10px;
+                                text-align: center;
+                                transition: transform 0.2s, box-shadow 0.2s;
+                            }
+                            .doctor-sidebar-content .stat-card:hover {
+                                transform: translateY(-2px);
+                                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                            }
+                            .doctor-sidebar-content .stat-card .stat-value {
+                                font-size: 24px;
+                                font-weight: bold;
+                                color: #f44;
+                            }
+                            .doctor-sidebar-content .stat-card .stat-label {
+                                font-size: 11px;
+                                color: #888;
+                                margin-top: 4px;
+                            }
+                            .doctor-sidebar-content .top-patterns {
+                                margin-top: 10px;
+                            }
+                            .doctor-sidebar-content .top-patterns h5 {
+                                margin: 0 0 8px 0;
+                                font-size: 12px;
+                                color: #aaa;
+                            }
+                            .doctor-sidebar-content .pattern-item {
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                padding: 6px 8px;
+                                background: rgba(255,68,68,0.1);
+                                border-radius: 4px;
+                                margin-bottom: 4px;
+                                font-size: 12px;
+                            }
+                            .doctor-sidebar-content .pattern-item .pattern-name {
+                                color: #ff6b6b;
+                                flex: 1;
+                            }
+                            .doctor-sidebar-content .pattern-item .pattern-count {
+                                background: #f44;
+                                color: white;
+                                padding: 2px 6px;
+                                border-radius: 10px;
+                                font-size: 10px;
+                                font-weight: bold;
+                            }
+                            .doctor-sidebar-content .category-bar {
+                                margin-bottom: 6px;
+                            }
+                            .doctor-sidebar-content .category-bar .bar-label {
+                                font-size: 11px;
+                                color: #aaa;
+                                display: flex;
+                                justify-content: space-between;
+                                margin-bottom: 2px;
+                            }
+                            .doctor-sidebar-content .category-bar .bar-track {
+                                height: 6px;
+                                background: #333;
+                                border-radius: 3px;
+                                overflow: hidden;
+                            }
+                            .doctor-sidebar-content .category-bar .bar-fill {
+                                height: 100%;
+                                border-radius: 3px;
+                                transition: width 0.3s ease;
+                            }
+                            .doctor-sidebar-content .stats-empty {
+                                text-align: center;
+                                padding: 20px;
+                                color: #666;
+                                font-size: 12px;
+                            }
                         `;
                         document.head.appendChild(style);
                     }
@@ -594,6 +695,55 @@ app.registerExtension({
                             }, 2000);
                         }
                     };
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // SECTION 2.5: STATISTICS PANEL (F4 Dashboard)
+                    // ═══════════════════════════════════════════════════════════════
+                    // PURPOSE: Display error statistics and trends
+                    // UPDATED BY: doctor_ui.js:renderStatistics()
+                    // STATE: Persisted in localStorage ('doctor_stats_expanded')
+                    // ═══════════════════════════════════════════════════════════════
+                    const statsExpanded = localStorage.getItem('doctor_stats_expanded') === 'true';
+                    const statsPanel = document.createElement('details');
+                    statsPanel.id = 'doctor-statistics-panel';
+                    statsPanel.className = 'stats-panel doctor-sidebar-content';
+                    statsPanel.open = statsExpanded;
+                    statsPanel.innerHTML = `
+                        <summary>📊 ${app.Doctor.getUIText('statistics_title') || 'Error Statistics'}</summary>
+                        <div id="doctor-stats-content">
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-value" id="stats-total">-</div>
+                                    <div class="stat-label">${app.Doctor.getUIText('stats_total_errors') || 'Total (30d)'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value" id="stats-24h">-</div>
+                                    <div class="stat-label">${app.Doctor.getUIText('stats_last_24h') || 'Last 24h'}</div>
+                                </div>
+                            </div>
+                            <div class="top-patterns" id="doctor-top-patterns">
+                                <h5>🔥 ${app.Doctor.getUIText('stats_top_patterns') || 'Top Error Patterns'}</h5>
+                                <div class="stats-empty">${app.Doctor.getUIText('stats_loading') || 'Loading...'}</div>
+                            </div>
+                            <div class="category-breakdown" id="doctor-category-breakdown" style="margin-top: 10px;">
+                                <h5>📁 ${app.Doctor.getUIText('stats_categories') || 'Categories'}</h5>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(statsPanel);
+
+                    // Persist stats panel state
+                    statsPanel.addEventListener('toggle', () => {
+                        localStorage.setItem('doctor_stats_expanded', statsPanel.open);
+                    });
+
+                    // Store reference for refresh
+                    doctorUI.sidebarStatsPanel = statsPanel;
+
+                    // Initial load of statistics
+                    if (typeof doctorUI.renderStatistics === 'function') {
+                        doctorUI.renderStatistics();
+                    }
 
                     // ═══════════════════════════════════════════════════════════════
                     // SECTION 3: ERROR CONTEXT AREA

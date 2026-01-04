@@ -24,12 +24,21 @@ class HistoryEntry:
         suggestion: Analysis suggestion dictionary with keys like 'pattern', 'message', 'actions'
         node_context: Optional node context dictionary
         workflow_snapshot: Optional workflow JSON snapshot (for F3)
+        matched_pattern_id: Optional pattern ID that matched this error (for F4 statistics)
+        pattern_category: Optional category of the matched pattern (for F4 statistics)
+        pattern_priority: Optional priority of the matched pattern (for F4 statistics)
+        resolution_status: Resolution status of the error (for F4 tracking)
     """
     timestamp: str
     error: str
     suggestion: Dict[str, Any]
     node_context: Optional[Dict[str, Any]] = None
     workflow_snapshot: Optional[str] = None
+    # F4: Pattern metadata for statistics tracking
+    matched_pattern_id: Optional[str] = None
+    pattern_category: Optional[str] = None
+    pattern_priority: Optional[int] = None
+    resolution_status: str = "unresolved"  # "resolved"|"unresolved"|"ignored"
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert entry to dictionary for JSON serialization."""
@@ -37,13 +46,18 @@ class HistoryEntry:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "HistoryEntry":
-        """Create entry from dictionary."""
+        """Create entry from dictionary (backward compatible with old format)."""
         return cls(
             timestamp=data.get("timestamp", ""),
             error=data.get("error", ""),
             suggestion=data.get("suggestion", {}),
             node_context=data.get("node_context"),
-            workflow_snapshot=data.get("workflow_snapshot")
+            workflow_snapshot=data.get("workflow_snapshot"),
+            # F4: Pattern metadata (optional for backward compatibility)
+            matched_pattern_id=data.get("matched_pattern_id"),
+            pattern_category=data.get("pattern_category"),
+            pattern_priority=data.get("pattern_priority"),
+            resolution_status=data.get("resolution_status", "unresolved")
         )
 
 

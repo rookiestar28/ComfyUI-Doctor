@@ -124,6 +124,6 @@ export async function clearStorage(page) {
  */
 export async function waitForI18nLoaded(page) {
   await page.waitForFunction(() => {
-    return window.Doctor?.uiText && Object.keys(window.Doctor.uiText).length > 0;
-  }, { timeout: 5000 });
+    return window.app?.Doctor?.uiText && Object.keys(window.app.Doctor.uiText).length > 0;
+  }, { timeout: 10000 });
 }

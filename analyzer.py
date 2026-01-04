@@ -171,6 +171,44 @@ class ErrorAnalyzer:
     """
     
     @staticmethod
+    def _infer_category_from_key(error_key: str) -> str:
+        """
+        Infer error category from error_key for statistics tracking.
+        
+        Categories:
+        - memory: OOM errors, memory allocation failures
+        - model_loading: Model/checkpoint loading errors
+        - workflow: Validation, missing inputs, type mismatches
+        - framework: CUDA, PyTorch, library errors
+        - generic: Other errors
+        
+        Args:
+            error_key: The error key from patterns (lowercased)
+        
+        Returns:
+            Category string
+        """
+        key_lower = error_key.lower()
+        
+        # Memory-related errors
+        if any(keyword in key_lower for keyword in ['oom', 'memory', 'allocation']):
+            return 'memory'
+        
+        # Model loading errors
+        if any(keyword in key_lower for keyword in ['safetensors', 'checkpoint', 'model', 'lora', 'vae']):
+            return 'model_loading'
+        
+        # Workflow errors (validation, inputs, types)
+        if any(keyword in key_lower for keyword in ['validation', 'missing_input', 'type_mismatch', 'dimension', 'shape']):
+            return 'workflow'
+        
+        # Framework errors (CUDA, PyTorch, libraries)
+        if any(keyword in key_lower for keyword in ['cuda', 'cudnn', 'torch', 'mps', 'insightface', 'module']):
+            return 'framework'
+        
+        return 'generic'
+    
+    @staticmethod
     def extract_node_context(traceback_text: str) -> NodeContext:
         """
         Extract ComfyUI node context from a traceback.
@@ -229,9 +267,9 @@ class ErrorAnalyzer:
         return context
     
     @staticmethod
-    def analyze(traceback_text: str) -> Optional[str]:
+    def analyze(traceback_text: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """
-        Scans the traceback for known error patterns and returns a suggestion.
+        Scans the traceback for known error patterns and returns a suggestion with metadata.
 
         Architecture (v1.3.0+):
         - Try PatternLoader first (JSON-based patterns with hot-reload)
@@ -242,10 +280,13 @@ class ErrorAnalyzer:
             traceback_text: The full traceback text to analyze.
 
         Returns:
-            A formatted suggestion string, or None if no pattern matched.
+            Tuple of (suggestion_string, pattern_metadata)
+            - suggestion_string: Formatted suggestion, or None if no match
+            - pattern_metadata: Dict with keys 'matched_pattern_id', 'category', 'priority',
+              or None if no match
         """
         if not traceback_text:
-            return None
+            return (None, None)
 
         # Try PatternLoader first (JSON-based patterns)
         try:
@@ -255,13 +296,41 @@ class ErrorAnalyzer:
                 error_key, groups = result
                 # Map error_key (e.g., "MISSING_INPUT") to suggestion key (e.g., "missing_input")
                 suggestion_key = ERROR_KEYS.get(error_key, error_key)
+                
+                # Build suggestion text
                 try:
                     if groups:
-                        return get_suggestion(suggestion_key, *groups)
+                        suggestion = get_suggestion(suggestion_key, *groups)
                     else:
-                        return get_suggestion(suggestion_key)
+                        suggestion = get_suggestion(suggestion_key)
                 except Exception:
-                    return get_suggestion(suggestion_key)
+                    suggestion = get_suggestion(suggestion_key)
+                
+                # Build pattern metadata for statistics (F4)
+                try:
+                    pattern_info = loader.get_pattern_info(error_key)
+                    if pattern_info:
+                        metadata = {
+                            'matched_pattern_id': pattern_info.get('id', error_key),
+                            'category': pattern_info.get('category', ErrorAnalyzer._infer_category_from_key(suggestion_key)),
+                            'priority': pattern_info.get('priority', 50)
+                        }
+                    else:
+                        # Fallback metadata if pattern_info unavailable
+                        metadata = {
+                            'matched_pattern_id': error_key,
+                            'category': ErrorAnalyzer._infer_category_from_key(suggestion_key),
+                            'priority': 50
+                        }
+                except Exception:
+                    # Minimal metadata on error
+                    metadata = {
+                        'matched_pattern_id': error_key,
+                        'category': ErrorAnalyzer._infer_category_from_key(suggestion_key),
+                        'priority': 50
+                    }
+                
+                return (suggestion, metadata)
         except Exception as e:
             # Log warning but continue to fallback
             logging.warning(f"[ErrorAnalyzer] PatternLoader failed, using fallback: {e}")
@@ -272,17 +341,31 @@ class ErrorAnalyzer:
             if match:
                 try:
                     if has_groups and match.groups():
-                        return get_suggestion(error_key, *match.groups())
+                        suggestion = get_suggestion(error_key, *match.groups())
                     else:
-                        return get_suggestion(error_key)
+                        suggestion = get_suggestion(error_key)
                 except Exception:
-                    return get_suggestion(error_key)
+                    suggestion = get_suggestion(error_key)
+                
+                # Build metadata for fallback patterns
+                metadata = {
+                    'matched_pattern_id': error_key,
+                    'category': ErrorAnalyzer._infer_category_from_key(error_key),
+                    'priority': 50  # Default priority for hardcoded patterns
+                }
+                return (suggestion, metadata)
 
         # Generic hints for unmatched errors
         if "grad_fn" in traceback_text:
-            return get_suggestion(ERROR_KEYS["AUTOGRAD"])
+            suggestion = get_suggestion(ERROR_KEYS["AUTOGRAD"])
+            metadata = {
+                'matched_pattern_id': 'autograd_generic',
+                'category': 'framework',
+                'priority': 30
+            }
+            return (suggestion, metadata)
 
-        return None
+        return (None, None)
     
     @staticmethod
     def is_complete_traceback(text: str) -> bool:

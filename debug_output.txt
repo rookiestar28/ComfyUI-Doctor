@@ -1,0 +1,79 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › tests\e2e\specs\statistics.spec.js:395:7 › Statistics Dashboard › should support i18n (multilingual UI)
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /tests/e2e/test-harness.html HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /tests/e2e/mocks/comfyui-app.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /web/doctor.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /web/doctor_ui.js HTTP/1.1" 200 -
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /web/doctor_api.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /web/doctor_chat.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /web/doctor_state.js HTTP/1.1" 200 -
+
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "GET /web/doctor_fix_handler.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] code 501, message Unsupported method ('POST')
+[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "POST /doctor/list_models HTTP/1.1" 501 -
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] code 501, message Unsupported method ('POST')
+
+[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:34] "POST /debugger/set_language HTTP/1.1" 501 -
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /tests/e2e/test-harness.html HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /tests/e2e/mocks/comfyui-app.js HTTP/1.1" 200 -
+
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /web/doctor.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /web/doctor_ui.js HTTP/1.1" 200 -
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /web/doctor_api.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /web/doctor_chat.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /web/doctor_state.js HTTP/1.1" 200 -
+
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "GET /web/doctor_fix_handler.js HTTP/1.1" 200 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] code 501, message Unsupported method ('POST')
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] code 501, message Unsupported method ('POST')
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "POST /doctor/list_models HTTP/1.1" 501 -
+
+[1A[2K[WebServer] ::ffff:127.0.0.1 - - [04/Jan/2026 19:46:36] "POST /debugger/set_language HTTP/1.1" 501 -
+
+[1A[2K  1) [chromium] › tests\e2e\specs\statistics.spec.js:395:7 › Statistics Dashboard › should support i18n (multilingual UI) 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContain[2m([22m[32mexpected[39m[2m) // indexOf[22m
+
+    Expected substring: [32m"エラー統計"[39m
+    Received string:    [31m"📊 [Missing: statistics_title]"[39m
+
+      405 |
+      406 |     // Should display Japanese text
+    > 407 |     expect(text).toContain('エラー統計');
+          |                  ^
+      408 |   });
+      409 |
+      410 |   test('should format pattern names correctly', async ({ page }) => {
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\statistics.spec.js:407:18
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\statistics-Statistics-Dash-93308-pport-i18n-multilingual-UI--chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\statistics-Statistics-Dash-93308-pport-i18n-multilingual-UI--chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\statistics-Statistics-Dash-93308-pport-i18n-multilingual-UI--chromium\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › tests\e2e\specs\statistics.spec.js:395:7 › Statistics Dashboard › should support i18n (multilingual UI) 

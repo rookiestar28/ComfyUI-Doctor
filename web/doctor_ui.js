@@ -121,7 +121,9 @@ export class DoctorUI {
             const response = await fetch(`/doctor/ui_text?lang=${this.language}`);
             const data = await response.json();
             this.uiText = data.text || {};
-            console.log(`[ComfyUI-Doctor] Loaded UI text for language: ${data.language}`);
+            console.log(`[ComfyUI-Doctor] Loaded UI text for language: ${data.language}, Keys: ${Object.keys(this.uiText).length}`);
+            if (this.uiText.statistics_title) console.log(`[ComfyUI-Doctor] statistics_title: ${this.uiText.statistics_title}`);
+            else console.log(`[ComfyUI-Doctor] statistics_title MISSING`);
 
             // Update UI if already created
             if (this.panel) {
@@ -156,6 +158,25 @@ export class DoctorUI {
                 "stop_btn": "Stop Generating",
                 "confirm_clear": "Clear conversation?",
                 "clear_history": "Clear History",
+                "statistics_title": "Error Statistics",
+                "stats_total_errors": "Total (30d)",
+                "stats_last_24h": "Last 24h",
+                "stats_last_7d": "Last 7d",
+                "stats_last_30d": "Last 30d",
+                "stats_top_patterns": "Top Error Patterns",
+                "stats_resolution_rate": "Resolution Rate",
+                "stats_error": "Failed to load statistics",
+                "stats_categories": "Categories",
+                "stats_loading": "Loading...",
+                "stats_no_data": "No data yet",
+                "stats_resolved": "Resolved",
+                "stats_unresolved": "Unresolved",
+                "stats_ignored": "Ignored",
+                "category_memory": "Memory",
+                "category_workflow": "Workflow",
+                "category_model_loading": "Model Loading",
+                "category_framework": "Framework",
+                "category_generic": "Generic",
             };
         }
     }
@@ -182,6 +203,7 @@ export class DoctorUI {
         // For now, we'll implement the specific UI updates in the relevant methods
         this.updateInfoCard();
         this.updateLogCard();
+        this.updateStatisticsPanel();
     }
 
     /**
@@ -285,6 +307,9 @@ export class DoctorUI {
                 : (data.last_error ? data.last_error.substring(0, 100) : 'New error detected');
             new Notification('ComfyUI Doctor', { body, icon: '🏥' });
         }
+
+        // F4: Auto-refresh statistics
+        this.renderStatistics();
     }
 
     /**
@@ -845,6 +870,178 @@ export class DoctorUI {
             this.startErrorMonitor();
         }
         console.log(`[ComfyUI-Doctor] Poll interval updated to ${newInterval}ms`);
+    }
+
+    /**
+     * F4: Update statistics panel UI text (i18n)
+     * Updates static text labels in the statistics panel
+     */
+    updateStatisticsPanel() {
+        // Update panel summary title
+        const statsSummary = document.querySelector('#doctor-statistics-panel > summary');
+        if (statsSummary) {
+            statsSummary.textContent = `📊 ${this.getUIText('statistics_title')}`;
+        }
+
+        // Update stat card labels
+        const statsGrid = document.querySelector('#doctor-stats-content .stats-grid');
+        if (statsGrid) {
+            const totalLabel = statsGrid.querySelector('.stat-card:nth-child(1) .stat-label');
+            if (totalLabel) {
+                totalLabel.textContent = this.getUIText('stats_total_errors');
+            }
+
+            const last24hLabel = statsGrid.querySelector('.stat-card:nth-child(2) .stat-label');
+            if (last24hLabel) {
+                last24hLabel.textContent = this.getUIText('stats_last_24h');
+            }
+        }
+
+        // Note: Don't call renderStatistics() here to avoid unnecessary API calls
+        // renderStatistics() will be called separately when needed
+    }
+
+    /**
+     * F4: Render statistics dashboard panel
+     * Fetches statistics from /doctor/statistics API and updates the panel
+     */
+    async renderStatistics() {
+        try {
+            // Fetch statistics from API
+            const result = await DoctorAPI.getStatistics(30);
+
+            if (!result.success) {
+                console.warn('[ComfyUI-Doctor] Failed to load statistics:', result.error);
+                const container = document.getElementById('doctor-stats-content');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="stats-empty" style="text-align:center;padding:20px;color:#ff6b6b;">
+                            ⚠️ ${this.getUIText('stats_error')}
+                        </div>
+                     `;
+                }
+                return;
+            }
+
+            const stats = result.statistics;
+
+            // Update stat cards
+            const totalEl = document.getElementById('stats-total');
+            const last24hEl = document.getElementById('stats-24h');
+
+            if (totalEl) totalEl.textContent = stats.total_errors || 0;
+            if (last24hEl) last24hEl.textContent = stats.trend?.last_24h || 0;
+
+            // Update resolution rate (inject if missing)
+            let resolvedEl = document.getElementById('stats-resolved-count');
+
+            if (!resolvedEl) {
+                const topPatternsEl = document.getElementById('doctor-top-patterns');
+                if (topPatternsEl) {
+                    const resolutionDiv = document.createElement('div');
+                    resolutionDiv.style.cssText = "margin-bottom:15px;padding:8px;background:#222;border-radius:4px;";
+                    resolutionDiv.innerHTML = `
+                        <h5 style="margin:0 0 8px 0;font-size:11px;color:#aaa;">${this.getUIText('stats_resolution_rate')}</h5>
+                        <div style="display:flex;justify-content:space-between;font-size:11px;">
+                            <span style="color:#4caf50;">✔ ${this.getUIText('stats_resolved')}: <strong id="stats-resolved-count">0</strong></span>
+                            <span style="color:#ff9800;">⚠ ${this.getUIText('stats_unresolved')}: <strong id="stats-unresolved-count">0</strong></span>
+                            <span style="color:#888;">⚪ ${this.getUIText('stats_ignored')}: <strong id="stats-ignored-count">0</strong></span>
+                        </div>
+                    `;
+                    topPatternsEl.parentNode.insertBefore(resolutionDiv, topPatternsEl);
+
+                    // Re-fetch element
+                    resolvedEl = document.getElementById('stats-resolved-count');
+                }
+            }
+
+            const unresolvedEl = document.getElementById('stats-unresolved-count');
+            const ignoredEl = document.getElementById('stats-ignored-count');
+
+            if (resolvedEl) resolvedEl.textContent = stats.resolution_rate?.resolved || 0;
+            if (unresolvedEl) unresolvedEl.textContent = stats.resolution_rate?.unresolved || 0;
+            if (ignoredEl) ignoredEl.textContent = stats.resolution_rate?.ignored || 0;
+
+            // Render top patterns
+            const topPatternsEl = document.getElementById('doctor-top-patterns');
+            if (topPatternsEl) {
+                if (stats.top_patterns && stats.top_patterns.length > 0) {
+                    let html = `<h5>🔥 ${this.getUIText('stats_top_patterns') || 'Top Error Patterns'}</h5>`;
+                    stats.top_patterns.forEach(p => {
+                        const displayName = this.formatPatternName(p.pattern_id);
+                        html += `
+                            <div class="pattern-item">
+                                <span class="pattern-name">${this.escapeHtml(displayName)}</span>
+                                <span class="pattern-count">${p.count}</span>
+                            </div>
+                        `;
+                    });
+                    topPatternsEl.innerHTML = html;
+                } else {
+                    topPatternsEl.innerHTML = `
+                        <h5>🔥 ${this.getUIText('stats_top_patterns') || 'Top Error Patterns'}</h5>
+                        <div class="stats-empty">${this.getUIText('stats_no_data') || 'No data yet'}</div>
+                    `;
+                }
+            }
+
+            // Render category breakdown
+            const categoriesEl = document.getElementById('doctor-category-breakdown');
+            if (categoriesEl && stats.category_breakdown) {
+                const total = stats.total_errors || 1;
+                const colors = {
+                    'memory': '#f44',
+                    'model_loading': '#ff9800',
+                    'workflow': '#2196f3',
+                    'framework': '#9c27b0',
+                    'generic': '#607d8b'
+                };
+
+                let html = `<h5>📁 ${this.getUIText('stats_categories') || 'Categories'}</h5>`;
+
+                Object.entries(stats.category_breakdown).forEach(([category, count]) => {
+                    const percent = Math.round((count / total) * 100);
+                    const color = colors[category] || '#888';
+                    const labelKey = `category_${category}`;
+                    const label = this.getUIText(labelKey) || category.replace('_', ' ');
+
+                    html += `
+                        <div class="category-bar">
+                            <div class="bar-label">
+                                <span>${this.escapeHtml(label)}</span>
+                                <span>${count} (${percent}%)</span>
+                            </div>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: ${percent}%; background: ${color};"></div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                categoriesEl.innerHTML = html;
+            }
+
+            console.log('[ComfyUI-Doctor] Statistics rendered:', stats);
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to render statistics:', error);
+        }
+    }
+
+    /**
+     * F4: Format pattern ID to human-readable name
+     * "cuda_oom_classic" -> "CUDA OOM"
+     */
+    formatPatternName(patternId) {
+        if (!patternId) return 'Unknown';
+
+        // Convert snake_case to Title Case
+        return patternId
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, l => l.toUpperCase())
+            .replace(/Oom/g, 'OOM')
+            .replace(/Cuda/g, 'CUDA')
+            .replace(/Vae/g, 'VAE')
+            .replace(/Llm/g, 'LLM');
     }
 
     createStyles() {

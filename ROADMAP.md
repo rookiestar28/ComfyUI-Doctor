@@ -15,6 +15,7 @@ graph TD
     B --> F[config.py]
     B --> G[nodes.py]
     B --> H[pattern_loader.py]
+    B --> HH[statistics.py]
 
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
@@ -45,6 +46,8 @@ graph TD
     X --> AE["API: /doctor/provider_defaults"]
     X --> AF["API: /doctor/ui_text"]
     X --> AG["API: /doctor/chat"]
+    X --> AGS["API: /doctor/statistics"]
+    X --> AGM["API: /doctor/mark_resolved"]
 
     AH[web/doctor.js] --> AI[Settings Registration]
     AJ[web/doctor_ui.js] --> AK[Sidebar Panel]
@@ -76,11 +79,13 @@ graph TD
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
 | `config.py` | 65 | Config management: dataclass + JSON persistence |
 | `nodes.py` | 179 | Smart Debug Node: deep data inspection |
+| `statistics.py` | 155 | Error statistics calculator: pattern frequency, category breakdown, trends |
+| `history_store.py` | 195 | Error history persistence with pattern metadata (F4 enhanced) |
 | `patterns/builtin/core.json` | - | 22 builtin error patterns (PyTorch, CUDA, Memory, etc.) |
 | `patterns/community/*.json` | - | 35 community patterns (ControlNet, LoRA, VAE, AnimateDiff, IPAdapter, FaceRestore, Misc) |
 | `web/doctor.js` | 600+ | ComfyUI settings panel integration, sidebar UI initialization |
 | `web/doctor_ui.js` | 1400+ | Sidebar UI, error cards, AI analysis trigger, i18n integration |
-| `web/doctor_api.js` | 207 | API wrapper layer with streaming support |
+| `web/doctor_api.js` | 260+ | API wrapper layer with streaming support, statistics API |
 | `web/doctor_chat.js` | 600+ | Multi-turn chat interface, SSE streaming, markdown rendering |
 | `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
@@ -188,12 +193,22 @@ graph TD
 *Sorted by priority (High → Low):*
 
 - [ ] **R12**: Smart Token Budget Management - 🟡 Medium ⚠️ *Use dev branch*
-  - Dynamic context pruning based on error type
-  - Filter `pip list` to packages mentioned in error (torch → keep torch/cuda/xformers only)
-  - Collapse repetitive stack frames (keep first 5 + last 5, omit middle)
-  - Configurable token budget per provider (GPT-4: 8K, Claude: 100K)
-  - Real-time token estimation with `tiktoken` library
-  - **Cost impact**: 50-67% token reduction, saving $40 per 1000 analyses (GPT-4)
+  - **Core Strategy**: Implement `WorkflowPruner` service class for intelligent context reduction
+  - **Workflow Pruning**:
+    - Graph-based dependency tracking using BFS (Breadth-First Search)
+    - Trace upstream nodes from error node (configurable max_depth: 4, max_nodes: 20)
+    - Support both ComfyUI API format and UI-saved format
+    - Remove irrelevant branches (e.g., Note nodes, unrelated Image Save)
+  - **Smart pip list filtering**:
+    - Core package whitelist (torch, numpy, transformers, etc.)
+    - Keyword extraction from error message
+    - Fallback to top 50 packages if filtering too aggressive
+  - **Stack frame collapsing**: Keep first 5 + last 5, omit middle repetitive frames
+  - **Configurable token budget** per provider (GPT-4: 8K, Claude: 100K)
+  - **Real-time token estimation** with `tiktoken` library
+  - **Cost impact**: 60-80% token reduction, saving $40-60 per 1000 analyses (GPT-4)
+  - **Implementation**: Complete code available in `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
+  - **Integration**: Add as `services/workflow_pruner.py`, call from `analyzer.py`
   - **Prerequisite**: Works best with A6 Pipeline architecture
   - **Note**: Requires A/B testing to ensure analysis accuracy ≥ 95%
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
@@ -232,10 +247,16 @@ graph TD
   - **Prerequisite**: T8 (pattern validation CI) recommended
   - **Implementation**: `.planning/260103-Phase_4B-STAGE3_IMPLEMENTATION_RECORD.md`
 - [ ] **F6**: Multi-LLM provider quick switch - 🟡 Medium ⚠️ *Use dev branch*
-- [ ] **F4**: Error statistics dashboard - 🟡 Medium ⚠️ *Use dev branch*
-  - Track error frequency to identify Top 10 most common issues
-  - Data-driven prioritization for offline pattern expansion
-  - Display statistics in sidebar UI
+- [x] **F4**: Error statistics dashboard - 🟡 Medium ✅ *Completed (2026-01-04)*
+  - ✅ Track error frequency with pattern metadata (pattern_id, category, priority)
+  - ✅ Top 5 most common error patterns with category breakdown
+  - ✅ Time-based trend analysis (24h/7d/30d)
+  - ✅ Resolution tracking (resolved/unresolved/ignored)
+  - ✅ Collapsible statistics panel in sidebar UI
+  - ✅ Full i18n support (9 languages, 17 translation keys)
+  - **New files**: `statistics.py` (StatisticsCalculator class)
+  - **API endpoints**: `/doctor/statistics`, `/doctor/mark_resolved`
+  - **Implementation**: `.planning/260104-F4_STATISTICS_RECORD.md`
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [x] **F2**: Hot-reload error patterns from external JSON/YAML - 🟡 Medium ✅ *Completed (2026-01-03)*
   - **Priority upgraded** from Low → Medium (enables community ecosystem)
@@ -259,27 +280,49 @@ graph TD
 *Sorted by complexity and priority (High → Low):*
 
 - [ ] **A6**: Refactor analyzer.py to Plugin-based Pipeline - 🔴 High ⚠️ *Use dev branch*
-  - **Stage 1**: Sanitizer (PII removal, implements S6)
-  - **Stage 2**: PatternMatcher (built-in patterns + community plugins)
-  - **Stage 3**: ContextEnhancer (node context extraction)
-  - **Stage 4**: LLMContextBuilder (token optimization, implements R12)
-  - **Plugin Registry**: Allow community to register custom error matchers
-  - **Example plugins**: Reactor face-swap errors, ControlNet-specific issues
-  - **Benefits**: Single Responsibility Principle, testable stages, extensible without core changes
+  - **Architecture**: Transform monolithic analyzer into composable pipeline stages
+  - **Pipeline Stages**:
+    - **Stage 1**: Sanitizer (PII removal, implements S6)
+    - **Stage 2**: PatternMatcher (built-in patterns + community plugins)
+    - **Stage 3**: ContextEnhancer (node context extraction)
+    - **Stage 4**: LLMContextBuilder (token optimization, implements R12)
+  - **Plugin System**:
+    - Python Plugin API for community contributions
+    - Register custom error matchers beyond regex patterns
+    - Enable logic-based checks (e.g., filesystem validation for model paths)
+    - **Example plugins**: Reactor face-swap errors, ControlNet-specific issues, custom node validators
+  - **Benefits**:
+    - Single Responsibility Principle (each stage testable in isolation)
+    - Extensible without core code changes
+    - Community can contribute logic, not just JSON rules
+    - Gradual performance optimization per stage
   - **Migration strategy**: Incremental with adapter pattern, keep old code paths initially
   - **Foundation for**: S6, R12, F7, and future community ecosystem
+  - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A7**: Frontend Architecture Modernization (Preact Migration) - 🟡 Medium ⚠️ *Use dev branch*
-  - **Problem**: v2.0 Chat Interface will create state management complexity with Vanilla JS
-  - **Solution**: Migrate to Preact (3KB, React-like, TypeScript-friendly)
-  - **Strategy**: Incremental migration (coexist with Vanilla JS)
+  - **Problem**: v2.0 Chat Interface creates state management complexity with Vanilla JS
+  - **Solution**: "Island Architecture" - Preact (3KB) for complex components, keep Vanilla JS for simple UI
+  - **Migration Strategy**:
+    - **Phase 1**: Keep existing `doctor_ui.js` for settings panel (Vanilla JS)
+    - **Phase 2**: Migrate Chat Interface to Preact component mounted in sidebar DOM
+    - **Phase 3**: Gradually wrap other complex UI in Preact islands as needed
+  - **Technical Approach**:
+    - Use ESM CDN for Preact (no build step, aligns with ComfyUI extension patterns)
+    - Preact Signals for reactive state management (replaces manual DOM manipulation)
+    - Coexistence: Vanilla JS and Preact can run side-by-side
   - **Benefits**:
-    - No manual DOM updates (eliminates `.innerHTML` calls)
-    - Component reusability (MessageItem, ChatInterface)
-    - Easy testing (render components in isolation)
-    - Preact Signals for reactive state management
-  - **Why Preact**: Already used in ComfyUI, no build step required (ESM CDN), low learning curve
-  - **Trigger**: BEFORE v2.0 Chat Interface development begins
-  - **Foundation for**: v2.0, v3.0 multi-workspace features
+    - **No manual DOM updates** (eliminates error-prone `.innerHTML` calls)
+    - **Component reusability** (MessageItem, ChatInterface, StreamingIndicator)
+    - **Easier testing** (render components in isolation with Playwright)
+    - **Better maintainability** for SSE streaming and real-time updates
+  - **Why Preact**:
+    - Already used in ComfyUI core (proven compatibility)
+    - No build step required (ESM CDN: `https://esm.sh/preact`)
+    - Low learning curve (React-like API)
+    - Tiny footprint (3KB gzipped)
+  - **Trigger**: BEFORE v2.0 Chat Interface expansion begins
+  - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
+  - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low ✅ *Completed (Phase 3A)*
@@ -334,6 +377,7 @@ graph TD
     # Run specific test file
     npx playwright test tests/e2e/specs/settings.spec.js
     ```
+
     </details>
   - **Implementation Record**: `.planning/260103-T2_playwright_test_infrastructure.md`
   - **Foundation for**: CI/CD integration, UI regression detection
@@ -508,7 +552,7 @@ graph TD
 **UX Enhancements**:
 
 - [ ] **F6** Multi-LLM provider quick switch
-- [ ] **F4** Statistics dashboard
+- [x] **F4** Statistics dashboard
 - [ ] **R6-R7** Network reliability improvements
 - [ ] **T2-T5** Comprehensive testing suite
 
@@ -856,12 +900,22 @@ graph TD
 *按優先級排序（高 → 低）：*
 
 - [ ] **R12**: 智慧 Token 預算管理 - 🟡 Medium ⚠️ *使用 dev branch*
-  - 根據錯誤類型動態剪裁上下文
-  - 過濾 `pip list` 至錯誤相關套件（torch → 僅保留 torch/cuda/xformers）
-  - 摺疊重複堆疊幀（保留前 5 + 後 5，省略中間）
-  - 每個 Provider 可配置 Token 預算（GPT-4: 8K，Claude: 100K）
-  - 使用 `tiktoken` 庫進行即時 Token 估算
-  - **成本影響**：50-67% Token 減少，每 1000 次分析節省 $40（GPT-4）
+  - **核心策略**：實作 `WorkflowPruner` 服務類別進行智慧上下文縮減
+  - **工作流程剪裁**：
+    - 使用 BFS（廣度優先搜尋）進行圖論依賴追蹤
+    - 從錯誤節點向上追溯（可配置 max_depth: 4, max_nodes: 20）
+    - 支援 ComfyUI API 格式與 UI 保存格式
+    - 移除無關分支（例如 Note 節點、無關的 Image Save）
+  - **智慧 pip list 過濾**：
+    - 核心套件白名單（torch、numpy、transformers 等）
+    - 從錯誤訊息提取關鍵字
+    - 若過濾過於激進則回退至前 50 個套件
+  - **堆疊幀摺疊**：保留前 5 + 後 5，省略中間重複幀
+  - **可配置 Token 預算**（每個 Provider）（GPT-4: 8K，Claude: 100K）
+  - **即時 Token 估算**（使用 `tiktoken` 庫）
+  - **成本影響**：60-80% Token 減少，每 1000 次分析節省 $40-60（GPT-4）
+  - **實作**：完整代碼見 `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
+  - **整合方式**：新增為 `services/workflow_pruner.py`，從 `analyzer.py` 呼叫
   - **前提條件**：搭配 A6 Pipeline 架構效果最佳
   - **注意**：需 A/B 測試確保分析準確度 ≥ 95%
 - [ ] **R5**: 前端錯誤邊界 - 🟡 Medium ⚠️ *使用 dev branch*
@@ -900,10 +954,16 @@ graph TD
   - **前提條件**：建議先完成 T8（pattern 驗證 CI）
   - **實作記錄**：`.planning/260103-I18N_COMPLETION_RECORD.md`
 - [ ] **F6**: 多 LLM Provider 快速切換 - 🟡 Medium ⚠️ *使用 dev branch*
-- [ ] **F4**: 錯誤統計儀表板 - 🟡 Medium ⚠️ *使用 dev branch*
-  - 追蹤錯誤頻率以識別 Top 10 最常見問題
-  - 數據驅動的離線模式擴充優先級排序
-  - 在側邊欄 UI 顯示統計數據
+- [x] **F4**: 錯誤統計儀表板 - 🟡 Medium ✅ *已完成 (2026-01-04)*
+  - ✅ 追蹤錯誤頻率並記錄 pattern metadata（pattern_id、category、priority）
+  - ✅ Top 5 最常見錯誤模式與類別分布
+  - ✅ 時間趨勢分析（24h/7d/30d）
+  - ✅ 解決狀態追蹤（resolved/unresolved/ignored）
+  - ✅ 側邊欄可收合統計面板
+  - ✅ 完整 i18n 支援（9 種語言，17 個翻譯鍵值）
+  - **新增檔案**：`statistics.py`（StatisticsCalculator 類別）
+  - **API 端點**：`/doctor/statistics`、`/doctor/mark_resolved`
+  - **實作記錄**：`.planning/260104-F4_STATISTICS_RECORD.md`
 - [ ] **F5**: 節點健康評分 - 🟢 Low
 - [x] **F2**: 錯誤模式熱更新（從外部 JSON/YAML 載入） - 🟡 Medium ✅ *已完成 (2026-01-03)*
   - **優先級升級** 從 Low → Medium（啟用社群生態系統）
@@ -927,27 +987,49 @@ graph TD
 *按複雜度與優先級排序（高 → 低）：*
 
 - [ ] **A6**: 重構 analyzer.py 為插件式 Pipeline - 🔴 High ⚠️ *使用 dev branch*
-  - **階段 1**：Sanitizer（PII 移除，實作 S6）
-  - **階段 2**：PatternMatcher（內建模式 + 社群插件）
-  - **階段 3**：ContextEnhancer（節點上下文擷取）
-  - **階段 4**：LLMContextBuilder（Token 優化，實作 R12）
-  - **插件註冊中心**：允許社群註冊自訂錯誤匹配器
-  - **插件範例**：Reactor 人臉交換錯誤、ControlNet 特定問題
-  - **優勢**：單一職責原則、可測試階段、不改核心即可擴展
+  - **架構**：將單體式分析器轉換為可組合的 Pipeline 階段
+  - **Pipeline 階段**：
+    - **階段 1**：Sanitizer（PII 移除，實作 S6）
+    - **階段 2**：PatternMatcher（內建模式 + 社群插件）
+    - **階段 3**：ContextEnhancer（節點上下文擷取）
+    - **階段 4**：LLMContextBuilder（Token 優化，實作 R12）
+  - **插件系統**：
+    - 社群可貢獻 Python Plugin API
+    - 註冊自訂錯誤匹配器（超越 Regex 模式）
+    - 啟用邏輯檢查（例如檔案系統模型路徑驗證）
+    - **插件範例**：Reactor 人臉交換錯誤、ControlNet 特定問題、自訂節點驗證器
+  - **優勢**：
+    - 單一職責原則（每個階段可獨立測試）
+    - 不改核心程式碼即可擴展
+    - 社群可貢獻邏輯，而非僅 JSON 規則
+    - 各階段漸進式性能優化
   - **遷移策略**：漸進式搭配轉接器模式，初期保留舊程式碼路徑
   - **基礎支撐**：S6、R12、F7 及未來社群生態系統
+  - **設計參考**：參見 `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A7**: 前端架構現代化（Preact 遷移） - 🟡 Medium ⚠️ *使用 dev branch*
-  - **問題**：v2.0 Chat Interface 將使 Vanilla JS 狀態管理複雜化
-  - **解決方案**：遷移至 Preact（3KB、React-like、TypeScript 友好）
-  - **策略**：漸進式遷移（與 Vanilla JS 共存）
+  - **問題**：v2.0 Chat Interface 使 Vanilla JS 狀態管理複雜化
+  - **解決方案**：「島嶼架構」- 複雜組件用 Preact（3KB），簡單 UI 保留 Vanilla JS
+  - **遷移策略**：
+    - **階段 1**：保留現有 `doctor_ui.js` 處理設定面板（Vanilla JS）
+    - **階段 2**：將 Chat Interface 遷移為掛載在側邊欄 DOM 的 Preact 組件
+    - **階段 3**：視需要漸進式將其他複雜 UI 封裝為 Preact islands
+  - **技術方法**：
+    - 使用 ESM CDN 載入 Preact（無需 build step，符合 ComfyUI 擴充套件模式）
+    - Preact Signals 響應式狀態管理（取代手動 DOM 操作）
+    - 共存：Vanilla JS 與 Preact 可並行運行
   - **優勢**：
-    - 無需手動 DOM 更新（消除 `.innerHTML` 呼叫）
-    - 組件可重用性（MessageItem、ChatInterface）
-    - 易於測試（隔離渲染組件）
-    - Preact Signals 響應式狀態管理
-  - **為何選 Preact**：ComfyUI 已部分使用、無需 build step（ESM CDN）、學習曲線低
-  - **觸發時機**：v2.0 Chat Interface 開發之前
-  - **基礎支撐**：v2.0、v3.0 多工作區功能
+    - **無需手動 DOM 更新**（消除容易出錯的 `.innerHTML` 呼叫）
+    - **組件可重用性**（MessageItem、ChatInterface、StreamingIndicator）
+    - **更易測試**（使用 Playwright 隔離渲染組件）
+    - **更易維護** SSE 串流與即時更新
+  - **為何選 Preact**：
+    - ComfyUI 核心已部分使用（已驗證相容性）
+    - 無需 build step（ESM CDN: `https://esm.sh/preact`）
+    - 學習曲線低（React-like API）
+    - 極小體積（gzipped 後僅 3KB）
+  - **觸發時機**：v2.0 Chat Interface 擴充開發之前
+  - **基礎支撐**：v2.0 進階聊天功能、v3.0 多工作區功能
+  - **設計參考**：參見 `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A5**: 建立 LLMProvider Protocol 統一介面 - 🟡 Medium ⚠️ *使用 dev branch*
 - [ ] **A4**: NodeContext 改為 frozen dataclass + 驗證 - 🟡 Medium ⚠️ *使用 dev branch*
 - [x] **A1**: py.typed + mypy 配置 - 🟢 Low ✅ *已於 Phase 3A 完成*
@@ -1002,6 +1084,7 @@ graph TD
     # 執行特定測試檔案
     npx playwright test tests/e2e/specs/settings.spec.js
     ```
+
     </details>
   - **實作記錄**：`.planning/260103-T2_playwright_test_infrastructure.md`
   - **基礎支撐**：CI/CD 整合、UI 回歸檢測
@@ -1176,7 +1259,7 @@ graph TD
 **UX 增強**:
 
 - [ ] **F6** 多 LLM Provider 快速切換
-- [ ] **F4** 統計儀表板
+- [x] **F4** 統計儀表板
 - [ ] **R6-R7** 網路可靠性改進
 - [ ] **T3-T5** 其他測試套件
 

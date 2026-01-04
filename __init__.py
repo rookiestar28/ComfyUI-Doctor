@@ -1932,6 +1932,105 @@ try:
                 "models": [],
                 "message": f"Error: {str(e)}"
             })
+    
+    # ---- F4: Statistics Dashboard API Endpoints ----
+    
+    @server.PromptServer.instance.routes.get("/doctor/statistics")
+    async def api_get_statistics(request):
+        """
+        API endpoint to get error statistics for dashboard.
+        
+        Query params: ?time_range_days=30 (default: 30)
+        
+        Returns: {
+            "success": bool,
+            "statistics": {
+                "total_errors": int,
+                "pattern_frequency": {pattern_id: count},
+                "category_breakdown": {category: count},
+                "top_patterns": [{pattern_id, count, category}],
+                "resolution_rate": {resolved, unresolved, ignored},
+                "trend": {last_24h, last_7d, last_30d}
+            }
+        }
+        """
+        try:
+            from .statistics import StatisticsCalculator
+            
+            time_range_days = int(request.query.get("time_range_days", 30))
+            
+            # Get history from SmartLogger
+            history = get_analysis_history()
+            
+            # Calculate statistics
+            statistics = StatisticsCalculator.calculate(history, time_range_days)
+            
+            logger.info(f"Statistics calculated: total_errors={statistics['total_errors']}, time_range={time_range_days}d")
+            
+            return web.json_response({
+                "success": True,
+                "statistics": statistics
+            })
+        except Exception as e:
+            logger.error(f"Statistics API error: {str(e)}")
+            return web.json_response({
+                "success": False,
+                "error": str(e),
+                "statistics": {
+                    "total_errors": 0,
+                    "pattern_frequency": {},
+                    "category_breakdown": {},
+                    "top_patterns": [],
+                    "resolution_rate": {"resolved": 0, "unresolved": 0, "ignored": 0},
+                    "trend": {"last_24h": 0, "last_7d": 0, "last_30d": 0}
+                }
+            })
+    
+    @server.PromptServer.instance.routes.post("/doctor/mark_resolved")
+    async def api_mark_error_resolved(request):
+        """
+        API endpoint to mark an error as resolved/unresolved/ignored.
+        
+        Body: {
+            "timestamp": "2026-01-04T12:00:00",
+            "status": "resolved"|"unresolved"|"ignored"
+        }
+        
+        Returns: {"success": bool, "message": str}
+        """
+        try:
+            data = await request.json()
+            timestamp = data.get("timestamp")
+            status = data.get("status", "resolved")
+            
+            if not timestamp:
+                return web.json_response({"success": False, "message": "Missing timestamp"}, status=400)
+            
+            if status not in ["resolved", "unresolved", "ignored"]:
+                return web.json_response({"success": False, "message": "Invalid status"}, status=400)
+            
+            # Update history entry in SmartLogger's history store
+            # Note: This requires access to the history store's internal list
+            from .logger import _smart_logger
+            if _smart_logger and hasattr(_smart_logger, '_history_store'):
+                store = _smart_logger._history_store
+                # Find and update the entry by timestamp
+                with store._lock:
+                    store._load()
+                    for entry in store._history:
+                        if entry.timestamp == timestamp:
+                            entry.resolution_status = status
+                            break
+                    store._save()
+                
+                logger.info(f"Error marked as {status}: {timestamp}")
+                return web.json_response({"success": True, "message": f"Error marked as {status}"})
+            else:
+                return web.json_response({"success": False, "message": "History store not available"}, status=500)
+                
+        except Exception as e:
+            logger.error(f"Mark resolved API error: {str(e)}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
         
     print("[ComfyUI-Doctor] 🌐 API Hooks registered:")
     print("  - GET  /debugger/last_analysis")
@@ -1942,6 +2041,8 @@ try:
     print("  - POST /doctor/chat (SSE streaming)")
     print("  - POST /doctor/verify_key")
     print("  - POST /doctor/list_models")
+    print("  - GET  /doctor/statistics (F4)")
+    print("  - POST /doctor/mark_resolved (F4)")
     print("\n")
     print("💬 Questions? Updates? Suggestions and Contributions are welcome!")
     print("⭐ Give us a Star on GitHub - it's always good for the Doctor's health! 💝")
