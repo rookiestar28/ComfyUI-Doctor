@@ -350,6 +350,7 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
    - 從下拉選單中選擇模型（自動從您的提供商 API 取得）
    - 點擊 🔄 重新整理按鈕可重新載入可用模型
    - 或勾選「手動輸入模型名稱」以輸入自訂模型名稱
+5. **Privacy Mode (隱私模式)**：選擇雲端 AI 服務的 PII 淨化等級（詳見下方[設定 (Settings)](#設定-settings) 章節中的「10. Privacy Mode」說明）
 
 ### 使用 AI 分析
 
@@ -428,6 +429,27 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 - **手動輸入模式**：勾選「手動輸入模型名稱」以手動輸入自訂模型名稱（例如：`gpt-4o`、`deepseek-chat`、`llama3.1:8b`）。
 - 當您變更提供商或點擊重新整理時，模型會自動從所選提供商的 API 取得。
 - 對於本地 LLM（Ollama/LMStudio），下拉選單會顯示所有本地可用的模型。
+
+### 10. Privacy Mode (隱私模式)
+
+**功能**：設定發送至雲端 AI 服務時的 PII (個人識別資訊) 淨化等級。
+**選項**：
+
+- **None (無)**：不進行任何淨化 - 建議用於本地 LLM (Ollama、LMStudio)
+- **Basic (基本)** (預設)：標準保護 - 移除使用者路徑、API 金鑰、電子郵件、IP 位址
+- **Strict (嚴格)**：最高隱私保護 - 在 Basic 基礎上額外移除 IPv6、SSH 指紋等
+
+**用途**：使用雲端 LLM 時建議開啟至少 Basic 等級,以保護個人資訊不被傳送至第三方服務。企業用戶建議使用 Strict 等級以符合合規要求。
+
+**淨化內容範例** (Basic 等級):
+
+- ✅ Windows 使用者路徑: `C:\Users\john\file.py` → `<USER_PATH>\file.py`
+- ✅ Linux/macOS 家目錄: `/home/alice/test.py` → `<USER_HOME>/test.py`
+- ✅ API 金鑰: `sk-abc123...` → `<API_KEY>`
+- ✅ 電子郵件: `user@example.com` → `<EMAIL>`
+- ✅ 私有 IP: `192.168.1.1` → `<PRIVATE_IP>`
+
+**GDPR 合規性**：此功能支援 GDPR 第 25 條（資料保護設計原則），建議企業部署時啟用。
 
 ---
 
@@ -574,9 +596,20 @@ ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
   "traceback_timeout_seconds": 5.0,  // Traceback 逾時秒數
   "history_size": 20,             // 錯誤歷史記錄數量
   "default_language": "zh_TW",    // 預設語系
-  "enable_api": true              // 啟用 API 端點
+  "enable_api": true,             // 啟用 API 端點
+  "privacy_mode": "basic"         // 隱私模式: "none"、"basic" (預設)、"strict"
 }
 ```
+
+**參數說明**：
+
+- `max_log_files`: 最多保留幾個日誌檔案
+- `buffer_limit`: Traceback 緩衝區大小（行數）
+- `traceback_timeout_seconds`: Traceback 逾時秒數
+- `history_size`: 錯誤歷史記錄數量
+- `default_language`: 預設語系
+- `enable_api`: 啟用 API 端點
+- `privacy_mode`: PII 淨化等級 - `"none"`、`"basic"` (預設) 或 `"strict"` (詳見上方隱私模式說明)
 
 ## 支援的錯誤模式
 

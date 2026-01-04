@@ -351,6 +351,7 @@ Configure AI analysis in the **Doctor Sidebar** → **Settings** panel:
    - Select a model from the dropdown list (automatically populated from your provider's API)
    - Click the 🔄 refresh button to reload available models
    - Or check "Enter model name manually" to type a custom model name
+5. **Privacy Mode**: Select PII sanitization level for cloud AI services (see [Privacy Mode (PII Sanitization)](#privacy-mode-pii-sanitization) section below for details)
 
 ### Using AI Analysis
 
@@ -607,7 +608,8 @@ Create `config.json` to customize behavior:
   "traceback_timeout_seconds": 5.0,
   "history_size": 20,
   "default_language": "zh_TW",
-  "enable_api": true
+  "enable_api": true,
+  "privacy_mode": "basic"
 }
 ```
 
@@ -619,6 +621,7 @@ Create `config.json` to customize behavior:
 - `history_size`: Number of errors to keep in history
 - `default_language`: Default suggestion language
 - `enable_api`: Enable API endpoints
+- `privacy_mode`: PII sanitization level - `"none"`, `"basic"` (default), or `"strict"` (see Privacy Mode section above)
 
 ---
 
