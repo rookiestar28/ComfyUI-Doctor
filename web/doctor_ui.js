@@ -897,6 +897,24 @@ export class DoctorUI {
             }
         }
 
+        // Update resolution rate section title
+        const resolutionTitle = document.querySelector('#doctor-stats-content .resolution-section > h4');
+        if (resolutionTitle) {
+            resolutionTitle.textContent = this.getUIText('stats_resolution_rate');
+        }
+
+        // Update top patterns section title
+        const patternsTitle = document.querySelector('#doctor-stats-content .patterns-section > h4');
+        if (patternsTitle) {
+            patternsTitle.textContent = `🔥 ${this.getUIText('stats_top_patterns')}`;
+        }
+
+        // Update categories section title
+        const categoriesTitle = document.querySelector('#doctor-stats-content .categories-section > h4');
+        if (categoriesTitle) {
+            categoriesTitle.textContent = `📊 ${this.getUIText('stats_categories')}`;
+        }
+
         // Note: Don't call renderStatistics() here to avoid unnecessary API calls
         // renderStatistics() will be called separately when needed
     }

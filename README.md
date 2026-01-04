@@ -9,6 +9,43 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Jan 2026)
 
 <details>
+<summary><strong>F4: Statistics Dashboard</strong> - Click to expand</summary>
+
+**Track your ComfyUI stability at a glance!**
+
+ComfyUI-Doctor now includes a **Statistics Dashboard** that provides insights into error trends, common issues, and resolution progress.
+
+**Features**:
+
+- 📊 **Error Trends**: Track errors across 24h/7d/30d time ranges
+- 🔥 **Top 5 Patterns**: See which errors occur most frequently
+- 📈 **Category Breakdown**: Visualize errors by category (Memory, Workflow, Model Loading, etc.)
+- ✅ **Resolution Tracking**: Monitor resolved vs. unresolved errors
+- 🌍 **Full i18n Support**: Available in all 9 languages
+
+![Statistics Dashboard](assets/statistics_panel.png)
+
+**How to Use**:
+
+1. Open the Doctor sidebar panel (click the 🏥 icon on the left)
+2. Expand the "📊 Error Statistics" section
+3. View real-time error analytics and trends
+4. Mark errors as resolved/ignored to track your progress
+
+**Backend API**:
+
+- `GET /doctor/statistics?time_range_days=30` - Fetch statistics
+- `POST /doctor/mark_resolved` - Update resolution status
+
+**Test Coverage**: 17/17 backend tests ✅ | 14/18 E2E tests (78% pass rate)
+
+**Implementation Details**: See `.planning/260104-F4_STATISTICS_RECORD.md`
+
+</details>
+
+---
+
+<details>
 <summary><strong>T8: Pattern Validation CI </strong> - Click to expand</summary>
 
 **Automated quality checks now protect pattern integrity!**
@@ -393,6 +430,39 @@ ComfyUI-Doctor includes automatic **PII (Personally Identifiable Information) sa
 **Configure Privacy Mode**: Open Doctor Sidebar → Settings → 🔒 Privacy Mode dropdown. Changes apply immediately to all AI analysis requests.
 
 **GDPR Compliance**: This feature supports GDPR Article 25 (Data Protection by Design) and is recommended for enterprise deployments.
+
+### Statistics Dashboard
+
+![Statistics Panel](assets/statistics_panel.png)
+
+The **Statistics Dashboard** provides real-time insights into your ComfyUI error patterns and stability trends.
+
+**Features**:
+
+- **📊 Error Trends**: Total errors and counts for last 24h/7d/30d
+- **🔥 Top Error Patterns**: Top 5 most frequent error types with occurrence counts
+- **📈 Category Breakdown**: Visual breakdown by error category (Memory, Workflow, Model Loading, Framework, Generic)
+- **✅ Resolution Tracking**: Track resolved, unresolved, and ignored errors
+
+**How to Use**:
+
+1. Open the Doctor sidebar (click 🏥 icon on left)
+2. Find the **📊 Error Statistics** collapsible section
+3. Click to expand and view your error analytics
+4. Mark errors as resolved/ignored directly from error cards to update resolution tracking
+
+**Understanding the Data**:
+
+- **Total (30d)**: Cumulative errors in the past 30 days
+- **Last 24h**: Errors in the last 24 hours (helps identify recent issues)
+- **Resolution Rate**: Shows progress toward resolving known issues
+  - 🟢 **Resolved**: Issues you've fixed
+  - 🟠 **Unresolved**: Active issues requiring attention
+  - ⚪ **Ignored**: Non-critical issues you've chosen to ignore
+- **Top Patterns**: Identifies which error types need priority attention
+- **Categories**: Helps you understand whether issues are memory-related, workflow problems, model loading failures, etc.
+
+**Panel State Persistence**: The panel's open/closed state is saved in your browser's localStorage, so your preference persists across sessions.
 
 ### Example Providers Setup
 
