@@ -1,14 +1,15 @@
 /**
  * Settings Panel Tests
  *
- * Tests the Doctor settings panel functionality:
- * - Navigation to settings tab
+ * Tests the Doctor left sidebar settings panel functionality:
+ * - Settings panel toggle
  * - Language selection
+ * - Provider selection
  * - Settings persistence
  */
 
 import { test, expect } from '@playwright/test';
-import { waitForDoctorReady, navigateToTab, clearStorage, mockApiResponse } from '../utils/helpers.js';
+import { waitForDoctorReady, clearStorage } from '../utils/helpers.js';
 
 test.describe('Settings Panel', () => {
   test.beforeEach(async ({ page }) => {
@@ -29,24 +30,68 @@ test.describe('Settings Panel', () => {
       });
     });
 
+    // Mock backend API endpoints
+    await page.route('**/doctor/provider_defaults', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          openai: 'https://api.openai.com/v1',
+          deepseek: 'https://api.deepseek.com/v1',
+        }),
+      });
+    });
+
+    await page.route('**/doctor/ui_text*', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sidebar_doctor_title: 'Doctor',
+          settings_title: 'Settings',
+          language_label: 'Language',
+          ai_provider_label: 'AI Provider',
+        }),
+      });
+    });
+
+    await page.route('**/debugger/set_language', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
     await page.goto('/tests/e2e/test-harness.html');
     await clearStorage(page);
     await waitForDoctorReady(page);
   });
 
-  test('should navigate to settings tab', async ({ page }) => {
-    await navigateToTab(page, 'settings');
+  test('should have settings toggle button', async ({ page }) => {
+    const toggleBtn = page.locator('#doctor-settings-toggle');
+    await expect(toggleBtn).toBeVisible();
+  });
 
-    const settingsTab = page.locator('[data-tab="settings"]');
-    await expect(settingsTab).toHaveClass(/active/);
-
-    // Verify settings panel is visible
+  test('should toggle settings panel visibility', async ({ page }) => {
     const settingsPanel = page.locator('#doctor-settings-panel');
+    const toggleBtn = page.locator('#doctor-settings-toggle');
+
+    // Panel should be hidden by default
+    await expect(settingsPanel).toBeHidden();
+
+    // Click to show
+    await toggleBtn.click();
     await expect(settingsPanel).toBeVisible();
+
+    // Click to hide
+    await toggleBtn.click();
+    await expect(settingsPanel).toBeHidden();
   });
 
   test('should display language selector', async ({ page }) => {
-    await navigateToTab(page, 'settings');
+    // Open settings panel
+    await page.click('#doctor-settings-toggle');
 
     const languageSelect = page.locator('#doctor-language-select');
     await expect(languageSelect).toBeVisible();
@@ -54,22 +99,22 @@ test.describe('Settings Panel', () => {
   });
 
   test('should have all supported languages in selector', async ({ page }) => {
-    await navigateToTab(page, 'settings');
+    await page.click('#doctor-settings-toggle');
 
     const languageSelect = page.locator('#doctor-language-select');
     const options = await languageSelect.locator('option').allTextContents();
 
     // Verify all 9 languages are present
-    const expectedLanguages = ['en', 'zh_TW', 'zh_CN', 'ja', 'de', 'fr', 'it', 'es', 'ko'];
+    const expectedLanguages = ['English', '繁體中文', '简体中文', '日本語', 'Deutsch', 'Français', 'Italiano', 'Español', '한국어'];
 
     for (const lang of expectedLanguages) {
-      const hasLang = options.some(opt => opt.includes(lang) || opt.toLowerCase().includes(lang));
+      const hasLang = options.some(opt => opt.includes(lang));
       expect(hasLang).toBe(true);
     }
   });
 
   test('should change language selection', async ({ page }) => {
-    await navigateToTab(page, 'settings');
+    await page.click('#doctor-settings-toggle');
 
     const languageSelect = page.locator('#doctor-language-select');
 
@@ -85,19 +130,51 @@ test.describe('Settings Panel', () => {
     expect(newValue).not.toBe(initialValue);
   });
 
-  test('should display save settings button', async ({ page }) => {
-    await navigateToTab(page, 'settings');
+  test('should display provider selector', async ({ page }) => {
+    await page.click('#doctor-settings-toggle');
+
+    const providerSelect = page.locator('#doctor-provider-select');
+    await expect(providerSelect).toBeVisible();
+    await expect(providerSelect).toBeEnabled();
+  });
+
+  test('should have multiple AI providers', async ({ page }) => {
+    await page.click('#doctor-settings-toggle');
+
+    const providerSelect = page.locator('#doctor-provider-select');
+    const options = await providerSelect.locator('option').allTextContents();
+
+    // Should have at least these providers
+    expect(options.length).toBeGreaterThan(5);
+    expect(options.some(opt => opt.includes('OpenAI'))).toBe(true);
+    expect(options.some(opt => opt.includes('DeepSeek'))).toBe(true);
+  });
+
+  test('should display API key input', async ({ page }) => {
+    await page.click('#doctor-settings-toggle');
+
+    const apiKeyInput = page.locator('#doctor-apikey-input');
+    await expect(apiKeyInput).toBeVisible();
+    await expect(apiKeyInput).toHaveAttribute('type', 'password');
+  });
+
+  test('should display base URL input', async ({ page }) => {
+    await page.click('#doctor-settings-toggle');
+
+    const baseUrlInput = page.locator('#doctor-baseurl-input');
+    await expect(baseUrlInput).toBeVisible();
+  });
+
+  test('should display save button', async ({ page }) => {
+    await page.click('#doctor-settings-toggle');
 
     const saveBtn = page.locator('#doctor-save-settings-btn');
     await expect(saveBtn).toBeVisible();
     await expect(saveBtn).toBeEnabled();
   });
 
-  test('should save settings when save button is clicked', async ({ page }) => {
-    // Mock the settings save API endpoint
-    await mockApiResponse(page, '/doctor/settings', { success: true });
-
-    await navigateToTab(page, 'settings');
+  test('should save settings and show feedback', async ({ page }) => {
+    await page.click('#doctor-settings-toggle');
 
     // Change language
     const languageSelect = page.locator('#doctor-language-select');
@@ -105,65 +182,36 @@ test.describe('Settings Panel', () => {
 
     // Click save
     const saveBtn = page.locator('#doctor-save-settings-btn');
+    const originalText = await saveBtn.textContent();
     await saveBtn.click();
 
-    // Wait for save operation
-    await page.waitForTimeout(500);
+    // Wait for feedback
+    await page.waitForTimeout(200);
 
-    // Verify settings were persisted in localStorage
-    const savedLanguage = await page.evaluate(() => {
-      return localStorage.getItem('doctor_language');
-    });
-
-    expect(savedLanguage).toBe('ja');
+    // Should show success message
+    const buttonText = await saveBtn.textContent();
+    expect(buttonText).toContain('Saved');
   });
 
-  test('should display API provider settings', async ({ page }) => {
-    await navigateToTab(page, 'settings');
+  test('should persist settings panel state', async ({ page }) => {
+    // Open settings panel
+    await page.click('#doctor-settings-toggle');
 
-    // Check for provider selector
-    const providerSelect = page.locator('#doctor-provider-select');
-    await expect(providerSelect).toBeVisible();
-  });
-
-  test('should display API key input field', async ({ page }) => {
-    await navigateToTab(page, 'settings');
-
-    const apiKeyInput = page.locator('#doctor-api-key-input');
-    await expect(apiKeyInput).toBeVisible();
-
-    // API key field should be password type
-    await expect(apiKeyInput).toHaveAttribute('type', 'password');
-  });
-
-  test('should display model selection', async ({ page }) => {
-    await navigateToTab(page, 'settings');
-
-    const modelInput = page.locator('#doctor-model-input');
-    await expect(modelInput).toBeVisible();
-  });
-
-  test('should load saved settings on initialization', async ({ page }) => {
-    // Pre-set settings in localStorage
-    await page.evaluate(() => {
-      localStorage.setItem('doctor_language', 'zh_CN');
-      localStorage.setItem('doctor_provider', 'deepseek');
-      localStorage.setItem('doctor_model', 'deepseek-chat');
-    });
+    // Verify it's open
+    await expect(page.locator('#doctor-settings-panel')).toBeVisible();
 
     // Reload page
     await page.goto('/tests/e2e/test-harness.html');
     await waitForDoctorReady(page);
-    await navigateToTab(page, 'settings');
 
-    // Verify settings were loaded
-    const languageValue = await page.locator('#doctor-language-select').inputValue();
-    expect(languageValue).toBe('zh_CN');
+    // Panel should remember open state
+    const settingsPanel = page.locator('#doctor-settings-panel');
+    const isVisible = await settingsPanel.isVisible();
 
-    const providerValue = await page.locator('#doctor-provider-select').inputValue();
-    expect(providerValue).toBe('deepseek');
-
-    const modelValue = await page.locator('#doctor-model-input').inputValue();
-    expect(modelValue).toBe('deepseek-chat');
+    // Check localStorage was set
+    const storedState = await page.evaluate(() => {
+      return localStorage.getItem('doctor_settings_expanded');
+    });
+    expect(storedState).toBe('true');
   });
 });

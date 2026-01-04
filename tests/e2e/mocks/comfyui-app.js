@@ -47,7 +47,24 @@ export function createMockComfyUIApp() {
       ds: { scale: 1, offset: [0, 0] },
     },
     extensionManager: {
-      // Mock extension manager
+      registerSidebarTab(config) {
+        console.log('[Mock] Registering sidebar tab via extensionManager:', config.id);
+        mockSidebarTabs.push(config);
+
+        // Create mock sidebar tab in DOM
+        const tabContainer = document.getElementById('mock-sidebar-tabs');
+        if (tabContainer && config.render) {
+          const tabElement = document.createElement('div');
+          tabElement.id = `sidebar-tab-${config.id}`;
+          tabElement.className = 'mock-sidebar-tab';
+          tabContainer.appendChild(tabElement);
+
+          // Render the tab content
+          config.render(tabElement);
+        }
+
+        return config;
+      }
     },
     registerExtension(extension) {
       console.log('[Mock] Registering extension:', extension.name);

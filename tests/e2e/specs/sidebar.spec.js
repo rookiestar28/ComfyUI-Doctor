@@ -1,16 +1,16 @@
 /**
  * Sidebar UI Tests
  *
- * Tests the Doctor sidebar's basic functionality:
- * - Opening and closing
- * - Toggle button behavior
- * - Initial state
+ * Tests the Doctor right panel and chat interface:
+ * - Messages area
+ * - Input controls
+ * - Error context display
  */
 
 import { test, expect } from '@playwright/test';
-import { waitForDoctorReady, openDoctorSidebar, closeDoctorSidebar, clearStorage } from '../utils/helpers.js';
+import { waitForDoctorReady, clearStorage } from '../utils/helpers.js';
 
-test.describe('Doctor Sidebar', () => {
+test.describe('Doctor Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
     // Mock the ComfyUI modules that doctor.js tries to import
     await page.route('**/scripts/app.js', route => {
@@ -29,6 +29,42 @@ test.describe('Doctor Sidebar', () => {
       });
     });
 
+    // Mock backend API endpoints
+    await page.route('**/doctor/provider_defaults', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      });
+    });
+
+    await page.route('**/doctor/ui_text*', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sidebar_doctor_title: 'Doctor',
+          no_errors: 'No errors detected',
+        }),
+      });
+    });
+
+    await page.route('**/debugger/set_language', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true }),
+      });
+    });
+
+    await page.route('**/debugger/last_analysis', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      });
+    });
+
     // Navigate to test harness first
     await page.goto('/tests/e2e/test-harness.html');
 
@@ -39,107 +75,61 @@ test.describe('Doctor Sidebar', () => {
     await waitForDoctorReady(page);
   });
 
-  test('should have a toggle button visible', async ({ page }) => {
-    const toggleBtn = page.locator('#doctor-toggle-btn');
-
-    await expect(toggleBtn).toBeVisible();
-    await expect(toggleBtn).toBeEnabled();
+  test('should display messages area', async ({ page }) => {
+    const messages = page.locator('#doctor-messages');
+    await expect(messages).toBeVisible();
   });
 
-  test('should start with sidebar closed by default', async ({ page }) => {
-    const sidebar = page.locator('#doctor-sidebar');
+  test('should display default no errors message', async ({ page }) => {
+    const messages = page.locator('#doctor-messages');
+    const content = await messages.textContent();
 
-    // Sidebar should not be visible initially
-    const isVisible = await sidebar.isVisible().catch(() => false);
-    expect(isVisible).toBe(false);
+    // Should show "no errors" or similar message
+    expect(content?.toLowerCase()).toContain('no error');
   });
 
-  test('should open sidebar when toggle button is clicked', async ({ page }) => {
-    const toggleBtn = page.locator('#doctor-toggle-btn');
-    const sidebar = page.locator('#doctor-sidebar');
-
-    // Click toggle button
-    await toggleBtn.click();
-
-    // Sidebar should become visible
-    await expect(sidebar).toBeVisible({ timeout: 5000 });
-
-    // Verify sidebar has expected content
-    await expect(sidebar).toContainText('ComfyUI Doctor');
+  test('should have input textarea', async ({ page }) => {
+    const input = page.locator('#doctor-input');
+    await expect(input).toBeVisible();
+    await expect(input).toBeEnabled();
   });
 
-  test('should close sidebar when toggle button is clicked again', async ({ page }) => {
-    const toggleBtn = page.locator('#doctor-toggle-btn');
-    const sidebar = page.locator('#doctor-sidebar');
-
-    // Open sidebar
-    await toggleBtn.click();
-    await expect(sidebar).toBeVisible();
-
-    // Close sidebar
-    await toggleBtn.click();
-
-    // Sidebar should be hidden
-    await expect(sidebar).not.toBeVisible();
+  test('should have send button', async ({ page }) => {
+    const sendBtn = page.locator('#doctor-send-btn');
+    await expect(sendBtn).toBeVisible();
+    await expect(sendBtn).toBeEnabled();
   });
 
-  test('should toggle sidebar multiple times correctly', async ({ page }) => {
-    const toggleBtn = page.locator('#doctor-toggle-btn');
-    const sidebar = page.locator('#doctor-sidebar');
-
-    // Test multiple open/close cycles
-    for (let i = 0; i < 3; i++) {
-      // Open
-      await toggleBtn.click();
-      await expect(sidebar).toBeVisible();
-
-      // Close
-      await toggleBtn.click();
-      await expect(sidebar).not.toBeVisible();
-    }
+  test('should have clear button', async ({ page }) => {
+    const clearBtn = page.locator('#doctor-clear-btn');
+    await expect(clearBtn).toBeVisible();
+    await expect(clearBtn).toBeEnabled();
   });
 
-  test('should display all three tabs when sidebar is open', async ({ page }) => {
-    await openDoctorSidebar(page);
+  test('should allow typing in input field', async ({ page }) => {
+    const input = page.locator('#doctor-input');
 
-    // Check for tab buttons
-    const errorsTab = page.locator('[data-tab="errors"]');
-    const chatTab = page.locator('[data-tab="chat"]');
-    const settingsTab = page.locator('[data-tab="settings"]');
+    await input.fill('Test message');
+    const value = await input.inputValue();
 
-    await expect(errorsTab).toBeVisible();
-    await expect(chatTab).toBeVisible();
-    await expect(settingsTab).toBeVisible();
+    expect(value).toBe('Test message');
   });
 
-  test('should have "errors" tab active by default', async ({ page }) => {
-    await openDoctorSidebar(page);
+  test('should display error context area', async ({ page }) => {
+    const errorContext = page.locator('#doctor-error-context');
 
-    const errorsTab = page.locator('[data-tab="errors"]');
-
-    // Errors tab should have "active" class
-    await expect(errorsTab).toHaveClass(/active/);
+    // Error context should exist but be hidden by default
+    const count = await errorContext.count();
+    expect(count).toBeGreaterThan(0);
   });
 
-  test('should persist sidebar state in localStorage', async ({ page }) => {
-    // Open sidebar
-    await openDoctorSidebar(page);
+  test('should have Doctor title in header', async ({ page }) => {
+    // Check for Doctor title icon in the sidebar header
+    const header = page.locator('#mock-sidebar-tabs');
+    const headerText = await header.textContent();
 
-    // Check localStorage
-    const isOpen = await page.evaluate(() => {
-      return localStorage.getItem('doctor_sidebar_open') === 'true';
-    });
-
-    expect(isOpen).toBe(true);
-
-    // Close sidebar
-    await closeDoctorSidebar(page);
-
-    // Check localStorage again
-    const isClosed = await page.evaluate(() => {
-      return localStorage.getItem('doctor_sidebar_open') === 'false';
-    });
-
-    expect(isClosed).toBe(true);
+    // The header should contain either "Doctor" or the hospital emoji
+    const hasTitle = headerText.includes('Doctor') || headerText.includes('🏥');
+    expect(hasTitle).toBe(true);
   });
 });

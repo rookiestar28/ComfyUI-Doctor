@@ -54,6 +54,14 @@ graph TD
     AO[web/doctor_api.js] --> AP[Fetch Wrapper]
     AQ[web/doctor_chat.js] --> AR[Chat Interface]
     AQ --> AS[SSE Streaming]
+
+    AT[tests/e2e/] --> AU[Playwright Test Suite]
+    AU --> AV[test-harness.html]
+    AU --> AW[mocks/comfyui-app.js]
+    AU --> AX[specs/settings.spec.js - 12 tests]
+    AU --> AY[specs/sidebar.spec.js - 8 tests]
+    AV --> AH
+    AV --> AJ
 ```
 
 ### 1.2 Module Overview
@@ -74,6 +82,11 @@ graph TD
 | `web/doctor_ui.js` | 1400+ | Sidebar UI, error cards, AI analysis trigger, i18n integration |
 | `web/doctor_api.js` | 207 | API wrapper layer with streaming support |
 | `web/doctor_chat.js` | 600+ | Multi-turn chat interface, SSE streaming, markdown rendering |
+| `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
+| `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
+| `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (12 tests): toggle, selectors, inputs, persistence |
+| `tests/e2e/specs/sidebar.spec.js` | 135 | Chat interface tests (8 tests): messages, input, buttons, error context |
+| `playwright.config.js` | 89 | Playwright configuration for E2E tests |
 
 ---
 
@@ -293,7 +306,37 @@ graph TD
   - **Foundation for**: Community pattern contributions
   - **Limitation**: Does NOT test if patterns match real errors (community feedback + hot-reload for fixes)
   - **Implementation Record**: `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
-- [ ] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium ⚠️ *Use dev branch*
+- [x] **T2**: Frontend interaction tests (Playwright) - 🟡 Medium ✅ *Completed (2026-01-04)*
+  - **Problem**: No automated UI testing for Doctor sidebar settings and chat interface
+  - **Solution**: Playwright end-to-end tests with isolated test harness
+  - **Implementation**:
+    - Test harness loads full Doctor UI without ComfyUI ✅
+    - Mock ComfyUI environment (app, api, extensionManager) ✅
+    - Settings panel tests (12 tests): toggle, language selector, provider selector, inputs ✅
+    - Chat interface tests (8 tests): messages area, input/send/clear buttons, error context ✅
+    - API endpoint mocks for backend calls ✅
+  - **Test Results**: 100% pass rate (20/20 tests)
+  - **Execution time**: ~11 seconds for full test suite
+  - **How to Run Tests**:
+    <details>
+    <summary>Click to expand test commands</summary>
+
+    ```bash
+    # Install dependencies (first time only)
+    npm install
+
+    # Run all tests in headless mode
+    npm test
+
+    # Run tests in UI mode (interactive)
+    npm run test:ui
+
+    # Run specific test file
+    npx playwright test tests/e2e/specs/settings.spec.js
+    ```
+    </details>
+  - **Implementation Record**: `.planning/260103-T2_playwright_test_infrastructure.md`
+  - **Foundation for**: CI/CD integration, UI regression detection
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek, Anthropic) - 🟡 Medium
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
@@ -439,6 +482,16 @@ graph TD
 #### Phase 4C: UX Polish & Analytics
 
 **Priority**: Low-Medium
+
+**Status**: ✅ **T2 Complete** (2026-01-04)
+
+**Completed Tasks**:
+
+- [x] **T2** Frontend Interaction Tests (Playwright) ✅ *Completed (2026-01-04)*
+  - 20 end-to-end tests for Doctor UI (settings panel + chat interface)
+  - 100% pass rate, execution time ~11 seconds
+  - Ready for CI/CD integration
+  - See `.planning/260103-T2_playwright_test_infrastructure.md`
 
 **Pending UI i18n Completion** (from Phase 4B):
 
@@ -669,6 +722,14 @@ graph TD
     AO[web/doctor_api.js] --> AP[Fetch Wrapper]
     AQ[web/doctor_chat.js] --> AR[Chat Interface]
     AQ --> AS[SSE Streaming]
+
+    AT[tests/e2e/] --> AU[Playwright 測試套件]
+    AU --> AV[test-harness.html]
+    AU --> AW[mocks/comfyui-app.js]
+    AU --> AX[specs/settings.spec.js - 12 項測試]
+    AU --> AY[specs/sidebar.spec.js - 8 項測試]
+    AV --> AH
+    AV --> AJ
 ```
 
 ### 1.2 模組功能概覽
@@ -689,6 +750,11 @@ graph TD
 | `web/doctor_ui.js` | 1400+ | Sidebar UI、錯誤卡片、AI 分析觸發、i18n 整合 |
 | `web/doctor_api.js` | 207 | API 封裝層（支援串流） |
 | `web/doctor_chat.js` | 600+ | 多輪聊天介面、SSE 串流、Markdown 渲染 |
+| `tests/e2e/test-harness.html` | 104 | Doctor UI 獨立測試環境（無需 ComfyUI 即可載入完整擴充） |
+| `tests/e2e/mocks/comfyui-app.js` | 155 | 測試用 ComfyUI app/api 物件模擬 |
+| `tests/e2e/specs/settings.spec.js` | 217 | 設定面板測試（12 項）：切換、選擇器、輸入、持久化 |
+| `tests/e2e/specs/sidebar.spec.js` | 135 | 聊天介面測試（8 項）：訊息、輸入、按鈕、錯誤上下文 |
+| `playwright.config.js` | 89 | Playwright E2E 測試配置 |
 
 ---
 
@@ -908,7 +974,37 @@ graph TD
   - **基礎支撐**：社群 pattern 貢獻
   - **限制**：無法測試 patterns 是否匹配真實錯誤（依賴社群回報 + 熱重載修復）
   - **實作記錄**：`.planning/260103-T8_IMPLEMENTATION_RECORD.md`
-- [ ] **T2**: 前端互動測試（Playwright） - 🟡 Medium ⚠️ *使用 dev branch*
+- [x] **T2**: 前端互動測試（Playwright） - 🟡 Medium ✅ *已完成 (2026-01-04)*
+  - **問題**：Doctor 側邊欄設定與聊天介面缺乏自動化 UI 測試
+  - **解決方案**：使用 Playwright 端對端測試，搭配獨立測試環境
+  - **實作**：
+    - 測試環境可載入完整 Doctor UI（無需 ComfyUI）✅
+    - 模擬 ComfyUI 環境（app, api, extensionManager）✅
+    - 設定面板測試（12 項測試）：切換、語言選擇器、Provider 選擇器、輸入欄位 ✅
+    - 聊天介面測試（8 項測試）：訊息區、輸入/傳送/清除按鈕、錯誤上下文 ✅
+    - 後端 API 呼叫的端點模擬 ✅
+  - **測試結果**：100% 通過率（20/20 測試）
+  - **執行時間**：完整測試套件約 11 秒
+  - **執行測試方法**：
+    <details>
+    <summary>點擊展開測試指令</summary>
+
+    ```bash
+    # 安裝依賴（僅首次需要）
+    npm install
+
+    # 在無頭模式下執行所有測試
+    npm test
+
+    # 在 UI 模式下執行測試（互動式）
+    npm run test:ui
+
+    # 執行特定測試檔案
+    npx playwright test tests/e2e/specs/settings.spec.js
+    ```
+    </details>
+  - **實作記錄**：`.planning/260103-T2_playwright_test_infrastructure.md`
+  - **基礎支撐**：CI/CD 整合、UI 回歸檢測
 - [ ] **T5**: 線上 API 整合測試（OpenAI、DeepSeek、Anthropic） - 🟡 Medium
 - [ ] **T3**: 端對端整合測試 - 🟢 Low
 - [ ] **T4**: 壓力測試 - 🟢 Low
@@ -1051,16 +1147,45 @@ graph TD
   - 於 `feature/token-budget` 分支開發
   - **前提條件**：A/B 測試框架
 
-#### Phase 4C: 分析與多提供商
+#### Phase 4C: UX 優化與分析
 
 **優先級**: 低-中
 
-- [ ] **F12** 擴充離線 patterns 至 50+
+**狀態**: ✅ **T2 已完成** (2026-01-04)
+
+**已完成任務**:
+
+- [x] **T2** 前端互動測試（Playwright） ✅ *已完成 (2026-01-04)*
+  - 20 項 Doctor UI 端對端測試（設定面板 + 聊天介面）
+  - 100% 通過率，執行時間約 11 秒
+  - 準備好進行 CI/CD 整合
+  - 參見 `.planning/260103-T2_playwright_test_infrastructure.md`
+
+**待完成的 UI 國際化**（來自 Phase 4B）:
+
+- [ ] **i18n-UI-1**: 完成 zh_CN、ja 的 UI_TEXT 翻譯 - 🟢 Low（各 5 個 keys）
+  - 缺失 keys: `api_key_placeholder`, `enable_doctor_label`, `model_manual_placeholder`, `nodes_count`, `sidebar_config_hint`
+  - 影響：中文/日文使用者的設定面板部分為英文
+  - 預估工作量：10 分鐘
+- [ ] **i18n-UI-2**: 完成 de, fr, it, es, ko 的 UI_TEXT 翻譯 - 🟡 Medium（各 27 個 keys）
+  - 缺失 keys: `ai_provider_label`, `analyze_prompt_label`, `analyzing_error_label`, `api_key_label`, `base_url_label`, `chat_ask_ai_placeholder` 等
+  - 影響：歐洲/韓文使用者的設定面板約 31% 為英文
+  - 預估工作量：1-2 小時（可利用 LLM 翻譯）
+  - **注意**：錯誤診斷功能在所有語言完全正常（58 個 patterns 100% 翻譯）
+
+**UX 增強**:
+
 - [ ] **F6** 多 LLM Provider 快速切換
 - [ ] **F4** 統計儀表板
-- [ ] **F2** Pattern 熱更新（JSON）
 - [ ] **R6-R7** 網路可靠性改進
-- [ ] **T2-T5** 全面測試套件
+- [ ] **T3-T5** 其他測試套件
+
+**聊天介面改進**:
+
+- [ ] Session 持久化（localStorage）
+- [ ] 回應重新生成按鈕
+- [ ] 聊天歷史匯出
+- [ ] 快速操作按鈕（解釋節點、優化工作流）
 
 #### Phase 4D: 技術債務緩解
 
