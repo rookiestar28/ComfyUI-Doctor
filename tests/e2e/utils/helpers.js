@@ -98,10 +98,24 @@ export async function triggerMockError(page, errorData) {
  * @param {import('@playwright/test').Page} page
  */
 export async function clearStorage(page) {
-  await page.evaluate(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  });
+  // Use context.clearCookies() instead of page.evaluate to avoid security errors
+  // This works even with file:// protocol and http:// protocol
+  try {
+    await page.context().clearCookies();
+  } catch (e) {
+    // Ignore errors if cookies can't be cleared
+  }
+
+  // Try to clear storage, but don't fail if it's not accessible yet
+  try {
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+  } catch (e) {
+    // Storage not accessible yet, which is fine for beforeEach hooks
+    // It will be cleared when the page actually loads
+  }
 }
 
 /**

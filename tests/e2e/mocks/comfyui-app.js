@@ -7,22 +7,32 @@
 
 export function createMockComfyUIApp() {
   const mockSettings = new Map();
+  const mockExtensions = [];
+  const mockSidebarTabs = [];
 
-  return {
+  const app = {
     ui: {
       settings: {
         addSetting(config) {
           console.log('[Mock] Adding setting:', config.id);
           mockSettings.set(config.id, config);
+          // Set initial value
+          if (config.defaultValue !== undefined) {
+            mockSettings.get(config.id).value = config.defaultValue;
+          }
           return config;
         },
         getSettingValue(id, defaultValue) {
-          return mockSettings.get(id)?.defaultValue ?? defaultValue;
+          const setting = mockSettings.get(id);
+          return setting?.value ?? setting?.defaultValue ?? defaultValue;
         },
         setSettingValue(id, value) {
           const setting = mockSettings.get(id);
           if (setting) {
-            setting.defaultValue = value;
+            setting.value = value;
+          } else {
+            // Create setting if it doesn't exist
+            mockSettings.set(id, { id, value, defaultValue: value });
           }
         },
       },
@@ -36,7 +46,45 @@ export function createMockComfyUIApp() {
     canvas: {
       ds: { scale: 1, offset: [0, 0] },
     },
+    extensionManager: {
+      // Mock extension manager
+    },
+    registerExtension(extension) {
+      console.log('[Mock] Registering extension:', extension.name);
+      mockExtensions.push(extension);
+      // Call setup immediately for testing
+      if (extension.setup) {
+        setTimeout(() => extension.setup.call(extension), 0);
+      }
+    },
   };
+
+  // Mock sidebar API (for left sidebar tabs)
+  if (typeof window !== 'undefined') {
+    window.comfyAPI = window.comfyAPI || {};
+    window.comfyAPI.sidebarTab = window.comfyAPI.sidebarTab || {
+      addTab(config) {
+        console.log('[Mock] Adding sidebar tab:', config.id);
+        mockSidebarTabs.push(config);
+
+        // Create mock sidebar tab in DOM
+        const tabContainer = document.getElementById('mock-sidebar-tabs');
+        if (tabContainer && config.render) {
+          const tabElement = document.createElement('div');
+          tabElement.id = `sidebar-tab-${config.id}`;
+          tabElement.className = 'mock-sidebar-tab';
+          tabContainer.appendChild(tabElement);
+
+          // Render the tab content
+          config.render(tabElement);
+        }
+
+        return config;
+      },
+    };
+  }
+
+  return app;
 }
 
 export function createMockComfyUIAPI() {

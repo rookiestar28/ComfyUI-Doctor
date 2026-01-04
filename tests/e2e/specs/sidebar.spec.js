@@ -12,11 +12,28 @@ import { waitForDoctorReady, openDoctorSidebar, closeDoctorSidebar, clearStorage
 
 test.describe('Doctor Sidebar', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear storage before each test
-    await clearStorage(page);
+    // Mock the ComfyUI modules that doctor.js tries to import
+    await page.route('**/scripts/app.js', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/javascript',
+        body: 'export const app = window.app;',
+      });
+    });
 
-    // Navigate to test harness
-    await page.goto('/test-harness.html');
+    await page.route('**/scripts/api.js', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/javascript',
+        body: 'export const api = window.api;',
+      });
+    });
+
+    // Navigate to test harness first
+    await page.goto('/tests/e2e/test-harness.html');
+
+    // Clear storage after page loads to avoid security errors
+    await clearStorage(page);
 
     // Wait for Doctor UI to initialize
     await waitForDoctorReady(page);
