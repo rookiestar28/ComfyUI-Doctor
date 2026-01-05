@@ -72,7 +72,7 @@ import { waitForDoctorReady, navigateToTab } from '../utils/helpers.js';
 
 test.describe('My Feature', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/test-harness.html');
+    await page.goto('test-harness.html');
     await waitForDoctorReady(page);
   });
 

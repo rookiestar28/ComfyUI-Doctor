@@ -326,7 +326,7 @@ def test_real_patterns_load():
     # Should have 21 patterns from core.json
     stats = loader.get_stats()
     assert stats["total"] >= 21, f"Expected at least 21 patterns, got {stats['total']}"
-    assert "builtin" in str(stats["sources"]) or "core.json" in str(stats["sources"])
+    assert "core.json" in str(stats["sources"])
 
     print(f"✅ Test 9 passed: Real patterns loaded ({stats['total']} total)")
 

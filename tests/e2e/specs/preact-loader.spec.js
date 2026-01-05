@@ -11,8 +11,25 @@ const { test, expect } = require('@playwright/test');
  */
 test.describe('Preact Loader', () => {
     test.beforeEach(async ({ page }) => {
+        // Mock the ComfyUI modules that doctor.js tries to import
+        await page.route('**/scripts/app.js', route => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/javascript',
+                body: 'export const app = window.app;',
+            });
+        });
+
+        await page.route('**/scripts/api.js', route => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/javascript',
+                body: 'export const api = window.api;',
+            });
+        });
+
         // Navigate to test harness
-        await page.goto('/test-harness.html');
+        await page.goto('test-harness.html');
 
         // Wait for Doctor UI to be ready
         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 10000 });

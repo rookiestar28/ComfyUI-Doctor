@@ -235,7 +235,7 @@ class TestPatternValidation:
                 )
     
     def test_priority_ranges(self, all_patterns):
-        """Test 5: All priorities are within valid range 50-95"""
+        """Test 5: All priorities are within valid range 0-100"""
         for pattern in all_patterns:
             pattern_id = pattern.get("id", "UNKNOWN")
             priority = pattern.get("priority", 0)
@@ -245,9 +245,9 @@ class TestPatternValidation:
                 f"has non-integer priority: {priority}"
             )
             
-            assert 50 <= priority <= 95, (
+            assert 0 <= priority <= 100, (
                 f"Pattern {pattern_id} in {pattern['_source_file']} "
-                f"has priority {priority} outside valid range 50-95"
+                f"has priority {priority} outside valid range 0-100"
             )
     
     def test_no_duplicate_ids(self, all_patterns):

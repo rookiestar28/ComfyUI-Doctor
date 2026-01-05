@@ -63,7 +63,7 @@ test.describe('Settings Panel', () => {
       });
     });
 
-    await page.goto('/tests/e2e/test-harness.html');
+    await page.goto('test-harness.html');
     await clearStorage(page);
     await waitForDoctorReady(page);
   });
@@ -201,7 +201,7 @@ test.describe('Settings Panel', () => {
     await expect(page.locator('#doctor-settings-panel')).toBeVisible();
 
     // Reload page
-    await page.goto('/tests/e2e/test-harness.html');
+    await page.goto('test-harness.html');
     await waitForDoctorReady(page);
 
     // Panel should remember open state

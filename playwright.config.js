@@ -44,7 +44,7 @@ module.exports = defineConfig({
   use: {
     // Base URL for test harness
     // Server runs from project root, so we need the full path to test-harness.html
-    baseURL: 'http://127.0.0.1:3000/tests/e2e',
+    baseURL: 'http://127.0.0.1:3000/tests/e2e/',
 
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
@@ -80,7 +80,7 @@ module.exports = defineConfig({
   // Run local web server before starting tests
   // Serve from project root so that /web/doctor_ui.js paths work correctly
   webServer: {
-    command: 'python -m http.server 3000',
+    command: 'python3 -m http.server 3000',
     port: 3000,
     timeout: 120 * 1000,
     reuseExistingServer: !process.env.CI,

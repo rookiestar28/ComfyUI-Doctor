@@ -191,7 +191,7 @@ test.describe('Statistics Dashboard', () => {
     // Setup all mocks using shared helper
     await setupMocks(page);
 
-    await page.goto('/tests/e2e/test-harness.html');
+    await page.goto('test-harness.html');
     await clearStorage(page);
     await waitForDoctorReady(page);
     await waitForI18nLoaded(page); // Wait for UI text to load

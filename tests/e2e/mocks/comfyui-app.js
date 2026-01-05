@@ -9,6 +9,40 @@ export function createMockComfyUIApp() {
   const mockSettings = new Map();
   const mockExtensions = [];
   const mockSidebarTabs = [];
+  const renderedTabs = new Set();
+
+  function renderSidebarTab(config) {
+    if (!config || renderedTabs.has(config.id)) {
+      return;
+    }
+
+    const tabContainer = document.getElementById('mock-sidebar-tabs');
+    if (tabContainer && config.render) {
+      const tabElement = document.createElement('div');
+      tabElement.id = `sidebar-tab-${config.id}`;
+      tabElement.className = 'mock-sidebar-tab';
+      tabContainer.appendChild(tabElement);
+
+      // Render the tab content
+      config.render(tabElement);
+      renderedTabs.add(config.id);
+    }
+  }
+
+  function scheduleSidebarRender(config) {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (window.__doctorTestReady) {
+      renderSidebarTab(config);
+      return;
+    }
+
+    window.addEventListener('doctor-ready', () => {
+      renderSidebarTab(config);
+    }, { once: true });
+  }
 
   const app = {
     ui: {
@@ -50,18 +84,7 @@ export function createMockComfyUIApp() {
       registerSidebarTab(config) {
         console.log('[Mock] Registering sidebar tab via extensionManager:', config.id);
         mockSidebarTabs.push(config);
-
-        // Create mock sidebar tab in DOM
-        const tabContainer = document.getElementById('mock-sidebar-tabs');
-        if (tabContainer && config.render) {
-          const tabElement = document.createElement('div');
-          tabElement.id = `sidebar-tab-${config.id}`;
-          tabElement.className = 'mock-sidebar-tab';
-          tabContainer.appendChild(tabElement);
-
-          // Render the tab content
-          config.render(tabElement);
-        }
+        scheduleSidebarRender(config);
 
         return config;
       }
@@ -83,18 +106,7 @@ export function createMockComfyUIApp() {
       addTab(config) {
         console.log('[Mock] Adding sidebar tab:', config.id);
         mockSidebarTabs.push(config);
-
-        // Create mock sidebar tab in DOM
-        const tabContainer = document.getElementById('mock-sidebar-tabs');
-        if (tabContainer && config.render) {
-          const tabElement = document.createElement('div');
-          tabElement.id = `sidebar-tab-${config.id}`;
-          tabElement.className = 'mock-sidebar-tab';
-          tabContainer.appendChild(tabElement);
-
-          // Render the tab content
-          config.render(tabElement);
-        }
+        scheduleSidebarRender(config);
 
         return config;
       },

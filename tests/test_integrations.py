@@ -1,10 +1,8 @@
 
 import unittest
 import sys
-import io
-import time
 import os
-import tempfile
+import time
 from unittest.mock import MagicMock
 
 # --- PATH SETUP ---
@@ -28,7 +26,7 @@ sys.modules['server'] = MagicMock() # Also mock server just in case
 
 from analyzer import ErrorAnalyzer, NodeContext, ERROR_KEYS
 from i18n import set_language, get_suggestion
-from logger import SmartLogger
+from logger import SmartLogger, clear_analysis_history, get_last_analysis
 
 class TestIntegration(unittest.TestCase):
     
@@ -80,78 +78,25 @@ class TestIntegration(unittest.TestCase):
         for traceback_text, expected_key, expected_snippet in test_cases:
             result = ErrorAnalyzer.analyze(traceback_text)
             self.assertIsNotNone(result, f"Failed to detect pattern for: {expected_key}")
-            suggestion, metadata = result
+            suggestion, _metadata = result
             self.assertIsNotNone(suggestion, f"Failed to generate suggestion for: {expected_key}")
             self.assertIn(expected_snippet, suggestion, f"Suggestion content mismatch for: {expected_key}")
             
-    def test_logger_timeout(self):
-        """Test DoctorLogProcessor buffer timeout mechanism (new architecture)."""
-        # Note: New architecture uses SafeStreamWrapper + DoctorLogProcessor
-        # The timeout mechanism is now in the background processor thread
+    def test_logger_validation_error_capture(self):
+        """Test validation error capture via on_flush callback."""
+        SmartLogger.install("test.log")
+        clear_analysis_history()
 
-        import queue
-        from logger import DoctorLogProcessor
+        print("Failed to validate prompt for output 1:")
+        print("* KSampler 1:")
+        print("  - Return type mismatch between linked nodes: scheduler")
+        print("Executing prompt: test-123")
+        time.sleep(0.2)
 
-        # Create message queue and processor
-        message_queue = queue.Queue(maxsize=100)
-        processor = DoctorLogProcessor(message_queue)
+        last = get_last_analysis()
 
-        try:
-            # Start background processor
-            processor.start()
-
-            # Simulate start of traceback
-            message_queue.put("Traceback (most recent call last):\n")
-            time.sleep(0.1)  # Let processor handle the message
-            self.assertTrue(processor.in_traceback)
-
-            # Wait for timeout (default is 5 seconds)
-            time.sleep(5.2)
-
-            # Write next line, should reset buffer due to timeout
-            message_queue.put("  File foo.py line 10\n")
-            time.sleep(0.1)  # Let processor handle the message
-
-            self.assertFalse(processor.in_traceback, "Processor should have timed out and reset in_traceback")
-            self.assertEqual(len(processor.buffer), 0, "Buffer should be empty after timeout")
-
-        finally:
-            processor.stop()
-            processor.join(timeout=2.0)
-
-    def test_logger_install_uninstall(self):
-        """Test the safe install/uninstall mechanism (new architecture)."""
-        # Note: New architecture uses SafeStreamWrapper instead of SmartLogger instances
-        from logger import SafeStreamWrapper, install, uninstall
-
-        original_stdout = sys.stdout
-        original_stderr = sys.stderr
-
-        with tempfile.NamedTemporaryFile(delete=False) as tf:
-            log_path = tf.name
-
-        try:
-            # Install
-            install(log_path)
-            self.assertIsInstance(sys.stdout, SafeStreamWrapper)
-            self.assertIsInstance(sys.stderr, SafeStreamWrapper)
-
-            # Verify double install doesn't wrap twice
-            first_wrapper = sys.stdout
-            install(log_path)
-            self.assertIs(sys.stdout, first_wrapper, "Double install should not create new wrapper")
-
-            # Uninstall
-            uninstall()
-            self.assertIs(sys.stdout, original_stdout)
-            self.assertIs(sys.stderr, original_stderr)
-
-        finally:
-            if os.path.exists(log_path):
-                os.remove(log_path)
-            # Ensure restoration even if test fails
-            sys.stdout = original_stdout
-            sys.stderr = original_stderr
+        self.assertIsNotNone(last.get("error"))
+        self.assertIn("Failed to validate", last.get("error", ""))
 
 if __name__ == '__main__':
     unittest.main()

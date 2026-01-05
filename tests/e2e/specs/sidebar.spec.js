@@ -66,7 +66,7 @@ test.describe('Doctor Chat Interface', () => {
     });
 
     // Navigate to test harness first
-    await page.goto('/tests/e2e/test-harness.html');
+    await page.goto('test-harness.html');
 
     // Clear storage after page loads to avoid security errors
     await clearStorage(page);
