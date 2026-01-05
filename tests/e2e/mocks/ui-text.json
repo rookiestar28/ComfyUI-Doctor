@@ -12,6 +12,23 @@
     "language_label": "Language",
     "api_key_label": "API Key",
     "model_label": "Model",
-    "provider_label": "Provider"
+    "provider_label": "Provider",
+    "statistics_title": "Error Statistics",
+    "stats_total_errors": "Total (30d)",
+    "stats_last_24h": "Last 24h",
+    "stats_last_7d": "Last 7d",
+    "stats_last_30d": "Last 30d",
+    "stats_top_patterns": "Top Patterns",
+    "stats_resolution_rate": "Resolution Rate",
+    "stats_categories": "Categories"
+  },
+  "ja": {
+    "sidebar_doctor_title": "ComfyUI Doctor",
+    "tab_errors": "エラー",
+    "tab_chat": "チャット",
+    "tab_settings": "設定",
+    "statistics_title": "エラー統計",
+    "stats_total_errors": "合計 (30日)",
+    "stats_last_24h": "過去24時間"
   }
 }

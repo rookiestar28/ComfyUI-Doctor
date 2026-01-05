@@ -235,7 +235,7 @@ class PatternLoader:
                 if has_groups:
                     return (error_key, match.groups())
                 else:
-                    return (error_key, ())
+                    return (error_key, [])
         return None
     
     def get_pattern_info(self, pattern_id: str) -> Optional[Dict]:

@@ -129,13 +129,34 @@ export function createMockComfyUIAPI() {
     async fetchApi(endpoint, options = {}) {
       console.log(`[Mock API] Fetching: ${endpoint}`);
 
-      // Mock UI text endpoint
-      if (endpoint === '/doctor/ui_text') {
-        const uiText = await fetch('/mocks/ui-text.json').then(r => r.json());
+      // Mock UI text endpoint (used by doctor_ui.js loadUIText)
+      if (endpoint.startsWith('/doctor/ui_text')) {
+        const uiTextData = await fetch('/tests/e2e/mocks/ui-text.json').then(r => r.json());
+        // Extract language from query param, default to 'en'
+        const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+        const lang = urlParams.get('lang') || 'en';
         return {
           ok: true,
           status: 200,
-          json: async () => uiText,
+          json: async () => ({
+            text: uiTextData[lang] || uiTextData.en || {},
+            language: lang
+          }),
+        };
+      }
+
+      // Mock i18n endpoint (used by statistics dashboard and other components)
+      if (endpoint === '/debugger/get_ui_text' || endpoint.startsWith('/debugger/get_ui_text?')) {
+        const uiTextData = await fetch('/tests/e2e/mocks/ui-text.json').then(r => r.json());
+        const urlParams = new URLSearchParams(endpoint.split('?')[1] || '');
+        const lang = urlParams.get('lang') || 'en';
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            text: uiTextData[lang] || uiTextData.en || {},
+            language: lang
+          }),
         };
       }
 

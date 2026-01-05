@@ -210,9 +210,10 @@ class DoctorLogProcessor(threading.Thread):
 
         # P3: Urgent single-line warnings (immediate analysis)
         if "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message:
-            suggestion = ErrorAnalyzer.analyze(message)
+            result = ErrorAnalyzer.analyze(message)
+            suggestion, metadata = result if result else (None, None)
             if suggestion:
-                self._record_analysis(message, suggestion)
+                self._record_analysis(message, suggestion, metadata)
             return
 
         # Detect traceback start
@@ -237,9 +238,10 @@ class DoctorLogProcessor(threading.Thread):
             # Check timeout
             if current_time - self.last_buffer_time > CONFIG.traceback_timeout_seconds:
                 full_traceback = "".join(self.buffer)
-                suggestion = ErrorAnalyzer.analyze(full_traceback)
+                result = ErrorAnalyzer.analyze(full_traceback)
+                suggestion, metadata = result if result else (None, None)
                 if suggestion or "Failed to validate" in full_traceback:
-                    self._record_analysis(full_traceback, suggestion)
+                    self._record_analysis(full_traceback, suggestion, metadata)
                 self.in_traceback = False
                 self.buffer = []
             else:
@@ -250,8 +252,9 @@ class DoctorLogProcessor(threading.Thread):
                 # Validation error completion marker
                 if "Failed to validate prompt for output" in full_traceback:
                     if "Executing prompt:" in message:
-                        suggestion = ErrorAnalyzer.analyze(full_traceback)
-                        self._record_analysis(full_traceback, suggestion)
+                        result = ErrorAnalyzer.analyze(full_traceback)
+                        suggestion, metadata = result if result else (None, None)
+                        self._record_analysis(full_traceback, suggestion, metadata)
                         self.in_traceback = False
                         self.buffer = []
                         return
@@ -259,8 +262,9 @@ class DoctorLogProcessor(threading.Thread):
 
                 # Normal traceback completion
                 if ErrorAnalyzer.is_complete_traceback(full_traceback):
-                    suggestion = ErrorAnalyzer.analyze(full_traceback)
-                    self._record_analysis(full_traceback, suggestion)
+                    result = ErrorAnalyzer.analyze(full_traceback)
+                    suggestion, metadata = result if result else (None, None)
+                    self._record_analysis(full_traceback, suggestion, metadata)
                     self.in_traceback = False
                     self.buffer = []
 
@@ -275,15 +279,21 @@ class DoctorLogProcessor(threading.Thread):
             current_time = time.time()
             if current_time - self.last_buffer_time > CONFIG.traceback_timeout_seconds:
                 full_traceback = "".join(self.buffer)
-                suggestion = ErrorAnalyzer.analyze(full_traceback)
+                result = ErrorAnalyzer.analyze(full_traceback)
+                suggestion, metadata = result if result else (None, None)
                 if suggestion or "Failed to validate" in full_traceback:
-                    self._record_analysis(full_traceback, suggestion)
+                    self._record_analysis(full_traceback, suggestion, metadata)
                 self.in_traceback = False
                 self.buffer = []
 
-    def _record_analysis(self, full_traceback, suggestion):
+    def _record_analysis(self, full_traceback, suggestion, metadata=None):
         """
         Record analysis result (migrated from SmartLogger._record_analysis).
+
+        Args:
+            full_traceback: The full traceback string
+            suggestion: Suggestion text (or None if no match)
+            metadata: Optional metadata dict with pattern info (from F4)
         """
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
         timestamp = datetime.datetime.now().isoformat()

@@ -78,62 +78,74 @@ class TestIntegration(unittest.TestCase):
         ]
 
         for traceback_text, expected_key, expected_snippet in test_cases:
-            suggestion = ErrorAnalyzer.analyze(traceback_text)
-            self.assertIsNotNone(suggestion, f"Failed to detect pattern for: {expected_key}")
+            result = ErrorAnalyzer.analyze(traceback_text)
+            self.assertIsNotNone(result, f"Failed to detect pattern for: {expected_key}")
+            suggestion, metadata = result
+            self.assertIsNotNone(suggestion, f"Failed to generate suggestion for: {expected_key}")
             self.assertIn(expected_snippet, suggestion, f"Suggestion content mismatch for: {expected_key}")
             
     def test_logger_timeout(self):
-        """Test SmartLogger buffer timeout mechanism."""
-        # Create a temp log file
-        with tempfile.NamedTemporaryFile(delete=False) as tf:
-            log_path = tf.name
-        
-        mock_stream = io.StringIO()
-        logger = SmartLogger(log_path, mock_stream)
-        
+        """Test DoctorLogProcessor buffer timeout mechanism (new architecture)."""
+        # Note: New architecture uses SafeStreamWrapper + DoctorLogProcessor
+        # The timeout mechanism is now in the background processor thread
+
+        import queue
+        from logger import DoctorLogProcessor
+
+        # Create message queue and processor
+        message_queue = queue.Queue(maxsize=100)
+        processor = DoctorLogProcessor(message_queue)
+
         try:
+            # Start background processor
+            processor.start()
+
             # Simulate start of traceback
-            logger.write("Traceback (most recent call last):\n")
-            self.assertTrue(logger.in_traceback)
-            
-            # Wait for timeout (simulated manually or by time.sleep if logic depended on system time)
-            # Since our implementation checks time.time(), we can sleep
-            time.sleep(5.1)
-            
+            message_queue.put("Traceback (most recent call last):\n")
+            time.sleep(0.1)  # Let processor handle the message
+            self.assertTrue(processor.in_traceback)
+
+            # Wait for timeout (default is 5 seconds)
+            time.sleep(5.2)
+
             # Write next line, should reset buffer due to timeout
-            logger.write("  File foo.py line 10\n")
-            
-            self.assertFalse(logger.in_traceback, "Logger should have timed out and reset in_traceback")
-            self.assertEqual(len(logger.buffer), 0, "Buffer should be empty after timeout")
-            
+            message_queue.put("  File foo.py line 10\n")
+            time.sleep(0.1)  # Let processor handle the message
+
+            self.assertFalse(processor.in_traceback, "Processor should have timed out and reset in_traceback")
+            self.assertEqual(len(processor.buffer), 0, "Buffer should be empty after timeout")
+
         finally:
-            logger.close()
-            os.remove(log_path)
+            processor.stop()
+            processor.join(timeout=2.0)
 
     def test_logger_install_uninstall(self):
-        """Test the safe install/uninstall mechanism."""
+        """Test the safe install/uninstall mechanism (new architecture)."""
+        # Note: New architecture uses SafeStreamWrapper instead of SmartLogger instances
+        from logger import SafeStreamWrapper, install, uninstall
+
         original_stdout = sys.stdout
         original_stderr = sys.stderr
-        
+
         with tempfile.NamedTemporaryFile(delete=False) as tf:
             log_path = tf.name
-            
+
         try:
             # Install
-            SmartLogger.install(log_path)
-            self.assertIsInstance(sys.stdout, SmartLogger)
-            self.assertIsInstance(sys.stderr, SmartLogger)
-            
+            install(log_path)
+            self.assertIsInstance(sys.stdout, SafeStreamWrapper)
+            self.assertIsInstance(sys.stderr, SafeStreamWrapper)
+
             # Verify double install doesn't wrap twice
             first_wrapper = sys.stdout
-            SmartLogger.install(log_path)
-            self.assertIs(sys.stdout, first_wrapper)
-            
+            install(log_path)
+            self.assertIs(sys.stdout, first_wrapper, "Double install should not create new wrapper")
+
             # Uninstall
-            SmartLogger.uninstall()
+            uninstall()
             self.assertIs(sys.stdout, original_stdout)
             self.assertIs(sys.stderr, original_stderr)
-            
+
         finally:
             if os.path.exists(log_path):
                 os.remove(log_path)

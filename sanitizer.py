@@ -80,6 +80,13 @@ class PIISanitizer:
             r'<API_KEY>'
         ),
 
+        # Username in URLs (http://username:password@host or ssh://username@host)
+        # IMPORTANT: Must come BEFORE email pattern to avoid email sanitizer matching password@domain
+        "url_credentials": (
+            r'://[^:@\s]+(?::[^@\s]+)?@',
+            r'<USER>@'
+        ),
+
         # Email addresses
         "email": (
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
@@ -94,14 +101,8 @@ class PIISanitizer:
 
         # Localhost variants
         "localhost": (
-            r'\b(?:127\.0\.0\.1|localhost|::1)\b',
+            r'\b(?:127\.0\.0\.1|localhost)\b|(?<![0-9a-f])::1(?![0-9a-f:])',
             r'<LOCALHOST>'
-        ),
-
-        # Username in URLs (http://username:password@host or ssh://username@host)
-        "url_credentials": (
-            r'://([^:@\s]+)(?::([^@\s]+))?@',
-            r'://<USER>@'
         ),
     }
 
@@ -115,13 +116,13 @@ class PIISanitizer:
 
         # IPv6 private addresses (fc00::/7, fe80::/10)
         "private_ipv6": (
-            r'\b(?:fc00|fe80):[0-9a-f:]+\b',
+            r'(?:fc00|fe80):[0-9a-f:]+(?:/\d{1,3})?',
             r'<PRIVATE_IPV6>'
         ),
 
         # SSH keys fingerprints
         "ssh_fingerprint": (
-            r'\b(?:SHA256|MD5):[A-Za-z0-9+/=]{32,}\b',
+            r'SHA256:[A-Za-z0-9+/=]{32,}|:(?:[0-9a-f]{2}:){15}[0-9a-f]{2}',
             r'<SSH_FINGERPRINT>'
         ),
     }
