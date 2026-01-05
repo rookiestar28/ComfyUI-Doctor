@@ -217,13 +217,22 @@ The new interactive chat interface provides a conversational debugging experienc
 
 ## Installation
 
+### Option 1: Using ComfyUI-Manager (Recommended)
+
+1. Open ComfyUI and click the **Manager** button in the menu
+2. Select **Install Custom Nodes**
+3. Search for `ComfyUI-Doctor`
+4. Click **Install** and restart ComfyUI
+
+### Option 2: Manual Installation (Git Clone)
+
 1. Navigate to your ComfyUI custom nodes directory:
 
    ```bash
    cd ComfyUI/custom_nodes/
    ```
 
-2. Clone or download this repository:
+2. Clone this repository:
 
    ```bash
    git clone https://github.com/rookiestar28/ComfyUI-Doctor.git

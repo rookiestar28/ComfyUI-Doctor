@@ -218,6 +218,15 @@ ComfyUI 設定面板現在僅顯示啟用/停用切換 - 所有其他設定已�
 
 ## 安裝
 
+### 方式一：使用 ComfyUI-Manager（推薦）
+
+1. 開啟 ComfyUI，點擊選單中的 **Manager** 按鈕
+2. 選擇 **Install Custom Nodes**
+3. 搜尋 `ComfyUI-Doctor`
+4. 點擊 **Install** 並重新啟動 ComfyUI
+
+### 方式二：手動安裝（Git Clone）
+
 1. 進入 ComfyUI 的自訂節點目錄：
 
    ```bash

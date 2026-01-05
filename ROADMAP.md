@@ -1287,11 +1287,13 @@ graph TD
   - OWASP ZAP、Snyk、Semgrep 自動化
   - 手動滲透測試
   - 交付物：安全稽核報告
-- [ ] **A7** 前端架構規劃
-  - 評估 Preact 遷移影響
-  - 設計狀態管理架構
-  - 建立組件遷移檢查清單
-  - **觸發時機**：v2.0 Chat Interface 開發之前
+- [x] **A7** 前端架構規劃 ✅ *已完成 (2026-01-05)*
+  - ✅ 建立 `preact-loader.js` 單實例 CDN 載入器
+  - ✅ 實作 `PREACT_ISLANDS_ENABLED` 功能旗標
+  - ✅ 新增 `chat-island.js` 範例組件與 fallback UI
+  - ✅ Vendor 檔案打包於 `web/lib/` (preact, hooks, signals, htm)
+  - **實作記錄**：`.planning/260105-A7_IMPLEMENTATION_RECORD.md`
+  - **下一階段**：遷移實際 Chat UI 至 Preact island (Phase 5A)
 
 ### Phase 5: 重大重構（未來）
 
@@ -1316,7 +1318,7 @@ graph TD
   - 將聊天介面遷移至 Preact 組件
   - 加入 Preact Signals 響應式狀態管理
   - **前提條件**：完成 v2.0 功能規格
-  - **觸發時機**：Phase 4D 規劃完成後
+  - **觸發時機**：Phase 4D 規劃完成後 ✅ (可開始)
 
 #### Phase 5B: 型別安全與進階功能
 
