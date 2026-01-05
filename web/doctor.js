@@ -6,6 +6,18 @@ import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 import { DoctorUI } from "./doctor_ui.js";
 import { DoctorAPI } from "./doctor_api.js";
+import { isPreactEnabled, loadPreact, getLoadError } from "./preact-loader.js";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A7: PREACT ISLANDS FEATURE FLAG
+// ═══════════════════════════════════════════════════════════════════════════
+// Controls whether Preact-based UI components (islands) are loaded.
+// When disabled, the extension uses pure Vanilla JS fallback UI.
+//
+// How to disable: localStorage.setItem('doctor_preact_disabled', 'true')
+// Last Modified: 2026-01-05 (A7 Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+const PREACT_ISLANDS_ENABLED = localStorage.getItem('doctor_preact_disabled') !== 'true' && isPreactEnabled();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CRITICAL: Frontend Default Configuration
