@@ -642,13 +642,14 @@ graph TD
   - Foundation for S6, R12, F7 integration
   - Enables community plugin ecosystem
   - **Status**: Merged to main after verification
-- [ ] **A7** Preact Migration (Phase 5A)
-  - **Prerequisite**: F13 (Sidebar Tab Refactoring) must be completed first
-  - Migrate Chat tab to Preact `ChatIsland` component
-  - Migrate Stats tab to Preact `StatisticsIsland` component
-  - Add Preact Signals for reactive state management
-  - Settings tab remains Vanilla JS
-  - **Trigger**: After F13 complete
+- [x] **A7** Preact Migration (Phase 5A) ✅ *Completed (2026-01-06)*
+  - **Prerequisite**: F13 (Sidebar Tab Refactoring) completed
+  - ✅ Migrated Chat tab to Preact `ChatIsland` component (SSE streaming, Markdown, dynamic asset loading)
+  - ✅ Migrated Stats tab to Preact `StatisticsIsland` component (data fetching, charts, categories)
+  - ✅ Implemented Vanilla JS fallback for both islands
+  - ✅ E2E Test Results: `sidebar.spec.js` (10/10), `statistics.spec.js` (16/16)
+  - Settings tab remains Vanilla JS (per A7 non-goals)
+  - **Implementation Record**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`
 
 #### Phase 5B: Type Safety & Advanced Features
 
@@ -1390,13 +1391,14 @@ graph TD
   - S6、R12、F7 整合基礎
   - 啟用社群插件生態系統
   - **狀態**：驗證後已合併至 main
-- [ ] **A7** Preact 遷移（Phase 5A）
-  - **前提條件**：須先完成 F13（側邊欄分頁重構）
-  - 將 Chat 分頁遷移至 Preact `ChatIsland` 組件
-  - 將 Stats 分頁遷移至 Preact `StatisticsIsland` 組件
-  - 加入 Preact Signals 響應式狀態管理
-  - Settings 分頁保持 Vanilla JS
-  - **觸發時機**：F13 完成後
+- [x] **A7** Preact 遷移（Phase 5A） ✅ *已完成 (2026-01-06)*
+  - **前提條件**：已完成 F13（側邊欄分頁重構）
+  - ✅ 將 Chat 分頁遷移至 Preact `ChatIsland` 組件（SSE 串流、Markdown、動態資源載入）
+  - ✅ 將 Stats 分頁遷移至 Preact `StatisticsIsland` 組件（資料抓取、圖表、分類）
+  - ✅ 為兩個 Island 實作 Vanilla JS fallback
+  - ✅ E2E 測試結果：`sidebar.spec.js` (10/10)、`statistics.spec.js` (16/16)
+  - Settings 分頁保持 Vanilla JS（依據 A7 非目標）
+  - **實作記錄**：`.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`
 
 #### Phase 5B: 型別安全與進階功能
 

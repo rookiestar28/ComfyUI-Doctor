@@ -262,10 +262,10 @@ export function render(container) {
 
             // Visual Feedback
             const originalText = saveBtn.textContent;
-            saveBtn.textContent = '✅ Saved!';
+            saveBtn.textContent = '✅ Saved, please refresh the UI to apply changes';
             setTimeout(() => {
                 saveBtn.textContent = originalText;
-            }, 2000);
+            }, 4000);
 
         } catch (e) {
             console.error('Failed to save settings:', e);

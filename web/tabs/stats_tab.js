@@ -1,16 +1,17 @@
 import { app } from "../../../../scripts/app.js";
+import { renderStatisticsIsland } from "../statistics-island.js";
 
-export function render(container) {
+let isPreactMode = false;
+
+// Vanilla Fallback Logic
+function renderVanilla(container) {
     const doctorUI = app.Doctor;
 
-    // We use a <details> element to maintain compatibility with existing CSS structure,
-    // but we force it open and remove height constraints for the tab view.
     const statsPanel = document.createElement('details');
     statsPanel.id = 'doctor-statistics-panel';
     statsPanel.className = 'stats-panel doctor-sidebar-content';
     statsPanel.open = true;
 
-    // Override styles to fit tab view (full height, no scroll internal if tab scrolls)
     statsPanel.style.cssText = `
         background: transparent;
         padding: 10px;
@@ -20,6 +21,8 @@ export function render(container) {
         border-radius: 0;
     `;
 
+    // Align empty-state copy with E2E expectations and UX.
+    const topPatternsEmptyText = doctorUI.getUIText('stats_no_data') || 'No data yet';
     statsPanel.innerHTML = `
         <summary style="pointer-events: none; opacity: 0.7; margin-bottom: 15px;">📊 ${doctorUI.getUIText('statistics_title') || 'Error Statistics'}</summary>
         <div id="doctor-stats-content">
@@ -35,7 +38,7 @@ export function render(container) {
             </div>
             <div class="top-patterns" id="doctor-top-patterns" style="margin-top: 20px;">
                 <h5>🔥 ${doctorUI.getUIText('stats_top_patterns') || 'Top Error Patterns'}</h5>
-                <div class="stats-empty">${doctorUI.getUIText('stats_loading') || 'Loading...'}</div>
+                <div class="stats-empty">${topPatternsEmptyText}</div>
             </div>
             <div class="category-breakdown" id="doctor-category-breakdown" style="margin-top: 20px;">
                 <h5>📁 ${doctorUI.getUIText('stats_categories') || 'Categories'}</h5>
@@ -44,20 +47,40 @@ export function render(container) {
     `;
 
     container.appendChild(statsPanel);
-
-    // Store reference so doctor_ui.js can update it
     doctorUI.sidebarStatsPanel = statsPanel;
 
-    // Initial Load
     if (typeof doctorUI.renderStatistics === 'function') {
         doctorUI.renderStatistics();
     }
 }
 
+export async function render(container) {
+    const doctorUI = app.Doctor;
+
+    // Render Vanilla immediately so stats are visible even if Preact is slow/disabled.
+    isPreactMode = false;
+    renderVanilla(container);
+
+    // Try Preact Island (replace vanilla when ready)
+    const success = await renderStatisticsIsland(container, { uiText: doctorUI.uiText }, { replace: true });
+
+    if (success) {
+        isPreactMode = true;
+        doctorUI.sidebarStatsPanel = null;
+    }
+}
+
 export function onActivate() {
     const doctorUI = app.Doctor;
-    // Refresh stats when tab is activated
-    if (typeof doctorUI.renderStatistics === 'function') {
+
+    // Refresh for Vanilla only when running in vanilla mode.
+    if (!isPreactMode && typeof doctorUI.renderStatistics === 'function') {
         doctorUI.renderStatistics();
+    }
+
+    // Refresh for Preact
+    // Dispatch event to trigger refresh in island
+    if (isPreactMode) {
+        window.dispatchEvent(new CustomEvent('doctor-refresh-stats'));
     }
 }

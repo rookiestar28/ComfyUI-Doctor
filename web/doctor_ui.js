@@ -4,6 +4,7 @@
 import { app } from "../../../scripts/app.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { ChatPanel } from "./doctor_chat.js";
+import { doctorContext } from "./doctor_state.js";
 
 /**
  * CRITICAL INITIALIZATION WARNING (Added 2026-01-03)
@@ -286,6 +287,11 @@ export class DoctorUI {
         this.lastErrorData = data;
         // F13: Store analysis metadata for sanitization status display
         this.lastAnalysisMetadata = data.analysis_metadata || null;
+
+        // Keep Preact ChatIsland in sync with new error context.
+        if (doctorContext) {
+            doctorContext.setState({ workflowContext: data });
+        }
 
         this.updateLogCard(data);
 
