@@ -305,6 +305,9 @@ app.registerExtension({
                                 border-radius: 8px;
                                 padding: 12px;
                                 margin: 10px 0;
+                                max-height: 200px;
+                                overflow-y: auto;
+                                flex-shrink: 0;
                             }
                             .doctor-sidebar-content .stats-panel summary {
                                 cursor: pointer;
@@ -787,7 +790,7 @@ app.registerExtension({
                     // ═══════════════════════════════════════════════════════════════
                     const messages = document.createElement('div');
                     messages.id = 'doctor-messages';
-                    messages.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; min-height: 0;';
+                    messages.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; min-height: 150px;';
                     messages.innerHTML = `
                         <div style="text-align: center; padding: 40px 20px; color: #888;">
                             <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
