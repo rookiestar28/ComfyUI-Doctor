@@ -346,9 +346,13 @@ class DoctorLogProcessor(threading.Thread):
 
             output_parts.append("🎯 ERROR LOCATION: " + " | ".join(node_info))
 
-        # Add suggestion
+        # Add suggestion (defensive: ensure suggestion is a string)
         if suggestion:
-            output_parts.append(suggestion)
+            if isinstance(suggestion, str):
+                output_parts.append(suggestion)
+            elif isinstance(suggestion, (tuple, list)) and len(suggestion) > 0:
+                # Handle case where suggestion is accidentally a tuple (e.g., from analyzer)
+                output_parts.append(str(suggestion[0]) if suggestion[0] else "")
 
         output_parts.append(f"{'-'*40}\n")
 

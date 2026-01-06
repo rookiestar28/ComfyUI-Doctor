@@ -16,6 +16,7 @@ graph TD
     B --> G[nodes.py]
     B --> H[pattern_loader.py]
     B --> HH[statistics.py]
+    B --> HH[statistics.py]
 
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
@@ -48,6 +49,8 @@ graph TD
     X --> AG["API: /doctor/chat"]
     X --> AGS["API: /doctor/statistics"]
     X --> AGM["API: /doctor/mark_resolved"]
+    X --> AGS["API: /doctor/statistics"]
+    X --> AGM["API: /doctor/mark_resolved"]
 
     AH[web/doctor.js] --> AI[Settings Registration]
     AJ[web/doctor_ui.js] --> AK[Sidebar Panel]
@@ -63,6 +66,8 @@ graph TD
     AU --> AW[mocks/comfyui-app.js]
     AU --> AX[specs/settings.spec.js - 12 tests]
     AU --> AY[specs/sidebar.spec.js - 8 tests]
+    AU --> AZ[specs/statistics.spec.js - 18 tests]
+    AU --> BA[specs/preact-loader.spec.js - 8 tests]
     AV --> AH
     AV --> AJ
 ```
@@ -91,6 +96,8 @@ graph TD
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
 | `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (12 tests): toggle, selectors, inputs, persistence |
 | `tests/e2e/specs/sidebar.spec.js` | 135 | Chat interface tests (8 tests): messages, input, buttons, error context |
+| `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n |
+| `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (8 tests): module loading, flags, error handling |
 | `playwright.config.js` | 89 | Playwright configuration for E2E tests |
 
 ---
@@ -357,9 +364,11 @@ graph TD
     - Mock ComfyUI environment (app, api, extensionManager) ✅
     - Settings panel tests (12 tests): toggle, language selector, provider selector, inputs ✅
     - Chat interface tests (8 tests): messages area, input/send/clear buttons, error context ✅
+    - Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n ✅
+    - Preact loader tests (8 tests): module loading, flags, error handling ✅
     - API endpoint mocks for backend calls ✅
-  - **Test Results**: 100% pass rate (20/20 tests)
-  - **Execution time**: ~11 seconds for full test suite
+  - **Test Results**: 100% pass rate (46/46 tests)
+  - **Execution time**: ~16 seconds for full test suite (Chromium, 10 workers)
   - **How to Run Tests**:
     <details>
     <summary>Click to expand test commands</summary>
@@ -532,8 +541,8 @@ graph TD
 **Completed Tasks**:
 
 - [x] **T2** Frontend Interaction Tests (Playwright) ✅ *Completed (2026-01-04)*
-  - 20 end-to-end tests for Doctor UI (settings panel + chat interface)
-  - 100% pass rate, execution time ~11 seconds
+  - 46 end-to-end tests for Doctor UI (settings panel, chat interface, statistics dashboard, preact loader)
+  - 100% pass rate, execution time ~16 seconds (Chromium, 10 workers)
   - Ready for CI/CD integration
   - See `.planning/260103-T2_playwright_test_infrastructure.md`
 
@@ -557,7 +566,7 @@ graph TD
   - API: `/doctor/statistics` (GET) and `/doctor/mark_resolved` (POST)
   - Frontend: Collapsible statistics panel in sidebar with error trends, top patterns, category breakdown, and resolution tracking
   - Features: 24h/7d/30d time ranges, Top 5 error patterns, resolution rate tracking (resolved/unresolved/ignored)
-  - Testing: 17/17 backend unit tests passed, 14/18 E2E tests passed (78% pass rate, 4 i18n timing issues in test environment only)
+  - Testing: 17/17 backend unit tests passed; statistics E2E tests 18/18 passed; full Playwright suite 46/46 passed
   - i18n: Fully translated across all 9 languages
   - See `.planning/260104-F4_STATISTICS_RECORD.md` for implementation details
 - [ ] **R6-R7** Network reliability improvements
@@ -781,6 +790,8 @@ graph TD
     AU --> AW[mocks/comfyui-app.js]
     AU --> AX[specs/settings.spec.js - 12 項測試]
     AU --> AY[specs/sidebar.spec.js - 8 項測試]
+    AU --> AZ[specs/statistics.spec.js - 18 項測試]
+    AU --> BA[specs/preact-loader.spec.js - 8 項測試]
     AV --> AH
     AV --> AJ
 ```
@@ -807,6 +818,8 @@ graph TD
 | `tests/e2e/mocks/comfyui-app.js` | 155 | 測試用 ComfyUI app/api 物件模擬 |
 | `tests/e2e/specs/settings.spec.js` | 217 | 設定面板測試（12 項）：切換、選擇器、輸入、持久化 |
 | `tests/e2e/specs/sidebar.spec.js` | 135 | 聊天介面測試（8 項）：訊息、輸入、按鈕、錯誤上下文 |
+| `tests/e2e/specs/statistics.spec.js` | 470+ | 統計儀表板測試（18 項）：面板、卡片、模式、分類、i18n |
+| `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact 載入器測試（8 項）：模組載入、旗標、錯誤處理 |
 | `playwright.config.js` | 89 | Playwright E2E 測試配置 |
 
 ---
@@ -972,6 +985,7 @@ graph TD
   - ✅ 完整 i18n 支援（9 種語言，17 個翻譯鍵值）
   - **新增檔案**：`statistics.py`（StatisticsCalculator 類別）
   - **API 端點**：`/doctor/statistics`、`/doctor/mark_resolved`
+  - **測試**：後端單元測試 17/17；統計 E2E 測試 18/18；Playwright 全套 46/46
   - **實作記錄**：`.planning/260104-F4_STATISTICS_RECORD.md`
 - [ ] **F5**: 節點健康評分 - 🟢 Low
 - [x] **F2**: 錯誤模式熱更新（從外部 JSON/YAML 載入） - 🟡 Medium ✅ *已完成 (2026-01-03)*
@@ -1073,9 +1087,11 @@ graph TD
     - 模擬 ComfyUI 環境（app, api, extensionManager）✅
     - 設定面板測試（12 項測試）：切換、語言選擇器、Provider 選擇器、輸入欄位 ✅
     - 聊天介面測試（8 項測試）：訊息區、輸入/傳送/清除按鈕、錯誤上下文 ✅
+    - 統計儀表板測試（18 項測試）：面板、卡片、模式、分類、i18n ✅
+    - Preact 載入器測試（8 項測試）：模組載入、旗標、錯誤處理 ✅
     - 後端 API 呼叫的端點模擬 ✅
-  - **測試結果**：100% 通過率（20/20 測試）
-  - **執行時間**：完整測試套件約 11 秒
+  - **測試結果**：100% 通過率（46/46 測試）
+  - **執行時間**：完整測試套件約 16 秒（Chromium，10 workers）
   - **執行測試方法**：
     <details>
     <summary>點擊展開測試指令</summary>
@@ -1248,8 +1264,8 @@ graph TD
 **已完成任務**:
 
 - [x] **T2** 前端互動測試（Playwright） ✅ *已完成 (2026-01-04)*
-  - 20 項 Doctor UI 端對端測試（設定面板 + 聊天介面）
-  - 100% 通過率，執行時間約 11 秒
+  - 46 項 Doctor UI 端對端測試（設定面板、聊天介面、統計儀表板、preact loader）
+  - 100% 通過率，執行時間約 16 秒（Chromium，10 workers）
   - 準備好進行 CI/CD 整合
   - 參見 `.planning/260103-T2_playwright_test_infrastructure.md`
 
