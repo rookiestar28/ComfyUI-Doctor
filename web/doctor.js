@@ -440,6 +440,13 @@ app.registerExtension({
                             .doctor-tab-pane {
                                 height: 100%;
                                 display: none;
+                                overflow: hidden;
+                                /* Ensure flex children can fill height */
+                                box-sizing: border-box;
+                            }
+                            .doctor-tab-pane[style*="display: block"] {
+                                display: flex !important;
+                                flex-direction: column;
                             }
                         `;
                         document.head.appendChild(tabStyle);
@@ -488,49 +495,68 @@ app.registerExtension({
                     // 3. Tab Content
                     const content = document.createElement('div');
                     content.id = 'doctor-tab-content';
-                    content.style.cssText = 'flex: 1; overflow: hidden; position: relative;';
+                    // ⚠️ CRITICAL: min-height: 0 required for nested flex scrolling
+                    content.style.cssText = 'flex: 1 1 0; overflow: hidden; position: relative; min-height: 0;';
                     container.appendChild(content);
 
                     // Register Tabs
                     const getTxt = (k, f) => app.Doctor.getUIText(k) || f;
 
-                    tabRegistry.register({
-                        id: 'chat',
-                        icon: '💬',
-                        label: getTxt('tab_chat', 'Chat'),
-                        order: 10,
-                        render: ChatTab.render,
-                        onActivate: ChatTab.onActivate
-                    });
+                    try {
+                        console.log("[ComfyUI-Doctor] Registering Chat tab...");
+                        tabRegistry.register({
+                            id: 'chat',
+                            icon: '💬',
+                            label: getTxt('tab_chat', 'Chat'),
+                            order: 10,
+                            render: ChatTab.render,
+                            onActivate: ChatTab.onActivate
+                        });
 
-                    tabRegistry.register({
-                        id: 'stats',
-                        icon: '📊',
-                        label: getTxt('tab_stats', 'Stats'),
-                        order: 20,
-                        render: StatsTab.render,
-                        onActivate: StatsTab.onActivate
-                    });
+                        console.log("[ComfyUI-Doctor] Registering Stats tab...");
+                        tabRegistry.register({
+                            id: 'stats',
+                            icon: '📊',
+                            label: getTxt('tab_stats', 'Stats'),
+                            order: 20,
+                            render: StatsTab.render,
+                            onActivate: StatsTab.onActivate
+                        });
 
-                    tabRegistry.register({
-                        id: 'settings',
-                        icon: '⚙️',
-                        label: getTxt('tab_settings', 'Settings'),
-                        order: 30,
-                        render: SettingsTab.render
-                    });
+                        console.log("[ComfyUI-Doctor] Registering Settings tab...");
+                        tabRegistry.register({
+                            id: 'settings',
+                            icon: '⚙️',
+                            label: getTxt('tab_settings', 'Settings'),
+                            order: 30,
+                            render: SettingsTab.render
+                        });
 
-                    // Init Manager
-                    const manager = new TabManager(tabRegistry, 'doctor-tab-content', 'doctor-tab-bar');
-                    manager.init();
+                        console.log("[ComfyUI-Doctor] Initializing TabManager...");
+                        // Init Manager - pass DOM elements directly (not IDs)
+                        // ⚠️ CRITICAL: document.getElementById() fails in ComfyUI's Vue context
+                        const manager = new TabManager(tabRegistry, content, tabBar);
+                        manager.init();
+                        console.log("[ComfyUI-Doctor] ✅ TabManager initialized successfully");
 
-                    // Store references
-                    doctorUI.sidebarTabContainer = content;
-                    doctorUI.tabManager = manager;
+                        // Store references
+                        doctorUI.sidebarTabContainer = content;
+                        doctorUI.tabManager = manager;
 
-                    // Update status dot if error exists
-                    if (doctorUI.lastErrorData) {
-                        const statusDot = header.querySelector('#doctor-tab-status');
+                        // Update status dot if error exists
+                        if (doctorUI.lastErrorData) {
+                            const statusDot = header.querySelector('#doctor-tab-status');
+                        }
+                    } catch (tabError) {
+                        console.error("[ComfyUI-Doctor] ❌ Tab initialization failed:", tabError);
+                        // Show error message in sidebar content
+                        content.innerHTML = `
+                            <div style="padding: 20px; color: #ff5555;">
+                                <h4>⚠️ Tab Initialization Error</h4>
+                                <p style="font-size: 12px; white-space: pre-wrap;">${tabError.message}</p>
+                                <p style="font-size: 10px; color: #888;">Check browser console for details</p>
+                            </div>
+                        `;
                     }
                 }
             });

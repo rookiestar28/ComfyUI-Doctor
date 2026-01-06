@@ -1,8 +1,28 @@
+/**
+ * ComfyUI-Doctor Chat Tab Component
+ * Provides AI chat interface within the Doctor sidebar.
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * CRITICAL CSS NOTES (2026-01-06):
+ * ═══════════════════════════════════════════════════════════════
+ * 1. Container MUST use flex: 1; min-height: 0; (not height: 100%)
+ *    because parent .doctor-tab-pane is a flex container.
+ *
+ * 2. Messages area MUST use min-height: 0 for overflow-y: auto
+ *    to work properly in nested flex layouts.
+ *
+ * 3. DO NOT use height: 100% on flex children - use flex: 1 instead.
+ *
+ * See: .planning/260106-F13_SIDEBAR_TAB_REFACTORING_IMPLEMENTATION_RECORD.md
+ * ═══════════════════════════════════════════════════════════════
+ */
 import { app } from "../../../../scripts/app.js";
 
 export function render(container) {
     const doctorUI = app.Doctor;
-    container.style.cssText = 'display: flex; flex-direction: column; height: 100%;';
+    // Container fills parent flex container and uses column layout
+    // ⚠️ Parent .doctor-tab-pane is display: flex, so use flex: 1 not height: 100%
+    container.style.cssText = 'display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;';
 
     // 1. Error Context Area
     // Separator line at bottom to distinguish from messages
@@ -27,9 +47,10 @@ export function render(container) {
     container.appendChild(sanitizationStatus);
 
     // 3. Messages Area (AI Chat)
+    // ⚠️ CRITICAL: min-height: 0 is required for flex child scrolling to work
     const messages = document.createElement('div');
     messages.id = 'doctor-messages';
-    messages.style.cssText = 'flex: 1; overflow-y: auto; padding: 10px; min-height: 150px;';
+    messages.style.cssText = 'flex: 1 1 0; overflow-y: auto; overflow-x: hidden; padding: 10px; min-height: 0;';
 
     // Default Empty State
     messages.innerHTML = `

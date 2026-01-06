@@ -209,6 +209,30 @@ class DoctorLogProcessor(threading.Thread):
         """
         current_time = time.time()
 
+        # ═══════════════════════════════════════════════════════════════
+        # CRITICAL FIX (2026-01-06): Prevent recursive log capture
+        # ═══════════════════════════════════════════════════════════════
+        # BUG: Doctor's own log messages (e.g., "[Doctor] _record_analysis called")
+        #      were being captured by SafeStreamWrapper, and since they contain
+        #      the original error text, they triggered new analysis cycles.
+        #      This caused duplicate suggestions and infinite recursion.
+        #
+        # SOLUTION: Skip any message that contains Doctor's internal log markers.
+        #
+        # ⚠️ DO NOT REMOVE THIS CHECK! It prevents infinite recursion.
+        # See: .planning/260106-BUGFIX_DUPLICATE_LOG_CAPTURE.md
+        # ═══════════════════════════════════════════════════════════════
+        doctor_markers = [
+            "[Doctor]",       # Internal logging prefix
+            "[Doctor-API]",   # API logging prefix
+            "🎯 ERROR LOCATION:",  # Formatted output header
+            "💡 SUGGESTION:",      # Formatted output suggestion
+            "----------------------------------------",  # Divider line
+        ]
+        for marker in doctor_markers:
+            if marker in message:
+                return  # Skip Doctor's own output to prevent recursion
+
         # P3: Urgent single-line warnings (immediate analysis)
         if "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message:
             result = ErrorAnalyzer.analyze(message)

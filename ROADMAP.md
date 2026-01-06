@@ -77,7 +77,7 @@ graph TD
     AU --> AV[test-harness.html]
     AU --> AW[mocks/comfyui-app.js]
     AU --> AX[specs/settings.spec.js - 12 tests]
-    AU --> AY[specs/sidebar.spec.js - 8 tests]
+    AU --> AY[specs/sidebar.spec.js - 10 tests]
     AU --> AZ[specs/statistics.spec.js - 18 tests]
     AU --> BA[specs/preact-loader.spec.js - 8 tests]
     AV --> AH
@@ -111,7 +111,7 @@ graph TD
 | `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
 | `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (12 tests): toggle, selectors, inputs, persistence |
-| `tests/e2e/specs/sidebar.spec.js` | 135 | Chat interface tests (8 tests): messages, input, buttons, error context |
+| `tests/e2e/specs/sidebar.spec.js` | 190 | Chat interface tests (10 tests): messages, input, buttons, error context, sanitization status |
 | `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n |
 | `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (8 tests): module loading, flags, error handling |
 | `playwright.config.js` | 89 | Playwright configuration for E2E tests |
