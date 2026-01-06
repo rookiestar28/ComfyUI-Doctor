@@ -58,14 +58,20 @@ graph TD
     X --> AGS["API: /doctor/statistics"]
     X --> AGM["API: /doctor/mark_resolved"]
 
-    AH[web/doctor.js] --> AI[Settings Registration]
-    AJ[web/doctor_ui.js] --> AK[Sidebar Panel]
-    AJ --> AL[Error Cards]
+    AH[web/doctor.js] --> TM[Tab Manager]
+    TM --> TC[Chat Tab]
+    TM --> TS[Statistics Tab]
+    TM --> TSE[Settings Tab]
+    
+    TC --> AR[Chat Interface]
+    TS --> AK[Statistics Panel]
+    TSE --> AI[Settings UI]
+
+    AJ[web/doctor_ui.js] --> AL[Error Cards]
     AJ --> AM[AI Analysis]
     AJ --> AN[i18n Integration]
     AO[web/doctor_api.js] --> AP[Fetch Wrapper]
-    AQ[web/doctor_chat.js] --> AR[Chat Interface]
-    AQ --> AS[SSE Streaming]
+    TC --> AS[SSE Streaming]
 
     AT[tests/e2e/] --> AU[Playwright Test Suite]
     AU --> AV[test-harness.html]
@@ -97,6 +103,8 @@ graph TD
 | `patterns/builtin/core.json` | - | 22 builtin error patterns (PyTorch, CUDA, Memory, etc.) |
 | `patterns/community/*.json` | - | 35 community patterns (ControlNet, LoRA, VAE, AnimateDiff, IPAdapter, FaceRestore, Misc) |
 | `web/doctor.js` | 600+ | ComfyUI settings panel integration, sidebar UI initialization |
+| `web/doctor_tabs.js` | 100+ | Tab state management & registry |
+| `web/tabs/*.js` | 500+ | Chat, Stats, and Settings tab implementations |
 | `web/doctor_ui.js` | 1400+ | Sidebar UI, error cards, AI analysis trigger, i18n integration |
 | `web/doctor_api.js` | 260+ | API wrapper layer with streaming support, statistics API |
 | `web/doctor_chat.js` | 600+ | Multi-turn chat interface, SSE streaming, markdown rendering |
@@ -272,9 +280,9 @@ graph TD
   - **New files**: `statistics.py` (StatisticsCalculator class)
   - **API endpoints**: `/doctor/statistics`, `/doctor/mark_resolved`
   - **Implementation**: `.planning/260104-F4_STATISTICS_RECORD.md`
-- [ ] **F13**: Sidebar Tab Navigation Refactoring - 🟡 Medium ⚠️ *Use dev branch*
-  - **Problem**: Current sidebar uses collapsible `<details>` panels, causing vertical scroll issues and content overlap
-  - **Solution**: Convert to internal tab navigation (Chat | Stats | Settings)
+- [x] **F13**: Sidebar Tab Navigation Refactoring - 🟡 Medium ✅ *Completed (2026-01-06)*
+  - **Problem**: Previous sidebar used collapsible `<details>` panels, causing vertical scroll issues and content overlap
+  - **Solution**: Converted to internal tab navigation (Chat | Stats | Settings)
   - **Key Design**:
     - `TabRegistry` + `TabManager` classes for dynamic tab registration
     - `render(container)` interface compatible with both Vanilla JS and Preact
@@ -284,8 +292,7 @@ graph TD
     - Stats tab → Preact `StatisticsIsland` (Phase 5A)
     - Settings tab → Stays Vanilla JS (per A7 non-goals)
   - **New Files**: `doctor_tabs.js`, `tabs/chat_tab.js`, `tabs/stats_tab.js`, `tabs/settings_tab.js`
-  - **Est. Time**: ~11 hours
-  - **Implementation Plan**: `.planning/260106-SIDEBAR_TAB_REFACTORING_PLAN.md`
+  - **Implementation Record**: `.planning/260106-F13_SIDEBAR_TAB_REFACTORING_IMPLEMENTATION_RECORD.md`
   - **Prerequisite**: Before A7 Phase 5A component migration
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [x] **F2**: Hot-reload error patterns from external JSON/YAML - 🟡 Medium ✅ *Completed (2026-01-03)*
@@ -807,14 +814,20 @@ graph TD
     X --> AF["API: /doctor/ui_text"]
     X --> AG["API: /doctor/chat"]
 
-    AH[web/doctor.js] --> AI[Settings Registration]
-    AJ[web/doctor_ui.js] --> AK[Sidebar Panel]
-    AJ --> AL[Error Cards]
+    AH[web/doctor.js] --> TM[Tab Manager]
+    TM --> TC[Chat Tab]
+    TM --> TS[Statistics Tab]
+    TM --> TSE[Settings Tab]
+    
+    TC --> AR[Chat Interface]
+    TS --> AK[Statistics Panel]
+    TSE --> AI[Settings UI]
+
+    AJ[web/doctor_ui.js] --> AL[Error Cards]
     AJ --> AM[AI Analysis]
     AJ --> AN[i18n 整合]
     AO[web/doctor_api.js] --> AP[Fetch Wrapper]
-    AQ[web/doctor_chat.js] --> AR[Chat Interface]
-    AQ --> AS[SSE Streaming]
+    TC --> AS[SSE Streaming]
 
     AT[tests/e2e/] --> AU[Playwright 測試套件]
     AU --> AV[test-harness.html]
@@ -844,6 +857,8 @@ graph TD
 | `patterns/builtin/core.json` | - | 22 個內建錯誤模式（PyTorch、CUDA、Memory 等） |
 | `patterns/community/*.json` | - | 35 個社群模式（ControlNet、LoRA、VAE、AnimateDiff、IPAdapter、FaceRestore、Misc） |
 | `web/doctor.js` | 600+ | ComfyUI 設定面板整合、側邊欄 UI 初始化 |
+| `web/doctor_tabs.js` | 100+ | 分頁狀態管理與註冊表 |
+| `web/tabs/*.js` | 500+ | Chat, Stats, 與 Settings 分頁實作 |
 | `web/doctor_ui.js` | 1400+ | Sidebar UI、錯誤卡片、AI 分析觸發、i18n 整合 |
 | `web/doctor_api.js` | 207 | API 封裝層（支援串流） |
 | `web/doctor_chat.js` | 600+ | 多輪聊天介面、SSE 串流、Markdown 渲染 |
@@ -1020,8 +1035,8 @@ graph TD
   - **API 端點**：`/doctor/statistics`、`/doctor/mark_resolved`
   - **測試**：後端單元測試 17/17；統計 E2E 測試 18/18；Playwright 全套 46/46
   - **實作記錄**：`.planning/260104-F4_STATISTICS_RECORD.md`
-- [ ] **F13**: 側邊欄分頁導航重構 - 🟡 Medium ⚠️ *使用 dev branch*
-  - **問題**：當前側邊欄使用可折疊 `<details>` 面板，導致垂直滾動問題與內容重疊
+- [x] **F13**: 側邊欄分頁導航重構 - 🟡 Medium ✅ *已完成 (2026-01-06)*
+  - **問題**：先前側邊欄使用可折疊 `<details>` 面板，導致垂直滾動問題與內容重疊
   - **解決方案**：轉換為內部分頁導航（Chat | Stats | Settings）
   - **核心設計**：
     - `TabRegistry` + `TabManager` 類別用於動態分頁註冊
@@ -1032,8 +1047,7 @@ graph TD
     - Stats 分頁 → Preact `StatisticsIsland`（Phase 5A）
     - Settings 分頁 → 保持 Vanilla JS（依據 A7 非目標）
   - **新增檔案**：`doctor_tabs.js`、`tabs/chat_tab.js`、`tabs/stats_tab.js`、`tabs/settings_tab.js`
-  - **預估時間**：約 11 小時
-  - **實作計劃**：`.planning/260106-SIDEBAR_TAB_REFACTORING_PLAN.md`
+  - **實作記錄**：`.planning/260106-F13_SIDEBAR_TAB_REFACTORING_IMPLEMENTATION_RECORD.md`
   - **前提條件**：須在 A7 Phase 5A 組件遷移之前完成
 - [ ] **F5**: 節點健康評分 - 🟢 Low
 - [x] **F2**: 錯誤模式熱更新（從外部 JSON/YAML 載入） - 🟡 Medium ✅ *已完成 (2026-01-03)*

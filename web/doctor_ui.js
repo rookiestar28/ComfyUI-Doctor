@@ -284,6 +284,8 @@ export class DoctorUI {
     handleNewError(data) {
         // Store for sidebar tab access
         this.lastErrorData = data;
+        // F13: Store analysis metadata for sanitization status display
+        this.lastAnalysisMetadata = data.analysis_metadata || null;
 
         this.updateLogCard(data);
 
@@ -343,6 +345,12 @@ export class DoctorUI {
      * ═══════════════════════════════════════════════════════════════
      */
     updateSidebarTab(data) {
+        // F13: Ensure Chat Tab is active and rendered if we have an error
+        // This handles cases where user is on another tab (e.g. Stats) when error occurs
+        if ((!this.sidebarErrorContext || !this.sidebarMessages) && this.tabManager) {
+            this.tabManager.activateTab('chat');
+        }
+
         const errorContext = this.sidebarErrorContext;
         const messages = this.sidebarMessages;
         const statusDot = document.getElementById('doctor-tab-status');

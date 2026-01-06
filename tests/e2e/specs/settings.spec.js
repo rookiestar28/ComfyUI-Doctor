@@ -8,8 +8,14 @@
  * - Settings persistence
  */
 
+import fs from 'fs';
+import path from 'path';
 import { test, expect } from '@playwright/test';
-import { waitForDoctorReady, clearStorage } from '../utils/helpers.js';
+import { waitForDoctorReady, waitForI18nLoaded, clearStorage } from '../utils/helpers.js';
+
+const UI_TEXT = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), 'tests/e2e/mocks/ui-text.json'), 'utf-8')
+);
 
 test.describe('Settings Panel', () => {
   test.beforeEach(async ({ page }) => {
@@ -43,15 +49,13 @@ test.describe('Settings Panel', () => {
     });
 
     await page.route('**/doctor/ui_text*', route => {
+      const url = new URL(route.request().url());
+      const lang = url.searchParams.get('lang') || 'en';
+      const text = UI_TEXT[lang] || UI_TEXT.en || {};
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          sidebar_doctor_title: 'Doctor',
-          settings_title: 'Settings',
-          language_label: 'Language',
-          ai_provider_label: 'AI Provider',
-        }),
+        body: JSON.stringify({ language: lang, text }),
       });
     });
 
@@ -63,35 +67,48 @@ test.describe('Settings Panel', () => {
       });
     });
 
+    // Debug: capture console output
+    page.on('console', msg => console.log('PAGE LOG:', msg.type(), msg.text()));
+    page.on('pageerror', err => console.log('PAGE ERROR:', err.message));
+
     await page.goto('test-harness.html');
     await clearStorage(page);
+
+    // Debug: check for test harness error
+    const hasError = await page.evaluate(() => window.__doctorTestError);
+    if (hasError) {
+      console.log('TEST HARNESS ERROR:', hasError);
+    }
+
     await waitForDoctorReady(page);
+    await waitForI18nLoaded(page);
   });
 
-  test('should have settings toggle button', async ({ page }) => {
-    const toggleBtn = page.locator('#doctor-settings-toggle');
+  test('should have settings tab button', async ({ page }) => {
+    const toggleBtn = page.locator('.doctor-tab-button[data-tab-id="settings"]');
     await expect(toggleBtn).toBeVisible();
   });
 
-  test('should toggle settings panel visibility', async ({ page }) => {
+  test('should toggle settings panel visibility via tab', async ({ page }) => {
     const settingsPanel = page.locator('#doctor-settings-panel');
-    const toggleBtn = page.locator('#doctor-settings-toggle');
+    const settingsTabBtn = page.locator('.doctor-tab-button[data-tab-id="settings"]');
+    const chatTabBtn = page.locator('.doctor-tab-button[data-tab-id="chat"]');
 
-    // Panel should be hidden by default
+    // Panel should be hidden (or non-existent) by default as Chat is default tab
     await expect(settingsPanel).toBeHidden();
 
-    // Click to show
-    await toggleBtn.click();
+    // Click Settings Tab to show
+    await settingsTabBtn.click();
     await expect(settingsPanel).toBeVisible();
 
-    // Click to hide
-    await toggleBtn.click();
+    // Click Chat Tab to hide Settings
+    await chatTabBtn.click();
     await expect(settingsPanel).toBeHidden();
   });
 
   test('should display language selector', async ({ page }) => {
     // Open settings panel
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const languageSelect = page.locator('#doctor-language-select');
     await expect(languageSelect).toBeVisible();
@@ -99,7 +116,7 @@ test.describe('Settings Panel', () => {
   });
 
   test('should have all supported languages in selector', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const languageSelect = page.locator('#doctor-language-select');
     const options = await languageSelect.locator('option').allTextContents();
@@ -114,7 +131,7 @@ test.describe('Settings Panel', () => {
   });
 
   test('should change language selection', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const languageSelect = page.locator('#doctor-language-select');
 
@@ -131,7 +148,7 @@ test.describe('Settings Panel', () => {
   });
 
   test('should display provider selector', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const providerSelect = page.locator('#doctor-provider-select');
     await expect(providerSelect).toBeVisible();
@@ -139,7 +156,7 @@ test.describe('Settings Panel', () => {
   });
 
   test('should have multiple AI providers', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const providerSelect = page.locator('#doctor-provider-select');
     const options = await providerSelect.locator('option').allTextContents();
@@ -151,7 +168,7 @@ test.describe('Settings Panel', () => {
   });
 
   test('should display API key input', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const apiKeyInput = page.locator('#doctor-apikey-input');
     await expect(apiKeyInput).toBeVisible();
@@ -159,14 +176,14 @@ test.describe('Settings Panel', () => {
   });
 
   test('should display base URL input', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const baseUrlInput = page.locator('#doctor-baseurl-input');
     await expect(baseUrlInput).toBeVisible();
   });
 
   test('should display save button', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     const saveBtn = page.locator('#doctor-save-settings-btn');
     await expect(saveBtn).toBeVisible();
@@ -174,7 +191,7 @@ test.describe('Settings Panel', () => {
   });
 
   test('should save settings and show feedback', async ({ page }) => {
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     // Change language
     const languageSelect = page.locator('#doctor-language-select');
@@ -185,17 +202,12 @@ test.describe('Settings Panel', () => {
     const originalText = await saveBtn.textContent();
     await saveBtn.click();
 
-    // Wait for feedback
-    await page.waitForTimeout(200);
-
-    // Should show success message
-    const buttonText = await saveBtn.textContent();
-    expect(buttonText).toContain('Saved');
+    await expect(saveBtn).toContainText('Saved');
   });
 
-  test('should persist settings panel state', async ({ page }) => {
+  test('should persist active tab state', async ({ page }) => {
     // Open settings panel
-    await page.click('#doctor-settings-toggle');
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
 
     // Verify it's open
     await expect(page.locator('#doctor-settings-panel')).toBeVisible();
@@ -210,8 +222,8 @@ test.describe('Settings Panel', () => {
 
     // Check localStorage was set
     const storedState = await page.evaluate(() => {
-      return localStorage.getItem('doctor_settings_expanded');
+      return localStorage.getItem('doctor_active_tab');
     });
-    expect(storedState).toBe('true');
+    expect(storedState).toBe('settings');
   });
 });

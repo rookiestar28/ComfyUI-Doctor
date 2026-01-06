@@ -21,6 +21,7 @@ htmlcov/
 .tox/
 coverage.xml
 *.cover
+.tmp/
 
 # Type checking
 .mypy_cache/

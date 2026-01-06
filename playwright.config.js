@@ -80,7 +80,7 @@ module.exports = defineConfig({
   // Run local web server before starting tests
   // Serve from project root so that /web/doctor_ui.js paths work correctly
   webServer: {
-    command: 'python3 -m http.server 3000',
+    command: 'python -m http.server 3000',
     port: 3000,
     timeout: 120 * 1000,
     reuseExistingServer: !process.env.CI,

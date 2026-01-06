@@ -96,7 +96,6 @@ const MOCK_UI_TEXT_EN = {
   stats_resolution_rate: 'Resolution Rate',
   stats_error: 'Failed to load statistics',
   stats_categories: 'Categories',
-  stats_categories: 'Categories',
   stats_loading: 'Loading...',
   stats_no_data: 'No data yet',
   stats_resolved: 'Resolved',
@@ -169,6 +168,14 @@ async function setupMocks(page, options = {}) {
     });
   });
 
+  await page.route('**/debugger/set_language', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    });
+  });
+
   await page.route('**/doctor/ui_text*', route => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ language: 'en', text: uiText }) });
   });
@@ -197,138 +204,78 @@ test.describe('Statistics Dashboard', () => {
     await waitForI18nLoaded(page); // Wait for UI text to load
   });
 
-  test('should display statistics panel', async ({ page }) => {
-    const statsPanel = page.locator('#doctor-statistics-panel');
-    await expect(statsPanel).toBeVisible();
+  test('should display statistics tab button', async ({ page }) => {
+    const tabBtn = page.locator('.doctor-tab-button[data-tab-id="stats"]');
+    await expect(tabBtn).toBeVisible();
   });
 
-  test('should have collapsible details element', async ({ page }) => {
-    const statsPanel = page.locator('#doctor-statistics-panel');
+  test('should show statistics content when tab clicked', async ({ page }) => {
+    const tabBtn = page.locator('.doctor-tab-button[data-tab-id="stats"]');
+    const statsContent = page.locator('#doctor-stats-content');
 
-    // Should be a <details> element
-    const tagName = await statsPanel.evaluate(el => el.tagName.toLowerCase());
-    expect(tagName).toBe('details');
-  });
+    // Initially hidden (since chat is default)
+    await expect(statsContent).toBeHidden();
 
-  test('should display statistics title in summary', async ({ page }) => {
-    const summary = page.locator('#doctor-statistics-panel > summary');
-    await expect(summary).toBeVisible();
-
-    const text = await summary.textContent();
-    expect(text).toContain('Error Statistics');
-  });
-
-  test('should toggle panel open/closed', async ({ page }) => {
-    const statsPanel = page.locator('#doctor-statistics-panel');
-    const summary = page.locator('#doctor-statistics-panel > summary');
-
-    // Initially closed
-    let isOpen = await statsPanel.evaluate(el => el.open);
-    expect(isOpen).toBe(false);
-
-    // Click to open
-    await summary.click();
-    isOpen = await statsPanel.evaluate(el => el.open);
-    expect(isOpen).toBe(true);
-
-    // Click to close
-    await summary.click();
-    isOpen = await statsPanel.evaluate(el => el.open);
-    expect(isOpen).toBe(false);
+    // Click tab
+    await tabBtn.click();
+    await expect(statsContent).toBeVisible();
   });
 
   test('should display total errors stat card', async ({ page }) => {
-    // Open panel
-    await page.click('#doctor-statistics-panel > summary');
-
-    // Wait for content to load
-    await page.waitForTimeout(100);
-
-    const statsContent = page.locator('#doctor-stats-content');
-    await expect(statsContent).toBeVisible();
-
-    // Check for total errors display
-    const totalText = await statsContent.textContent();
-    expect(totalText).toContain('Total');
-    expect(totalText).toContain('42'); // From MOCK_STATISTICS
+    // Open panel by clicking tab
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const total = page.locator('#stats-total');
+    await expect(total).toHaveText('42'); // From MOCK_STATISTICS
   });
 
   test('should display last 24h stat card', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
-
-    const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
-
-    expect(text).toContain('Last 24h');
-    expect(text).toContain('3'); // From MOCK_STATISTICS.trend.last_24h
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const last24h = page.locator('#stats-24h');
+    await expect(last24h).toHaveText('3'); // From MOCK_STATISTICS.trend.last_24h
   });
 
   test('should display top 5 error patterns', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const patternItems = page.locator('.pattern-item');
+    await expect(patternItems).toHaveCount(5);
 
-    const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
-
-    // Should show "Top Error Patterns" header
-    expect(text).toContain('Top Error Patterns');
-
-    // Should display pattern names (formatted)
-    expect(text).toMatch(/CUDA OOM/i);
-    expect(text).toMatch(/Missing Module/i);
+    const patterns = page.locator('#doctor-top-patterns');
+    await expect(patterns).toContainText('Top Error Patterns');
+    await expect(patterns).toContainText(/CUDA OOM/i);
+    await expect(patterns).toContainText(/Missing Module/i);
   });
 
   test('should limit top patterns to 5 items', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
-
-    // Count pattern items in the list
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
     const patternItems = page.locator('.pattern-item');
-    const count = await patternItems.count();
-
-    // Should show exactly 5 patterns (or less if fewer exist)
-    expect(count).toBeLessThanOrEqual(5);
-    expect(count).toBe(5); // Our mock has exactly 5
+    await expect(patternItems).toHaveCount(5); // Our mock has exactly 5
   });
 
   test('should display pattern counts', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const patternItems = page.locator('.pattern-item');
+    await expect(patternItems).toHaveCount(5);
 
-    const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
-
-    // Should show counts for top patterns
-    expect(text).toContain('15'); // cuda_oom_classic count
-    expect(text).toContain('10'); // missing_module count
+    const counts = page.locator('.pattern-count');
+    await expect(counts.nth(0)).toHaveText('15'); // cuda_oom_classic count
+    await expect(counts.nth(1)).toHaveText('10'); // missing_module count
   });
 
   test('should display category breakdown section', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const categoryBars = page.locator('.category-bar');
+    await expect(categoryBars).toHaveCount(4);
 
-    const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
-
-    // Should show "Categories" header
-    expect(text).toContain('Categories');
-
-    // Should show category names
-    expect(text).toContain('Memory');
-    expect(text).toContain('Workflow');
+    const categories = page.locator('#doctor-category-breakdown');
+    await expect(categories).toContainText('Categories');
+    await expect(categories).toContainText('Memory');
+    await expect(categories).toContainText('Workflow');
   });
 
   test('should display category progress bars', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
-
-    // Look for category bar elements
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
     const categoryBars = page.locator('.category-bar');
-    const count = await categoryBars.count();
-
-    // Should have 4 categories from MOCK_STATISTICS
-    expect(count).toBe(4);
+    await expect(categoryBars).toHaveCount(4);
   });
 
   test('should handle empty statistics gracefully', async ({ page }) => {
@@ -339,7 +286,7 @@ test.describe('Statistics Dashboard', () => {
     await page.reload();
     await waitForDoctorReady(page);
 
-    await page.click('#doctor-statistics-panel > summary');
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
     await page.waitForTimeout(100);
 
     const statsContent = page.locator('#doctor-stats-content');
@@ -357,7 +304,7 @@ test.describe('Statistics Dashboard', () => {
     await page.reload();
     await waitForDoctorReady(page);
 
-    await page.click('#doctor-statistics-panel > summary');
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
     await page.waitForTimeout(100);
 
     // Should still render without crashing
@@ -369,18 +316,10 @@ test.describe('Statistics Dashboard', () => {
     expect(text).toMatch(/0|No data|Failed/i);
   });
 
-  test('should persist panel open/closed state', async ({ page }) => {
-    const statsPanel = page.locator('#doctor-statistics-panel');
-
-    // Open panel
-    await page.click('#doctor-statistics-panel > summary');
-
-    // Verify it's open
-    let isOpen = await statsPanel.evaluate(el => el.open);
-    expect(isOpen).toBe(true);
-
-    // Setup mocks before reload
-    await setupMocks(page);
+  test('should persist active stats tab', async ({ page }) => {
+    // Click stats tab
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await expect(page.locator('#doctor-stats-content')).toBeVisible();
 
     // Reload page
     await page.reload();
@@ -388,9 +327,12 @@ test.describe('Statistics Dashboard', () => {
 
     // Check localStorage was set
     const storedState = await page.evaluate(() => {
-      return localStorage.getItem('doctor_stats_expanded');
+      return localStorage.getItem('doctor_active_tab');
     });
-    expect(storedState).toBe('true');
+    expect(storedState).toBe('stats');
+
+    // Check if it restored the active tab (content visible)
+    await expect(page.locator('#doctor-stats-content')).toBeVisible();
   });
 
   test('should support i18n (multilingual UI)', async ({ page }) => {
@@ -401,36 +343,40 @@ test.describe('Statistics Dashboard', () => {
     await page.reload();
     await waitForDoctorReady(page);
 
-    const summary = page.locator('#doctor-statistics-panel > summary');
-    const text = await summary.textContent();
+    // We can't check title of tab bar without waiting for render?
+    // But statistics title might only render when tab is active?
+    // Wait, the test checked summary text.
+    // Now we check tab content.
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(100);
 
-    // Should display Japanese text
+    // Check the full stats panel which contains the summary with the title
+    const statsPanel = page.locator('#doctor-statistics-panel');
+    const text = await statsPanel.textContent();
+
+    // Should display Japanese text from MOCK_UI_TEXT_JA.statistics_title
+    // The title is in the <summary> element inside #doctor-statistics-panel
     expect(text).toContain('エラー統計');
   });
 
   test('should format pattern names correctly', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const patternItems = page.locator('.pattern-item');
+    await expect(patternItems).toHaveCount(5);
 
-    const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
+    const patternNames = page.locator('.pattern-name');
+    const text = await patternNames.allTextContents();
 
-    // "cuda_oom_classic" should be formatted to "CUDA OOM Classic"
-    // Check for capital letters and spaces
-    expect(text).toMatch(/CUDA/);
-    expect(text).toMatch(/OOM/);
-
-    // Should not contain raw underscores in pattern names
-    expect(text).not.toMatch(/cuda_oom_classic/);
+    expect(text.join(' ')).toMatch(/CUDA/);
+    expect(text.join(' ')).toMatch(/OOM/);
+    expect(text.join(' ')).not.toMatch(/cuda_oom_classic/);
   });
 
   test('should calculate category percentages', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
     await page.waitForTimeout(100);
 
     // Memory: 20/42 = 47.6%
-    // Workflow: 12/42 = 28.6%
-    // Check that progress bars have width styles
     const categoryBars = page.locator('.category-bar .bar-fill');
     const firstBarWidth = await categoryBars.first().evaluate(el => el.style.width);
 
@@ -439,15 +385,13 @@ test.describe('Statistics Dashboard', () => {
   });
 
   test('should display resolution rate statistics', async ({ page }) => {
-    await page.click('#doctor-statistics-panel > summary');
-    await page.waitForTimeout(100);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    const resolved = page.locator('#stats-resolved-count');
+    const unresolved = page.locator('#stats-unresolved-count');
+    const ignored = page.locator('#stats-ignored-count');
 
-    const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
-
-    // Should show resolution status counts
-    expect(text).toContain('20'); // Resolved count
-    expect(text).toContain('18'); // Unresolved count
-    expect(text).toContain('4');  // Ignored count
+    await expect(resolved).toHaveText('20');
+    await expect(unresolved).toHaveText('18');
+    await expect(ignored).toHaveText('4');
   });
 });

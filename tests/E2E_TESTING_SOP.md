@@ -24,10 +24,10 @@ against the test harness and mocks (no live ComfyUI backend required).
 | Playwright browsers | latest | Installed via `npx playwright install chromium` |
 
 Notes:
-- `playwright.config.js` starts a local web server using `python3 -m http.server 3000`.
-  Ensure `python3` is available on PATH.
-- If you use WSL and run from `/mnt/c/...`, set `TMPDIR=/tmp` to avoid permission
-  issues with Playwright transform cache.
+- `playwright.config.js` starts a local web server using `python -m http.server 3000`.
+  Ensure `python` is available on PATH (activate `.venv` if needed).
+- If you use WSL and run from `/mnt/c/...`, set a writable temp directory to avoid
+  Playwright transform cache permission errors (e.g. `.tmp/playwright` or `/tmp`).
 
 ---
 
@@ -44,7 +44,8 @@ npm install
 npx playwright install chromium
 
 # Run E2E with a safe temp directory (WSL /mnt/c permission fix)
-TMPDIR=/tmp npm test
+mkdir -p .tmp/playwright
+TMPDIR=.tmp/playwright TMP=.tmp/playwright TEMP=.tmp/playwright npm test
 ```
 
 Expected result: `46 passed` with no failures.
@@ -85,7 +86,8 @@ npx playwright install chromium
 ### 4.4 Run E2E tests
 
 ```bash
-TMPDIR=/tmp npm test
+mkdir -p .tmp/playwright
+TMPDIR=.tmp/playwright TMP=.tmp/playwright TEMP=.tmp/playwright npm test
 ```
 
 Optional modes:
@@ -164,7 +166,8 @@ await page.route('**/scripts/api.js', route => {
 ```
 
 If tests rely on localized strings, mock `/doctor/ui_text` (or
-`/debugger/get_ui_text`) to avoid missing i18n keys.
+`/debugger/get_ui_text`) to return `{ language, text }` to avoid missing i18n keys.
+Prefer waiting on `waitForI18nLoaded` before asserting translated UI.
 
 ---
 
