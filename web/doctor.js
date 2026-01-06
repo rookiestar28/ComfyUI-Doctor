@@ -179,6 +179,18 @@ app.registerExtension({
         app.Doctor = doctorUI;
         app.Doctor.providerDefaults = PROVIDER_DEFAULTS;
 
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CRITICAL: Wait for UI text to load before registering sidebar tab
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ⚠️ WARNING: registerSidebarTab() uses getUIText() for tooltip/title
+        //    If called before loadUIText() completes, translations will be missing
+        //    and sidebar will show "[Missing: sidebar_doctor_tooltip]"
+        //
+        // FIX: Explicitly await loadUIText() before registering sidebar tab
+        // Last Modified: 2026-01-06 (Fixed tooltip [Missing: ...] issue)
+        // ═══════════════════════════════════════════════════════════════════════════
+        await doctorUI.loadUIText();
+
         // ========================================
         // Register Sidebar Tab (Modern ComfyUI API)
         // ========================================
@@ -187,8 +199,9 @@ app.registerExtension({
             app.extensionManager.registerSidebarTab({
                 id: "comfyui-doctor",
                 icon: "pi pi-heart-fill",  // PrimeVue icon
-                title: doctorUI.getUIText('sidebar_doctor_title'),
-                tooltip: doctorUI.getUIText('sidebar_doctor_tooltip'),
+                // ⚠️ BUGFIX 2026-01-06: title/tooltip MUST only be called AFTER await loadUIText() above
+                title: doctorUI.getUIText('sidebar_doctor_title'),      // Requires loadUIText() complete
+                tooltip: doctorUI.getUIText('sidebar_doctor_tooltip'),  // Requires loadUIText() complete
                 type: "custom",
                 render: (container) => {
                     // Add styles for the sidebar content if not already added

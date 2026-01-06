@@ -85,12 +85,15 @@ export class DoctorUI {
         // Last Modified: 2026-01-03 (Fixed race condition)
         // ═══════════════════════════════════════════════════════════════
         this.uiText = {};
+        this._loadUITextPromise = null;  // Prevents duplicate loadUIText() calls
 
         this.createStyles();
         this.createMenuButton();
 
         // ⚠️ CRITICAL: Load UI text FIRST, then create sidebar
         // DO NOT move createSidebar() before loadUIText() completes!
+        // Note: loadUIText() is also awaited in doctor.js before registerSidebarTab()
+        // The Promise is cached to avoid duplicate HTTP requests
         this.loadUIText().then(() => {
             this.createSidebar();
         });
@@ -115,8 +118,24 @@ export class DoctorUI {
      * - getUIText() will return "[Missing: key]" if called before this completes
      * - UI elements created in constructor may initially show fallback text
      * - Language updates happen via updateUILanguage() after loading
+     *
+     * NOTE (Added 2026-01-06): This method now caches the Promise to prevent
+     * duplicate HTTP requests when called from both constructor and doctor.js
      */
     async loadUIText() {
+        // Return cached promise if already loading/loaded
+        if (this._loadUITextPromise) {
+            return this._loadUITextPromise;
+        }
+
+        this._loadUITextPromise = this._doLoadUIText();
+        return this._loadUITextPromise;
+    }
+
+    /**
+     * Internal method to actually load UI text (called once via cached promise)
+     */
+    async _doLoadUIText() {
         try {
             const response = await fetch(`/doctor/ui_text?lang=${this.language}`);
             const data = await response.json();
