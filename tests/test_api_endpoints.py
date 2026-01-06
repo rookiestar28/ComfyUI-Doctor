@@ -303,19 +303,12 @@ class TestSSRFProtection(unittest.TestCase):
     
     def setUp(self):
         """Import validate_ssrf_url from project."""
-        try:
-            from __init__ import validate_ssrf_url, is_local_llm_url
-            self.validate_ssrf_url = validate_ssrf_url
-            self.is_local_llm_url = is_local_llm_url
-        except ImportError:
-            # Fallback: test the logic directly
-            self.validate_ssrf_url = None
+        from security import validate_ssrf_url, is_local_llm_url
+        self.validate_ssrf_url = validate_ssrf_url
+        self.is_local_llm_url = is_local_llm_url
     
     def test_private_ip_blocked(self):
         """Test that private IP addresses are blocked."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         blocked_urls = [
             "http://10.0.0.1/v1",
             "http://10.255.255.255/v1",
@@ -331,9 +324,6 @@ class TestSSRFProtection(unittest.TestCase):
     
     def test_localhost_blocked(self):
         """Test that localhost is blocked (when not local LLM)."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         blocked_urls = [
             "http://localhost/v1",
             "http://127.0.0.1/v1",
@@ -345,9 +335,6 @@ class TestSSRFProtection(unittest.TestCase):
     
     def test_local_llm_allowed(self):
         """Test that known local LLM patterns are allowed."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         allowed_urls = [
             "http://localhost:11434/v1",  # Ollama
             "http://127.0.0.1:1234/v1",   # LMStudio
@@ -358,9 +345,6 @@ class TestSSRFProtection(unittest.TestCase):
     
     def test_cloud_urls_allowed(self):
         """Test that legitimate cloud URLs are allowed."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         allowed_urls = [
             "https://api.openai.com/v1",
             "https://api.deepseek.com/v1",
@@ -373,9 +357,6 @@ class TestSSRFProtection(unittest.TestCase):
     
     def test_non_http_blocked(self):
         """Test that non-HTTP protocols are blocked."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         blocked_urls = [
             "file:///etc/passwd",
             "ftp://ftp.example.com/file",
@@ -388,9 +369,6 @@ class TestSSRFProtection(unittest.TestCase):
     
     def test_internal_domains_blocked(self):
         """Test that internal domains are blocked."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         blocked_urls = [
             "http://server.local/v1",
             "http://api.internal/v1",
@@ -403,9 +381,6 @@ class TestSSRFProtection(unittest.TestCase):
     
     def test_metadata_endpoint_blocked(self):
         """Test that cloud metadata endpoints are blocked."""
-        if not self.validate_ssrf_url:
-            self.skipTest("validate_ssrf_url not importable")
-        
         # AWS metadata endpoint
         is_valid, error = self.validate_ssrf_url("http://169.254.169.254/latest/meta-data/")
         self.assertFalse(is_valid, "Metadata endpoint should be blocked")

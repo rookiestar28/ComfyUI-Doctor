@@ -59,6 +59,29 @@ def test_validation_error_block_capture():
     uninstall()
 
 
+def test_last_analysis_includes_sanitization_metadata():
+    """Sanitization metadata should be present in last analysis."""
+    from logger import install, uninstall, get_last_analysis, clear_analysis_history
+
+    install("test.log")
+    clear_analysis_history()
+
+    print("Traceback (most recent call last):")
+    print('  File "C:\\Users\\alice\\secret.py", line 1')
+    print("RuntimeError: CUDA out of memory")
+
+    _wait_for(lambda: "CUDA out of memory" in (get_last_analysis().get("error") or ""))
+    last = get_last_analysis()
+
+    analysis_meta = last.get("analysis_metadata") or {}
+    sanitization = analysis_meta.get("sanitization") or {}
+
+    assert sanitization.get("pii_found") is True
+    assert sanitization.get("sanitized_length") < sanitization.get("original_length")
+
+    uninstall()
+
+
 def test_install_uninstall_idempotent():
     """Installing twice should not break, uninstall restores streams."""
     import sys
@@ -74,4 +97,3 @@ def test_install_uninstall_idempotent():
 
     assert sys.stdout is original_stdout
     assert sys.stderr is original_stderr
-

@@ -44,6 +44,7 @@ _last_analysis: Dict[str, Any] = {
     "suggestion": None,
     "timestamp": None,
     "node_context": None,  # NodeContext.to_dict() result
+    "analysis_metadata": None,
 }
 
 # P1: Error history buffer (ring buffer for last N errors)
@@ -371,6 +372,11 @@ class DoctorLogProcessor(threading.Thread):
             logging.debug(f"[Doctor] Skipping non-error message (no indicators): {full_traceback[:100]}")
             return
         
+        analysis_metadata = metadata if isinstance(metadata, dict) else {}
+        matched_pattern_id = analysis_metadata.get("matched_pattern_id")
+        pattern_category = analysis_metadata.get("pattern_category") or analysis_metadata.get("category")
+        pattern_priority = analysis_metadata.get("pattern_priority") or analysis_metadata.get("priority")
+
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
         timestamp = datetime.datetime.now().isoformat()
 
@@ -379,6 +385,10 @@ class DoctorLogProcessor(threading.Thread):
             "suggestion": suggestion,
             "timestamp": timestamp,
             "node_context": node_context.to_dict() if node_context else None,
+            "analysis_metadata": analysis_metadata,
+            "matched_pattern_id": matched_pattern_id,
+            "pattern_category": pattern_category,
+            "pattern_priority": pattern_priority,
         }
 
         # R2: Thread-safe update of shared state
@@ -395,6 +405,10 @@ class DoctorLogProcessor(threading.Thread):
                 error=full_traceback,
                 suggestion=suggestion if suggestion else {},
                 node_context=node_context.to_dict() if node_context else None,
+                matched_pattern_id=matched_pattern_id,
+                pattern_category=pattern_category,
+                pattern_priority=pattern_priority,
+                analysis_metadata=analysis_metadata,
             )
             store.append(entry)
         except Exception:

@@ -14,17 +14,23 @@ graph TD
     B --> E[i18n.py]
     B --> F[config.py]
     B --> G[nodes.py]
-    B --> H[pattern_loader.py]
-    B --> HH[statistics.py]
     B --> HH[statistics.py]
 
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
     C --> K[DoctorLogProcessor]
 
-    D --> L[ErrorAnalyzer]
-    D --> M[NodeContext]
-    D --> H
+    %% A6 Pipeline Architecture
+    D --> PIPE[pipeline/orchestrator.py]
+    PIPE --> S1[SanitizerStage]
+    PIPE --> S2[PatternMatcherStage]
+    PIPE --> S3[ContextEnhancerStage]
+    PIPE --> S4[LLMBuilderStage]
+
+    %% Stage Dependencies
+    S2 --> H[pattern_loader.py]
+    S2 --> PLUG[pipeline/plugins/]
+    S4 --> SERV[services/workflow_pruner.py]
 
     H --> N[patterns/builtin/]
     H --> O[patterns/community/]
@@ -79,7 +85,9 @@ graph TD
 | `prestartup_script.py` | 102 | Earliest log interception hook (before custom_nodes load) |
 | `__init__.py` | 1900+ | Main entry: full Logger install, 9 API endpoints, LLM integration, env var support |
 | `logger.py` | 400+ | SafeStreamWrapper + queue-based processing, DoctorLogProcessor background thread, async writes |
-| `analyzer.py` | 320+ | Error analyzer: 57+ patterns (PatternLoader integration), node context extraction |
+| `analyzer.py` | 320+ | Wrapper for AnalysisPipeline, legacy API compatibility |
+| `pipeline/` | 400+ | A6: Error analysis pipeline (Sanitizer, Matcher, Context, LLMBuilder) |
+| `services/` | 50+ | R12: Workflow pruning and pip validation services |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
 | `config.py` | 65 | Config management: dataclass + JSON persistence |
@@ -264,6 +272,21 @@ graph TD
   - **New files**: `statistics.py` (StatisticsCalculator class)
   - **API endpoints**: `/doctor/statistics`, `/doctor/mark_resolved`
   - **Implementation**: `.planning/260104-F4_STATISTICS_RECORD.md`
+- [ ] **F13**: Sidebar Tab Navigation Refactoring - 🟡 Medium ⚠️ *Use dev branch*
+  - **Problem**: Current sidebar uses collapsible `<details>` panels, causing vertical scroll issues and content overlap
+  - **Solution**: Convert to internal tab navigation (Chat | Stats | Settings)
+  - **Key Design**:
+    - `TabRegistry` + `TabManager` classes for dynamic tab registration
+    - `render(container)` interface compatible with both Vanilla JS and Preact
+    - Lazy loading of tab content (improve initial load performance)
+  - **A7 Compatibility**: Designed to support future Preact island migration
+    - Chat tab → Preact `ChatIsland` (Phase 5A)
+    - Stats tab → Preact `StatisticsIsland` (Phase 5A)
+    - Settings tab → Stays Vanilla JS (per A7 non-goals)
+  - **New Files**: `doctor_tabs.js`, `tabs/chat_tab.js`, `tabs/stats_tab.js`, `tabs/settings_tab.js`
+  - **Est. Time**: ~11 hours
+  - **Implementation Plan**: `.planning/260106-SIDEBAR_TAB_REFACTORING_PLAN.md`
+  - **Prerequisite**: Before A7 Phase 5A component migration
 - [ ] **F5**: Node health scoring - 🟢 Low
 - [x] **F2**: Hot-reload error patterns from external JSON/YAML - 🟡 Medium ✅ *Completed (2026-01-03)*
   - **Priority upgraded** from Low → Medium (enables community ecosystem)
@@ -286,7 +309,7 @@ graph TD
 
 *Sorted by complexity and priority (High → Low):*
 
-- [ ] **A6**: Refactor analyzer.py to Plugin-based Pipeline - 🔴 High ⚠️ *Use dev branch*
+- [x] **A6**: Refactor analyzer.py to Plugin-based Pipeline - 🔴 High ✅ *Completed (2026-01-06)*
   - **Architecture**: Transform monolithic analyzer into composable pipeline stages
   - **Pipeline Stages**:
     - **Stage 1**: Sanitizer (PII removal, implements S6)
@@ -297,14 +320,14 @@ graph TD
     - Python Plugin API for community contributions
     - Register custom error matchers beyond regex patterns
     - Enable logic-based checks (e.g., filesystem validation for model paths)
-    - **Example plugins**: Reactor face-swap errors, ControlNet-specific issues, custom node validators
+    - **Example plugin**: included in `pipeline/plugins/community/example.py`
   - **Benefits**:
     - Single Responsibility Principle (each stage testable in isolation)
     - Extensible without core code changes
     - Community can contribute logic, not just JSON rules
     - Gradual performance optimization per stage
-  - **Migration strategy**: Incremental with adapter pattern, keep old code paths initially
-  - **Foundation for**: S6, R12, F7, and future community ecosystem
+  - **Verification**: Full regression suite passed (132 tests), see `walkthrough.md`
+  - **Implementation Record**: `.planning/260106-A6_IMPLEMENTATION_RECORD.md`
   - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A7**: Frontend Architecture Modernization (Preact Migration) - 🟡 Medium ⚠️ *Use dev branch*
   - **Problem**: v2.0 Chat Interface creates state management complexity with Vanilla JS
@@ -604,21 +627,21 @@ graph TD
 **Priority**: High
 **Branch**: `dev` (REQUIRED)
 
-- [ ] **A6** Plugin-based Pipeline refactor
+- [x] **A6** Plugin-based Pipeline refactor ✅ *Completed (2026-01-06)*
   - **Stage 1**: Sanitizer (implements S6 backend)
-  - **Stage 2**: PatternMatcher (integrates T8 test results)
+  - **Stage 2**: PatternMatcher (integrates T8 test results, supports Plugins)
   - **Stage 3**: ContextEnhancer (node extraction)
-  - **Stage 4**: LLMContextBuilder (implements R12)
+  - **Stage 4**: LLMContextBuilder (implements R12 foundation)
   - Foundation for S6, R12, F7 integration
   - Enables community plugin ecosystem
-  - Incremental migration with adapter pattern
-  - **Critical**: Comprehensive testing before merge
-- [ ] **A7** Preact Migration
-  - Wrap existing Vanilla JS components
-  - Migrate chat interface to Preact components
+  - **Status**: Merged to main after verification
+- [ ] **A7** Preact Migration (Phase 5A)
+  - **Prerequisite**: F13 (Sidebar Tab Refactoring) must be completed first
+  - Migrate Chat tab to Preact `ChatIsland` component
+  - Migrate Stats tab to Preact `StatisticsIsland` component
   - Add Preact Signals for reactive state management
-  - **Prerequisite**: Complete v2.0 feature specification
-  - **Trigger**: After Phase 4D planning complete
+  - Settings tab remains Vanilla JS
+  - **Trigger**: After F13 complete
 
 #### Phase 5B: Type Safety & Advanced Features
 
@@ -744,15 +767,23 @@ graph TD
     B --> E[i18n.py]
     B --> F[config.py]
     B --> G[nodes.py]
-    B --> H[pattern_loader.py]
+    B --> HH[statistics.py]
 
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
     C --> K[DoctorLogProcessor]
 
-    D --> L[ErrorAnalyzer]
-    D --> M[NodeContext]
-    D --> H
+    %% A6 Pipeline Architecture
+    D --> PIPE[pipeline/orchestrator.py]
+    PIPE --> S1[SanitizerStage]
+    PIPE --> S2[PatternMatcherStage]
+    PIPE --> S3[ContextEnhancerStage]
+    PIPE --> S4[LLMBuilderStage]
+
+    %% Stage Dependencies
+    S2 --> H[pattern_loader.py]
+    S2 --> PLUG[pipeline/plugins/]
+    S4 --> SERV[services/workflow_pruner.py]
 
     H --> N[patterns/builtin/]
     H --> O[patterns/community/]
@@ -803,7 +834,9 @@ graph TD
 | `prestartup_script.py` | 102 | 最早的日誌攔截 Hook（在 custom_nodes 載入前） |
 | `__init__.py` | 1900+ | 主入口：完整 Logger 安裝、9 個 API 端點、LLM 整合、環境變數支援 |
 | `logger.py` | 400+ | SafeStreamWrapper + queue-based 處理、DoctorLogProcessor 背景執行緒、非同步寫入 |
-| `analyzer.py` | 320+ | 錯誤分析器：57+ 模式（PatternLoader 整合）、節點上下文擷取 |
+| `analyzer.py` | 320+ | AnalysisPipeline 封裝器，維持 Legacy API 相容性 |
+| `pipeline/` | 400+ | A6: 錯誤分析管線（Sanitizer, Matcher, Context, LLMBuilder） |
+| `services/` | 50+ | R12: 工作流剪裁與套件驗證服務 |
 | `pattern_loader.py` | 150+ | JSON-based pattern 管理，支援熱重載 |
 | `i18n.py` | 1400+ | 國際化：9 語言（en, zh_TW, zh_CN, ja, de, fr, it, es, ko）、57 個 pattern 翻譯 |
 | `config.py` | 65 | 配置管理：dataclass + JSON 持久化 |
@@ -987,6 +1020,21 @@ graph TD
   - **API 端點**：`/doctor/statistics`、`/doctor/mark_resolved`
   - **測試**：後端單元測試 17/17；統計 E2E 測試 18/18；Playwright 全套 46/46
   - **實作記錄**：`.planning/260104-F4_STATISTICS_RECORD.md`
+- [ ] **F13**: 側邊欄分頁導航重構 - 🟡 Medium ⚠️ *使用 dev branch*
+  - **問題**：當前側邊欄使用可折疊 `<details>` 面板，導致垂直滾動問題與內容重疊
+  - **解決方案**：轉換為內部分頁導航（Chat | Stats | Settings）
+  - **核心設計**：
+    - `TabRegistry` + `TabManager` 類別用於動態分頁註冊
+    - `render(container)` 介面同時相容 Vanilla JS 與 Preact
+    - 分頁內容懶加載（提升初始載入效能）
+  - **A7 相容性**：設計支援未來 Preact island 遷移
+    - Chat 分頁 → Preact `ChatIsland`（Phase 5A）
+    - Stats 分頁 → Preact `StatisticsIsland`（Phase 5A）
+    - Settings 分頁 → 保持 Vanilla JS（依據 A7 非目標）
+  - **新增檔案**：`doctor_tabs.js`、`tabs/chat_tab.js`、`tabs/stats_tab.js`、`tabs/settings_tab.js`
+  - **預估時間**：約 11 小時
+  - **實作計劃**：`.planning/260106-SIDEBAR_TAB_REFACTORING_PLAN.md`
+  - **前提條件**：須在 A7 Phase 5A 組件遷移之前完成
 - [ ] **F5**: 節點健康評分 - 🟢 Low
 - [x] **F2**: 錯誤模式熱更新（從外部 JSON/YAML 載入） - 🟡 Medium ✅ *已完成 (2026-01-03)*
   - **優先級升級** 從 Low → Medium（啟用社群生態系統）
@@ -1009,7 +1057,7 @@ graph TD
 
 *按複雜度與優先級排序（高 → 低）：*
 
-- [ ] **A6**: 重構 analyzer.py 為插件式 Pipeline - 🔴 High ⚠️ *使用 dev branch*
+- [x] **A6**: 重構 analyzer.py 為插件式 Pipeline - 🔴 High ✅ *已完成 (2026-01-06)*
   - **架構**：將單體式分析器轉換為可組合的 Pipeline 階段
   - **Pipeline 階段**：
     - **階段 1**：Sanitizer（PII 移除，實作 S6）
@@ -1020,14 +1068,14 @@ graph TD
     - 社群可貢獻 Python Plugin API
     - 註冊自訂錯誤匹配器（超越 Regex 模式）
     - 啟用邏輯檢查（例如檔案系統模型路徑驗證）
-    - **插件範例**：Reactor 人臉交換錯誤、ControlNet 特定問題、自訂節點驗證器
+    - **範例**：已包含 `pipeline/plugins/community/example.py`
   - **優勢**：
     - 單一職責原則（每個階段可獨立測試）
     - 不改核心程式碼即可擴展
     - 社群可貢獻邏輯，而非僅 JSON 規則
     - 各階段漸進式性能優化
-  - **遷移策略**：漸進式搭配轉接器模式，初期保留舊程式碼路徑
-  - **基礎支撐**：S6、R12、F7 及未來社群生態系統
+  - **驗證**：完整回歸測試通過（132 項），詳見 `walkthrough.md`
+  - **實作記錄**：`.planning/260106-A6_IMPLEMENTATION_RECORD.md`
   - **設計參考**：參見 `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A7**: 前端架構現代化（Preact 遷移） - 🟡 Medium ⚠️ *使用 dev branch*
   - **問題**：v2.0 Chat Interface 使 Vanilla JS 狀態管理複雜化
@@ -1320,21 +1368,21 @@ graph TD
 **優先級**: 高
 **分支**: `dev`（必要）
 
-- [ ] **A6** 插件式 Pipeline 重構
+- [x] **A6** 插件式 Pipeline 重構 ✅ *已完成 (2026-01-06)*
   - **階段 1**：Sanitizer（實作 S6 後端）
-  - **階段 2**：PatternMatcher（整合 T8 測試結果）
+  - **階段 2**：PatternMatcher（整合 T8 測試結果+插件支援）
   - **階段 3**：ContextEnhancer（節點擷取）
-  - **階段 4**：LLMContextBuilder（實作 R12）
+  - **階段 4**：LLMContextBuilder（實作 R12 基礎）
   - S6、R12、F7 整合基礎
   - 啟用社群插件生態系統
-  - 漸進式遷移搭配轉接器模式
-  - **關鍵**：合併前需全面測試
-- [ ] **A7** Preact 遷移
-  - 包裝現有 Vanilla JS 組件
-  - 將聊天介面遷移至 Preact 組件
+  - **狀態**：驗證後已合併至 main
+- [ ] **A7** Preact 遷移（Phase 5A）
+  - **前提條件**：須先完成 F13（側邊欄分頁重構）
+  - 將 Chat 分頁遷移至 Preact `ChatIsland` 組件
+  - 將 Stats 分頁遷移至 Preact `StatisticsIsland` 組件
   - 加入 Preact Signals 響應式狀態管理
-  - **前提條件**：完成 v2.0 功能規格
-  - **觸發時機**：Phase 4D 規劃完成後 ✅ (可開始)
+  - Settings 分頁保持 Vanilla JS
+  - **觸發時機**：F13 完成後
 
 #### Phase 5B: 型別安全與進階功能
 

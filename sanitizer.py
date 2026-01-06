@@ -76,7 +76,7 @@ class PIISanitizer:
 
         # API keys (common patterns: sk-..., key_..., token_...)
         "api_key": (
-            r'\b(?:sk-[a-zA-Z0-9_-]{20,}|key_[a-zA-Z0-9]{20,}|token_[a-zA-Z0-9]{20,}|[a-f0-9]{32,64})\b',
+            r'\b(?:sk-[a-zA-Z0-9_-]{20,}|key_[a-zA-Z0-9]{20,}|token_[a-zA-Z0-9]{20,}|(?<!SHA256:)[a-f0-9]{32,64})\b',
             r'<API_KEY>'
         ),
 

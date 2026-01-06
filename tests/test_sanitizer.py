@@ -258,6 +258,10 @@ class TestPIISanitizerStrict:
                 "SSH fingerprint: <SSH_FINGERPRINT>"
             ),
             (
+                "SSH fingerprint: SHA256:abcdef0123456789abcdef0123456789",
+                "SSH fingerprint: <SSH_FINGERPRINT>"
+            ),
+            (
                 "MD5:a1:b2:c3:d4:e5:f6:a7:b8:c9:d0:e1:f2:a3:b4:c5:d6",
                 "MD5<SSH_FINGERPRINT>"
             ),

@@ -53,6 +53,7 @@ from .config import CONFIG
 from .session_manager import SessionManager
 from .system_info import get_system_environment, format_env_for_llm
 from .sanitizer import PIISanitizer, SanitizationLevel
+from .security import is_local_llm_url, validate_ssrf_url
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -66,111 +67,6 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
 
 
-def is_local_llm_url(base_url: str) -> bool:
-    """
-    Check if the base URL is a local LLM service (LMStudio, Ollama, etc.)
-    These typically don't require an API key.
-    """
-    if not base_url:
-        return False
-    
-    base_url_lower = base_url.lower()
-    local_patterns = [
-        # LMStudio patterns
-        "localhost:1234", "127.0.0.1:1234", "0.0.0.0:1234",
-        # Ollama patterns
-        "localhost:11434", "127.0.0.1:11434", "0.0.0.0:11434",
-        # Generic local patterns
-        "localhost/v1", "127.0.0.1/v1",
-    ]
-    return any(pattern in base_url_lower for pattern in local_patterns)
-
-
-def validate_ssrf_url(base_url: str, allow_local_llm: bool = True) -> tuple[bool, str]:
-    """
-    S2: Validate base URL to prevent SSRF attacks.
-    
-    Blocks:
-    - Private IP ranges (10.x, 172.16-31.x, 192.168.x)
-    - Localhost (127.x.x.x, localhost, ::1)
-    - Link-local addresses (169.254.x.x)
-    - Non-HTTP protocols (file://, ftp://, etc.)
-    - Metadata endpoints (169.254.169.254)
-    
-    Args:
-        base_url: The URL to validate
-        allow_local_llm: If True, allows known local LLM patterns (LMStudio, Ollama)
-        
-    Returns:
-        (is_valid, error_message) tuple
-    """
-    import ipaddress
-    from urllib.parse import urlparse
-    
-    if not base_url:
-        return False, "Empty URL"
-    
-    # Allow known local LLM patterns if enabled
-    if allow_local_llm and is_local_llm_url(base_url):
-        return True, ""
-    
-    try:
-        parsed = urlparse(base_url)
-    except Exception as e:
-        return False, f"Invalid URL format: {e}"
-    
-    # Check protocol
-    if parsed.scheme not in ('http', 'https'):
-        return False, f"Invalid protocol: {parsed.scheme}. Only HTTP/HTTPS allowed."
-    
-    hostname = parsed.hostname
-    if not hostname:
-        return False, "Missing hostname"
-    
-    hostname_lower = hostname.lower()
-    
-    # Block localhost patterns
-    localhost_patterns = ['localhost', '127.0.0.1', '::1', '0.0.0.0']
-    if hostname_lower in localhost_patterns:
-        return False, f"Blocked: localhost access ({hostname})"
-    
-    # Check if hostname is an IP address
-    try:
-        ip = ipaddress.ip_address(hostname)
-        
-        # Block loopback
-        if ip.is_loopback:
-            return False, f"Blocked: loopback address ({hostname})"
-        
-        # Block private IPs
-        if ip.is_private:
-            return False, f"Blocked: private IP address ({hostname})"
-        
-        # Block link-local
-        if ip.is_link_local:
-            return False, f"Blocked: link-local address ({hostname})"
-        
-        # Block reserved IPs (includes metadata endpoints like 169.254.169.254)
-        if ip.is_reserved:
-            return False, f"Blocked: reserved IP address ({hostname})"
-        
-        # Block multicast
-        if ip.is_multicast:
-            return False, f"Blocked: multicast address ({hostname})"
-            
-    except ValueError:
-        # Not an IP address, it's a hostname - check for suspicious patterns
-        # Block .local domains
-        if hostname_lower.endswith('.local'):
-            return False, f"Blocked: .local domain ({hostname})"
-        
-        # Block internal TLDs sometimes used in corporate networks
-        internal_tlds = ['.internal', '.corp', '.lan', '.home', '.localdomain']
-        for tld in internal_tlds:
-            if hostname_lower.endswith(tld):
-                return False, f"Blocked: internal domain ({hostname})"
-    
-    return True, ""
 
 def is_anthropic(base_url: str) -> bool:
     """Check if the base URL is for Anthropic API."""
@@ -991,6 +887,10 @@ try:
             "suggestion": analysis.get("suggestion"),
             "timestamp": analysis.get("timestamp"),
             "node_context": analysis.get("node_context"),
+            "analysis_metadata": analysis.get("analysis_metadata"),
+            "matched_pattern_id": analysis.get("matched_pattern_id"),
+            "pattern_category": analysis.get("pattern_category"),
+            "pattern_priority": analysis.get("pattern_priority"),
         })
     
     @server.PromptServer.instance.routes.post("/debugger/set_language")

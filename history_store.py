@@ -28,6 +28,7 @@ class HistoryEntry:
         pattern_category: Optional category of the matched pattern (for F4 statistics)
         pattern_priority: Optional priority of the matched pattern (for F4 statistics)
         resolution_status: Resolution status of the error (for F4 tracking)
+        analysis_metadata: Optional analysis metadata (sanitization, sources, etc.)
     """
     timestamp: str
     error: str
@@ -39,6 +40,7 @@ class HistoryEntry:
     pattern_category: Optional[str] = None
     pattern_priority: Optional[int] = None
     resolution_status: str = "unresolved"  # "resolved"|"unresolved"|"ignored"
+    analysis_metadata: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert entry to dictionary for JSON serialization."""
@@ -57,7 +59,8 @@ class HistoryEntry:
             matched_pattern_id=data.get("matched_pattern_id"),
             pattern_category=data.get("pattern_category"),
             pattern_priority=data.get("pattern_priority"),
-            resolution_status=data.get("resolution_status", "unresolved")
+            resolution_status=data.get("resolution_status", "unresolved"),
+            analysis_metadata=data.get("analysis_metadata"),
         )
 
 
