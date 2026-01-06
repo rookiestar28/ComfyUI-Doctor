@@ -245,6 +245,28 @@ class DoctorLogProcessor(threading.Thread):
                 self.in_traceback = False
                 self.buffer = []
             else:
+                # ═══════════════════════════════════════════════════════════════
+                # CRITICAL FIX (2026-01-06): Check completion marker BEFORE buffer.append()
+                # ═══════════════════════════════════════════════════════════════
+                # BUG: "Prompt executed in X seconds" was being added to buffer BEFORE
+                #      is_complete_traceback() detected completion, causing it to be
+                #      recorded as part of the error message.
+                #
+                # SOLUTION: Intercept "Prompt executed" BEFORE appending to buffer.
+                #           Use current buffer (without this line) for recording.
+                #
+                # DO NOT MOVE THIS CHECK AFTER buffer.append()!
+                # ═══════════════════════════════════════════════════════════════
+                if "Prompt executed" in message:
+                    full_traceback = "".join(self.buffer)
+                    if full_traceback.strip():  # Only record if buffer has content
+                        result = ErrorAnalyzer.analyze(full_traceback)
+                        suggestion, metadata = result if result else (None, None)
+                        self._record_analysis(full_traceback, suggestion, metadata)
+                    self.in_traceback = False
+                    self.buffer = []
+                    return
+                
                 self.buffer.append(message)
                 self.last_buffer_time = current_time
                 full_traceback = "".join(self.buffer)
@@ -295,6 +317,60 @@ class DoctorLogProcessor(threading.Thread):
             suggestion: Suggestion text (or None if no match)
             metadata: Optional metadata dict with pattern info (from F4)
         """
+        # DEBUG: Log what's being recorded
+        logging.info(f"[Doctor] _record_analysis called with traceback preview: {full_traceback[:100] if full_traceback else 'None'}...")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # CRITICAL FIX (2026-01-06): Prevent non-error messages from
+        # overwriting legitimate error records
+        # ═══════════════════════════════════════════════════════════════
+        # BUG: Normal messages like "Prompt executed in X seconds" were
+        #      being recorded as errors, overwriting real error logs.
+        #
+        # SOLUTION: Validate that full_traceback contains actual error
+        #           indicators before recording.
+        #
+        # DO NOT REMOVE THIS VALIDATION!
+        # ═══════════════════════════════════════════════════════════════
+        
+        # Skip recording if no actual error content
+        # This prevents normal messages like "Prompt executed in X seconds" from
+        # overwriting legitimate error records
+        if not full_traceback:
+            return
+        
+        # Explicit exclusion for normal execution messages
+        # These messages should NEVER be recorded as errors
+        normal_messages = [
+            "Prompt executed in",
+            "got prompt",
+            "Executing node",
+            "To see the GUI go to:",
+            "Starting server",
+        ]
+        for normal_msg in normal_messages:
+            if normal_msg in full_traceback and "Error" not in full_traceback and "Exception" not in full_traceback:
+                logging.debug(f"[Doctor] Skipping normal message: {full_traceback[:100]}")
+                return
+        
+        # Require at least one error indicator
+        error_indicators = [
+            "Traceback (most recent call last):",
+            "Error:",
+            "Error ",  # Catch RuntimeError, ValueError etc without colon
+            "Exception:",
+            "Exception ",
+            "Failed to validate",
+            "❌ CRITICAL",
+            "⚠️ Meta Tensor",
+        ]
+        has_error_indicator = any(indicator in full_traceback for indicator in error_indicators)
+        
+        # Also accept if we have a valid suggestion (pattern matched)
+        if not has_error_indicator and not suggestion:
+            logging.debug(f"[Doctor] Skipping non-error message (no indicators): {full_traceback[:100]}")
+            return
+        
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
         timestamp = datetime.datetime.now().isoformat()
 

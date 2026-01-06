@@ -1466,9 +1466,42 @@ export class DoctorUI {
                 // Check if error is too long (more than 500 characters)
                 result.hasLongError = fullError.length > 500;
             } else if (lines.length > 0) {
-                // --- Other Errors ---
-                // Use last line (usually Exception: Message)
-                result.errorSummary = lines[lines.length - 1];
+                // ═══════════════════════════════════════════════════════════════
+                // CRITICAL FIX (2026-01-06): Find actual exception line
+                // ═══════════════════════════════════════════════════════════════
+                // BUG: Previous code used `lines[lines.length - 1]` (last line)
+                //      which could be "Prompt executed in X seconds" if that
+                //      message was included in the recorded traceback.
+                //
+                // SOLUTION: Search backwards for lines matching Python exception
+                //           format (e.g., "RuntimeError:", "ValueError:")
+                //
+                // DO NOT CHANGE BACK TO `lines[lines.length - 1]`!
+                // ═══════════════════════════════════════════════════════════════
+                let errorLine = null;
+
+                // Search backwards for the exception line
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    const line = lines[i].trim();
+                    // Match Python exception format: ExceptionType: message
+                    if (/^[A-Z][a-zA-Z0-9]*(?:Error|Exception|Warning|Interrupt):/.test(line)) {
+                        errorLine = line;
+                        break;
+                    }
+                }
+
+                // Fallback: use last non-empty line that's not a normal status message
+                if (!errorLine) {
+                    for (let i = lines.length - 1; i >= 0; i--) {
+                        const line = lines[i].trim();
+                        if (line && !line.startsWith('Prompt executed') && !line.startsWith('+-')) {
+                            errorLine = line;
+                            break;
+                        }
+                    }
+                }
+
+                result.errorSummary = errorLine || lines[lines.length - 1];
                 result.hasLongError = fullError.length > 500;
             }
         }
