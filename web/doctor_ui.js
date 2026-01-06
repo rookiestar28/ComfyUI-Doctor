@@ -56,6 +56,15 @@ export class DoctorUI {
         this.panel = null;
         this.pollTimerId = null;
 
+        // ═══════════════════════════════════════════════════════════════
+        // 5B.1: Island Mode Gating Flags
+        // ═══════════════════════════════════════════════════════════════
+        // When Preact islands are active, DoctorUI should NOT manipulate
+        // their DOM directly. These flags are set by tab renderers.
+        // ═══════════════════════════════════════════════════════════════
+        this.chatIslandActive = false;
+        this.statsIslandActive = false;
+
         // Deduplication state
         this.lastErrorHash = null;
         this.lastErrorTimestamp = 0;
@@ -351,6 +360,21 @@ export class DoctorUI {
      * ═══════════════════════════════════════════════════════════════
      */
     updateSidebarTab(data) {
+        // ═══════════════════════════════════════════════════════════════
+        // 5B.1: Skip DOM updates when ChatIsland is active
+        // ═══════════════════════════════════════════════════════════════
+        // ChatIsland manages its own DOM via Preact. DoctorUI should only
+        // update doctorContext (which ChatIsland subscribes to).
+        // ═══════════════════════════════════════════════════════════════
+        if (this.chatIslandActive) {
+            // Just update context state - ChatIsland will react
+            if (doctorContext) {
+                doctorContext.setState({ workflowContext: data });
+            }
+            console.log('[DoctorUI] ChatIsland active, skipping vanilla DOM update');
+            return;
+        }
+
         // F13: Ensure Chat Tab is active and rendered if we have an error
         // This handles cases where user is on another tab (e.g. Stats) when error occurs
         if ((!this.sidebarErrorContext || !this.sidebarMessages) && this.tabManager) {
@@ -938,6 +962,16 @@ export class DoctorUI {
      * Fetches statistics from /doctor/statistics API and updates the panel
      */
     async renderStatistics() {
+        // ═══════════════════════════════════════════════════════════════
+        // 5B.1: Skip DOM updates when StatisticsIsland is active
+        // ═══════════════════════════════════════════════════════════════
+        // StatisticsIsland manages its own DOM via Preact.
+        // ═══════════════════════════════════════════════════════════════
+        if (this.statsIslandActive) {
+            console.log('[DoctorUI] StatisticsIsland active, skipping vanilla DOM update');
+            return;
+        }
+
         try {
             // Fetch statistics from API
             const result = await DoctorAPI.getStatistics(30);

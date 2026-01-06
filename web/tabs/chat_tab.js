@@ -21,6 +21,8 @@ export async function render(container) {
 
     if (success) {
         isPreactMode = true;
+        // 5B.1: Set island active flag to gate DoctorUI DOM updates
+        doctorUI.chatIslandActive = true;
         // Styles for container
         container.style.cssText = 'display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;';
         // Clear vanilla references so DoctorUI doesn't try to manipulate removed DOM.
@@ -31,6 +33,9 @@ export async function render(container) {
         doctorUI.sidebarSendBtn = null;
         doctorUI.sidebarClearBtn = null;
         doctorUI.updateSanitizationStatusVanilla = null;
+    } else {
+        // 5B.1: Ensure flag is false when Preact fails
+        doctorUI.chatIslandActive = false;
     }
 }
 

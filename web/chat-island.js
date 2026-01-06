@@ -301,6 +301,16 @@ function ChatIsland({ uiText }) {
         loadAssets();
     }, []);
 
+    // 5B.3: Cleanup on unmount - abort active streams
+    useEffect(() => {
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+        };
+    }, []);
+
     const scrollToBottom = () => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: "smooth" });

@@ -66,7 +66,12 @@ export async function render(container) {
 
     if (success) {
         isPreactMode = true;
+        // 5B.1: Set island active flag to gate DoctorUI DOM updates
+        doctorUI.statsIslandActive = true;
         doctorUI.sidebarStatsPanel = null;
+    } else {
+        // 5B.1: Ensure flag is false when Preact fails
+        doctorUI.statsIslandActive = false;
     }
 }
 

@@ -75,9 +75,9 @@ graph TD
     AU --> AV[test-harness.html]
     AU --> AW[mocks/comfyui-app.js]
     AU --> AX[specs/settings.spec.js - 12 tests]
-    AU --> AY[specs/sidebar.spec.js - 10 tests]
-    AU --> AZ[specs/statistics.spec.js - 18 tests]
-    AU --> BA[specs/preact-loader.spec.js - 8 tests]
+    AU --> AY[specs/sidebar.spec.js - 13 tests]
+    AU --> AZ[specs/statistics.spec.js - 14 tests]
+    AU --> BA[specs/preact-loader.spec.js - 12 tests]
     AV --> AH
     AV --> AJ
 ```
@@ -109,9 +109,9 @@ graph TD
 | `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
 | `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (12 tests): toggle, selectors, inputs, persistence |
-| `tests/e2e/specs/sidebar.spec.js` | 190 | Chat interface tests (10 tests): messages, input, buttons, error context, sanitization status |
-| `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n |
-| `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (8 tests): module loading, flags, error handling |
+| `tests/e2e/specs/sidebar.spec.js` | 266 | Chat interface tests (12 tests): messages, input, buttons, error context, fallback, Analyze |
+| `tests/e2e/specs/statistics.spec.js` | 381 | Statistics dashboard tests (14 tests): panel, cards, patterns, categories, i18n |
+| `tests/e2e/specs/preact-loader.spec.js` | 215 | Preact loader tests (10 tests): module loading, flags, error handling |
 | `playwright.config.js` | 89 | Playwright configuration for E2E tests |
 
 ---
@@ -358,8 +358,9 @@ graph TD
   - **Trigger**: BEFORE v2.0 Chat Interface expansion begins
   - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
   - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
-  - **Phase Status**: Phase 5A completed; Phase 5B (integration hardening) planned; Phase 5C (extensibility) planned
+  - **Phase Status**: Phase 5A completed ✅; Phase 5B completed ✅; Phase 5C (extensibility) planned
   - **Plans**: `.planning/260106-A7_PHASE_5B_INTEGRATION_HARDENING_PLAN.md`, `.planning/260106-A7_PHASE_5C_EXTENSIBILITY_PLAN.md`
+  - **Implementation Records**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`, `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low ✅ *Completed (Phase 3A)*
@@ -393,12 +394,12 @@ graph TD
     - Test harness loads full Doctor UI without ComfyUI ✅
     - Mock ComfyUI environment (app, api, extensionManager) ✅
     - Settings panel tests (12 tests): toggle, language selector, provider selector, inputs ✅
-    - Chat interface tests (8 tests): messages area, input/send/clear buttons, error context ✅
-    - Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n ✅
-    - Preact loader tests (8 tests): module loading, flags, error handling ✅
+    - Chat interface tests (13 tests): messages area, input/send/clear buttons, fallback, Analyze ✅
+    - Statistics dashboard tests (16 tests): panel, cards, patterns, categories, i18n ✅
+    - Preact loader tests (10 tests): module loading, flags, error handling, UI fallback ✅
     - API endpoint mocks for backend calls ✅
-  - **Test Results**: 100% pass rate (46/46 tests)
-  - **Execution time**: ~16 seconds for full test suite (Chromium, 10 workers)
+  - **Test Results**: 100% pass rate (51/51 tests)
+  - **Execution time**: Varies by environment; baseline ~18.3s total with preflight
   - **How to Run Tests**:
     <details>
     <summary>Click to expand test commands</summary>
@@ -596,7 +597,7 @@ graph TD
   - API: `/doctor/statistics` (GET) and `/doctor/mark_resolved` (POST)
   - Frontend: Collapsible statistics panel in sidebar with error trends, top patterns, category breakdown, and resolution tracking
   - Features: 24h/7d/30d time ranges, Top 5 error patterns, resolution rate tracking (resolved/unresolved/ignored)
-  - Testing: 17/17 backend unit tests passed; statistics E2E tests 18/18 passed; full Playwright suite 46/46 passed
+  - Testing: 17/17 backend unit tests passed; statistics E2E tests 18/18 passed; full Playwright suite 51/51 passed (post-5B additions)
   - i18n: Fully translated across all 9 languages
   - See `.planning/260104-F4_STATISTICS_RECORD.md` for implementation details
 - [ ] **R6-R7** Network reliability improvements
@@ -647,22 +648,26 @@ graph TD
   - ✅ Migrated Chat tab to Preact `ChatIsland` component (SSE streaming, Markdown, dynamic asset loading)
   - ✅ Migrated Stats tab to Preact `StatisticsIsland` component (data fetching, charts, categories)
   - ✅ Implemented Vanilla JS fallback for both islands
-  - ✅ E2E Test Results: `sidebar.spec.js` (10/10), `statistics.spec.js` (16/16)
+  - ✅ E2E Test Results: `sidebar.spec.js` (13/13), `statistics.spec.js` (16/16)
   - Settings tab remains Vanilla JS (per A7 non-goals)
   - **Implementation Record**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`
 
-#### Phase 5B: A7 Integration & Hardening
+#### Phase 5B: A7 Integration & Hardening ✅ COMPLETED
 
 **Priority**: Medium
-**Branch**: `dev` (REQUIRED)
+**Branch**: `dev` → merged to `main`
+**Completion Date**: 2026-01-07
 
-- [ ] **A7** Integration & hardening (Phase 5B)
-  - Mode gating between DoctorUI and islands
-  - Fallback robustness when Preact is disabled or fails
-  - Lifecycle safeguards (tab switching, SSE)
-  - Preflight JS validation before E2E/CI
-  - Expanded E2E coverage and performance baselines
-  - **Plan**: `.planning/260106-A7_PHASE_5B_INTEGRATION_HARDENING_PLAN.md`
+- [x] **A7** Integration & hardening (Phase 5B) ✅ *Completed (2026-01-07)*
+  - ✅ **5B.1 Mode Gating**: Added `chatIslandActive`/`statsIslandActive` flags to `DoctorUI`
+  - ✅ **5B.2 Fallback Robustness**: Preact disabled → vanilla renders (E2E verified)
+  - ✅ **5B.3 Lifecycle Safety**: Added stream abort cleanup on component unmount
+  - ✅ **5B.4 Preflight Validation**: Created `scripts/preflight-js.mjs` (13/13 files pass)
+  - ✅ **5B.5 E2E Coverage**: Fallback, Analyze button, vendor failure → UI tests
+  - ✅ **5B.6 Documentation**: Performance baselines documented (timing varies; see record)
+  - ✅ Fixed vendor module bare specifiers for browser ESM compatibility
+  - ✅ **Final E2E Result: 51/51 tests passed**
+  - **Implementation Record**: `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
 
 #### Phase 5C: A7 Extensibility
 

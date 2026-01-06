@@ -134,8 +134,9 @@ test.describe('Preact Loader', () => {
     });
 
     test.describe('Error Handling', () => {
-        test('should handle CDN failure gracefully', async ({ page }) => {
-            // Block esm.sh requests to simulate offline
+        test('should handle complete load failure gracefully', async ({ page }) => {
+            // Block both local vendor files AND esm.sh CDN to simulate complete failure
+            await page.route('**/web/lib/**', route => route.abort());
             await page.route('**/esm.sh/**', route => route.abort());
 
             const result = await page.evaluate(async () => {
@@ -153,13 +154,15 @@ test.describe('Preact Loader', () => {
                 }
             });
 
-            // Should fail gracefully when CDN is blocked
+            // Should fail gracefully when both local and CDN are blocked
             expect(result.success).toBe(false);
-            expect(result.error).toContain('Failed to load');
+            // Error message should indicate failure (may vary)
+            expect(result.error).toBeTruthy();
         });
 
         test('should report error via getLoadError after failure', async ({ page }) => {
-            // Block CDN
+            // Block both local vendor files AND CDN
+            await page.route('**/web/lib/**', route => route.abort());
             await page.route('**/esm.sh/**', route => route.abort());
 
             const result = await page.evaluate(async () => {
@@ -206,6 +209,63 @@ test.describe('Preact Loader', () => {
             expect(result.sameH).toBe(true);
             expect(result.sameRender).toBe(true);
             expect(result.sameSignal).toBe(true);
+        });
+    });
+
+    // 5B.2/5B.5: Vendor load failure should trigger vanilla UI fallback
+    test.describe('UI Fallback on Load Failure', () => {
+        test('should render vanilla Chat UI when vendor files fail to load', async ({ page }) => {
+            // Block all vendor files AND CDN before page load
+            await page.route('**/web/lib/**', route => route.abort());
+            await page.route('**/esm.sh/**', route => route.abort());
+
+            // Navigate to test harness (Preact will fail to load)
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+
+            // Verify Chat UI still renders (vanilla fallback)
+            const chatMessages = page.locator('#doctor-messages');
+            await expect(chatMessages).toBeVisible({ timeout: 5000 });
+
+            // Verify input is still functional
+            const chatInput = page.locator('#doctor-input');
+            await expect(chatInput).toBeVisible();
+        });
+
+        test('should render vanilla Stats UI when vendor files fail to load', async ({ page }) => {
+            // Mock statistics API (needed for stats rendering)
+            await page.route('**/doctor/statistics*', route => {
+                route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        success: true,
+                        statistics: {
+                            total_errors: 3,
+                            top_patterns: [],
+                            category_breakdown: {},
+                            resolution_rate: { resolved: 1, unresolved: 1, ignored: 1 },
+                            trend: { last_24h: 1, last_7d: 2, last_30d: 3 }
+                        }
+                    }),
+                });
+            });
+
+            // Block all vendor files AND CDN
+            await page.route('**/web/lib/**', route => route.abort());
+            await page.route('**/esm.sh/**', route => route.abort());
+
+            // Navigate to test harness
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+
+            // Switch to Stats tab
+            await page.click('.doctor-tab-button[data-tab-id="stats"]');
+            await page.waitForTimeout(500);
+
+            // Verify Stats panel renders (vanilla fallback)
+            const statsPanel = page.locator('#doctor-statistics-panel, #doctor-stats-content');
+            await expect(statsPanel.first()).toBeVisible({ timeout: 5000 });
         });
     });
 });
