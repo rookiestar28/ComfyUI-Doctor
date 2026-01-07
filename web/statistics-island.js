@@ -6,6 +6,8 @@
 
 import { loadPreact, isPreactEnabled } from './preact-loader.js';
 import { DoctorAPI } from './doctor_api.js';
+// 5C.2: Use selectors for UI text
+import { getUIText } from './doctor_selectors.js';
 
 let preactModules = null;
 let islandMounted = false;

@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { waitForDoctorReady, clearStorage } from '../utils/helpers.js';
+import { waitForDoctorReady, clearStorage, disablePreact, assertChatFallbackUI } from '../utils/helpers.js';
 
 test.describe('Doctor Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
@@ -213,24 +213,17 @@ test.describe('Doctor Chat Interface', () => {
     expect(sanitizationStatus).toBeDefined();
   });
 
-  // 5B.5: Test Preact disabled fallback
+  // 5C.5: Test Preact disabled fallback using shared helpers
   test('should render vanilla chat when Preact is disabled', async ({ page }) => {
-    // Set Preact disabled flag before reload
-    await page.evaluate(() => {
-      localStorage.setItem('doctor_preact_disabled', 'true');
-    });
+    // Use shared helper to disable Preact before page load
+    await disablePreact(page);
 
     // Reload to apply flag
     await page.reload();
     await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 10000 });
 
-    // Verify Chat UI is still visible (vanilla fallback should work)
-    const messagesArea = page.locator('#doctor-messages');
-    await expect(messagesArea).toBeVisible();
-
-    // Verify input is still functional
-    const input = page.locator('#doctor-input');
-    await expect(input).toBeVisible();
+    // Use shared helper to assert fallback UI
+    await assertChatFallbackUI(page);
 
     // Clean up
     await page.evaluate(() => {

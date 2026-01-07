@@ -6,17 +6,21 @@
 
 import { app } from "../../../scripts/app.js";
 import { loadPreact, isPreactEnabled } from './preact-loader.js';
-import { doctorContext } from './doctor_state.js';
 import { DoctorAPI } from './doctor_api.js';
 import { FixHandler } from './doctor_fix_handler.js';
-
-// Assets
-const LOCAL_MARKED = "/extensions/ComfyUI-Doctor/lib/marked.min.js";
-const LOCAL_HIGHLIGHT = "/extensions/ComfyUI-Doctor/lib/highlight.min.js";
-const LOCAL_HIGHLIGHT_CSS = "/extensions/ComfyUI-Doctor/lib/github-dark.min.css";
-const CDN_MARKED = "https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js";
-const CDN_HIGHLIGHT = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js";
-const CDN_HIGHLIGHT_CSS = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css";
+// 5C.2: Use read-only selectors
+import {
+    getMessages, getWorkflowContext, getSettings, getIsProcessing, getSanitizationMetadata,
+    onMessagesChanged, onStateChanged
+} from './doctor_selectors.js';
+// 5C.2: Use actions for state mutations (separate from selectors)
+import {
+    refreshSettings, addMessage, clearMessages, setProcessing, setState
+} from './doctor_actions.js';
+// 5C.3: Use shared rendering utilities
+import {
+    loadRenderingAssets, sanitizeHtml, highlightCodeBlocks, addCopyButtons
+} from './doctor_rendering.js';
 
 // Shared State
 let preactModules = null;
@@ -24,66 +28,7 @@ let islandMounted = false;
 let currentContainer = null;
 let fixHandler = null;
 
-// Helper: Asset Loader
-const loadScript = (src) => new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-});
-
-const loadAssets = async () => {
-    // CSS
-    if (!document.getElementById('hljs-style')) {
-        const link = document.createElement('link');
-        link.id = 'hljs-style';
-        link.rel = 'stylesheet';
-        link.href = LOCAL_HIGHLIGHT_CSS;
-        link.onerror = () => link.href = CDN_HIGHLIGHT_CSS;
-        document.head.appendChild(link);
-    }
-    // JS
-    if (!window.marked) {
-        try { await loadScript(LOCAL_MARKED); }
-        catch { await loadScript(CDN_MARKED); }
-    }
-    if (!window.hljs) {
-        try { await loadScript(LOCAL_HIGHLIGHT); }
-        catch { await loadScript(CDN_HIGHLIGHT); }
-    }
-};
-
-const sanitizeHtml = (unsafeHtml) => {
-    try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(unsafeHtml, 'text/html');
-
-        const blockedTags = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'];
-        blockedTags.forEach(tag => {
-            doc.querySelectorAll(tag).forEach(node => node.remove());
-        });
-
-        doc.querySelectorAll('*').forEach(node => {
-            [...node.attributes].forEach(attr => {
-                const name = attr.name.toLowerCase();
-                const value = attr.value || '';
-                if (name.startsWith('on')) {
-                    node.removeAttribute(attr.name);
-                }
-                if ((name === 'src' || name === 'href') && /^javascript:/i.test(value.trim())) {
-                    node.removeAttribute(attr.name);
-                }
-            });
-        });
-
-        return doc.body.innerHTML;
-    } catch (e) {
-        const div = document.createElement('div');
-        div.textContent = unsafeHtml;
-        return div.innerHTML;
-    }
-};
+// 5C.3: Local loadAssets, loadScript, sanitizeHtml removed - using shared doctor_rendering.js
 
 // =========================================================
 // COMPONENTS
@@ -189,32 +134,9 @@ function MessageItem({ msg, uiText }) {
         // Avoid raw HTML injection from markdown.
         contentRef.current.innerHTML = sanitizeHtml(rawHtml);
 
-        // Highlight
-        if (window.hljs) {
-            contentRef.current.querySelectorAll('pre code').forEach(block => {
-                window.hljs.highlightElement(block);
-            });
-        }
-
-        // Add Copy Buttons (Simplified)
-        contentRef.current.querySelectorAll('pre').forEach(pre => {
-            if (pre.querySelector('.copy-btn')) return;
-            if (!pre.querySelector('code')) return;
-
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = '📋';
-            btn.title = 'Copy code';
-            btn.onclick = () => {
-                const code = pre.querySelector('code').innerText;
-                navigator.clipboard.writeText(code)
-                    .then(() => btn.textContent = '✅')
-                    .catch(() => btn.textContent = '❌');
-                setTimeout(() => btn.textContent = '📋', 2000);
-            };
-            pre.style.position = 'relative';
-            pre.appendChild(btn);
-        });
+        // 5C.3: Use shared highlight/copy utilities
+        highlightCodeBlocks(contentRef.current);
+        addCopyButtons(contentRef.current);
 
         if (fixHandler) {
             const fixData = fixHandler.detectFixes(msg.content || '');
@@ -255,27 +177,20 @@ function ChatIsland({ uiText }) {
     const abortControllerRef = useRef(null);
     const textareaRef = useRef(null);
 
-    // Subscribe to doctorContext
+    // 5C.2: Subscribe via selectors instead of direct doctorContext access
     useEffect(() => {
-        // Initial load
-        const state = doctorContext.state;
-        setMessages(state.messages || []);
-        setWorkflowContext(state.workflowContext);
+        // Initial load via selectors
+        setMessages(getMessages());
+        setWorkflowContext(getWorkflowContext());
+        setSanitizationMetadata(getSanitizationMetadata());
 
-        // Determine sanitization metadata
-        if (state.workflowContext?.analysis_metadata?.sanitization) {
-            setSanitizationMetadata(state.workflowContext.analysis_metadata.sanitization);
-        }
-
-        // Listeners
-        const msgUnsub = doctorContext.subscribe('messageAdded', () => {
-            setMessages([...doctorContext.state.messages]);
+        // Listeners via selectors
+        const msgUnsub = onMessagesChanged((msgs) => {
+            setMessages([...msgs]);
         });
 
-        // doctorContext publishes {prev, current}; do not treat it as the state object.
-        const stateUnsub = doctorContext.subscribe('stateChanged', (state) => {
-            const current = state?.current || doctorContext.state;
-            setIsProcessing(current.isProcessing);
+        const stateUnsub = onStateChanged((current) => {
+            setIsProcessing(current.isProcessing || false);
             setMessages(current.messages || []);
             if (current.workflowContext !== workflowContext) {
                 setWorkflowContext(current.workflowContext);
@@ -296,9 +211,9 @@ function ChatIsland({ uiText }) {
         }
     }, [messages, messages.length]);
 
-    // Load Assets
+    // 5C.3: Load rendering assets via shared module
     useEffect(() => {
-        loadAssets();
+        loadRenderingAssets();
     }, []);
 
     // 5B.3: Cleanup on unmount - abort active streams
@@ -320,30 +235,32 @@ function ChatIsland({ uiText }) {
     const runChat = useCallback(async (text) => {
         if (!text || isProcessing) return;
 
-        // Refresh settings to avoid stale API keys/base URLs.
-        doctorContext.refreshSettings?.();
+        // 5C.2: Refresh settings via selector
+        refreshSettings();
         const privacyMode = app?.ui?.settings?.getSettingValue?.("Doctor.Privacy.Mode", "basic") || "basic";
 
-        // 1. Add User Message to Context
-        doctorContext.addMessage('user', text);
-        doctorContext.setProcessing(true);
+        // 1. Add User Message via selector
+        addMessage('user', text);
+        setProcessing(true);
 
         // 2. Add System Placeholder for Assistant
-        doctorContext.addMessage('assistant', '...');
+        addMessage('assistant', '...');
 
-        // 3. Prepare Payload
+        // 3. Prepare Payload via selectors
         abortControllerRef.current = new AbortController();
 
-        const state = doctorContext.state;
+        const msgs = getMessages();
+        const wfCtx = getWorkflowContext();
+        const settings = getSettings();
         const payload = {
-            messages: state.messages.filter(m => m.content !== '...'),
-            error_context: state.workflowContext || {},
+            messages: msgs.filter(m => m.content !== '...'),
+            error_context: wfCtx || {},
             intent: 'chat',
-            selected_nodes: state.selectedNodes,
-            api_key: state.settings.apiKey,
-            base_url: state.settings.baseUrl,
-            model: state.settings.model,
-            language: state.settings.language,
+            selected_nodes: [],
+            api_key: settings.apiKey,
+            base_url: settings.baseUrl,
+            model: settings.model,
+            language: settings.language,
             privacy_mode: privacyMode
         };
 
@@ -355,10 +272,10 @@ function ChatIsland({ uiText }) {
                 (chunk) => {
                     if (chunk.delta) {
                         fullContent += chunk.delta;
-                        const msgs = [...doctorContext.state.messages];
-                        if (msgs.length > 0) {
-                            msgs[msgs.length - 1].content = fullContent;
-                            doctorContext.setState({ messages: msgs });
+                        const currentMsgs = [...getMessages()];
+                        if (currentMsgs.length > 0) {
+                            currentMsgs[currentMsgs.length - 1].content = fullContent;
+                            setState({ messages: currentMsgs });
                         }
                     }
                 },
@@ -367,10 +284,10 @@ function ChatIsland({ uiText }) {
             );
         } catch (e) {
             if (e.name !== 'AbortError') {
-                doctorContext.addMessage('system', `Error: ${e.message}`);
+                addMessage('system', `Error: ${e.message}`);
             }
         } finally {
-            doctorContext.setProcessing(false);
+            setProcessing(false);
             abortControllerRef.current = null;
         }
     }, [isProcessing]);
@@ -388,7 +305,8 @@ function ChatIsland({ uiText }) {
 
     const handleClear = useCallback(() => {
         if (confirm(uiText?.confirm_clear || 'Clear history?')) {
-            doctorContext.clearMessages();
+            // 5C.2: Use selector action
+            clearMessages();
         }
     }, [uiText]);
 

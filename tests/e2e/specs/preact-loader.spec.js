@@ -1,5 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { simulateVendorLoadFailure, disablePreact, assertChatFallbackUI } = require('../utils/helpers.js');
 
 /**
  * Preact Loader E2E Tests
@@ -110,10 +111,8 @@ test.describe('Preact Loader', () => {
                 return isPreactEnabled();
             });
 
-            // Note: isPreactEnabled() in preact-loader.js returns the PREACT_ENABLED constant,
-            // not the localStorage value directly. The localStorage check is in doctor.js.
-            // This test documents the current behavior.
-            expect(isEnabled).toBe(true); // PREACT_ENABLED is hardcoded to true
+            // 5C.5: isPreactEnabled() now checks localStorage flag
+            expect(isEnabled).toBe(false);
 
             // Clean up
             await page.evaluate(() => {
@@ -268,4 +267,109 @@ test.describe('Preact Loader', () => {
             await expect(statsPanel.first()).toBeVisible({ timeout: 5000 });
         });
     });
+
+    // 5C.5: Island Registry error boundary should trigger fallback
+    test.describe('Island Error Boundary (5C.5)', () => {
+        test('should trigger fallback when Preact vendor load fails', async ({ page }) => {
+            // Use shared helper from helpers.js
+            await simulateVendorLoadFailure(page);
+
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+
+            // Use shared helper from helpers.js
+            await assertChatFallbackUI(page);
+        });
+
+        test('should trigger fallback when localStorage disables Preact', async ({ page }) => {
+            // Use shared helper from helpers.js
+            await disablePreact(page);
+
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+
+            // Use shared helper from helpers.js
+            await assertChatFallbackUI(page);
+
+            // Verify isPreactEnabled() returns false
+            const isEnabled = await page.evaluate(async () => {
+                const { isPreactEnabled } = await import('/web/preact-loader.js');
+                return isPreactEnabled();
+            });
+            expect(isEnabled).toBe(false);
+        });
+
+        test('should record error when island render function throws', async ({ page }) => {
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+
+            // Register a test island that throws on render, then mount it
+            const result = await page.evaluate(async () => {
+                const registry = await import('/web/island_registry.js');
+
+                // Clear any previous errors
+                registry._resetRegistry();
+
+                // Register a test island that throws on render
+                registry.register({
+                    id: 'test-throwing-island',
+                    isEnabled: () => true,
+                    render: async () => {
+                        throw new Error('Intentional test error from render()');
+                    },
+                    unmount: () => { },
+                    fallbackRender: (container, error) => {
+                        container.innerHTML = '<div id="test-fallback">Fallback rendered</div>';
+                    },
+                    onError: (err) => {
+                        console.log('onError callback triggered:', err.message);
+                    }
+                });
+
+                // Create a test container
+                const testContainer = document.createElement('div');
+                testContainer.id = 'test-island-container';
+                document.body.appendChild(testContainer);
+
+                // Call mount - this should trigger the error boundary
+                const success = await registry.mount('test-throwing-island', testContainer);
+
+                // Get recorded errors
+                const errors = registry.getErrors();
+
+                return {
+                    mountSuccess: success,
+                    errorCount: errors.length,
+                    hasTestError: errors.some(e => e.id === 'test-throwing-island'),
+                    fallbackRendered: !!document.getElementById('test-fallback')
+                };
+            });
+
+            // Assertions: mount should return false, error should be recorded, fallback should render
+            expect(result.mountSuccess).toBe(false);
+            expect(result.errorCount).toBeGreaterThan(0);
+            expect(result.hasTestError).toBe(true);
+            expect(result.fallbackRendered).toBe(true);
+        });
+
+        test('should maintain UI functionality after Preact load failure', async ({ page }) => {
+            // Use shared helper from helpers.js
+            await simulateVendorLoadFailure(page);
+
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+
+            // Verify input is fully functional
+            const input = page.locator('#doctor-input');
+            await expect(input).toBeVisible({ timeout: 5000 });
+            await input.fill('Test message after failure');
+            const value = await input.inputValue();
+            expect(value).toBe('Test message after failure');
+
+            // Verify send button exists
+            const sendBtn = page.locator('#doctor-send-btn');
+            await expect(sendBtn).toBeVisible();
+        });
+    });
 });
+

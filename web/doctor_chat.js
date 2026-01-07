@@ -3,15 +3,10 @@ import { app } from "../../../scripts/app.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { doctorContext } from "./doctor_state.js";
 import { FixHandler } from "./doctor_fix_handler.js";  // F7: Parameter injection
-
-// S5: Local bundled assets with CDN fallback (pinned versions)
-// Versions: marked@15.0.4, highlight.js@11.9.0
-const LOCAL_MARKED = "/extensions/ComfyUI-Doctor/lib/marked.min.js";
-const LOCAL_HIGHLIGHT = "/extensions/ComfyUI-Doctor/lib/highlight.min.js";
-const LOCAL_HIGHLIGHT_CSS = "/extensions/ComfyUI-Doctor/lib/github-dark.min.css";
-const CDN_MARKED = "https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js";
-const CDN_HIGHLIGHT = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js";
-const CDN_HIGHLIGHT_CSS = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css";
+// 5C.3: Use shared rendering utilities
+import {
+    loadRenderingAssets, sanitizeHtml, highlightCodeBlocks, addCopyButtons
+} from './doctor_rendering.js';
 
 export class ChatPanel {
     constructor(options = {}) {
@@ -31,8 +26,8 @@ export class ChatPanel {
         // F7: Initialize fix handler
         this.fixHandler = new FixHandler(app);
 
-        // Load dependencies
-        this.loadAssets();
+        // 5C.3: Load shared assets
+        loadRenderingAssets();
 
         // Create UI
         console.log('[ChatPanel] Creating interface...');
@@ -71,39 +66,7 @@ export class ChatPanel {
         console.log('[ChatPanel] Constructor complete. Element classes:', this.element.className);
     }
 
-    sanitizeHtml(unsafeHtml) {
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(unsafeHtml, 'text/html');
-
-            // Remove dangerous tags
-            const blockedTags = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'];
-            blockedTags.forEach(tag => {
-                doc.querySelectorAll(tag).forEach(node => node.remove());
-            });
-
-            // Remove event handlers and javascript: URLs
-            doc.querySelectorAll('*').forEach(node => {
-                [...node.attributes].forEach(attr => {
-                    const name = attr.name.toLowerCase();
-                    const value = attr.value || '';
-                    if (name.startsWith('on')) {
-                        node.removeAttribute(attr.name);
-                    }
-                    if ((name === 'src' || name === 'href') && /^javascript:/i.test(value.trim())) {
-                        node.removeAttribute(attr.name);
-                    }
-                });
-            });
-
-            return doc.body.innerHTML;
-        } catch (e) {
-            console.warn('[ChatPanel] sanitizeHtml failed, falling back to plain text:', e);
-            const div = document.createElement('div');
-            div.textContent = unsafeHtml;
-            return div.innerHTML;
-        }
-    }
+    // 5C.3: Moved sanitizeHtml to doctor_rendering.js - use imported function
 
     destroy() {
         console.log('[ChatPanel] Destroying panel and cleaning up resources');
@@ -187,62 +150,7 @@ export class ChatPanel {
         );
     }
 
-    async loadAssets() {
-        // S5: Load CSS - try local first, fallback to CDN
-        if (!document.getElementById('hljs-style')) {
-            const link = document.createElement('link');
-            link.id = 'hljs-style';
-            link.rel = 'stylesheet';
-            link.href = LOCAL_HIGHLIGHT_CSS;
-            link.onerror = () => {
-                console.warn('[ChatPanel] Local highlight.js CSS failed, using CDN fallback');
-                link.href = CDN_HIGHLIGHT_CSS;
-            };
-            document.head.appendChild(link);
-            console.log('[ChatPanel] Loading highlight.js CSS from:', link.href);
-        }
-
-        // Load custom chat CSS
-        if (!document.getElementById('doctor-chat-css')) {
-            const chatCss = document.createElement('link');
-            chatCss.id = 'doctor-chat-css';
-            chatCss.rel = 'stylesheet';
-            chatCss.href = '/extensions/ComfyUI-Doctor/doctor_chat.css';
-            document.head.appendChild(chatCss);
-            console.log('[ChatPanel] Loading chat CSS from:', chatCss.href);
-        }
-
-        // S5: Load JS libraries - try local first, fallback to CDN
-        if (!window.marked) {
-            try {
-                await this.loadScript(LOCAL_MARKED);
-                console.log('[ChatPanel] ✅ Loaded marked.js from local bundle');
-            } catch (e) {
-                console.warn('[ChatPanel] Local marked.js failed, using CDN fallback');
-                await this.loadScript(CDN_MARKED);
-            }
-        }
-
-        if (!window.hljs) {
-            try {
-                await this.loadScript(LOCAL_HIGHLIGHT);
-                console.log('[ChatPanel] ✅ Loaded highlight.js from local bundle');
-            } catch (e) {
-                console.warn('[ChatPanel] Local highlight.js failed, using CDN fallback');
-                await this.loadScript(CDN_HIGHLIGHT);
-            }
-        }
-    }
-
-    loadScript(src) {
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = resolve;
-            script.onerror = reject;
-            document.head.appendChild(script);
-        });
-    }
+    // 5C.3: Moved loadAssets/loadScript to doctor_rendering.js - using shared loadRenderingAssets()
 
     createInterface() {
         console.log('[ChatPanel] Creating interface HTML structure...');
@@ -396,13 +304,8 @@ export class ChatPanel {
 
             if (window.marked) {
                 const raw = window.marked.parse(content);
-                msgDiv.innerHTML = this.sanitizeHtml(raw);
-                if (window.hljs) {
-                    msgDiv.querySelectorAll('pre code').forEach((block) => {
-                        window.hljs.highlightElement(block);
-                    });
-                }
-                this.addCopyButtons(msgDiv);
+                // 5C.3: Use shared sanitize utility
+                msgDiv.innerHTML = sanitizeHtml(raw);
 
                 // F7: Render fix buttons if detected
                 if (fixData) {
@@ -417,6 +320,9 @@ export class ChatPanel {
         }
 
         this.messagesContainer.appendChild(msgDiv);
+        // 5C.3: Use shared highlight/copy utilities
+        highlightCodeBlocks(msgDiv);
+        addCopyButtons(msgDiv);
         this.scrollToBottom();
         return msgDiv;
     }
@@ -471,13 +377,10 @@ export class ChatPanel {
         if (lastMsg && lastMsg.classList.contains('assistant')) {
             if (window.marked) {
                 const raw = window.marked.parse(content);
-                lastMsg.innerHTML = this.sanitizeHtml(raw);
-                if (window.hljs) {
-                    lastMsg.querySelectorAll('pre code').forEach((block) => {
-                        window.hljs.highlightElement(block);
-                    });
-                }
-                this.addCopyButtons(lastMsg);
+                // 5C.3: Use shared sanitize + highlight + copy utilities
+                lastMsg.innerHTML = sanitizeHtml(raw);
+                highlightCodeBlocks(lastMsg);
+                addCopyButtons(lastMsg);
             } else {
                 lastMsg.textContent = content;
             }
@@ -629,29 +532,5 @@ export class ChatPanel {
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
     }
 
-    addCopyButtons(container) {
-        container.querySelectorAll('pre').forEach((pre) => {
-            if (pre.querySelector('.copy-btn')) return;
-            if (!pre.querySelector('code')) return;
-
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = '📋';
-            btn.title = 'Copy code';
-
-            btn.onclick = () => {
-                const code = pre.querySelector('code').innerText;
-                navigator.clipboard.writeText(code).then(() => {
-                    btn.textContent = '✅';
-                    setTimeout(() => btn.textContent = '📋', 2000);
-                }).catch(err => {
-                    console.error('Failed to copy', err);
-                    btn.textContent = '❌';
-                });
-            };
-
-            pre.style.position = 'relative';
-            pre.appendChild(btn);
-        });
-    }
+    // 5C.3: Moved addCopyButtons to doctor_rendering.js - using shared utility
 }

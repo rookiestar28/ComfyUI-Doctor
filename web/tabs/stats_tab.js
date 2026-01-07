@@ -1,9 +1,81 @@
+/**
+ * ComfyUI-Doctor Stats Tab Component
+ * Provides statistics dashboard within the Doctor sidebar.
+ * Uses Island Registry for standardized mount/unmount.
+ */
 import { app } from "../../../../scripts/app.js";
-import { renderStatisticsIsland } from "../statistics-island.js";
+import { register, mount } from "../island_registry.js";
+import { renderStatisticsIsland, unmountStatisticsIsland } from "../statistics-island.js";
+import { isPreactEnabled } from "../preact-loader.js";
 
 let isPreactMode = false;
 
-// Vanilla Fallback Logic
+// ═══════════════════════════════════════════════════════════════
+// ISLAND REGISTRATION (5C.1)
+// ═══════════════════════════════════════════════════════════════
+
+register({
+    id: 'stats',
+    isEnabled: () => isPreactEnabled(),
+    render: async (container, props) => {
+        const success = await renderStatisticsIsland(container, props, { replace: true });
+        if (!success) throw new Error('StatisticsIsland render returned false');
+    },
+    unmount: (container) => {
+        unmountStatisticsIsland();
+    },
+    fallbackRender: (container, error) => {
+        renderVanilla(container);
+    },
+    onError: (error) => {
+        console.warn('[StatsTab] Island error:', error?.message);
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TAB RENDER & ACTIVATE
+// ═══════════════════════════════════════════════════════════════
+
+export async function render(container) {
+    const doctorUI = app.Doctor;
+
+    // 5C.1: Use registry for mount - it handles Preact and fallback automatically
+    isPreactMode = false;
+
+    // Try Preact Island via Registry
+    const success = await mount('stats', container, { uiText: doctorUI.uiText });
+
+    if (success) {
+        isPreactMode = true;
+        // 5B.1: Set island active flag to gate DoctorUI DOM updates
+        doctorUI.statsIslandActive = true;
+        doctorUI.sidebarStatsPanel = null;
+    } else {
+        // 5B.1: Ensure flag is false when Preact fails
+        // Note: fallbackRender was already called by registry
+        doctorUI.statsIslandActive = false;
+    }
+}
+
+export function onActivate() {
+    const doctorUI = app.Doctor;
+
+    // Refresh for Vanilla only when running in vanilla mode.
+    if (!isPreactMode && typeof doctorUI.renderStatistics === 'function') {
+        doctorUI.renderStatistics();
+    }
+
+    // Refresh for Preact
+    // Dispatch event to trigger refresh in island
+    if (isPreactMode) {
+        window.dispatchEvent(new CustomEvent('doctor-refresh-stats'));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VANILLA RENDERER (Legacy F13 Logic)
+// ═══════════════════════════════════════════════════════════════
+
 function renderVanilla(container) {
     const doctorUI = app.Doctor;
 
@@ -51,41 +123,5 @@ function renderVanilla(container) {
 
     if (typeof doctorUI.renderStatistics === 'function') {
         doctorUI.renderStatistics();
-    }
-}
-
-export async function render(container) {
-    const doctorUI = app.Doctor;
-
-    // Render Vanilla immediately so stats are visible even if Preact is slow/disabled.
-    isPreactMode = false;
-    renderVanilla(container);
-
-    // Try Preact Island (replace vanilla when ready)
-    const success = await renderStatisticsIsland(container, { uiText: doctorUI.uiText }, { replace: true });
-
-    if (success) {
-        isPreactMode = true;
-        // 5B.1: Set island active flag to gate DoctorUI DOM updates
-        doctorUI.statsIslandActive = true;
-        doctorUI.sidebarStatsPanel = null;
-    } else {
-        // 5B.1: Ensure flag is false when Preact fails
-        doctorUI.statsIslandActive = false;
-    }
-}
-
-export function onActivate() {
-    const doctorUI = app.Doctor;
-
-    // Refresh for Vanilla only when running in vanilla mode.
-    if (!isPreactMode && typeof doctorUI.renderStatistics === 'function') {
-        doctorUI.renderStatistics();
-    }
-
-    // Refresh for Preact
-    // Dispatch event to trigger refresh in island
-    if (isPreactMode) {
-        window.dispatchEvent(new CustomEvent('doctor-refresh-stats'));
     }
 }

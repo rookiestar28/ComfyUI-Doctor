@@ -747,8 +747,6 @@ MIT License
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
----
-
-## Support
-
-If you encounter any issues or have suggestions, please open an issue on GitHub.
+**Report Issues**: Found a bug or have a suggestion? Open an issue on GitHub.
+**Submit PRs**: Help improve the codebase with bug fixes or general improvements.
+**Feature Requests**: Have some ideas for new features? Let us know please.

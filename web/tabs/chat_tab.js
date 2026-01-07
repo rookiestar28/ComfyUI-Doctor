@@ -1,23 +1,49 @@
 /**
  * ComfyUI-Doctor Chat Tab Component
  * Provides AI chat interface within the Doctor sidebar.
+ * Uses Island Registry for standardized mount/unmount.
  */
 import { app } from "../../../../scripts/app.js";
+import { register, mount } from "../island_registry.js";
 import { renderChatIsland, unmountChatIsland } from "../chat-island.js";
+import { isPreactEnabled } from "../preact-loader.js";
 
 let isPreactMode = false;
+
+// ═══════════════════════════════════════════════════════════════
+// ISLAND REGISTRATION (5C.1)
+// ═══════════════════════════════════════════════════════════════
+
+register({
+    id: 'chat',
+    isEnabled: () => isPreactEnabled(),
+    render: async (container, props) => {
+        const success = await renderChatIsland(container, props, { replace: true });
+        if (!success) throw new Error('ChatIsland render returned false');
+    },
+    unmount: (container) => {
+        unmountChatIsland();
+    },
+    fallbackRender: (container, error) => {
+        renderVanilla(container);
+    },
+    onError: (error) => {
+        console.warn('[ChatTab] Island error:', error?.message);
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TAB RENDER & ACTIVATE
+// ═══════════════════════════════════════════════════════════════
 
 export async function render(container) {
     const doctorUI = app.Doctor;
 
-    // Render Vanilla immediately so tests/users always see UI even if Preact loads later.
+    // 5C.1: Use registry for mount - it handles Preact and fallback automatically
     isPreactMode = false;
-    renderVanilla(container);
 
-    // Attempt Preact Render (replace vanilla when ready)
-    const success = await renderChatIsland(container, {
-        uiText: doctorUI.uiText
-    }, { replace: true });
+    // Attempt Preact via Registry
+    const success = await mount('chat', container, { uiText: doctorUI.uiText });
 
     if (success) {
         isPreactMode = true;
@@ -35,6 +61,7 @@ export async function render(container) {
         doctorUI.updateSanitizationStatusVanilla = null;
     } else {
         // 5B.1: Ensure flag is false when Preact fails
+        // Note: fallbackRender was already called by registry
         doctorUI.chatIslandActive = false;
     }
 }

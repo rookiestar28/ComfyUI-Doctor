@@ -725,8 +725,8 @@ MIT License
 
 ## 貢獻
 
-歡迎提交 Pull Request 協助改進本專案！
+歡迎提交各種 feedback：
 
-## 支援
-
-如果遇到任何問題或有功能建議，請在 GitHub 上提交 Issue。
+**回報問題**：發現 bug 或有任何建議？請在 GitHub 上提交 issue。
+**提交 PR**：透過修復 bug 或進行常規優化來幫助我們完善代碼庫。
+**功能請求**：有其他需求、或新功能的好點子？請透過 GitHub issues 告訴我們。

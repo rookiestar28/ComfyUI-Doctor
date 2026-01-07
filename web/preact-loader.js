@@ -64,9 +64,14 @@ let loadError = null;
 
 /**
  * Check if Preact islands are enabled.
+ * Checks both the hardcoded flag and localStorage override.
  * @returns {boolean} True if Preact is enabled
  */
 export function isPreactEnabled() {
+    // Check localStorage override (user can disable via developer tools)
+    if (localStorage.getItem('doctor_preact_disabled') === 'true') {
+        return false;
+    }
     return PREACT_ENABLED;
 }
 
