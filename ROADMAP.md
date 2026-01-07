@@ -174,6 +174,8 @@ graph TD
 
 ## 3. Extension Todo-List
 
+**Priority Order**: Security → Robustness → Features
+
 ### 3.1 Security (in progress)
 
 *Sorted by priority (High → Low):*
@@ -244,6 +246,12 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
+- [ ] **F14**: Proactive Diagnostics (Lint / Health Check) - 🔴 High ⚠️ *Use dev branch*
+  - **Goal**: Prevent failures before execution; Health Score is a core KPI
+  - **Checks**: Workflow lint, environment/deps, model assets, runtime, privacy
+  - **Outputs**: Actionable issues + node navigation; health report history
+  - **APIs**: `/doctor/health_check`, `/doctor/health_report`, `/doctor/health_history`, `/doctor/health_ack`
+  - **Plan**: `.planning/260108-PROACTIVE_DIAGNOSTICS_PLAN.md`
 - [x] **F7**: Enhanced Error Analysis (Multi-Language + Categorization) - 🔴 High ✅ *Completed (2026-01-01)*
   - **Phase 1**: Enhanced Error Context Collection
     - Python stack traces, execution logs (last 50 lines)
@@ -292,7 +300,6 @@ graph TD
   - **New Files**: `doctor_tabs.js`, `tabs/chat_tab.js`, `tabs/stats_tab.js`, `tabs/settings_tab.js`
   - **Implementation Record**: `.planning/260106-F13_SIDEBAR_TAB_REFACTORING_IMPLEMENTATION_RECORD.md`
   - **Prerequisite**: Before A7 Phase 5A component migration
-- [ ] **F5**: Node health scoring - 🟢 Low
 - [x] **F2**: Hot-reload error patterns from external JSON/YAML - 🟡 Medium ✅ *Completed (2026-01-03)*
   - **Priority upgraded** from Low → Medium (enables community ecosystem)
   - ✅ Load patterns from JSON files: builtin.json, community.json, custom.json
@@ -309,6 +316,7 @@ graph TD
   - Support `/v1/messages` endpoint with `x-api-key` authentication
   - Handle streaming with event types (`content_block_delta`, `message_stop`)
   - 9+ LLM providers now supported
+- [ ] **F5**: Node health scoring - 🟢 Low
 
 ### 3.4 Architecture Improvements (in progress)
 
@@ -494,7 +502,7 @@ graph TD
 
 #### Phase 4A: Security & UX (Quick Wins)
 
-**Priority**: Security → Features
+**Priority**: Security → Robustness → Features
 
 - [x] **S6** PII Sanitization ✅ *Completed (2025-12-31)*
   - ✅ Critical for enterprise adoption (blocks B2B market)
