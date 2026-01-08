@@ -1,8 +1,17 @@
 # ComfyUI-Doctor
 
-繁體中文 | [English](README.md) | [專案進度與開發藍圖](ROADMAP.md)
+繁體中文 | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [專案進度與開發藍圖](../ROADMAP.md)
 
 這是一個 ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動後的所有終端機輸出，捕捉完整的 Python 追蹤回溯 (Tracebacks)，並透過節點層級 (Node-level) 的上下文提取，提供具優先順序的修復建議。內建 57+ 種錯誤模式（22 個內建 + 35 個社群模式）、採用 JSON 熱重載模式，讓使用者自行維護管理其他 Error 類型；目前已支援 9 種語言、具備日誌持久化功能，並提供便於前端整合的 RESTful API。
+
+<details>
+<summary><strong>更新 (v1.4.0, 2026 年 1 月)</strong> - 點擊展開</summary>
+
+- A7 Preact 遷移完成（Phase 5A–5C：Chat/Stats islands、fallback、registry、shared rendering）。
+- 整合加固：生命週期處理與 E2E 覆蓋加強。
+- UI 修復：Locate Node 按鈕保留、Sidebar tooltip 載入時序修正。
+
+</details>
 
 ---
 
@@ -725,8 +734,8 @@ MIT License
 
 ## 貢獻
 
-歡迎提交 Pull Request 協助改進本專案！
+歡迎提交各種 feedback：
 
-## 支援
-
-如果遇到任何問題或有功能建議，請在 GitHub 上提交 Issue。
+**回報問題**：發現 bug 或有任何建議？請在 GitHub 上提交 issue。
+**提交 PR**：透過修復 bug 或進行常規優化來幫助我們完善代碼庫。
+**功能請求**：有其他需求、或新功能的好點子？請透過 GitHub issues 告訴我們。

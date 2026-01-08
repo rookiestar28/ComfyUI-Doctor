@@ -290,10 +290,8 @@ test.describe('Statistics Dashboard', () => {
     await page.waitForTimeout(100);
 
     const statsContent = page.locator('#doctor-stats-content');
-    const text = await statsContent.textContent();
-
-    // Should show "No data yet" message
-    expect(text).toContain('No data yet');
+    // Should show "No data yet" message after async load completes
+    await expect(statsContent).toContainText('No data yet');
   });
 
   test('should handle API error gracefully', async ({ page }) => {
@@ -311,9 +309,8 @@ test.describe('Statistics Dashboard', () => {
     const statsContent = page.locator('#doctor-stats-content');
     await expect(statsContent).toBeVisible();
 
-    // Should show error message
-    const text = await statsContent.textContent();
-    expect(text).toMatch(/0|No data|Failed/i);
+    // Should show error message after async load completes
+    await expect(statsContent).toContainText(/0|No data|Failed/i);
   });
 
   test('should persist active stats tab', async ({ page }) => {

@@ -4,12 +4,14 @@
   "description": "A real-time runtime diagnostics suite for ComfyUI",
   "private": true,
   "scripts": {
+    "pretest": "node scripts/preflight-js.mjs",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report",
-    "install-browsers": "playwright install chromium"
+    "install-browsers": "playwright install chromium",
+    "preflight:js": "node scripts/preflight-js.mjs"
   },
   "keywords": [
     "comfyui",
@@ -19,7 +21,8 @@
   "author": "rookiestar",
   "license": "MIT",
   "devDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.40.0",
+    "acorn": "^8.15.0"
   },
   "engines": {
     "node": ">=18.0.0"

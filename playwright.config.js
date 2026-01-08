@@ -1,6 +1,9 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+const webServerPort = Number(process.env.PW_WEB_SERVER_PORT) || 3000;
+const baseURL = process.env.PW_BASE_URL || `http://127.0.0.1:${webServerPort}/tests/e2e/`;
+
 /**
  * Playwright Configuration for ComfyUI-Doctor
  *
@@ -44,7 +47,7 @@ module.exports = defineConfig({
   use: {
     // Base URL for test harness
     // Server runs from project root, so we need the full path to test-harness.html
-    baseURL: 'http://127.0.0.1:3000/tests/e2e/',
+    baseURL,
 
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
@@ -80,8 +83,8 @@ module.exports = defineConfig({
   // Run local web server before starting tests
   // Serve from project root so that /web/doctor_ui.js paths work correctly
   webServer: {
-    command: 'python -m http.server 3000',
-    port: 3000,
+    command: `python -m http.server ${webServerPort}`,
+    port: webServerPort,
     timeout: 120 * 1000,
     reuseExistingServer: !process.env.CI,
     stdout: 'ignore',

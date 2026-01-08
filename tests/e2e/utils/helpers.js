@@ -9,11 +9,17 @@
 export async function waitForDoctorReady(page) {
   // Wait for the custom ready event
   await page.waitForFunction(() => window.__doctorTestReady === true, {
-    timeout: 10000,
+    timeout: 20000,
   });
 
-  // Additional wait for any async operations
-  await page.waitForTimeout(200);
+  // Ensure at least one tab content panel has mounted; tab render is async after ready.
+  await page.waitForFunction(() => {
+    return Boolean(
+      document.querySelector('#doctor-messages') ||
+      document.querySelector('#doctor-stats-content') ||
+      document.querySelector('#doctor-settings-panel')
+    );
+  }, { timeout: 20000 });
 }
 
 /**
@@ -126,4 +132,101 @@ export async function waitForI18nLoaded(page) {
   await page.waitForFunction(() => {
     return window.app?.Doctor?.uiText && Object.keys(window.app.Doctor.uiText).length > 0;
   }, { timeout: 10000 });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5C.5: ISLAND FALLBACK TESTING HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Disable Preact before page load by setting localStorage flag.
+ * Must be called BEFORE navigating to the page.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function disablePreact(page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('doctor_preact_disabled', 'true');
+  });
+}
+
+/**
+ * Enable Preact (remove disable flag).
+ * @param {import('@playwright/test').Page} page
+ */
+export async function enablePreact(page) {
+  await page.evaluate(() => {
+    localStorage.removeItem('doctor_preact_disabled');
+  });
+}
+
+/**
+ * Block vendor files to simulate Preact load failure.
+ * Forces fallback to vanilla UI.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function simulateVendorLoadFailure(page) {
+  await page.route('**/web/lib/**', route => route.abort());
+  await page.route('**/esm.sh/**', route => route.abort());
+}
+
+/**
+ * Assert that fallback (vanilla) Chat UI is visible.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function assertChatFallbackUI(page) {
+  const { expect } = await import('@playwright/test');
+
+  // Vanilla Chat UI has these elements
+  const chatMessages = page.locator('#doctor-messages');
+  const chatInput = page.locator('#doctor-input');
+  const sendBtn = page.locator('#doctor-send-btn');
+
+  await expect(chatMessages).toBeVisible({ timeout: 5000 });
+  await expect(chatInput).toBeVisible();
+  await expect(sendBtn).toBeVisible();
+}
+
+/**
+ * Assert that fallback (vanilla) Stats UI is visible.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function assertStatsFallbackUI(page) {
+  const { expect } = await import('@playwright/test');
+
+  // Vanilla Stats UI has these elements
+  const statsPanel = page.locator('#doctor-statistics-panel, #doctor-stats-content');
+  await expect(statsPanel.first()).toBeVisible({ timeout: 5000 });
+}
+
+/**
+ * Assert that Preact island is active (not vanilla fallback).
+ * Checks for island-specific markers.
+ * @param {import('@playwright/test').Page} page
+ * @param {'chat' | 'stats'} islandType
+ */
+export async function assertIslandActive(page, islandType) {
+  const isActive = await page.evaluate((type) => {
+    const doctorUI = window.app?.Doctor;
+    if (!doctorUI) return false;
+    return type === 'chat' ? doctorUI.chatIslandActive : doctorUI.statsIslandActive;
+  }, islandType);
+
+  const { expect } = await import('@playwright/test');
+  expect(isActive).toBe(true);
+}
+
+/**
+ * Get island registry errors (for testing error boundary).
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<Array<{id: string, timestamp: number}>>}
+ */
+export async function getIslandErrors(page) {
+  return await page.evaluate(async () => {
+    try {
+      const registry = await import('/web/island_registry.js');
+      return registry.getErrors().map(e => ({ id: e.id, timestamp: e.timestamp }));
+    } catch {
+      return [];
+    }
+  });
 }

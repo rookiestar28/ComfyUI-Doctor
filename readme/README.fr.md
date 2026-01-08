@@ -1,0 +1,761 @@
+# ComfyUI-Doctor
+
+[繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | Français | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [Roadmap & État du développement](../ROADMAP.md)
+
+Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI comprenant **une analyse alimentée par LLM**, **un chat de débogage interactif** et **plus de 50 modèles de correction**. Intercepte automatiquement toutes les sorties du terminal dès le démarrage, capture des traces Python complètes (tracebacks) et fournit des suggestions de correction priorisées avec extraction de contexte au niveau du nœud. Prend désormais en charge la **gestion des motifs basée sur JSON** avec rechargement à chaud et **prise en charge i18n complète** pour 9 langues (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
+
+<details>
+<summary><strong>Mise à jour (v1.4.0, Jan 2026)</strong> - Cliquer pour développer</summary>
+
+- Migration A7 Preact terminée sur les phases 5A–5C (îlots Chat/Stats, solutions de repli, registre, rendu partagé).
+- Renforcement de l'intégration : amélioration de la gestion du cycle de vie et extension de la couverture E2E.
+- Correctifs UI : persistance du bouton "Locate Node" et correction du timing de l'info-bulle de la barre latérale.
+
+</details>
+
+---
+
+## Dernières mises à jour (Jan 2026)
+
+<details>
+<summary><strong>F4 : Tableau de bord statistiques</strong> - Cliquer pour développer</summary>
+
+**Suivez votre stabilité ComfyUI en un coup d'œil !**
+
+ComfyUI-Doctor inclut désormais un **Tableau de bord statistiques** qui fournit des informations sur les tendances d'erreurs, les problèmes courants et la progression de la résolution.
+
+**Fonctionnalités** :
+
+- 📊 **Tendances d'erreurs** : Suivez les erreurs sur 24h/7j/30j
+- 🔥 **Top 5 des motifs** : Voyez quelles erreurs se produisent le plus fréquemment
+- 📈 **Répartition par catégorie** : Visualisez les erreurs par catégorie (Mémoire, Flux de travail, Chargement de modèle, etc.)
+- ✅ **Suivi de résolution** : Surveillez les erreurs résolues vs non résolues
+- 🌍 **Support i18n complet** : Disponible dans les 9 langues
+
+![Tableau de bord statistiques](assets/statistics_panel.png)
+
+**Comment utiliser** :
+
+1. Ouvrez le panneau latéral Doctor (cliquez sur l'icône 🏥 à gauche)
+2. Développez la section "📊 Statistiques d'erreurs"
+3. Consultez les analyses et tendances d'erreurs en temps réel
+4. Marquez les erreurs comme résolues/ignorées pour suivre vos progrès
+
+**API Backend** :
+
+- `GET /doctor/statistics?time_range_days=30` - Récupérer les statistiques
+- `POST /doctor/mark_resolved` - Mettre à jour le statut de résolution
+
+**Couverture des tests** : 17/17 tests backend ✅ | 14/18 tests E2E (taux de réussite 78%)
+
+**Détails de mise en œuvre** : Voir `.planning/260104-F4_STATISTICS_RECORD.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>T8 : CI de validation des motifs</strong> - Cliquer pour développer</summary>
+
+**Des contrôles qualités automatisés protègent désormais l'intégrité des motifs !**
+
+ComfyUI-Doctor inclut désormais des **tests d'intégration continue** pour tous les motifs d'erreur, garantissant des contributions zéro défaut.
+
+**Ce que T8 valide** :
+
+- ✅ **Format JSON** : Les 8 fichiers de motifs se compilent correctement
+- ✅ **Syntaxe Regex** : Les 57 motifs ont des expressions régulières valides
+- ✅ **Complétude i18n** : Couverture de traduction à 100% (57 motifs × 9 langues = 513 vérifications)
+- ✅ **Conformité Schéma** : Champs requis (`id`, `regex`, `error_key`, `priority`, `category`)
+- ✅ **Qualité Métadonnées** : Plages de priorité valides (50-95), ID uniques, catégories correctes
+
+**Intégration GitHub Actions** :
+
+- Se déclenche à chaque push/PR affectant `patterns/`, `i18n.py` ou les tests
+- S'exécute en ~3 secondes pour 0 $ (niveau gratuit GitHub Actions)
+- Bloque les fusions si la validation échoue
+
+**Pour les contributeurs** :
+
+```bash
+# Validation locale avant commit
+python run_pattern_tests.py
+
+# Sortie :
+✅ All 57 patterns have required fields
+✅ All 57 regex patterns compile successfully
+✅ en: All 57 patterns have translations
+✅ zh_TW: All 57 patterns have translations
+... (9 langues au total)
+```
+
+**Résultats des tests** : Taux de réussite de 100% sur tous les contrôles
+
+**Détails de mise en œuvre** : Voir `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>Phase 4B : Refonte du système de motifs (ÉTAPE 1-3 Terminée)</strong> - Cliquer pour développer</summary>
+
+ComfyUI-Doctor a subi une mise à niveau architecturale majeure avec **plus de 57 motifs d'erreur** et une **gestion des motifs basée sur JSON** !
+
+**ÉTAPE 1 : Correctif de l'architecture Logger**
+
+- Implémentation de SafeStreamWrapper avec traitement en arrière-plan basé sur une file d'attente
+- Élimination des risques de blocage (deadlock) et des conditions de concurrence (race conditions)
+- Correction des conflits d'interception de logs avec le LogInterceptor de ComfyUI
+
+**ÉTAPE 2 : Gestion des motifs JSON (F2)**
+
+- Nouveau PatternLoader avec capacité de rechargement à chaud (pas de redémarrage nécessaire !)
+- Les motifs sont maintenant définis dans des fichiers JSON sous le répertoire `patterns/`
+- 22 motifs intégrés dans `patterns/builtin/core.json`
+- Facile à étendre et à maintenir
+
+**ÉTAPE 3 : Extension des motifs communautaires (F12)**
+
+- **35 nouveaux motifs communautaires** couvrant les extensions populaires :
+  - **ControlNet** (8 motifs) : Chargement de modèle, pré-traitement, dimensionnement d'image
+  - **LoRA** (6 motifs) : Erreurs de chargement, compatibilité, problèmes de poids
+  - **VAE** (5 motifs) : Échec d'encodage/décodage, précision, tuilage
+  - **AnimateDiff** (4 motifs) : Chargement de modèle, nombre de trames, longueur de contexte
+  - **IPAdapter** (4 motifs) : Chargement de modèle, encodage d'image, compatibilité
+  - **FaceRestore** (3 motifs) : Modèles CodeFormer/GFPGAN, détection
+  - **Divers** (5 motifs) : Checkpoints, échantillonneurs, planificateurs, CLIP
+- Support i18n complet pour l'anglais, le chinois traditionnel et le chinois simplifié
+- Total : **57 motifs d'erreur** (22 intégrés + 35 communautaires)
+
+**Avantages** :
+
+- ✅ Couverture d'erreurs plus complète
+- ✅ Rechargement à chaud des motifs sans redémarrer ComfyUI
+- ✅ La communauté peut contribuer des motifs via des fichiers JSON
+- ✅ Base de code plus propre et maintenable
+
+</details>
+
+---
+
+<details>
+<summary><strong>Mises à jour précédentes (Déc 2025)</strong> - Cliquer pour développer</summary>
+
+### F9 : Extension du support multilingue
+
+Nous avons étendu le support linguistique de 4 à 9 langues ! ComfyUI-Doctor fournit désormais des suggestions d'erreurs en :
+
+- **English** Anglais (en)
+- **繁體中文** Chinois Traditionnel (zh_TW)
+- **简体中文** Chinois Simplifié (zh_CN)
+- **日本語** Japonais (ja)
+- **🆕 Deutsch** Allemand (de)
+- **🆕 Français** (fr)
+- **🆕 Italiano** Italien (it)
+- **🆕 Español** Espagnol (es)
+- **🆕 한국어** Coréen (ko)
+
+Les 57 motifs d'erreur sont entièrement traduits dans toutes les langues, assurant une qualité de diagnostic cohérente dans le monde entier.
+
+### F8 : Intégration des paramètres de la barre latérale
+
+Les paramètres ont été rationalisés ! Configurez Doctor directement depuis la barre latérale :
+
+- Cliquez sur l'icône ⚙️ dans l'en-tête de la barre latérale pour accéder à tous les paramètres
+- Sélection de la langue (9 langues)
+- Changement rapide de fournisseur d'IA (OpenAI, DeepSeek, Groq, Gemini, Ollama, etc.)
+- Remplissage automatique de l'URL de base lors du changement de fournisseur
+- Gestion de la clé API (saisie protégée par mot de passe)
+- Configuration du nom du modèle
+- Les paramètres persistent entre les sessions avec localStorage
+- Retour visuel lors de la sauvegarde (✅ Enregistré ! / ❌ Erreur)
+
+Le panneau Paramètres de ComfyUI affiche désormais uniquement le commutateur Activer/Désactiver - tous les autres paramètres ont été déplacés vers la barre latérale pour une expérience plus propre et intégrée.
+
+</details>
+
+---
+
+## Fonctionnalités
+
+- **Surveillance automatique des erreurs** : Capture toutes les sorties du terminal et détecte les traces Python en temps réel
+- **Analyse intelligente des erreurs** : Plus de 57 motifs d'erreur (22 intégrés + 35 communautaires) avec des suggestions exploitables
+- **Extraction du contexte du nœud** : Identifie quel nœud a causé l'erreur (ID du nœud, Nom, Classe)
+- **Contexte de l'environnement système** : Inclut automatiquement la version Python, les paquets installés (pip list) et les informations OS dans l'analyse IA
+- **Support multilingue** : 9 langues prises en charge (Anglais, Chinois Traditionnel, Chinois Simplifié, Japonais, Allemand, Français, Italien, Espagnol, Coréen)
+- **Gestion des motifs basée sur JSON** : Rechargement à chaud des motifs d'erreur sans redémarrer ComfyUI
+- **Support des motifs communautaires** : Couvre ControlNet, LoRA, VAE, AnimateDiff, IPAdapter, FaceRestore, et plus
+- **Nœud inspecteur de débogage** : Inspection approfondie des données circulant dans votre flux de travail
+- **Historique des erreurs** : Maintient un tampon des erreurs récentes via l'API
+- **API RESTful** : Sept points de terminaison pour l'intégration frontend
+- **Analyse alimentée par IA** : Analyse d'erreur LLM en un clic avec support de plus de 8 fournisseurs (OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, et plus)
+- **Interface de chat interactive** : Assistant de débogage IA multi-tours intégré dans la barre latérale de ComfyUI
+- **Interface latérale interactive** : Panneau d'erreur visuel avec localisation du nœud et diagnostics instantanés
+- **Configuration flexible** : Panneau de configuration complet pour la personnalisation du comportement
+
+### 🆕 Interface de Chat IA
+
+La nouvelle interface de chat interactive offre une expérience de débogage conversationnelle directement dans la barre latérale gauche de ComfyUI. Lorsqu'une erreur survient, cliquez simplement sur "Analyze with AI" pour démarrer une conversation multi-tours avec votre LLM préféré.
+
+<div align="center">
+<img src="assets/chat-ui.png" alt="Interface de Chat IA">
+</div>
+
+**Caractéristiques clés :**
+
+- **Conscient du contexte** : Inclut automatiquement les détails de l'erreur, les informations sur le nœud et le contexte du flux de travail
+- **Conscient de l'environnement** : Inclut la version Python, les paquets installés et les informations OS pour un débogage précis
+- **Réponses en streaming** : Réponses LLM en temps réel avec un formatage correct
+- **Conversations multi-tours** : Posez des questions de suivi pour approfondir les problèmes
+- **Toujours accessible** : La zone de saisie reste visible en bas avec un positionnement collant
+- **Supporte plus de 8 fournisseurs LLM** : OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, et plus
+- **Mise en cache intelligente** : Liste des paquets mise en cache pendant 24 heures pour éviter l'impact sur les performances
+
+**Comment utiliser :**
+
+1. Lorsqu'une erreur survient, ouvrez la barre latérale Doctor (panneau de gauche)
+2. Cliquez sur le bouton "✨ Analyze with AI" dans la zone de contexte d'erreur
+3. L'IA analysera automatiquement l'erreur et fournira des suggestions
+4. Continuez la conversation en tapant des questions de suivi dans la zone de saisie
+5. Appuyez sur Entrée ou cliquez sur "Send" pour envoyer votre message
+
+> **💡 Astuce API gratuite** : [Google AI Studio](https://aistudio.google.com/app/apikey) (Gemini) offre un niveau gratuit généreux sans carte de crédit requise. Parfait pour commencer avec le débogage alimenté par IA sans aucuns frais !
+
+---
+
+## Installation
+
+### Option 1 : Utiliser ComfyUI-Manager (Recommandé)
+
+1. Ouvrez ComfyUI et cliquez sur le bouton **Manager** dans le menu
+2. Sélectionnez **Install Custom Nodes**
+3. Recherchez `ComfyUI-Doctor`
+4. Cliquez sur **Install** et redémarrez ComfyUI
+
+### Option 2 : Installation manuelle (Git Clone)
+
+1. Naviguez vers votre répertoire de nœuds personnalisés ComfyUI :
+
+   ```bash
+   cd ComfyUI/custom_nodes/
+   ```
+
+2. Clonez ce dépôt :
+
+   ```bash
+   git clone https://github.com/rookiestar28/ComfyUI-Doctor.git
+   ```
+
+3. Redémarrez ComfyUI
+
+4. Recherchez le message d'initialisation dans la console :
+
+   ```text
+   [ComfyUI-Doctor] Initializing Smart Debugger...
+   [ComfyUI-Doctor] Log file: .../logs/comfyui_debug_2025-12-28.log
+   
+   ==================== SYSTEM SNAPSHOT ====================
+   OS: Windows 11
+   Python: 3.12.3
+   PyTorch: 2.0.1+cu118
+   CUDA Available: True
+   ...
+   ```
+
+---
+
+## Utilisation
+
+### Mode Passif (Automatique)
+
+Une fois installé, ComfyUI-Doctor fait automatiquement :
+
+- Enregistre toutes les sorties de la console dans le répertoire `logs/`
+- Détecte les erreurs et fournit des suggestions
+- Enregistre les informations sur l'environnement système
+
+**Exemple de sortie d'erreur** :
+
+```
+Traceback (most recent call last):
+  ...
+RuntimeError: CUDA out of memory. Tried to allocate 2.00 GiB
+
+----------------------------------------
+ERROR LOCATION: Node ID: #42 | Name: KSampler
+SUGGESTION: OOM (Out Of Memory) : Votre VRAM GPU est pleine. Essayez :
+   1. Réduire la taille du lot (Batch Size)
+   2. Utiliser le drapeau '--lowvram'
+   3. Fermer d'autres applications GPU
+----------------------------------------
+```
+
+### Mode Actif (Nœud de débogage)
+
+1. Faites un clic droit sur le canevas → `Add Node` → `Smart Debug Node`
+2. Connectez le nœud en ligne avec n'importe quelle connexion (prend en charge l'entrée joker `*`)
+3. Exécutez votre flux de travail
+
+**Exemple de sortie** :
+
+```text
+[DEBUG] Data Inspection:
+  Type: Tensor
+  Shape: torch.Size([1, 4, 64, 64])
+  Dtype: torch.float16
+  Device: cuda:0
+  Stats (All): Min=-3.2156, Max=4.8912, Mean=0.0023
+```
+
+Le nœud transmet les données sans affecter l'exécution du flux de travail.
+
+---
+
+## Interface Utilisateur (UI) Frontend
+
+ComfyUI-Doctor fournit une interface de barre latérale interactive pour la surveillance des erreurs et les diagnostics en temps réel.
+
+### Accéder au panneau Doctor
+
+Cliquez sur le bouton **🏥 Doctor** dans le menu ComfyUI (barre latérale gauche) pour ouvrir le panneau Doctor. Le panneau glisse depuis le côté droit de l'écran.
+
+### Caractéristiques de l'interface
+
+<div align="center">
+<img src="assets/doctor-side-bar.png" alt="Rapport d'erreur">
+</div>
+
+L'interface Doctor se compose de deux panneaux :
+
+#### Panneau latéral gauche (Barre latérale Doctor)
+
+Cliquez sur l'icône **🏥 Doctor** dans le menu gauche de ComfyUI pour accéder à :
+
+- **Panneau de configuration** (icône ⚙️) : Configurez la langue, le fournisseur d'IA, les clés API et la sélection de modèle
+- **Carte de contexte d'erreur** : Lorsqu'une erreur survient, affiche :
+  - **💡 Suggestion** : Conseil concis et exploitable (ex. "Vérifiez les connexions d'entrée et assurez-vous que les exigences du nœud sont satisfaites.")
+  - **Horodatage** : Moment où l'erreur s'est produite
+  - **Contexte du nœud** : ID et nom du nœud (si applicable)
+  - **✨ Analyze with AI** : Lancez un chat interactif pour un débogage détaillé
+- **Interface de chat IA** : Conversation multi-tours avec votre LLM pour une analyse approfondie des erreurs
+- **Zone de saisie collante** : Toujours accessible en bas pour les questions de suivi
+
+#### Panneau d'erreur droit (Dernier diagnostic)
+
+Notifications d'erreur en temps réel dans le coin supérieur droit :
+
+![Rapport d'erreur Doctor](./assets/error-report.png)
+
+- **Indicateur d'état** : Point coloré montrant la santé du système
+  - 🟢 **Vert** : Système fonctionnant normalement, aucune erreur détectée
+  - 🔴 **Rouge (pulsant)** : Erreur active détectée
+- **Carte du dernier diagnostic** : Affiche l'erreur la plus récente avec :
+  - **Résumé de l'erreur** : Brève description de l'erreur (thème rouge, pliable pour les erreurs longues)
+  - **💡 Suggestion** : Conseil concis et exploitable (thème vert)
+  - **Horodatage** : Moment où l'erreur s'est produite
+  - **Contexte du nœud** : ID, nom et classe du nœud
+  - **🔍 Localiser le nœud sur le canevas** : Centre et met en évidence automatiquement le nœud problématique
+
+**Principes de conception clés** :
+
+- ✅ **Suggestions concises** : Seul le conseil exploitable est affiché (ex. "Vérifiez les connexions d'entrée...") au lieu de descriptions d'erreurs verbeuses
+- ✅ **Séparation visuelle** : Les messages d'erreur (rouge) et les suggestions (vert) sont clairement distingués
+- ✅ **Troncature intelligente** : Les erreurs longues affichent les 3 premières + 3 dernières lignes avec détails complets pliables
+- ✅ **Mises à jour en temps réel** : Les deux panneaux se mettent à jour automatiquement lorsque de nouvelles erreurs surviennent via des événements WebSocket
+
+---
+
+## Analyse d'erreur alimentée par IA
+
+ComfyUI-Doctor s'intègre aux services LLM populaires pour fournir des suggestions de débogage intelligentes et contextuelles.
+
+### Fournisseurs d'IA pris en charge
+
+#### Services Cloud
+
+- **OpenAI** (GPT-4, GPT-4o, etc.)
+- **DeepSeek** (DeepSeek-V2, DeepSeek-Coder)
+- **Groq Cloud** (Llama 3, Mixtral - inférence LPU ultra-rapide)
+- **Google Gemini** (Gemini Pro, Gemini Flash)
+- **xAI Grok** (Grok-2, Grok-beta)
+- **OpenRouter** (Accès à Claude, GPT-4 et plus de 100 modèles)
+
+#### Services Locaux (Aucune clé API requise)
+
+- **Ollama** (`http://127.0.0.1:11434`) - Exécutez Llama, Mistral, CodeLlama localement
+- **LMStudio** (`http://localhost:1234/v1`) - Inférence de modèle locale avec GUI
+
+> **💡 Compatibilité multiplateforme** : Les URL par défaut peuvent être remplacées via des variables d'environnement :
+>
+> - `OLLAMA_BASE_URL` - Point de terminaison Ollama personnalisé (défaut : `http://127.0.0.1:11434`)
+> - `LMSTUDIO_BASE_URL` - Point de terminaison LMStudio personnalisé (défaut : `http://localhost:1234/v1`)
+>
+> Cela évite les conflits entre les instances Ollama Windows et WSL2, ou lors de l'exécution dans des configurations Docker/personnalisées.
+
+### Configuration
+
+![Panneau de configuration](./assets/settings.png)
+
+Configurez l'analyse IA dans le panneau **Barre latérale Doctor** → **Settings** :
+
+1. **AI Provider** : Sélectionnez dans le menu déroulant. L'URL de base se remplira automatiquement.
+2. **AI Base URL** : Le point de terminaison API (auto-peuplé, mais personnalisable)
+3. **AI API Key** : Votre clé API (laissez vide pour les LLM locaux comme Ollama/LMStudio)
+4. **AI Model Name** :
+   - Sélectionnez un modèle dans la liste déroulante (automatiquement peuplée depuis l'API de votre fournisseur)
+   - Cliquez sur le bouton d'actualisation 🔄 pour recharger les modèles disponibles
+   - Ou cochez "Saisir le nom du modèle manuellement" pour taper un nom de modèle personnalisé
+5. **Mode de confidentialité** : Sélectionnez le niveau de désinfection PII pour les services d'IA cloud (voir la section [Mode de confidentialité (Désinfection PII)](#mode-de-confidentialité-désinfection-pii) ci-dessous pour plus de détails)
+
+### Utilisation de l'analyse IA
+
+1. Le panneau Doctor s'ouvre automatiquement lorsqu'une erreur survient.
+2. Examinez les suggestions intégrées, ou cliquez sur le bouton ✨ Analyze with AI sur la carte d'erreur.
+3. Attendez que le LLM analyse l'erreur (généralement 3-10 secondes).
+4. Examinez les suggestions de débogage générées par l'IA.
+
+**Note de sécurité** : Votre clé API est transmise de manière sécurisée du frontend au backend uniquement pour la demande d'analyse. Elle n'est jamais enregistrée ou stockée de manière persistante.
+
+### Mode de confidentialité (Désinfection PII)
+
+ComfyUI-Doctor inclut une **désinfection automatique des PII (Informations Personnellement Identifiables)** pour protéger votre vie privée lors de l'envoi de messages d'erreur aux services d'IA cloud.
+
+**Trois niveaux de confidentialité** :
+
+| Niveau | Description | Ce qui est supprimé | Recommandé pour |
+| ----- | ----------- | --------------- | --------------- |
+| **None** | Aucune désinfection | Rien | LLM Locaux (Ollama, LMStudio) |
+| **Basic** (Défaut) | Protection standard | Chemins utilisateur, clés API, emails, adresses IP | La plupart des utilisateurs avec des LLM Cloud |
+| **Strict** | Confidentialité maximale | Tout de Basic + IPv6, empreintes SSH | Exigences Entreprise/Conformité |
+
+**Ce qui est désinfecté** (Niveau Basic) :
+
+- ✅ Chemins utilisateur Windows : `C:\Users\john\file.py` → `<USER_PATH>\file.py`
+- ✅ Accueil Linux/macOS : `/home/alice/test.py` → `<USER_HOME>/test.py`
+- ✅ Clés API : `sk-abc123...` → `<API_KEY>`
+- ✅ Adresses email : `user@example.com` → `<EMAIL>`
+- ✅ IPs privées : `192.168.1.1` → `<PRIVATE_IP>`
+- ✅ Identifiants URL : `https://user:pass@host` → `https://<USER>@host`
+
+**Ce qui n'est PAS supprimé** :
+
+- ❌ Messages d'erreur (nécessaires pour le débogage)
+- ❌ Noms de modèles, noms de nœuds
+- ❌ Structure du flux de travail
+- ❌ Chemins de fichiers publics (`/usr/bin/python`)
+
+**Configurer le mode de confidentialité** : Ouvrez la barre latérale Doctor → Settings → Menu déroulant 🔒 Privacy Mode. Les modifications s'appliquent immédiatement à toutes les demandes d'analyse IA.
+
+**Conformité RGPD** : Cette fonctionnalité prend en charge l'article 25 du RGPD (Protection des données dès la conception) et est recommandée pour les déploiements d'entreprise.
+
+### Tableau de bord statistiques
+
+![Panneau statistiques](assets/statistics_panel.png)
+
+Le **Tableau de bord statistiques** fournit des informations en temps réel sur vos modèles d'erreurs ComfyUI et les tendances de stabilité.
+
+**Fonctionnalités** :
+
+- **📊 Tendances d'erreurs** : Erreurs totales et comptes pour les derniers 24h/7j/30j
+- **🔥 Principaux motifs d'erreur** : Les 5 types d'erreurs les plus fréquents avec le nombre d'occurrences
+- **📈 Répartition par catégorie** : Répartition visuelle par catégorie d'erreur (Mémoire, Flux de travail, Chargement de modèle, Cadre, Générique)
+- **✅ Suivi de résolution** : Suivez les erreurs résolues, non résolues et ignorées
+
+**Comment utiliser** :
+
+1. Ouvrez la barre latérale Doctor (cliquez sur l'icône 🏥 à gauche)
+2. Trouvez la section pliable **📊 Statistiques d'erreurs**
+3. Cliquez pour développer et afficher vos analyses d'erreurs
+4. Marquez les erreurs comme résolues/ignorées directement depuis les cartes d'erreur pour mettre à jour le suivi de résolution
+
+**Comprendre les données** :
+
+- **Total (30j)** : Erreurs cumulées au cours des 30 derniers jours
+- **Dernières 24h** : Erreurs au cours des dernières 24 heures (aide à identifier les problèmes récents)
+- **Taux de résolution** : Montre les progrès vers la résolution des problèmes connus
+  - 🟢 **Résolu** : Problèmes que vous avez corrigés
+  - 🟠 **Non résolu** : Problèmes actifs nécessitant une attention
+  - ⚪ **Ignoré** : Problèmes non critiques que vous avez choisi d'ignorer
+- **Top Motifs** : Identifie quels types d'erreurs nécessitent une attention prioritaire
+- **Catégories** : Vous aide à comprendre si les problèmes sont liés à la mémoire, aux flux de travail, aux échecs de chargement de modèle, etc.
+
+**Persistance de l'état du panneau** : L'état ouvert/fermé du panneau est enregistré dans le localStorage de votre navigateur, de sorte que votre préférence persiste entre les sessions.
+
+### Exemple de configuration de fournisseur
+
+| Fournisseur      | URL de base                                                | Exemple de modèle            |
+|------------------|------------------------------------------------------------|------------------------------|
+| OpenAI           | `https://api.openai.com/v1`                                | `gpt-4o`                     |
+| DeepSeek         | `https://api.deepseek.com/v1`                              | `deepseek-chat`              |
+| Groq             | `https://api.groq.com/openai/v1`                           | `llama-3.1-70b-versatile`    |
+| Gemini           | `https://generativelanguage.googleapis.com/v1beta/openai`  | `gemini-1.5-flash`           |
+| Ollama (Local)   | `http://localhost:11434/v1`                                | `llama3.1:8b`                |
+| LMStudio (Local) | `http://localhost:1234/v1`                                 | Modèle chargé dans LMStudio  |
+
+---
+
+## Paramètres
+
+Vous pouvez personnaliser le comportement de ComfyUI-Doctor via le panneau Paramètres de ComfyUI (icône d'engrenage).
+
+### 1. Show error notifications (Afficher les notifications d'erreur)
+
+**Fonction** : Active/désactive les cartes de notification d'erreur flottantes (toasts) dans le coin supérieur droit.
+**Utilisation** : Désactivez si vous préférez vérifier les erreurs manuellement dans la barre latérale sans interruptions visuelles.
+
+### 2. Auto-open panel on error (Ouvrir automatiquement le panneau en cas d'erreur)
+
+**Fonction** : Développe automatiquement la barre latérale Doctor lorsqu'une nouvelle erreur est détectée.
+**Utilisation** : **Recommandé**. Fournit un accès immédiat aux résultats de diagnostic sans clic manuel.
+
+### 3. Error Check Interval (ms)
+
+**Fonction** : Fréquence des vérifications d'erreur frontend-backend (en millisecondes). Défaut : `2000`.
+**Utilisation** : Des valeurs plus basses (ex. 500) donnent un retour plus rapide mais augmentent la charge ; des valeurs plus élevées (ex. 5000) économisent les ressources.
+
+### 4. Suggestion Language (Langue de suggestion)
+
+**Fonction** : Langue pour les rapports de diagnostic et les suggestions du Doctor.
+**Utilisation** : Prend actuellement en charge l'anglais, le chinois traditionnel, le chinois simplifié et le japonais (d'autres à venir). Les changements s'appliquent aux nouvelles erreurs.
+
+### 5. Enable Doctor (requires restart)
+
+**Fonction** : Interrupteur principal pour le système d'interception de logs.
+**Utilisation** : Désactivez pour désactiver complètement la fonctionnalité principale de Doctor (nécessite un redémarrage de ComfyUI).
+
+### 6. AI Provider
+
+**Fonction** : Sélectionnez votre fournisseur de services LLM préféré dans un menu déroulant.
+**Options** : OpenAI, DeepSeek, Groq Cloud, Google Gemini, xAI Grok, OpenRouter, Ollama (Local), LMStudio (Local), Personnalisé.
+**Utilisation** : La sélection d'un fournisseur remplit automatiquement l'URL de base appropriée. Pour les fournisseurs locaux (Ollama/LMStudio), une alerte affiche les modèles disponibles.
+
+### 7. AI Base URL
+
+**Fonction** : Le point de terminaison API pour votre service LLM.
+**Utilisation** : Rempli automatiquement lorsque vous sélectionnez un fournisseur, mais peut être personnalisé pour les points de terminaison auto-hébergés ou personnalisés.
+
+### 8. AI API Key
+
+**Fonction** : Votre clé API pour l'authentification avec les services LLM cloud.
+**Utilisation** : Requis pour les fournisseurs de cloud (OpenAI, DeepSeek, etc.). Laissez vide pour les LLM locaux (Ollama, LMStudio).
+**Sécurité** : La clé est transmise uniquement lors des demandes d'analyse et n'est jamais enregistrée ou persistée.
+
+### 9. AI Model Name
+
+**Fonction** : Spécifiez quel modèle utiliser pour l'analyse des erreurs.
+**Utilisation** :
+
+- **Mode liste déroulante** (défaut) : Sélectionnez un modèle dans la liste automatiquement peuplée. Cliquez sur le bouton d'actualisation 🔄 pour recharger les modèles disponibles.
+- **Mode saisie manuelle** : Cochez "Saisir le nom du modèle manuellement" pour taper un nom de modèle personnalisé (ex. `gpt-4o`, `deepseek-chat`, `llama3.1:8b`).
+- Les modèles sont automatiquement récupérés depuis l'API de votre fournisseur sélectionné lorsque vous changez de fournisseur ou cliquez sur actualiser.
+- Pour les LLM locaux (Ollama/LMStudio), la liste déroulante affiche tous les modèles disponibles localement.
+
+---
+
+## Points de terminaison API
+
+### GET `/debugger/last_analysis`
+
+Récupérer l'analyse d'erreur la plus récente :
+
+```bash
+curl http://localhost:8188/debugger/last_analysis
+```
+
+**Exemple de réponse** :
+
+```json
+{
+  "status": "running",
+  "log_path": ".../logs/comfyui_debug_2025-12-28.log",
+  "language": "zh_TW",
+  "supported_languages": ["en", "zh_TW", "zh_CN", "ja"],
+  "last_error": "Traceback...",
+  "suggestion": "SUGGESTION : ...",
+  "timestamp": "2025-12-28T06:49:11",
+  "node_context": {
+    "node_id": "42",
+    "node_name": "KSampler",
+    "node_class": "KSamplerNode",
+    "custom_node_path": "ComfyUI-Impact-Pack"
+  }
+}
+```
+
+### GET `/debugger/history`
+
+Récupérer l'historique des erreurs (20 dernières entrées) :
+
+```bash
+curl http://localhost:8188/debugger/history
+```
+
+### POST `/debugger/set_language`
+
+Changer la langue de suggestion (voir la section Changement de langue).
+
+### POST `/doctor/analyze`
+
+Analyser une erreur en utilisant le service LLM configuré.
+
+**Charge utile** :
+
+```json
+{
+  "error": "Traceback...",
+  "node_context": {...},
+  "api_key": "your-api-key",
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-4o",
+  "language": "en"
+}
+```
+
+**Réponse** :
+
+```json
+{
+  "analysis": "AI-generated debugging suggestions..."
+}
+```
+
+### POST `/doctor/verify_key`
+
+Vérifier la validité de la clé API en testant la connexion au fournisseur LLM.
+
+**Charge utile** :
+
+```json
+{
+  "base_url": "https://api.openai.com/v1",
+  "api_key": "your-api-key"
+}
+```
+
+**Réponse** :
+
+```json
+{
+  "success": true,
+  "message": "API key is valid",
+  "is_local": false
+}
+```
+
+### POST `/doctor/list_models`
+
+Lister les modèles disponibles du fournisseur LLM configuré.
+
+**Charge utile** :
+
+```json
+{
+  "base_url": "http://localhost:11434/v1",
+  "api_key": ""
+}
+```
+
+**Réponse** :
+
+```json
+{
+  "success": true,
+  "models": [
+    {"id": "llama3.1:8b", "name": "llama3.1:8b"},
+    {"id": "mistral:7b", "name": "mistral:7b"}
+  ],
+  "message": "Found 2 models"
+}
+```
+
+---
+
+## Fichiers journaux
+
+Tous les journaux sont stockés dans :
+
+```text
+ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+```
+
+Format du nom de fichier : `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`
+
+Le système conserve automatiquement les 10 fichiers journaux les plus récents (configurable via `config.json`).
+
+---
+
+## Configuration
+
+Créez `config.json` pour personnaliser le comportement :
+
+```json
+{
+  "max_log_files": 10,
+  "buffer_limit": 100,
+  "traceback_timeout_seconds": 5.0,
+  "history_size": 20,
+  "default_language": "zh_TW",
+  "enable_api": true,
+  "privacy_mode": "basic"
+}
+```
+
+**Paramètres** :
+
+- `max_log_files` : Nombre maximum de fichiers journaux à conserver
+- `buffer_limit` : Taille du tampon de traceback (nombre de lignes)
+- `traceback_timeout_seconds` : Délai d'attente pour les tracebacks incomplets
+- `history_size` : Nombre d'erreurs à conserver dans l'historique
+- `default_language` : Langue de suggestion par défaut
+- `enable_api` : Activer les points de terminaison API
+- `privacy_mode` : Niveau de désinfection PII - `"none"`, `"basic"` (défaut), ou `"strict"`
+
+---
+
+## Motifs d'erreur pris en charge
+
+ComfyUI-Doctor peut détecter et fournir des suggestions pour :
+
+- Inadéquations de type (ex. fp16 vs float32)
+- Inadéquations de dimension
+- Mémoire CUDA/MPS insuffisante (OOM)
+- Erreurs de multiplication matricielle
+- Conflits périphérique/type
+- Modules Python manquants
+- Échecs d'assertion
+- Erreurs Clé/Attribut
+- Inadéquations de forme (Shape mismatches)
+- Erreurs de fichier non trouvé
+- Erreurs de chargement SafeTensors
+- Échecs d'exécution CUDNN
+- Bibliothèque InsightFace manquante
+- Inadéquations Modèle/VAE
+- JSON de prompt invalide
+
+Et plus encore...
+
+---
+
+## Conseils
+
+1. **Associer avec ComfyUI Manager** : Installez automatiquement les nœuds personnalisés manquants
+2. **Vérifier les fichiers journaux** : Les traces complètes sont enregistrées pour le signalement des problèmes
+3. **Utiliser la barre latérale intégrée** : Cliquez sur l'icône 🏥 Doctor dans le menu de gauche pour des diagnostics en temps réel
+4. **Débogage de nœud** : Connectez les nœuds de débogage pour inspecter le flux de données suspect
+
+---
+
+## Licence
+
+Licence MIT
+
+---
+
+## Contribuer
+
+Les contributions sont les bienvenues ! N'hésitez pas à soumettre une Pull Request.
+
+**Signaler des problèmes** : Vous avez trouvé un bug ou avez une suggestion ? Ouvrez un ticket (issue) sur GitHub.
+**Soumettre des PR** : Aidez à améliorer la base de code avec des corrections de bugs ou des améliorations générales.
+**Demandes de fonctionnalités** : Vous avez des idées de nouvelles fonctionnalités ? Faites-le nous savoir s'il vous plaît.
