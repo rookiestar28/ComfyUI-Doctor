@@ -179,6 +179,12 @@ app.registerExtension({
         app.Doctor = doctorUI;
         app.Doctor.providerDefaults = PROVIDER_DEFAULTS;
 
+        // NOTE (UI tooltip): Wait for UI text before sidebar registration to avoid "[Missing]" labels.
+        // Do not remove this await unless registerSidebarTab no longer uses getUIText().
+        if (doctorUI.uiTextReady) {
+            await doctorUI.uiTextReady;
+        }
+
         // ========================================
         // Register Sidebar Tab (Modern ComfyUI API)
         // ========================================
@@ -575,4 +581,3 @@ app.registerExtension({
         console.log("[ComfyUI-Doctor] Settings registered successfully");
     }
 });
-

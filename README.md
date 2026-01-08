@@ -1,8 +1,17 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | English | [Roadmap & Development Status](ROADMAP.md)
+[繁體中文](readme/README.zh-TW.md) | [简体中文](readme/README.zh-CN.md) | [日本語](readme/README.ja.md) | [한국어](readme/README.ko.md) | [Deutsch](readme/README.de.md) | [Français](readme/README.fr.md) | [Italiano](readme/README.it.md) | [Español](readme/README.es.md) | English | [Roadmap & Development Status](ROADMAP.md)
 
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
+
+<details>
+<summary><strong>Update (v1.4.0, Jan 2026)</strong> - Click to expand</summary>
+
+- A7 Preact migration completed across Phases 5A–5C (Chat/Stats islands, fallbacks, registry, shared rendering).
+- Integration hardening: improved lifecycle handling and expanded E2E coverage.
+- UI fixes: Locate Node button persistence and sidebar tooltip timing.
+
+</details>
 
 ---
 

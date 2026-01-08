@@ -164,6 +164,75 @@ test.describe('Doctor Chat Interface', () => {
     expect(count).toBeGreaterThan(0);
   });
 
+  test('should keep locate button after poll update without node id', async ({ page }) => {
+    await page.evaluate(() => {
+      if (!window.app?.Doctor?.handleNewError) {
+        throw new Error('DoctorUI not ready for error context update');
+      }
+
+      window.app.Doctor.handleNewError({
+        last_error: 'ValueError: invalid tokenizer',
+        timestamp: new Date().toISOString(),
+        node_context: { node_id: '12', node_name: 'LTTextEncoder', node_class: 'LTTextEncoder' }
+      });
+    });
+
+    const locateBtn = page.locator('#doctor-latest-log #doctor-locate-btn');
+    await expect(locateBtn).toBeVisible({ timeout: 5000 });
+
+    await page.evaluate(() => {
+      window.app.Doctor.handleNewError({
+        last_error: [
+          'Traceback (most recent call last):',
+          '  File \"A:\\\\comfyui\\\\execution.py\", line 518, in execute',
+          '    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(...)',
+          'ValueError: invalid tokenizer',
+          '',
+          'Prompt executed in 9.96 seconds'
+        ].join('\n'),
+        suggestion: 'Check input connections and ensure node requirements are met.',
+        timestamp: new Date().toISOString(),
+        // NOTE (A7 bugfix 2026-01-08): Simulate poll refresh missing node_id to ensure Locate button persists.
+        node_context: { node_id: null, node_name: 'LTTextEncoder', node_class: 'LTTextEncoder' }
+      });
+    });
+
+    await expect(locateBtn).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should display error summary in chat context card', async ({ page }) => {
+    await page.evaluate(() => {
+      const errorData = {
+        last_error: [
+          'Traceback (most recent call last):',
+          '  File \"A:\\\\comfyui\\\\execution.py\", line 518, in execute',
+          '    output_data, output_ui, has_subgraph, has_pending_tasks = await get_output_data(...)',
+          'ValueError: invalid tokenizer',
+          '',
+          'Prompt executed in 9.96 seconds'
+        ].join('\n'),
+        node_context: { node_id: '12', node_name: 'LTTextEncoder', node_class: 'LTTextEncoder' }
+      };
+
+      if (!window.app?.Doctor?.handleNewError) {
+        throw new Error('DoctorUI not ready for error context update');
+      }
+
+      window.app.Doctor.handleNewError(errorData);
+    });
+
+    // Trigger tab re-render
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    await page.waitForTimeout(300);
+
+    const errorContext = page.locator('#doctor-error-context');
+    await expect(errorContext).toBeVisible({ timeout: 5000 });
+
+    const errorMessage = errorContext.locator('div').nth(1);
+    await expect(errorMessage).toContainText('ValueError: invalid tokenizer');
+    await expect(errorMessage).not.toContainText('Traceback');
+  });
+
   test('should have Doctor title in header', async ({ page }) => {
     // Check for Doctor title icon in the sidebar header
     const header = page.locator('#mock-sidebar-tabs');

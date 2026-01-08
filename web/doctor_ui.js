@@ -69,6 +69,7 @@ export class DoctorUI {
         this.lastErrorHash = null;
         this.lastErrorTimestamp = 0;
         this.ERROR_DEBOUNCE_MS = 1000;  // Ignore duplicate errors within 1 second
+        this.nodeContextBySignature = new Map();
 
         // ═══════════════════════════════════════════════════════════════
         // CRITICAL: UI Text Loading Order
@@ -101,7 +102,8 @@ export class DoctorUI {
 
         // ⚠️ CRITICAL: Load UI text FIRST, then create sidebar
         // DO NOT move createSidebar() before loadUIText() completes!
-        this.loadUIText().then(() => {
+        // NOTE: doctor.js awaits uiTextReady before registerSidebarTab to avoid "[Missing]" tooltip/title.
+        this.uiTextReady = this.loadUIText().then(() => {
             this.createSidebar();
         });
 
@@ -289,23 +291,142 @@ export class DoctorUI {
     }
 
     /**
+     * Build a stable signature for error matching (used for context merging).
+     */
+    getErrorSignature(data) {
+        if (!data || !data.last_error) return '';
+        const info = this.extractErrorInfo(data);
+        return info?.errorSummary || data.last_error.trim();
+    }
+
+    /**
+     * Determine if two error payloads refer to the same error.
+     */
+    errorsMatch(current, previous) {
+        const currentText = (current?.last_error || '').trim();
+        const previousText = (previous?.last_error || '').trim();
+
+        if (!currentText || !previousText) return false;
+        if (currentText === previousText) return true;
+        if (currentText.includes(previousText) || previousText.includes(currentText)) return true;
+
+        const currentSig = this.getErrorSignature(current);
+        const previousSig = this.getErrorSignature(previous);
+        return currentSig && previousSig && currentSig === previousSig;
+    }
+
+    /**
+     * Check if node context includes a usable node ID.
+     */
+    hasNodeId(nodeContext) {
+        if (!nodeContext) return false;
+        const nodeId = nodeContext.node_id;
+        // NOTE (A7 bugfix 2026-01-08): Treat empty/null node_id as missing to avoid wiping cached context.
+        return nodeId !== null && nodeId !== undefined && nodeId !== '';
+    }
+
+    /**
+     * Merge node context without overwriting valid IDs with null/empty values.
+     */
+    mergeNodeContext(primary, fallback) {
+        if (!primary && !fallback) return null;
+        if (!primary) return { ...fallback };
+        if (!fallback) return { ...primary };
+
+        const merged = { ...fallback, ...primary };
+
+        // NOTE (A7 bugfix 2026-01-08): Preserve prior node_id when updates omit it (prevents Locate button loss).
+        if (!this.hasNodeId(primary) && this.hasNodeId(fallback)) {
+            merged.node_id = fallback.node_id;
+        }
+        if (!primary.node_name && fallback.node_name) {
+            merged.node_name = fallback.node_name;
+        }
+        if (!primary.node_class && fallback.node_class) {
+            merged.node_class = fallback.node_class;
+        }
+        if (!primary.custom_node_path && fallback.custom_node_path) {
+            merged.custom_node_path = fallback.custom_node_path;
+        }
+
+        return merged;
+    }
+
+    /**
+     * Normalize incoming error data and preserve context when safe.
+     */
+    normalizeErrorData(data) {
+        if (!data) return data;
+
+        const normalized = { ...data };
+
+        if (!normalized.last_error && normalized.error) {
+            normalized.last_error = normalized.error;
+        }
+
+        if (!normalized.error_summary && normalized.last_error) {
+            const info = this.extractErrorInfo(normalized);
+            normalized.error_summary = info.errorSummary;
+        }
+
+        const signature = this.getErrorSignature(normalized)
+            || (normalized.last_error ? normalized.last_error.trim().slice(0, 200) : '');
+        const now = Date.now();
+        const hasNodeId = this.hasNodeId(normalized.node_context);
+
+        if (signature && hasNodeId) {
+            this.nodeContextBySignature.set(signature, { node_context: normalized.node_context, timestamp: now });
+            if (this.nodeContextBySignature.size > 50) {
+                const firstKey = this.nodeContextBySignature.keys().next().value;
+                this.nodeContextBySignature.delete(firstKey);
+            }
+        } else if (signature && this.nodeContextBySignature.has(signature)) {
+            const cached = this.nodeContextBySignature.get(signature);
+            if (cached && (now - cached.timestamp) < 15000) {
+                // NOTE (A7 bugfix 2026-01-08): Merge cached node context when poll data lacks node_id.
+                normalized.node_context = this.mergeNodeContext(
+                    normalized.node_context,
+                    cached.node_context
+                );
+            } else if (cached) {
+                this.nodeContextBySignature.delete(signature);
+            }
+        }
+
+        const previous = this.lastErrorData;
+        if (previous && !this.hasNodeId(normalized.node_context) && this.hasNodeId(previous.node_context)) {
+            if (this.errorsMatch(normalized, previous)) {
+                // NOTE (A7 bugfix 2026-01-08): Keep previous node context if same error refresh arrives without node_id.
+                normalized.node_context = this.mergeNodeContext(
+                    normalized.node_context,
+                    previous.node_context
+                );
+            }
+        }
+
+        return normalized;
+    }
+
+    /**
      * Handle a new error (from either event or polling).
      */
     handleNewError(data) {
+        const normalized = this.normalizeErrorData(data);
+
         // Store for sidebar tab access
-        this.lastErrorData = data;
+        this.lastErrorData = normalized;
         // F13: Store analysis metadata for sanitization status display
-        this.lastAnalysisMetadata = data.analysis_metadata || null;
+        this.lastAnalysisMetadata = normalized.analysis_metadata || null;
 
         // Keep Preact ChatIsland in sync with new error context.
         if (doctorContext) {
-            doctorContext.setState({ workflowContext: data });
+            doctorContext.setState({ workflowContext: normalized });
         }
 
-        this.updateLogCard(data);
+        this.updateLogCard(normalized);
 
         // Update sidebar tab if available
-        this.updateSidebarTab(data);
+        this.updateSidebarTab(normalized);
 
         // Update status dot (legacy sidebar)
         const statusDot = document.getElementById('doctor-status');
@@ -360,6 +481,11 @@ export class DoctorUI {
      * ═══════════════════════════════════════════════════════════════
      */
     updateSidebarTab(data) {
+        const normalized = this.normalizeErrorData(data);
+        if (normalized) {
+            data = normalized;
+        }
+
         // ═══════════════════════════════════════════════════════════════
         // 5B.1: Skip DOM updates when ChatIsland is active
         // ═══════════════════════════════════════════════════════════════
@@ -1707,7 +1833,10 @@ export class DoctorUI {
         const container = document.getElementById('doctor-latest-log');
         if (!container) return;
 
-        const { errorSummary, fullError, suggestion, hasLongError } = this.extractErrorInfo(data);
+        const currentData = data || this.lastErrorData;
+        if (!currentData) return;
+
+        const { errorSummary, fullError, suggestion, hasLongError } = this.extractErrorInfo(currentData);
 
         let html = `
             <div class="doctor-card-title">${this.getUIText('latest_diagnosis_title')}</div>
@@ -1777,7 +1906,7 @@ export class DoctorUI {
         // Format: Local time (e.g., "2:30:45 PM")
         // Color: #666 (subtle, non-intrusive)
         // ═══════════════════════════════════════════════════════════════
-        html += `<div style="font-size:11px;color:#666;margin-bottom:8px;">${new Date(data.timestamp).toLocaleTimeString()}</div>`;
+        html += `<div style="font-size:11px;color:#666;margin-bottom:8px;">${new Date(currentData.timestamp).toLocaleTimeString()}</div>`;
 
         // ═══════════════════════════════════════════════════════════════
         // SECTION 5: NODE CONTEXT + LOCATE BUTTON
@@ -1789,9 +1918,10 @@ export class DoctorUI {
         //   - i18n: 'locate_node_btn'
         // Event: Re-bound after innerHTML update (see below)
         // ═══════════════════════════════════════════════════════════════
-        if (data.node_context && data.node_context.node_id) {
-            const safeNodeId = this.escapeHtml(String(data.node_context.node_id));
-            const safeNodeName = this.escapeHtml(data.node_context.node_name || 'Unknown');
+        // NOTE (A7 bugfix 2026-01-08): Use hasNodeId to avoid falsey node_id wiping Locate button.
+        if (this.hasNodeId(currentData.node_context)) {
+            const safeNodeId = this.escapeHtml(String(currentData.node_context.node_id));
+            const safeNodeName = this.escapeHtml(currentData.node_context.node_name || 'Unknown');
             html += `
                 <div style="background:#222;padding:6px;border-radius:4px;margin-bottom:8px;font-family:monospace;font-size:11px;">
                     ${this.getUIText('node_label')} #${safeNodeId}: ${safeNodeName}

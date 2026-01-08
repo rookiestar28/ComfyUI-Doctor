@@ -8,6 +8,27 @@ import {
     loadRenderingAssets, sanitizeHtml, highlightCodeBlocks, addCopyButtons
 } from './doctor_rendering.js';
 
+function summarizeError(lastError) {
+    if (!lastError) return '';
+    const lines = lastError.trim().split('\n');
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (/^[A-Z][a-zA-Z0-9]*(?:Error|Exception|Warning|Interrupt):/.test(line)) {
+            return line;
+        }
+    }
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line && !line.startsWith('Prompt executed') && !line.startsWith('+-')) {
+            return line;
+        }
+    }
+
+    return lines[lines.length - 1]?.trim() || '';
+}
+
 export class ChatPanel {
     constructor(options = {}) {
         console.log('[ChatPanel] Constructor called with options:', options);
@@ -391,7 +412,8 @@ export class ChatPanel {
     initConversation(errorData) {
         console.log('[ChatPanel] Initializing conversation with error data:', errorData);
 
-        const contextMsg = `Debugging: **${errorData.last_error}**\nNode: ${errorData.node_context?.node_name || 'Unknown'}`;
+        const errorSummary = errorData.error_summary || summarizeError(errorData.last_error);
+        const contextMsg = `Debugging: **${errorSummary}**\nNode: ${errorData.node_context?.node_name || 'Unknown'}`;
         doctorContext.addMessage('system', contextMsg);
 
         if (errorData.suggestion) {

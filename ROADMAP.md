@@ -75,9 +75,9 @@ graph TD
     AU --> AV[test-harness.html]
     AU --> AW[mocks/comfyui-app.js]
     AU --> AX[specs/settings.spec.js - 12 tests]
-    AU --> AY[specs/sidebar.spec.js - 13 tests]
-    AU --> AZ[specs/statistics.spec.js - 14 tests]
-    AU --> BA[specs/preact-loader.spec.js - 12 tests]
+    AU --> AY[specs/sidebar.spec.js - 10 tests]
+    AU --> AZ[specs/statistics.spec.js - 18 tests]
+    AU --> BA[specs/preact-loader.spec.js - 8 tests]
     AV --> AH
     AV --> AJ
 ```
@@ -109,9 +109,9 @@ graph TD
 | `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
 | `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (12 tests): toggle, selectors, inputs, persistence |
-| `tests/e2e/specs/sidebar.spec.js` | 266 | Chat interface tests (12 tests): messages, input, buttons, error context, fallback, Analyze |
-| `tests/e2e/specs/statistics.spec.js` | 381 | Statistics dashboard tests (14 tests): panel, cards, patterns, categories, i18n |
-| `tests/e2e/specs/preact-loader.spec.js` | 215 | Preact loader tests (10 tests): module loading, flags, error handling |
+| `tests/e2e/specs/sidebar.spec.js` | 190 | Chat interface tests (10 tests): messages, input, buttons, error context, sanitization status |
+| `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n |
+| `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (8 tests): module loading, flags, error handling |
 | `playwright.config.js` | 89 | Playwright configuration for E2E tests |
 
 ---
@@ -173,8 +173,6 @@ graph TD
 ---
 
 ## 3. Extension Todo-List
-
-**Priority Order**: Security → Robustness → Features
 
 ### 3.1 Security (in progress)
 
@@ -246,12 +244,28 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **F14**: Proactive Diagnostics (Lint / Health Check) - 🔴 High ⚠️ *Use dev branch*
+- [ ] **F14**: Proactive Diagnostics (Lint / Health Check + Intent Signature) - 🔴 High ⚠️ *Use dev branch*
   - **Goal**: Prevent failures before execution; Health Score is a core KPI
+  - **Intent Signature (ISS)**: deterministic intent inference (signals + scoring), top intents with evidence
   - **Checks**: Workflow lint, environment/deps, model assets, runtime, privacy
-  - **Outputs**: Actionable issues + node navigation; health report history
+  - **Outputs**: Actionable issues + node navigation; intent banner; health history
+  - **i18n**: Health tab + intent banner strings across 9 languages
+  - **Stats**: Top intents and intent-to-error correlation
   - **APIs**: `/doctor/health_check`, `/doctor/health_report`, `/doctor/health_history`, `/doctor/health_ack`
   - **Plan**: `.planning/260108-PROACTIVE_DIAGNOSTICS_PLAN.md`
+- [ ] **F15**: Resolution Marking UI (Resolved / Unresolved / Ignored) - 🟡 Medium
+  - **Goal**: Let users update resolution status directly from UI
+  - **Scope**: Statistics tab first; optional Chat tab parity
+  - **Flow**: `POST /doctor/mark_resolved` → refresh stats
+  - **i18n**: Status labels and "Mark as" strings
+  - **Tests**: Playwright mock API + UI state assertions
+  - **Plan**: `.planning/260108-F15_RESOLUTION_MARKING_UI_PLAN.md`
+- [ ] **F16**: Quick Community Feedback (GitHub PR) - 🔴 High
+  - **Goal**: One-click PR with sanitized pattern + verified suggestion + optional stats snapshot
+  - **Repo**: `rookiestar28/ComfyUI-Doctor`
+  - **Conflict avoidance**: Append-only JSON files under `feedback/`
+  - **Auth**: Server-side token (env var) or future device flow
+  - **Plan**: `.planning/260108-F16_GITHUB_FEEDBACK_PR_PLAN.md`
 - [x] **F7**: Enhanced Error Analysis (Multi-Language + Categorization) - 🔴 High ✅ *Completed (2026-01-01)*
   - **Phase 1**: Enhanced Error Context Collection
     - Python stack traces, execution logs (last 50 lines)
@@ -300,6 +314,7 @@ graph TD
   - **New Files**: `doctor_tabs.js`, `tabs/chat_tab.js`, `tabs/stats_tab.js`, `tabs/settings_tab.js`
   - **Implementation Record**: `.planning/260106-F13_SIDEBAR_TAB_REFACTORING_IMPLEMENTATION_RECORD.md`
   - **Prerequisite**: Before A7 Phase 5A component migration
+- [ ] **F5**: Node health scoring - 🟢 Low
 - [x] **F2**: Hot-reload error patterns from external JSON/YAML - 🟡 Medium ✅ *Completed (2026-01-03)*
   - **Priority upgraded** from Low → Medium (enables community ecosystem)
   - ✅ Load patterns from JSON files: builtin.json, community.json, custom.json
@@ -316,7 +331,6 @@ graph TD
   - Support `/v1/messages` endpoint with `x-api-key` authentication
   - Handle streaming with event types (`content_block_delta`, `message_stop`)
   - 9+ LLM providers now supported
-- [ ] **F5**: Node health scoring - 🟢 Low
 
 ### 3.4 Architecture Improvements (in progress)
 
@@ -366,9 +380,6 @@ graph TD
   - **Trigger**: BEFORE v2.0 Chat Interface expansion begins
   - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
   - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
-  - **Phase Status**: Phase 5A completed ✅; Phase 5B completed ✅; Phase 5C (extensibility) planned
-  - **Plans**: `.planning/260106-A7_PHASE_5B_INTEGRATION_HARDENING_PLAN.md`, `.planning/260106-A7_PHASE_5C_EXTENSIBILITY_PLAN.md`
-  - **Implementation Records**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`, `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low ✅ *Completed (Phase 3A)*
@@ -402,12 +413,12 @@ graph TD
     - Test harness loads full Doctor UI without ComfyUI ✅
     - Mock ComfyUI environment (app, api, extensionManager) ✅
     - Settings panel tests (12 tests): toggle, language selector, provider selector, inputs ✅
-    - Chat interface tests (13 tests): messages area, input/send/clear buttons, fallback, Analyze ✅
-    - Statistics dashboard tests (16 tests): panel, cards, patterns, categories, i18n ✅
-    - Preact loader tests (10 tests): module loading, flags, error handling, UI fallback ✅
+    - Chat interface tests (8 tests): messages area, input/send/clear buttons, error context ✅
+    - Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n ✅
+    - Preact loader tests (8 tests): module loading, flags, error handling ✅
     - API endpoint mocks for backend calls ✅
-  - **Test Results**: 100% pass rate (51/51 tests)
-  - **Execution time**: Varies by environment; baseline ~18.3s total with preflight
+  - **Test Results**: 100% pass rate (46/46 tests)
+  - **Execution time**: ~16 seconds for full test suite (Chromium, 10 workers)
   - **How to Run Tests**:
     <details>
     <summary>Click to expand test commands</summary>
@@ -429,6 +440,16 @@ graph TD
     </details>
   - **Implementation Record**: `.planning/260103-T2_playwright_test_infrastructure.md`
   - **Foundation for**: CI/CD integration, UI regression detection
+- [ ] **T9**: External Environment Test Coverage Expansion (Non-ComfyUI) - 🟡 Medium
+  - **Goal**: Cover pipeline integration, SSE/REST contracts, and UI contracts without a live ComfyUI runtime
+  - **Phases**:
+    - **Phase 1**: Fixture library (tracebacks, workflows, history)
+    - **Phase 2**: Python integration tests (pipeline end-to-end, statistics)
+    - **Phase 3**: SSE stub server + JS contract tests
+    - **Phase 4**: Playwright harness extensions (execution_error/polling sequences)
+    - **Phase 5**: SOP + optional CI updates
+  - **Out of Scope**: Real ComfyUI runtime interception and live node execution
+  - **Plan**: `.planning/260108-TEST_COVERAGE_EXPANSION_PLAN.md`
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek, Anthropic) - 🟡 Medium
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
@@ -502,7 +523,7 @@ graph TD
 
 #### Phase 4A: Security & UX (Quick Wins)
 
-**Priority**: Security → Robustness → Features
+**Priority**: Security → Features
 
 - [x] **S6** PII Sanitization ✅ *Completed (2025-12-31)*
   - ✅ Critical for enterprise adoption (blocks B2B market)
@@ -605,7 +626,7 @@ graph TD
   - API: `/doctor/statistics` (GET) and `/doctor/mark_resolved` (POST)
   - Frontend: Collapsible statistics panel in sidebar with error trends, top patterns, category breakdown, and resolution tracking
   - Features: 24h/7d/30d time ranges, Top 5 error patterns, resolution rate tracking (resolved/unresolved/ignored)
-  - Testing: 17/17 backend unit tests passed; statistics E2E tests 18/18 passed; full Playwright suite 51/51 passed (post-5B additions)
+  - Testing: 17/17 backend unit tests passed; statistics E2E tests 18/18 passed; full Playwright suite 46/46 passed
   - i18n: Fully translated across all 9 languages
   - See `.planning/260104-F4_STATISTICS_RECORD.md` for implementation details
 - [ ] **R6-R7** Network reliability improvements
@@ -632,7 +653,7 @@ graph TD
   - ✅ Added `chat-island.js` example component with fallback UI
   - ✅ Vendor files bundled in `web/lib/` (preact, hooks, signals, htm)
   - **Implementation**: `.planning/260105-A7_IMPLEMENTATION_RECORD.md`
-  - **Next Phase**: Phase 5B integration hardening + Phase 5C extensibility scaffolding
+  - **Next Phase**: ✅ Completed Phase 5A–5C Preact migration (2026-01-08)
 
 ### Phase 5: Major Refactoring (Future)
 
@@ -651,47 +672,14 @@ graph TD
   - Foundation for S6, R12, F7 integration
   - Enables community plugin ecosystem
   - **Status**: Merged to main after verification
-- [x] **A7** Preact Migration (Phase 5A) ✅ *Completed (2026-01-06)*
+- [x] **A7** Preact Migration (Phase 5A–5C) ✅ *Completed (2026-01-08)*
   - **Prerequisite**: F13 (Sidebar Tab Refactoring) completed
-  - ✅ Migrated Chat tab to Preact `ChatIsland` component (SSE streaming, Markdown, dynamic asset loading)
-  - ✅ Migrated Stats tab to Preact `StatisticsIsland` component (data fetching, charts, categories)
-  - ✅ Implemented Vanilla JS fallback for both islands
-  - ✅ E2E Test Results: `sidebar.spec.js` (13/13), `statistics.spec.js` (16/16)
-  - Settings tab remains Vanilla JS (per A7 non-goals)
-  - **Implementation Record**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`
+  - **5A**: Chat/Stats islands migrated to Preact with vanilla fallback
+  - **5B**: Integration hardening (fallbacks, E2E coverage, lifecycle checks)
+  - **5C**: Extensibility layer (island registry, selectors, shared rendering, error boundary, E2E helpers)
+  - **Records**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`, `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`, `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
 
-#### Phase 5B: A7 Integration & Hardening ✅ COMPLETED
-
-**Priority**: Medium
-**Branch**: `dev` → merged to `main`
-**Completion Date**: 2026-01-07
-
-- [x] **A7** Integration & hardening (Phase 5B) ✅ *Completed (2026-01-07)*
-  - ✅ **5B.1 Mode Gating**: Added `chatIslandActive`/`statsIslandActive` flags to `DoctorUI`
-  - ✅ **5B.2 Fallback Robustness**: Preact disabled → vanilla renders (E2E verified)
-  - ✅ **5B.3 Lifecycle Safety**: Added stream abort cleanup on component unmount
-  - ✅ **5B.4 Preflight Validation**: Created `scripts/preflight-js.mjs` (13/13 files pass)
-  - ✅ **5B.5 E2E Coverage**: Fallback, Analyze button, vendor failure → UI tests
-  - ✅ **5B.6 Documentation**: Performance baselines documented (timing varies; see record)
-  - ✅ Fixed vendor module bare specifiers for browser ESM compatibility
-  - ✅ **Final E2E Result: 55/55 tests passed**
-  - **Implementation Record**: `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
-
-#### Phase 5C: A7 Extensibility ✅ COMPLETED
-
-**Priority**: Medium
-**Branch**: `dev` (REQUIRED)
-
-- [x] **A7** Extensibility scaffolding (Phase 5C) ✅ *Completed (2026-01-07)*
-  - Island registry/contract and unified mount/fallback
-  - doctorContext selectors to reduce coupling
-  - Shared render pipeline utilities
-  - Error boundary + auto fallback
-  - E2E helper scaffolding
-  - **Plan**: `.planning/260106-A7_PHASE_5C_EXTENSIBILITY_PLAN.md`
-  - **Implementation Record**: `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
-
-#### Phase 5D: Type Safety & Advanced Features
+#### Phase 5B: Type Safety & Advanced Features
 
 **Priority**: Medium
 

@@ -34,6 +34,27 @@ let fixHandler = null;
 // COMPONENTS
 // =========================================================
 
+function summarizeError(lastError) {
+    if (!lastError) return '';
+    const lines = lastError.trim().split('\n');
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (/^[A-Z][a-zA-Z0-9]*(?:Error|Exception|Warning|Interrupt):/.test(line)) {
+            return line;
+        }
+    }
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line && !line.startsWith('Prompt executed') && !line.startsWith('+-')) {
+            return line;
+        }
+    }
+
+    return lines[lines.length - 1]?.trim() || '';
+}
+
 function SanitizationStatus({ metadata, uiText }) {
     const { html } = preactModules;
 
@@ -93,13 +114,15 @@ function ErrorContextCard({ workflowContext, onAnalyze }) {
         return html`<div id="doctor-error-context" style=${style}></div>`;
     }
 
+    const errorSummary = workflowContext.error_summary || summarizeError(workflowContext.last_error);
+
     return html`
         <div id="doctor-error-context" class="error-context-card" style=${style}>
             <div style="font-weight: bold; color: #f44; margin-bottom: 5px;">
                 ${workflowContext.node_context?.node_name || 'Node Error'}
             </div>
             <div style="font-size: 12px; color: #ccc; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">
-                ${workflowContext.last_error}
+                ${errorSummary}
             </div>
              <button onClick=${onAnalyze} style="
                 width: 100%;
