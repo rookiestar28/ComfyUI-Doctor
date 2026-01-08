@@ -174,6 +174,15 @@ graph TD
 
 ## 3. Extension Todo-List
 
+### 3.0 Risk & Refactor Mitigation (Highest Priority)
+
+- [ ] **R0**: Risk & Refactor Mitigation (Security + Logger + Pipeline + Sanitization) - 🔴 Highest ⚠️ *Use dev branch*
+  - **Scope**: SSRF hardening, logger backpressure, pipeline health, prestartup handoff, sanitization boundary
+  - **Plan**: `.planning/260108-RISK_REFACTOR_MITIGATION_PLAN.md`
+- [ ] **R13**: Pipeline + Plugin Hardening (Phase 2 Assessment) - 🔴 Highest ⚠️ *Use dev branch*
+  - **Scope**: plugin gating + manifest/allowlist, metadata contract, pipeline dependency policy, expanded sanitization boundary, context extraction provenance
+  - **Plan**: `.planning/260109-PHASE2_PIPELINE_PLUGIN_HARDENING_PLAN.md`
+
 ### 3.1 Security (in progress)
 
 *Sorted by priority (High → Low):*

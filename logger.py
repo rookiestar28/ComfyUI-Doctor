@@ -45,6 +45,7 @@ _last_analysis: Dict[str, Any] = {
     "timestamp": None,
     "node_context": None,  # NodeContext.to_dict() result
     "analysis_metadata": None,
+    "resolution_status": None,
 }
 
 # P1: Error history buffer (ring buffer for last N errors)
@@ -74,6 +75,38 @@ def get_last_analysis() -> Dict[str, Any]:
     """Get the last error analysis result for API access."""
     with _history_lock:
         return _last_analysis.copy()
+
+
+def update_resolution_status(timestamp: str, status: str) -> bool:
+    """Update resolution status in history store and in-memory analysis data."""
+    updated = False
+
+    try:
+        store = _get_history_store()
+        with store._lock:
+            store._load()
+            for entry in store._history:
+                if entry.timestamp == timestamp:
+                    entry.resolution_status = status
+                    updated = True
+                    break
+            store._save()
+    except Exception:
+        pass
+
+    with _history_lock:
+        global _last_analysis
+        if _last_analysis.get("timestamp") == timestamp:
+            _last_analysis["resolution_status"] = status
+            updated = True
+
+        for entry in _analysis_history:
+            if entry.get("timestamp") == timestamp:
+                entry["resolution_status"] = status
+                updated = True
+                break
+
+    return updated
 
 
 def get_analysis_history() -> List[Dict[str, Any]]:
@@ -413,6 +446,7 @@ class DoctorLogProcessor(threading.Thread):
             "matched_pattern_id": matched_pattern_id,
             "pattern_category": pattern_category,
             "pattern_priority": pattern_priority,
+            "resolution_status": "unresolved",
         }
 
         # R2: Thread-safe update of shared state
@@ -432,6 +466,7 @@ class DoctorLogProcessor(threading.Thread):
                 matched_pattern_id=matched_pattern_id,
                 pattern_category=pattern_category,
                 pattern_priority=pattern_priority,
+                resolution_status="unresolved",
                 analysis_metadata=analysis_metadata,
             )
             store.append(entry)

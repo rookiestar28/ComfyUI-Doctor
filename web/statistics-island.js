@@ -7,7 +7,8 @@
 import { loadPreact, isPreactEnabled } from './preact-loader.js';
 import { DoctorAPI } from './doctor_api.js';
 // 5C.2: Use selectors for UI text
-import { getUIText } from './doctor_selectors.js';
+import { getUIText, getWorkflowContext } from './doctor_selectors.js';
+import { setState } from './doctor_actions.js';
 
 let preactModules = null;
 let islandMounted = false;
@@ -83,6 +84,146 @@ function ResolutionChart({ rates, uiText }) {
                     ⚪ ${uiText?.stats_ignored || 'Ignored'}: <strong id="stats-ignored-count">${ignored}</strong>
                 </span>
             </div>
+        </div>
+    `;
+}
+
+/**
+ * F15: Resolution Actions Component
+ * Allows users to mark the latest error as resolved/unresolved/ignored.
+ */
+function ResolutionActions({ uiText, onStatusUpdate }) {
+    const { html, useState, useEffect, useRef } = preactModules;
+
+    const [timestamp, setTimestamp] = useState(null);
+    const [currentStatus, setCurrentStatus] = useState(null);
+    const [updating, setUpdating] = useState(false);
+    const [message, setMessage] = useState(null);
+
+    // Track the last seen timestamp to detect new errors
+    const lastSeenTimestamp = useRef(null);
+    // Track if user has manually set status (prevents polling from overwriting)
+    const userSetStatus = useRef(false);
+
+    // Subscribe to workflowContext for timestamp
+    useEffect(() => {
+        const updateFromContext = () => {
+            const ctx = getWorkflowContext();
+            if (ctx?.timestamp) {
+                // Only reset status when a NEW error arrives (different timestamp)
+                if (ctx.timestamp !== lastSeenTimestamp.current) {
+                    lastSeenTimestamp.current = ctx.timestamp;
+                    setTimestamp(ctx.timestamp);
+                    // Only use context status for new errors, default to unresolved
+                    setCurrentStatus(ctx.resolution_status || 'unresolved');
+                    userSetStatus.current = false; // Reset user flag for new error
+                }
+                // If same timestamp and user has set status, preserve it
+            } else {
+                setTimestamp(null);
+                setCurrentStatus(null);
+                lastSeenTimestamp.current = null;
+                userSetStatus.current = false;
+            }
+        };
+
+        updateFromContext();
+
+        // Poll for context updates (simpler than full subscription for now)
+        const interval = setInterval(updateFromContext, 2000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleMarkStatus = async (status) => {
+        if (!timestamp || updating) return;
+
+        setUpdating(true);
+        setMessage(null);
+
+        try {
+            const result = await DoctorAPI.markResolved(timestamp, status);
+            if (result.success) {
+                setCurrentStatus(status);
+                userSetStatus.current = true; // Prevent polling from overwriting
+                const ctx = getWorkflowContext();
+                if (ctx?.timestamp === timestamp) {
+                    setState({ workflowContext: { ...ctx, resolution_status: status } });
+                }
+                setMessage({ type: 'success', text: uiText?.status_update_success || 'Status updated' });
+                // Trigger stats refresh
+                onStatusUpdate?.();
+            } else {
+                setMessage({ type: 'error', text: result.message || uiText?.status_update_failed || 'Failed to update status' });
+            }
+        } catch (e) {
+            setMessage({ type: 'error', text: uiText?.status_update_failed || 'Failed to update status' });
+        } finally {
+            setUpdating(false);
+            // Clear message after 3 seconds
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const disabled = !timestamp || updating;
+
+    const btnStyle = (status) => `
+        padding: 6px 10px;
+        border: 1px solid ${currentStatus === status ? '#4caf50' : '#555'};
+        border-radius: 4px;
+        background: ${currentStatus === status ? 'rgba(76, 175, 80, 0.2)' : 'transparent'};
+        color: ${disabled ? '#666' : '#ccc'};
+        cursor: ${disabled ? 'not-allowed' : 'pointer'};
+        font-size: 11px;
+        transition: all 0.2s;
+    `;
+
+    return html`
+        <div id="resolution-actions" class="resolution-actions" style="margin-bottom: 20px; padding: 12px; background: #222; border-radius: 6px;">
+            <h5 style="margin: 0 0 10px 0; font-size: 11px; color: #aaa; text-transform: uppercase;">
+                ${uiText?.mark_as || 'Mark as'}
+            </h5>
+            
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button 
+                    id="btn-mark-resolved"
+                    onClick=${() => handleMarkStatus('resolved')}
+                    disabled=${disabled}
+                    style=${btnStyle('resolved')}
+                    title=${disabled ? (uiText?.no_error_to_mark || 'No error to mark') : ''}
+                >
+                    ${uiText?.mark_resolved_btn || '✔ Resolved'}
+                </button>
+                <button 
+                    id="btn-mark-unresolved"
+                    onClick=${() => handleMarkStatus('unresolved')}
+                    disabled=${disabled}
+                    style=${btnStyle('unresolved')}
+                    title=${disabled ? (uiText?.no_error_to_mark || 'No error to mark') : ''}
+                >
+                    ${uiText?.mark_unresolved_btn || '⚠ Unresolved'}
+                </button>
+                <button 
+                    id="btn-mark-ignored"
+                    onClick=${() => handleMarkStatus('ignored')}
+                    disabled=${disabled}
+                    style=${btnStyle('ignored')}
+                    title=${disabled ? (uiText?.no_error_to_mark || 'No error to mark') : ''}
+                >
+                    ${uiText?.mark_ignored_btn || '⚪ Ignored'}
+                </button>
+            </div>
+            
+            ${message ? html`
+                <div style="margin-top: 8px; font-size: 11px; color: ${message.type === 'success' ? '#4caf50' : '#ff6b6b'};">
+                    ${message.text}
+                </div>
+            ` : null}
+            
+            ${disabled && !updating ? html`
+                <div style="margin-top: 8px; font-size: 10px; color: #666; font-style: italic;">
+                    ${uiText?.no_error_to_mark || 'No error to mark'}
+                </div>
+            ` : null}
         </div>
     `;
 }
@@ -268,6 +409,9 @@ function StatisticsIsland({ uiText }) {
 
                 <!-- Resolution Chart -->
                 <${ResolutionChart} rates=${stats.resolution_rate} uiText=${uiText} />
+
+                <!-- F15: Resolution Actions -->
+                <${ResolutionActions} uiText=${uiText} onStatusUpdate=${fetchStats} />
 
                 <!-- Top Patterns -->
                 <${PatternList} patterns=${stats.top_patterns} uiText=${uiText} />

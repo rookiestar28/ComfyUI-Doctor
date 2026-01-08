@@ -222,6 +222,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "Strict",
         "sanitization_pii_found": "PII removed",
         "sanitization_pii_not_found": "No PII detected",
+        # F15: Resolution Marking UI
+        "mark_as": "Mark as",
+        "mark_resolved_btn": "✔ Resolved",
+        "mark_unresolved_btn": "⚠ Unresolved",
+        "mark_ignored_btn": "⚪ Ignored",
+        "no_error_to_mark": "No error to mark",
+        "status_update_success": "Status updated",
+        "status_update_failed": "Failed to update status",
     },
     "zh_TW": {
         "info_title": "資訊",
@@ -343,6 +351,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "嚴格",
         "sanitization_pii_found": "已移除個人資訊",
         "sanitization_pii_not_found": "未偵測到個人資訊",
+        # F15: Resolution Marking UI
+        "mark_as": "標記為",
+        "mark_resolved_btn": "✔ 已解決",
+        "mark_unresolved_btn": "⚠ 未解決",
+        "mark_ignored_btn": "⚪ 已忽略",
+        "no_error_to_mark": "沒有可標記的錯誤",
+        "status_update_success": "狀態已更新",
+        "status_update_failed": "更新狀態失敗",
     },
     "zh_CN": {
         "info_title": "信息",
@@ -463,6 +479,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "严格",
         "sanitization_pii_found": "已移除个人信息",
         "sanitization_pii_not_found": "未检测到个人信息",
+        # F15: Resolution Marking UI
+        "mark_as": "标记为",
+        "mark_resolved_btn": "✔ 已解决",
+        "mark_unresolved_btn": "⚠ 未解决",
+        "mark_ignored_btn": "⚪ 已忽略",
+        "no_error_to_mark": "没有可标记的错误",
+        "status_update_success": "状态已更新",
+        "status_update_failed": "更新状态失败",
     },
     "ja": {
         "info_title": "情報",
@@ -583,6 +607,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "厳格",
         "sanitization_pii_found": "個人情報を削除済み",
         "sanitization_pii_not_found": "個人情報なし",
+        # F15: Resolution Marking UI
+        "mark_as": "ステータス変更",
+        "mark_resolved_btn": "✔ 解決済",
+        "mark_unresolved_btn": "⚠ 未解決",
+        "mark_ignored_btn": "⚪ 無視",
+        "no_error_to_mark": "マークするエラーがありません",
+        "status_update_success": "ステータスを更新しました",
+        "status_update_failed": "ステータスの更新に失敗しました",
     },
     "de": {
         "info_title": "INFO",
@@ -703,6 +735,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "Streng",
         "sanitization_pii_found": "PII entfernt",
         "sanitization_pii_not_found": "Keine PII erkannt",
+        # F15: Resolution Marking UI
+        "mark_as": "Markieren als",
+        "mark_resolved_btn": "✔ Gelöst",
+        "mark_unresolved_btn": "⚠ Ungelöst",
+        "mark_ignored_btn": "⚪ Ignoriert",
+        "no_error_to_mark": "Kein Fehler zum Markieren",
+        "status_update_success": "Status aktualisiert",
+        "status_update_failed": "Status konnte nicht aktualisiert werden",
     },
     "fr": {
         "info_title": "INFO",
@@ -823,6 +863,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "Stricte",
         "sanitization_pii_found": "PII supprimée",
         "sanitization_pii_not_found": "Aucune PII détectée",
+        # F15: Resolution Marking UI
+        "mark_as": "Marquer comme",
+        "mark_resolved_btn": "✔ Résolu",
+        "mark_unresolved_btn": "⚠ Non résolu",
+        "mark_ignored_btn": "⚪ Ignoré",
+        "no_error_to_mark": "Aucune erreur à marquer",
+        "status_update_success": "Statut mis à jour",
+        "status_update_failed": "Échec de la mise à jour du statut",
     },
     "it": {
         "info_title": "INFO",
@@ -943,6 +991,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "Rigida",
         "sanitization_pii_found": "PII rimossa",
         "sanitization_pii_not_found": "Nessuna PII rilevata",
+        # F15: Resolution Marking UI
+        "mark_as": "Segna come",
+        "mark_resolved_btn": "✔ Risolto",
+        "mark_unresolved_btn": "⚠ Non risolto",
+        "mark_ignored_btn": "⚪ Ignorato",
+        "no_error_to_mark": "Nessun errore da segnare",
+        "status_update_success": "Stato aggiornato",
+        "status_update_failed": "Aggiornamento stato fallito",
     },
     "es": {
         "info_title": "INFO",
@@ -1063,6 +1119,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "Estricta",
         "sanitization_pii_found": "PII eliminada",
         "sanitization_pii_not_found": "No se detectó PII",
+        # F15: Resolution Marking UI
+        "mark_as": "Marcar como",
+        "mark_resolved_btn": "✔ Resuelto",
+        "mark_unresolved_btn": "⚠ Sin resolver",
+        "mark_ignored_btn": "⚪ Ignorado",
+        "no_error_to_mark": "No hay error para marcar",
+        "status_update_success": "Estado actualizado",
+        "status_update_failed": "Error al actualizar el estado",
     },
     "ko": {
         "info_title": "정보",
@@ -1183,6 +1247,14 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "sanitization_strict": "엄격",
         "sanitization_pii_found": "개인정보 제거됨",
         "sanitization_pii_not_found": "개인정보 없음",
+        # F15: Resolution Marking UI
+        "mark_as": "상태 변경",
+        "mark_resolved_btn": "✔ 해결됨",
+        "mark_unresolved_btn": "⚠ 미해결",
+        "mark_ignored_btn": "⚪ 무시됨",
+        "no_error_to_mark": "표시할 오류 없음",
+        "status_update_success": "상태가 업데이트됨",
+        "status_update_failed": "상태 업데이트 실패",
     },
 }
 

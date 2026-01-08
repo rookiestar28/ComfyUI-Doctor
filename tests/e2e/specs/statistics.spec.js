@@ -391,4 +391,84 @@ test.describe('Statistics Dashboard', () => {
     await expect(unresolved).toHaveText('18');
     await expect(ignored).toHaveText('4');
   });
+
+  // F15: Resolution Marking UI Tests
+  test('should display resolution action buttons', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(100);
+
+    const actionsSection = page.locator('#resolution-actions');
+    await expect(actionsSection).toBeVisible();
+
+    const resolvedBtn = page.locator('#btn-mark-resolved');
+    const unresolvedBtn = page.locator('#btn-mark-unresolved');
+    const ignoredBtn = page.locator('#btn-mark-ignored');
+
+    await expect(resolvedBtn).toBeVisible();
+    await expect(unresolvedBtn).toBeVisible();
+    await expect(ignoredBtn).toBeVisible();
+  });
+
+  test('should disable resolution buttons when no error timestamp', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(100);
+
+    // Without a workflow context / timestamp, buttons should be disabled
+    const resolvedBtn = page.locator('#btn-mark-resolved');
+    await expect(resolvedBtn).toBeDisabled();
+
+    // Should show "No error to mark" hint
+    const hint = page.locator('#resolution-actions');
+    await expect(hint).toContainText('No error to mark');
+  });
+
+  test('should call mark_resolved API when button clicked', async ({ page }) => {
+    // Setup API interception BEFORE navigation
+    let apiCalled = false;
+    let requestBody = null;
+
+    await page.route('**/doctor/mark_resolved', async route => {
+      apiCalled = true;
+      requestBody = JSON.parse(route.request().postData());
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, message: 'Status updated' })
+      });
+    });
+
+    // Navigate to stats tab
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(300);
+
+    // Inject mock workflow context with timestamp via DoctorUI handler
+    await page.evaluate(() => {
+      const doctor = window.app?.Doctor;
+      if (!doctor || typeof doctor.handleNewError !== 'function') {
+        throw new Error('Doctor UI not ready for error injection');
+      }
+
+      doctor.handleNewError({
+        last_error: 'Mock Error',
+        timestamp: '2026-01-08T12:00:00Z',
+        resolution_status: 'unresolved'
+      });
+    });
+
+    // Wait for component to poll and pick up the new context (poll interval is 2s)
+    await page.waitForTimeout(2500);
+
+    // Now the button should be enabled - click it
+    const resolvedBtn = page.locator('#btn-mark-resolved');
+    await expect(resolvedBtn).toBeEnabled();
+    await resolvedBtn.click();
+    await page.waitForTimeout(500);
+
+    // Assert API was called
+    expect(apiCalled).toBe(true);
+    expect(requestBody).toEqual({
+      timestamp: '2026-01-08T12:00:00Z',
+      status: 'resolved'
+    });
+  });
 });

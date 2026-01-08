@@ -891,6 +891,7 @@ try:
             "matched_pattern_id": analysis.get("matched_pattern_id"),
             "pattern_category": analysis.get("pattern_category"),
             "pattern_priority": analysis.get("pattern_priority"),
+            "resolution_status": analysis.get("resolution_status"),
         })
     
     @server.PromptServer.instance.routes.post("/debugger/set_language")
@@ -1909,24 +1910,13 @@ try:
             if status not in ["resolved", "unresolved", "ignored"]:
                 return web.json_response({"success": False, "message": "Invalid status"}, status=400)
             
-            # Update history entry in SmartLogger's history store
-            # Note: This requires access to the history store's internal list
-            from .logger import _smart_logger
-            if _smart_logger and hasattr(_smart_logger, '_history_store'):
-                store = _smart_logger._history_store
-                # Find and update the entry by timestamp
-                with store._lock:
-                    store._load()
-                    for entry in store._history:
-                        if entry.timestamp == timestamp:
-                            entry.resolution_status = status
-                            break
-                    store._save()
-                
+            from .logger import update_resolution_status
+
+            if update_resolution_status(timestamp, status):
                 logger.info(f"Error marked as {status}: {timestamp}")
                 return web.json_response({"success": True, "message": f"Error marked as {status}"})
-            else:
-                return web.json_response({"success": False, "message": "History store not available"}, status=500)
+
+            return web.json_response({"success": False, "message": "Timestamp not found"}, status=404)
                 
         except Exception as e:
             logger.error(f"Mark resolved API error: {str(e)}")
