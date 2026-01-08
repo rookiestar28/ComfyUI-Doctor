@@ -1,8 +1,10 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [로드맵 & 개발 현황](../ROADMAP.md)
+[繁中](README.zh-TW.md) | [简中](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [로드맵 & 개발 현황](../ROADMAP.md)
 
 ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **LLM 기반 분석**, **대화형 디버깅 채팅**, **50개 이상의 수정 패턴**을 특징으로 합니다. 시작 시부터 모든 터미널 출력을 자동으로 가로채고, 완전한 Python 트레이스백을 캡처하며, 노드 수준의 컨텍스트 추출과 함께 우선순위가 지정된 수정 제안을 제공합니다. 이제 핫 리로드가 가능한 **JSON 기반 패턴 관리**와 9개 언어(en, zh_TW, zh_CN, ja, de, fr, it, es, ko)에 대한 **완전한 i18n 지원**을 제공합니다.
+
+## 최신 업데이트 (2026년 1월)
 
 <details>
 <summary><strong>업데이트 (v1.4.0, 2026년 1월)</strong> - 클릭하여 펼치기</summary>
@@ -14,8 +16,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 </details>
 
 ---
-
-## 최신 업데이트 (2026년 1월)
 
 <details>
 <summary><strong>F4: 통계 대시보드</strong> - 클릭하여 펼치기</summary>

@@ -1,8 +1,10 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | 日本語 | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [ロードマップ & 開発状況](../ROADMAP.md)
+[繁中](README.zh-TW.md) | [简中](README.zh-CN.md) | 日本語 | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [ロードマップ & 開発状況](../ROADMAP.md)
 
 ComfyUIのための継続的かつリアルタイムなランタイム診断スイートです。**LLM（大規模言語モデル）による分析**、**対話型デバッグチャット**、**50以上の修復パターン** を備えています。起動時からすべてのターミナル出力を自動的にインターセプトし、完全なPythonトレースバックをキャプチャし、ノードレベルのコンテキスト抽出とともに優先順位付けされた修復提案を提供します。**JSONベースのパターン管理**（ホットリロード対応）と、9言語（en, zh_TW, zh_CN, ja, de, fr, it, es, ko）の**完全なi18nサポート**に対応しました。
+
+## 最新のアップデート（2026年1月）
 
 <details>
 <summary><strong>アップデート (v1.4.0, 2026年1月)</strong> - クリックして展開</summary>
@@ -14,8 +16,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 </details>
 
 ---
-
-## 最新のアップデート（2026年1月）
 
 <details>
 <summary><strong>F4: 統計ダッシュボード</strong> - クリックして展開</summary>

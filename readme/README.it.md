@@ -1,8 +1,10 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | Italiano | [Español](README.es.md) | [English](../README.md) | [Roadmap e stato di sviluppo](../ROADMAP.md)
+[繁中](README.zh-TW.md) | [简中](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | Italiano | [Español](README.es.md) | [English](../README.md) | [Roadmap e stato di sviluppo](../ROADMAP.md)
 
 Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **analisi basata su LLM**, **chat di debug interattiva** e **50+ modelli di correzione**. Intercetta automaticamente tutto l'output del terminale dall'avvio, cattura traceback Python completi e fornisce suggerimenti di correzione priorizzati con estrazione del contesto a livello di nodo. Ora supporta la **gestione dei pattern basata su JSON** con hot-reload e **supporto i18n completo** per 9 lingue (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
+
+## Ultimi aggiornamenti (Gen 2026)
 
 <details>
 <summary><strong>Aggiornamento (v1.4.0, Gen 2026)</strong> - Clicca per espandere</summary>
@@ -14,8 +16,6 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 </details>
 
 ---
-
-## Ultimi aggiornamenti (Gen 2026)
 
 <details>
 <summary><strong>F4: Dashboard statistiche</strong> - Clicca per espandere</summary>

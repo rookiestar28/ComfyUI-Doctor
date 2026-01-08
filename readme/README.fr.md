@@ -1,8 +1,10 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | Français | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [Roadmap & État du développement](../ROADMAP.md)
+[繁中](README.zh-TW.md) | [简中](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | Français | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [Roadmap & État du développement](../ROADMAP.md)
 
 Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI comprenant **une analyse alimentée par LLM**, **un chat de débogage interactif** et **plus de 50 modèles de correction**. Intercepte automatiquement toutes les sorties du terminal dès le démarrage, capture des traces Python complètes (tracebacks) et fournit des suggestions de correction priorisées avec extraction de contexte au niveau du nœud. Prend désormais en charge la **gestion des motifs basée sur JSON** avec rechargement à chaud et **prise en charge i18n complète** pour 9 langues (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
+
+## Dernières mises à jour (Jan 2026)
 
 <details>
 <summary><strong>Mise à jour (v1.4.0, Jan 2026)</strong> - Cliquer pour développer</summary>
@@ -14,8 +16,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 </details>
 
 ---
-
-## Dernières mises à jour (Jan 2026)
 
 <details>
 <summary><strong>F4 : Tableau de bord statistiques</strong> - Cliquer pour développer</summary>

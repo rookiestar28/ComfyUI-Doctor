@@ -1,8 +1,10 @@
 # ComfyUI-Doctor
 
-[繁體中文](README.zh-TW.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [项目进度与开发蓝图](../ROADMAP.md)
+[繁中](README.zh-TW.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [项目进度与开发蓝图](../ROADMAP.md)
 
 这是一个 ComfyUI 专用的全时即时运行阶段诊断套件。能自动拦截启动后的所有终端输出，捕捉完整的 Python 追踪回溯 (Tracebacks)，并通过节点层级 (Node-level) 的上下文提取，提供具优先顺序的修复建议。内置 57+ 种错误模式（22 个内置 + 35 个社区模式）、采用 JSON 热重载模式，让使用者自行维护管理其他 Error 类型；目前已支持 9 种语言、具备日志持久化功能，并提供便于前端整合的 RESTful API。
+
+## 最新更新（2026 年 1 月）
 
 <details>
 <summary><strong>更新 (v1.4.0, 2026 年 1 月)</strong> - 点击展开</summary>
@@ -14,8 +16,6 @@
 </details>
 
 ---
-
-## 最新更新（2026 年 1 月）
 
 <details>
 <summary><strong>F4：统计仪表板</strong> - 点击展开</summary>
