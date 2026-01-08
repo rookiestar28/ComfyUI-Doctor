@@ -7,10 +7,11 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ## Dernières mises à jour (Jan 2026)
 
 <details>
-<summary><strong>Mise à jour (v1.4.0, Jan 2026)</strong> - Cliquer pour développer</summary>
+<summary><strong>Mise à jour (v1.4.1, Jan 2026)</strong> - Cliquer pour développer</summary>
 
-- Migration A7 Preact terminée sur les phases 5A–5C (îlots Chat/Stats, solutions de repli, registre, rendu partagé).
-- Renforcement de l'intégration : amélioration de la gestion du cycle de vie et extension de la couverture E2E.
+- Migration A7 Preact terminée sur les phases 5A–5C (îlots Chat/Stats, registre, rendu partagé, solutions de repli robustes).
+- F15 Marquage de statut : marquer la dernière erreur comme Résolu/Non résolu/Ignoré depuis l’onglet Statistiques ; statut persistant et reflété au chargement.
+- Renforcement de l'intégration : correction du flux resolution_status et couverture Playwright E2E renforcée.
 - Correctifs UI : persistance du bouton "Locate Node" et correction du timing de l'info-bulle de la barre latérale.
 
 </details>
@@ -461,13 +462,19 @@ Le **Tableau de bord statistiques** fournit des informations en temps réel sur 
 - **🔥 Principaux motifs d'erreur** : Les 5 types d'erreurs les plus fréquents avec le nombre d'occurrences
 - **📈 Répartition par catégorie** : Répartition visuelle par catégorie d'erreur (Mémoire, Flux de travail, Chargement de modèle, Cadre, Générique)
 - **✅ Suivi de résolution** : Suivez les erreurs résolues, non résolues et ignorées
+- **🧭 Contrôles de statut** : Marquer la dernière erreur comme Résolu / Non résolu / Ignoré depuis l’onglet Statistiques
 
 **Comment utiliser** :
 
 1. Ouvrez la barre latérale Doctor (cliquez sur l'icône 🏥 à gauche)
 2. Trouvez la section pliable **📊 Statistiques d'erreurs**
 3. Cliquez pour développer et afficher vos analyses d'erreurs
-4. Marquez les erreurs comme résolues/ignorées directement depuis les cartes d'erreur pour mettre à jour le suivi de résolution
+4. Utilisez les boutons **Marquer comme** pour définir l’état de la dernière erreur (Résolu / Non résolu / Ignoré)
+
+**Contrôles du statut** :
+
+- Les boutons ne sont activés que lorsqu’un horodatage de la dernière erreur est disponible
+- Les mises à jour de statut sont conservées dans l’historique et actualisent automatiquement le taux de résolution
 
 **Comprendre les données** :
 

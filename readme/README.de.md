@@ -7,10 +7,11 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ## Neueste Updates (Jan 2026)
 
 <details>
-<summary><strong>Update (v1.4.0, Jan 2026)</strong> - Zum Erweitern klicken</summary>
+<summary><strong>Update (v1.4.1, Jan 2026)</strong> - Zum Erweitern klicken</summary>
 
-- A7 Preact-Migration über die Phasen 5A–5C abgeschlossen (Chat/Stats Islands, Fallbacks, Registry, Shared Rendering).
-- Integrationshärtung: verbessertes Lifecycle-Handling und erweiterte E2E-Abdeckung.
+- A7 Preact-Migration über die Phasen 5A–5C abgeschlossen (Chat/Stats Islands, Registry, Shared Rendering, robuste Fallbacks).
+- F15 Status-Markierung: Den neuesten Fehler im Statistik-Tab als Gelöst/Ungelöst/Ignoriert markieren; Status bleibt erhalten und wird beim Laden angezeigt.
+- Integrationshärtung: resolution_status-Datenfluss ergänzt und Playwright-E2E-Abdeckung gestärkt.
 - UI-Korrekturen: Locate Node-Button bleibt erhalten und Sidebar-Tooltip-Timing korrigiert.
 
 </details>
@@ -461,13 +462,19 @@ Das **Statistik-Dashboard** bietet Echtzeit-Einblicke in Ihre ComfyUI-Fehlermust
 - **🔥 Top-Fehlermuster**: Top 5 der häufigsten Fehlertypen mit Vorkommensanzahl
 - **📈 Kategorie-Aufschlüsselung**: Visuelle Aufschlüsselung nach Fehlerkategorie (Speicher, Workflow, Modellladen, Framework, Generisch)
 - **✅ Lösungsverfolgung**: Verfolgen Sie gelöste, ungelöste und ignorierte Fehler
+- **🧭 Status-Steuerung**: Den neuesten Fehler im Statistik-Tab als Gelöst / Ungelöst / Ignoriert markieren
 
 **Verwendung**:
 
 1. Doctor-Seitenleiste öffnen (🏥-Symbol links klicken)
 2. Den einklappbaren Abschnitt **📊 Fehlerstatistik** finden
 3. Klicken zum Erweitern und Anzeigen Ihrer Fehleranalysen
-4. Fehler direkt von Fehlerkarten aus als gelöst/ignoriert markieren, um die Lösungsverfolgung zu aktualisieren
+4. Mit den **Mark as**-Schaltflächen den Status des neuesten Fehlers setzen (Gelöst / Ungelöst / Ignoriert)
+
+**Steuerung des Lösungsstatus**:
+
+- Schaltflächen sind nur aktiv, wenn ein Zeitstempel für den neuesten Fehler verfügbar ist
+- Status-Updates werden in der Historie gespeichert und aktualisieren die Lösungsquote automatisch
 
 **Verständnis der Daten**:
 

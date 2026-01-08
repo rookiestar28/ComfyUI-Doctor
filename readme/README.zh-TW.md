@@ -7,10 +7,11 @@
 ## 最新更新（2026 年 1 月）
 
 <details>
-<summary><strong>更新 (v1.4.0, 2026 年 1 月)</strong> - 點擊展開</summary>
+<summary><strong>更新 (v1.4.1, 2026 年 1 月)</strong> - 點擊展開</summary>
 
-- A7 Preact 遷移完成（Phase 5A–5C：Chat/Stats islands、fallback、registry、shared rendering）。
-- 整合加固：生命週期處理與 E2E 覆蓋加強。
+- A7 Preact 遷移完成（Phase 5A–5C：Chat/Stats islands、registry、shared rendering、穩健 fallback）。
+- F15 解決狀態標記：在統計分頁將最新錯誤標記為 已解決/未解決/已忽略；狀態持久化並於載入時反映。
+- 整合加固：補齊 resolution_status 後端資料流並強化 Playwright E2E 覆蓋。
 - UI 修復：Locate Node 按鈕保留、Sidebar tooltip 載入時序修正。
 
 </details>
@@ -518,13 +519,19 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 - **🔥 Top 錯誤模式**：顯示發生次數最多的前 5 種錯誤類型
 - **📈 分類統計**：依錯誤類別（記憶體、工作流程、模型載入、框架、一般）視覺化分布
 - **✅ 解決追蹤**：追蹤已解決、未解決和已忽略的錯誤
+- **🧭 狀態控制**：在統計分頁將最新錯誤標記為 已解決 / 未解決 / 已忽略
 
 **使用方法**：
 
 1. 開啟 Doctor 側邊欄（點擊左側 🏥 圖示）
 2. 找到 **📊 錯誤統計** 可摺疊區塊
 3. 點擊展開以檢視錯誤分析數據
-4. 直接從錯誤卡片將錯誤標記為已解決/已忽略，以更新解決追蹤
+4. 使用 **標記為** 按鈕設定最新錯誤狀態（已解決 / 未解決 / 已忽略）
+
+**解決狀態控制**：
+
+- 按鈕只有在有最新錯誤時間戳時才會啟用
+- 狀態更新會寫入歷史紀錄並自動刷新解決率
 
 **數據說明**：
 

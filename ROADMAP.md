@@ -262,13 +262,14 @@ graph TD
   - **Stats**: Top intents and intent-to-error correlation
   - **APIs**: `/doctor/health_check`, `/doctor/health_report`, `/doctor/health_history`, `/doctor/health_ack`
   - **Plan**: `.planning/260108-PROACTIVE_DIAGNOSTICS_PLAN.md`
-- [ ] **F15**: Resolution Marking UI (Resolved / Unresolved / Ignored) - 🟡 Medium
+- [x] **F15**: Resolution Marking UI (Resolved / Unresolved / Ignored) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Let users update resolution status directly from UI
   - **Scope**: Statistics tab first; optional Chat tab parity
   - **Flow**: `POST /doctor/mark_resolved` → refresh stats
   - **i18n**: Status labels and "Mark as" strings
   - **Tests**: Playwright mock API + UI state assertions
   - **Plan**: `.planning/260108-F15_RESOLUTION_MARKING_UI_PLAN.md`
+  - **Implementation Record**: `.planning/260108-F15_IMPLEMENTATION_RECORD.md`
 - [ ] **F16**: Quick Community Feedback (GitHub PR) - 🔴 High
   - **Goal**: One-click PR with sanitized pattern + verified suggestion + optional stats snapshot
   - **Repo**: `rookiestar28/ComfyUI-Doctor`

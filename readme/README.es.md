@@ -7,10 +7,11 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 ## Últimas actualizaciones (Ene 2026)
 
 <details>
-<summary><strong>Actualización (v1.4.0, Ene 2026)</strong> - Clic para expandir</summary>
+<summary><strong>Actualización (v1.4.1, Ene 2026)</strong> - Clic para expandir</summary>
 
-- Migración A7 Preact completada en las fases 5A–5C (islas de Chat/Estadísticas, respaldos, registro, renderizado compartido).
-- Refuerzo de integración: manejo mejorado del ciclo de vida y cobertura E2E extendida.
+- Migración A7 Preact completada en las fases 5A–5C (islas de Chat/Estadísticas, registro, renderizado compartido, respaldos robustos).
+- F15 Marcado de estado: marque el último error como Resuelto/No resuelto/Ignorado desde Estadísticas; estado persistente y reflejado al cargar.
+- Refuerzo de integración: corregido el flujo de resolution_status y reforzada la cobertura Playwright E2E.
 - Correcciones de UI: persistencia del botón Locate Node y corrección de la sincronización de la información sobre herramientas de la barra lateral.
 
 </details>
@@ -461,13 +462,19 @@ El **Panel de Estadísticas** proporciona información en tiempo real sobre sus 
 - **🔥 Patrones de Error Principales**: Los 5 tipos de error más frecuentes con recuentos de ocurrencia
 - **📈 Desglose por Categoría**: Desglose visual por categoría de error (Memoria, Flujo de trabajo, Carga de modelos, Marco, Genérico)
 - **✅ Seguimiento de Resolución**: Rastree errores resueltos, no resueltos e ignorados
+- **🧭 Controles de estado**: Marca el último error como Resuelto / No resuelto / Ignorado desde la pestaña Estadísticas
 
 **Cómo Usar**:
 
 1. Abra la barra lateral Doctor (clic en icono 🏥 a la izquierda)
 2. Encuentre la sección plegable **📊 Estadísticas de Errores**
 3. Haga clic para expandir y ver sus análisis de errores
-4. Marque los errores como resueltos/ignorados directamente desde las tarjetas de error para actualizar el seguimiento de resolución
+4. Usa los botones **Marcar como** para establecer el estado del último error (Resuelto / No resuelto / Ignorado)
+
+**Controles de estado**:
+
+- Los botones solo se habilitan cuando hay un timestamp del último error disponible
+- Las actualizaciones de estado se guardan en el historial y actualizan automáticamente la tasa de resolución
 
 **Entendiendo los Datos**:
 

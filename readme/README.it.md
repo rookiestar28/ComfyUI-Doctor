@@ -7,10 +7,11 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ## Ultimi aggiornamenti (Gen 2026)
 
 <details>
-<summary><strong>Aggiornamento (v1.4.0, Gen 2026)</strong> - Clicca per espandere</summary>
+<summary><strong>Aggiornamento (v1.4.1, Gen 2026)</strong> - Clicca per espandere</summary>
 
-- Migrazione A7 Preact completata nelle fasi 5A–5C (isole Chat/Stats, fallback, registro, rendering condiviso).
-- Rafforzamento dell'integrazione: gestione migliorata del ciclo di vita e copertura E2E estesa.
+- Migrazione A7 Preact completata nelle fasi 5A–5C (isole Chat/Stats, registro, rendering condiviso, fallback robusti).
+- F15 Marcatura stato: imposta l’ultimo errore come Risolto/Irrisolto/Ignorato dalla scheda Statistiche; stato persistente e riflesso al caricamento.
+- Rafforzamento dell'integrazione: sistemato il flusso resolution_status e rafforzata la copertura Playwright E2E.
 - Correzioni UI: persistenza del pulsante Locate Node e correzione della tempistica del tooltip della barra laterale.
 
 </details>
@@ -461,13 +462,19 @@ La **Dashboard Statistiche** fornisce approfondimenti in tempo reale sui pattern
 - **🔥 Pattern Errore Top**: I 5 tipi di errore più frequenti con conteggi delle occorrenze
 - **📈 Ripartizione Categorie**: Ripartizione visiva per categoria di errore (Memoria, Workflow, Caricamento Modelli, Framework, Generico)
 - **✅ Tracciamento Risoluzione**: Traccia errori risolti, irrisolti e ignorati
+- **🧭 Controlli stato**: Marca l’ultimo errore come Risolto / Irrisolto / Ignorato dalla scheda Statistiche
 
 **Come Usare**:
 
 1. Apri la barra laterale Doctor (clicca icona 🏥 a sinistra)
 2. Trova la sezione comprimibile **📊 Statistiche Errori**
 3. Clicca per espandere e visualizzare le tue analisi degli errori
-4. Contrassegna gli errori come risolti/ignorati direttamente dalle schede errore per aggiornare il tracciamento della risoluzione
+4. Usa i pulsanti **Segna come** per impostare lo stato dell’ultimo errore (Risolto / Irrisolto / Ignorato)
+
+**Controlli dello stato di risoluzione**:
+
+- I pulsanti sono abilitati solo quando è disponibile il timestamp dell’ultimo errore
+- Gli aggiornamenti di stato vengono salvati nella cronologia e aggiornano automaticamente il tasso di risoluzione
 
 **Comprendere i Dati**:
 

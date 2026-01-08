@@ -7,10 +7,11 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Jan 2026)
 
 <details>
-<summary><strong>Update (v1.4.0, Jan 2026)</strong> - Click to expand</summary>
+<summary><strong>Update (v1.4.1, Jan 2026)</strong> - Click to expand</summary>
 
-- A7 Preact migration completed across Phases 5A–5C (Chat/Stats islands, fallbacks, registry, shared rendering).
-- Integration hardening: improved lifecycle handling and expanded E2E coverage.
+- A7 Preact migration completed across Phases 5A–5C (Chat/Stats islands, registry, shared rendering, robust fallbacks).
+- F15 Resolution Marking UI: mark the latest error as Resolved/Unresolved/Ignored from Statistics; status persists and reflects on load.
+- Integration hardening: fixed resolution_status plumbing and strengthened Playwright E2E coverage.
 - UI fixes: Locate Node button persistence and sidebar tooltip timing.
 
 </details>
@@ -459,13 +460,19 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 - **🔥 Top Error Patterns**: Top 5 most frequent error types with occurrence counts
 - **📈 Category Breakdown**: Visual breakdown by error category (Memory, Workflow, Model Loading, Framework, Generic)
 - **✅ Resolution Tracking**: Track resolved, unresolved, and ignored errors
+- **🧭 Status Controls**: Mark the latest error as Resolved / Unresolved / Ignored from the Stats tab
 
 **How to Use**:
 
 1. Open the Doctor sidebar (click 🏥 icon on left)
 2. Find the **📊 Error Statistics** collapsible section
 3. Click to expand and view your error analytics
-4. Mark errors as resolved/ignored directly from error cards to update resolution tracking
+4. Use **Mark as** buttons to set the latest error status (Resolved / Unresolved / Ignored)
+
+**Resolution Status Controls**:
+
+- Buttons are enabled only when a latest error timestamp is available
+- Status updates persist in history and refresh the resolution rate automatically
 
 **Understanding the Data**:
 
