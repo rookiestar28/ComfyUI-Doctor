@@ -8,6 +8,10 @@ from dataclasses import dataclass
 class MockStage:
     def __init__(self, name="MockStage", should_fail=False):
         self._name = name
+        self.stage_id = name
+        self.requires = ["traceback"]
+        self.provides = []
+        self.version = "1.0"
         self.should_fail = should_fail
         self.processed = False
 
@@ -37,8 +41,9 @@ def test_orchestrator_runs_stages():
     
     assert stage1.processed
     assert stage2.processed
-    assert ctx.metadata["stage1_ran"] is True
-    assert ctx.metadata["stage2_ran"] is True
+    invalid = ctx.metadata.get("_invalid", {})
+    assert invalid["stage1_ran"] is True
+    assert invalid["stage2_ran"] is True
 
 def test_orchestrator_fail_safe():
     stage1 = MockStage("stage1")
@@ -59,7 +64,8 @@ def test_orchestrator_fail_safe():
     
     # Stage 3 still ran
     assert stage3.processed
-    assert ctx.metadata["stage3_ran"] is True
+    invalid = ctx.metadata.get("_invalid", {})
+    assert invalid["stage3_ran"] is True
 
 def test_sanitizer_stage_basic():
     ctx = AnalysisContext(

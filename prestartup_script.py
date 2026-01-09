@@ -56,6 +56,32 @@ class PrestartupLogger:
     def is_installed(cls):
         return cls._installed
 
+    @classmethod
+    def uninstall(cls):
+        if not cls._installed:
+            return
+        # Restore original streams if we still have them
+        try:
+            if cls._original_stdout:
+                sys.stdout = cls._original_stdout
+            if cls._original_stderr:
+                sys.stderr = cls._original_stderr
+        except Exception:
+            pass
+
+        # Close log file handle
+        try:
+            if cls._log_file:
+                cls._log_file.flush()
+                cls._log_file.close()
+        except Exception:
+            pass
+
+        cls._log_file = None
+        cls._original_stdout = None
+        cls._original_stderr = None
+        cls._installed = False
+
     def __init__(self, stream):
         self.stream = stream
 

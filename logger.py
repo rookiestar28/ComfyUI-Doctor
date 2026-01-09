@@ -66,6 +66,103 @@ def _get_history_store() -> HistoryStore:
 # R2: Thread safety locks for shared mutable state
 _history_lock = threading.Lock()
 
+_TRACEBACK_ACTIVE = threading.Event()
+
+
+class DroppingQueue:
+    """
+    Bounded queue with drop policy and counters.
+
+    - Non-priority messages are dropped when full.
+    - Priority messages evict the oldest non-priority item if possible.
+    - Drop counters are tracked for health/observability.
+    """
+
+    def __init__(self, maxsize: int = 1000):
+        self._maxsize = maxsize
+        self._queue = deque()
+        self._cv = threading.Condition()
+        self._stats = {
+            "queue_dropped_total": 0,
+            "queue_dropped_priority": 0,
+            "queue_dropped_non_priority": 0,
+            "queue_dropped_oldest": 0,
+        }
+
+    def _record_drop(self, item):
+        if not item:
+            return
+        priority, _ = item
+        self._stats["queue_dropped_total"] += 1
+        if priority:
+            self._stats["queue_dropped_priority"] += 1
+        else:
+            self._stats["queue_dropped_non_priority"] += 1
+
+    def _remove_at(self, index: int):
+        self._queue.rotate(-index)
+        item = self._queue.popleft()
+        self._queue.rotate(index)
+        return item
+
+    def _drop_oldest(self, prefer_non_priority: bool):
+        if not self._queue:
+            return None
+        if prefer_non_priority:
+            for idx, item in enumerate(self._queue):
+                if not item[0]:
+                    return self._remove_at(idx)
+        return self._queue.popleft()
+
+    def put_nowait(self, item, priority: bool = False) -> bool:
+        with self._cv:
+            if self._maxsize and len(self._queue) >= self._maxsize:
+                if priority:
+                    dropped = self._drop_oldest(prefer_non_priority=True)
+                    self._record_drop(dropped)
+                    self._stats["queue_dropped_oldest"] += 1
+                else:
+                    self._stats["queue_dropped_total"] += 1
+                    self._stats["queue_dropped_non_priority"] += 1
+                    return False
+
+            self._queue.append((priority, item))
+            self._cv.notify()
+            return True
+
+    def get(self, timeout: float = None):
+        with self._cv:
+            if not self._queue:
+                self._cv.wait(timeout)
+            if not self._queue:
+                raise queue.Empty
+            return self._queue.popleft()
+
+    def qsize(self) -> int:
+        with self._cv:
+            return len(self._queue)
+
+    def get_stats(self) -> Dict[str, int]:
+        with self._cv:
+            return dict(self._stats)
+
+    def clear(self) -> None:
+        with self._cv:
+            self._queue.clear()
+
+
+def _is_priority_message(message: str) -> bool:
+    if _TRACEBACK_ACTIVE.is_set():
+        return True
+    if not message:
+        return False
+    if "Traceback (most recent call last):" in message:
+        return True
+    if "Failed to validate prompt for output" in message:
+        return True
+    return False
+
+
 
 # ==============================================================================
 # API Functions (preserved from original implementation)
@@ -180,9 +277,9 @@ class SafeStreamWrapper:
 
         # 2. Enqueue for background processing (non-blocking)
         try:
-            self._queue.put_nowait(data)
-        except queue.Full:
-            # Queue full: discard message (extreme case, avoid blocking)
+            priority = _is_priority_message(data)
+            self._queue.put_nowait(data, priority=priority)
+        except Exception:
             pass
 
     def flush(self):
@@ -214,6 +311,11 @@ class DoctorLogProcessor(threading.Thread):
         super().__init__(daemon=True, name="DoctorLogProcessor")
         self._queue = message_queue
         self._running = True
+        self._metrics = {
+            "buffer_dropped": 0,
+            "traceback_resets": 0,
+            "queue_timeouts": 0,
+        }
 
         # Traceback buffer state (migrated from SmartLogger)
         self.buffer = []
@@ -225,11 +327,12 @@ class DoctorLogProcessor(threading.Thread):
         while self._running:
             try:
                 # Use timeout to allow periodic buffer timeout checks
-                message = self._queue.get(timeout=0.5)
+                priority, message = self._queue.get(timeout=0.5)
                 self._process_message(message)
 
             except queue.Empty:
                 # Timeout: check if buffer needs flushing
+                self._metrics["queue_timeouts"] += 1
                 self._check_buffer_timeout()
 
             except Exception as e:
@@ -276,7 +379,7 @@ class DoctorLogProcessor(threading.Thread):
 
         # Detect traceback start
         if "Traceback (most recent call last):" in message:
-            self.in_traceback = True
+            self._set_traceback_state(True)
             self.buffer = [message]
             self.last_buffer_time = current_time
             return
@@ -284,7 +387,7 @@ class DoctorLogProcessor(threading.Thread):
         # Handle validation errors
         if "Failed to validate prompt for output" in message:
             if not self.in_traceback:
-                self.in_traceback = True
+                self._set_traceback_state(True)
                 self.buffer = [message]
                 self.last_buffer_time = current_time
             else:
@@ -300,7 +403,7 @@ class DoctorLogProcessor(threading.Thread):
                 suggestion, metadata = result if result else (None, None)
                 if suggestion or "Failed to validate" in full_traceback:
                     self._record_analysis(full_traceback, suggestion, metadata)
-                self.in_traceback = False
+                self._set_traceback_state(False)
                 self.buffer = []
             else:
                 # ═══════════════════════════════════════════════════════════════
@@ -321,7 +424,7 @@ class DoctorLogProcessor(threading.Thread):
                         result = ErrorAnalyzer.analyze(full_traceback)
                         suggestion, metadata = result if result else (None, None)
                         self._record_analysis(full_traceback, suggestion, metadata)
-                    self.in_traceback = False
+                    self._set_traceback_state(False)
                     self.buffer = []
                     return
                 
@@ -335,7 +438,7 @@ class DoctorLogProcessor(threading.Thread):
                         result = ErrorAnalyzer.analyze(full_traceback)
                         suggestion, metadata = result if result else (None, None)
                         self._record_analysis(full_traceback, suggestion, metadata)
-                        self.in_traceback = False
+                        self._set_traceback_state(False)
                         self.buffer = []
                         return
                     return
@@ -345,12 +448,14 @@ class DoctorLogProcessor(threading.Thread):
                     result = ErrorAnalyzer.analyze(full_traceback)
                     suggestion, metadata = result if result else (None, None)
                     self._record_analysis(full_traceback, suggestion, metadata)
-                    self.in_traceback = False
+                    self._set_traceback_state(False)
                     self.buffer = []
 
                 # Buffer limit safety
                 elif len(self.buffer) > CONFIG.buffer_limit:
-                    self.in_traceback = False
+                    self._metrics["buffer_dropped"] += 1
+                    self._metrics["traceback_resets"] += 1
+                    self._set_traceback_state(False)
                     self.buffer = []
 
     def _check_buffer_timeout(self):
@@ -363,8 +468,16 @@ class DoctorLogProcessor(threading.Thread):
                 suggestion, metadata = result if result else (None, None)
                 if suggestion or "Failed to validate" in full_traceback:
                     self._record_analysis(full_traceback, suggestion, metadata)
-                self.in_traceback = False
+                self._metrics["traceback_resets"] += 1
+                self._set_traceback_state(False)
                 self.buffer = []
+
+    def _set_traceback_state(self, active: bool) -> None:
+        self.in_traceback = active
+        if active:
+            _TRACEBACK_ACTIVE.set()
+        else:
+            _TRACEBACK_ACTIVE.clear()
 
     def _record_analysis(self, full_traceback, suggestion, metadata=None):
         """
@@ -551,7 +664,7 @@ def install(log_path: str):
         return
 
     # Create queue and background processor
-    _message_queue = queue.Queue(maxsize=1000)
+    _message_queue = DroppingQueue(maxsize=CONFIG.log_queue_maxsize)
     _log_processor = DoctorLogProcessor(_message_queue)
     _log_processor.start()
 
@@ -585,9 +698,34 @@ def uninstall():
         _log_processor = None
 
     # Clear queue
+    if _message_queue:
+        _message_queue.clear()
     _message_queue = None
 
     logging.info("[Doctor] Logger uninstalled")
+
+
+def get_logger_metrics() -> Dict[str, Any]:
+    """Return logger health metrics for diagnostics and tests."""
+    metrics = {
+        "queue_size": 0,
+        "queue_dropped_total": 0,
+        "queue_dropped_priority": 0,
+        "queue_dropped_non_priority": 0,
+        "queue_dropped_oldest": 0,
+        "buffer_dropped": 0,
+        "traceback_resets": 0,
+        "queue_timeouts": 0,
+    }
+
+    if _message_queue:
+        metrics.update(_message_queue.get_stats())
+        metrics["queue_size"] = _message_queue.qsize()
+
+    if _log_processor:
+        metrics.update(_log_processor._metrics)
+
+    return metrics
 
 
 # ==============================================================================

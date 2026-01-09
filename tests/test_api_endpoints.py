@@ -25,30 +25,20 @@ class TestLocalLLMDetection(unittest.TestCase):
 
     def test_ollama_url_detected(self):
         """Test that Ollama URLs are detected as local."""
-        local_patterns = [
-            "localhost:11434", "127.0.0.1:11434", "0.0.0.0:11434",
-            "localhost:1234", "127.0.0.1:1234", "0.0.0.0:1234",
-            "localhost/v1", "127.0.0.1/v1",
-        ]
-        
+        from security import is_local_llm_url
         test_urls = [
             "http://localhost:11434/v1",
             "http://127.0.0.1:11434/v1",
             "http://localhost:1234/v1",
+            "http://0.0.0.0:11434/v1",
         ]
         
         for url in test_urls:
-            is_local = any(p in url.lower() for p in local_patterns)
-            self.assertTrue(is_local, f"URL {url} should be detected as local")
+            self.assertTrue(is_local_llm_url(url), f"URL {url} should be detected as local")
 
     def test_cloud_url_not_local(self):
         """Test that cloud URLs are not detected as local."""
-        local_patterns = [
-            "localhost:11434", "127.0.0.1:11434", "0.0.0.0:11434",
-            "localhost:1234", "127.0.0.1:1234", "0.0.0.0:1234",
-            "localhost/v1", "127.0.0.1/v1",
-        ]
-        
+        from security import is_local_llm_url
         cloud_urls = [
             "https://api.openai.com/v1",
             "https://api.deepseek.com/v1",
@@ -56,8 +46,7 @@ class TestLocalLLMDetection(unittest.TestCase):
         ]
         
         for url in cloud_urls:
-            is_local = any(p in url.lower() for p in local_patterns)
-            self.assertFalse(is_local, f"URL {url} should not be detected as local")
+            self.assertFalse(is_local_llm_url(url), f"URL {url} should not be detected as local")
 
 
 class TestAnalyzeErrorValidation(unittest.TestCase):
@@ -86,11 +75,11 @@ class TestVerifyKeyValidation(unittest.TestCase):
 
     def test_local_llm_no_key_required(self):
         """Test that local LLM doesn't require API key."""
+        from security import is_local_llm_url
         base_url = "http://localhost:11434/v1"
         api_key = ""
         
-        local_patterns = ["localhost", "127.0.0.1"]
-        is_local = any(p in base_url.lower() for p in local_patterns)
+        is_local = is_local_llm_url(base_url)
         
         # For local LLM, we should allow empty key
         if is_local and not api_key:
@@ -101,11 +90,11 @@ class TestVerifyKeyValidation(unittest.TestCase):
 
     def test_cloud_requires_key(self):
         """Test that cloud provider requires API key."""
+        from security import is_local_llm_url
         base_url = "https://api.openai.com/v1"
         api_key = ""
         
-        local_patterns = ["localhost", "127.0.0.1"]
-        is_local = any(p in base_url.lower() for p in local_patterns)
+        is_local = is_local_llm_url(base_url)
         
         # For cloud LLM, empty key should fail
         self.assertFalse(is_local)
@@ -384,6 +373,14 @@ class TestSSRFProtection(unittest.TestCase):
         # AWS metadata endpoint
         is_valid, error = self.validate_ssrf_url("http://169.254.169.254/latest/meta-data/")
         self.assertFalse(is_valid, "Metadata endpoint should be blocked")
+
+    def test_ssrf_metrics_increment(self):
+        """Blocked requests should increment SSRF metrics."""
+        from security import get_ssrf_metrics
+        before = get_ssrf_metrics().get("ssrf_block_count", 0)
+        self.validate_ssrf_url("http://169.254.169.254/latest/meta-data/", allow_local_llm=False)
+        after = get_ssrf_metrics().get("ssrf_block_count", 0)
+        self.assertGreaterEqual(after, before + 1)
 
 
 if __name__ == '__main__':

@@ -79,10 +79,6 @@ class TestPIISanitizerBasic:
                 "Auth with token_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "Auth with <API_KEY>"
             ),
-            (
-                "Hash: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
-                "Hash: <API_KEY>"
-            ),
         ]
 
         for input_text, expected in test_cases:
@@ -90,6 +86,17 @@ class TestPIISanitizerBasic:
             assert result.sanitized_text == expected
             assert result.pii_found is True
             assert "api_key" in result.replacements
+
+    def test_long_hex_is_not_sanitized_in_basic_but_is_in_strict(self):
+        text = "Hash: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+
+        basic = PIISanitizer(SanitizationLevel.BASIC).sanitize(text)
+        assert basic.sanitized_text == text
+        assert basic.pii_found is False
+
+        strict = PIISanitizer(SanitizationLevel.STRICT).sanitize(text)
+        assert strict.sanitized_text == "Hash: <API_KEY>"
+        assert strict.pii_found is True
 
     def test_email_sanitization(self):
         """Test email address removal."""

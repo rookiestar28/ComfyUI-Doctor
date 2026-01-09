@@ -1,6 +1,7 @@
 import pytest
 from pipeline.plugins import discover_plugins
 from pathlib import Path
+from config import CONFIG
 
 def test_plugin_discovery_and_execution():
     """Verify that plugins are discovered and can be executed."""
@@ -8,7 +9,15 @@ def test_plugin_discovery_and_execution():
     plugin_dir = Path("pipeline/plugins/community").absolute()
     
     # Discover plugins
-    plugins = discover_plugins(plugin_dir)
+    original_enabled = CONFIG.enable_community_plugins
+    original_allowlist = list(CONFIG.plugin_allowlist)
+    try:
+        CONFIG.enable_community_plugins = True
+        CONFIG.plugin_allowlist = ["community.example"]
+        plugins = discover_plugins(plugin_dir)
+    finally:
+        CONFIG.enable_community_plugins = original_enabled
+        CONFIG.plugin_allowlist = original_allowlist
     
     # Should find at least the example plugin
     assert len(plugins) >= 1

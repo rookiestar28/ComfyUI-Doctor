@@ -30,6 +30,10 @@ class LLMContextBuilderStage(PipelineStage):
             workflow_pruner: Service to prune workflows.
         """
         self._name = "LLMContextBuilderStage"
+        self.stage_id = "llm_context_builder"
+        self.requires = ["sanitized_traceback|traceback"]
+        self.provides = ["llm_context", "metadata.estimated_tokens"]
+        self.version = "1.0"
         self.pruner = workflow_pruner
 
     @property

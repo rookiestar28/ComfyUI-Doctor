@@ -226,4 +226,51 @@ test.describe('Settings Panel', () => {
     });
     expect(storedState).toBe('settings');
   });
+
+  test('should load health and plugin trust report on refresh', async ({ page }) => {
+    await page.route('**/doctor/health', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          health: {
+            logger: { dropped_messages: 2 },
+            ssrf: { blocked_total: 1 },
+            last_analysis: { timestamp: '2026-01-10T00:00:00Z', pipeline_status: 'ok' }
+          }
+        })
+      });
+    });
+
+    await page.route('**/doctor/plugins', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          plugins: {
+            config: { enabled: false, allowlist_count: 0, signature_required: false },
+            trust_counts: { untrusted: 1 },
+            plugins: [
+              { file: 'example.py', plugin_id: 'example.plugin', trust: 'untrusted', reason: 'not_allowlisted' }
+            ]
+          }
+        })
+      });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const refreshBtn = page.locator('#doctor-trust-health-refresh-btn');
+    await expect(refreshBtn).toBeVisible();
+    await refreshBtn.click();
+
+    await expect(page.locator('#doctor-health-output')).toContainText('pipeline_status=ok');
+    await expect(page.locator('#doctor-health-output')).toContainText('ssrf_blocked=1');
+    await expect(page.locator('#doctor-health-output')).toContainText('dropped_logs=2');
+
+    await expect(page.locator('#doctor-plugins-output')).toContainText('example.plugin');
+    await expect(page.locator('#doctor-plugins-output')).toContainText('untrusted');
+  });
 });

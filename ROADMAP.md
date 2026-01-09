@@ -13,6 +13,8 @@ graph TD
     B --> F[config.py]
     B --> G[nodes.py]
     B --> HH[statistics.py]
+    B --> SEC[security.py]
+    B --> OUT[outbound.py]
 
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
@@ -20,15 +22,18 @@ graph TD
 
     %% A6 Pipeline Architecture
     D --> PIPE[pipeline/orchestrator.py]
+    PIPE --> MC[pipeline/metadata_contract.py]
     PIPE --> S1[SanitizerStage]
     PIPE --> S2[PatternMatcherStage]
     PIPE --> S3[ContextEnhancerStage]
     PIPE --> S4[LLMBuilderStage]
 
     %% Stage Dependencies
+    S1 --> SAN[sanitizer.py]
     S2 --> H[pattern_loader.py]
     S2 --> PLUG[pipeline/plugins/]
     S4 --> SERV[services/workflow_pruner.py]
+    OUT --> SAN
 
     H --> N[patterns/builtin/]
     H --> O[patterns/community/]
@@ -53,8 +58,8 @@ graph TD
     X --> AG["API: /doctor/chat"]
     X --> AGS["API: /doctor/statistics"]
     X --> AGM["API: /doctor/mark_resolved"]
-    X --> AGS["API: /doctor/statistics"]
-    X --> AGM["API: /doctor/mark_resolved"]
+    X --> AH2["API: /doctor/health"]
+    X --> AH3["API: /doctor/plugins"]
 
     AH[web/doctor.js] --> TM[Tab Manager]
     TM --> TC[Chat Tab]
@@ -74,10 +79,10 @@ graph TD
     AT[tests/e2e/] --> AU[Playwright Test Suite]
     AU --> AV[test-harness.html]
     AU --> AW[mocks/comfyui-app.js]
-    AU --> AX[specs/settings.spec.js - 12 tests]
-    AU --> AY[specs/sidebar.spec.js - 10 tests]
-    AU --> AZ[specs/statistics.spec.js - 18 tests]
-    AU --> BA[specs/preact-loader.spec.js - 8 tests]
+    AU --> AX[specs/settings.spec.js - 13 tests]
+    AU --> AY[specs/sidebar.spec.js - 15 tests]
+    AU --> AZ[specs/statistics.spec.js - 19 tests]
+    AU --> BA[specs/preact-loader.spec.js - 14 tests]
     AV --> AH
     AV --> AJ
 ```
@@ -87,10 +92,14 @@ graph TD
 | Module | Lines | Function |
 |--------|-------|----------|
 | `prestartup_script.py` | 102 | Earliest log interception hook (before custom_nodes load) |
-| `__init__.py` | 1900+ | Main entry: full Logger install, 9 API endpoints, LLM integration, env var support |
+| `__init__.py` | 1900+ | Main entry: full Logger install, API endpoints, LLM integration, env var support |
 | `logger.py` | 400+ | SafeStreamWrapper + queue-based processing, DoctorLogProcessor background thread, async writes |
 | `analyzer.py` | 320+ | Wrapper for AnalysisPipeline, legacy API compatibility |
 | `pipeline/` | 400+ | A6: Error analysis pipeline (Sanitizer, Matcher, Context, LLMBuilder) |
+| `pipeline/metadata_contract.py` | ~120 | Metadata schema versioning + end-of-run validation/quarantine |
+| `security.py` | 300+ | SSRF hardening helpers + counters for health endpoint |
+| `outbound.py` | 150+ | Non-bypassable outbound sanitization boundary for remote requests |
+| `sanitizer.py` | 400+ | PII sanitization engine with `none/basic/strict` modes |
 | `services/` | 50+ | R12: Workflow pruning and pip validation services |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
@@ -108,10 +117,10 @@ graph TD
 | `web/doctor_chat.js` | 600+ | Multi-turn chat interface, SSE streaming, markdown rendering |
 | `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
-| `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (12 tests): toggle, selectors, inputs, persistence |
-| `tests/e2e/specs/sidebar.spec.js` | 190 | Chat interface tests (10 tests): messages, input, buttons, error context, sanitization status |
-| `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n |
-| `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (8 tests): module loading, flags, error handling |
+| `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (13 tests): toggle, selectors, inputs, persistence, trust/health refresh |
+| `tests/e2e/specs/sidebar.spec.js` | 190 | Chat interface tests (15 tests): messages, input, buttons, error context, sanitization status |
+| `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (19 tests): panel, cards, patterns, categories, i18n, resolution actions |
+| `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (14 tests): module loading, flags, error handling, vendor fallback |
 | `playwright.config.js` | 89 | Playwright configuration for E2E tests |
 
 ---
@@ -176,12 +185,30 @@ graph TD
 
 ### 3.0 Risk & Refactor Mitigation (Highest Priority)
 
-- [ ] **R0**: Risk & Refactor Mitigation (Security + Logger + Pipeline + Sanitization) - 🔴 Highest ⚠️ *Use dev branch*
+- [x] **R0**: Risk & Refactor Mitigation (Security + Logger + Pipeline + Sanitization) - 🔴 Highest ✅ *Completed (2026-01-10)*
   - **Scope**: SSRF hardening, logger backpressure, pipeline health, prestartup handoff, sanitization boundary
   - **Plan**: `.planning/260108-RISK_REFACTOR_MITIGATION_PLAN.md`
-- [ ] **R13**: Pipeline + Plugin Hardening (Phase 2 Assessment) - 🔴 Highest ⚠️ *Use dev branch*
+  - **Implementation Record**: `.planning/260110-R0_R13_PIPELINE_GOVERNANCE_IMPLEMENTATION_RECORD.md`
+  - **Progress**:
+    - ✅ **R0-P0**: SSRF hardening + redirect blocking for outbound requests
+    - ✅ **R0-P1**: Single outbound payload sanitization funnel (privacy_mode=none only for verified local)
+    - ✅ **R0-P2**: Logger backpressure + dropped-message counters
+    - ✅ **R0-P3**: Metadata contract versioning + end-of-run validation + dependency-aware pipeline
+    - ✅ **R0-P4**: Prestartup logger handoff (close/uninstall)
+    - ✅ **R0-P5**: Observability/health endpoint (`/doctor/health`)
+- [x] **R13**: Pipeline + Plugin Hardening (Phase 2 Assessment) - 🔴 Highest ✅ *Completed (2026-01-10)*
   - **Scope**: plugin gating + manifest/allowlist, metadata contract, pipeline dependency policy, expanded sanitization boundary, context extraction provenance
   - **Plan**: `.planning/260109-PHASE2_PIPELINE_PLUGIN_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260110-R0_R13_PIPELINE_GOVERNANCE_IMPLEMENTATION_RECORD.md`
+  - **Follow-up Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
+  - **Progress**:
+    - ✅ **R13-P0**: Plugin loader safe-by-default (default OFF + allowlist/manifest/sha256 + trust taxonomy + filesystem hardening)
+    - ✅ **R13-P0-TESTS**: Dedicated security tests for plugin loader
+    - ✅ **R13-P1**: Outbound payload safety funnel (shared with **R0-P1**)
+    - ✅ **R13-P2**: Metadata contract + dependency policy (shared with **R0-P3**)
+    - ✅ **R13-P3**: Context extraction provenance metadata
+    - ✅ **R13-OPT1**: Optional signature policy (HMAC) for allowlisted plugins (shared-secret integrity check, not public signing)
+    - ✅ **R13-OPT2**: Plugin trust UI + `/doctor/plugins` scan-only endpoint ✅ *Completed (2026-01-09)*
 
 ### 3.1 Security (in progress)
 
@@ -193,6 +220,7 @@ graph TD
     - ✅ Sanitize Linux/macOS home: `/home/username/` → `<USER_HOME>/`
     - ✅ Email addresses, private IP addresses (regex-based)
     - ✅ Configurable sanitization levels: `none`, `basic`, `strict`
+    - ✅ **S6-FP1**: Reduce false positives (BASIC no longer redacts arbitrary long hex; STRICT keeps long-hex redaction)
     - ✅ Zero runtime overhead, GDPR-friendly
   - **Frontend** (Privacy Controls):
     - ✅ Settings panel: "Privacy Mode" dropdown with 3 levels
@@ -391,6 +419,11 @@ graph TD
   - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
   - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
+- [ ] **A8**: Plugin Migration Tooling (Plan 6.3) - 🟡 Medium
+  - **Goal**: Reduce configuration friction for safe-by-default plugin policy (manifest + allowlist helpers; optional HMAC signer).
+  - **Deliverables**: `scripts/plugin_manifest.py`, `scripts/plugin_allowlist.py`, optional `scripts/plugin_hmac_sign.py`
+  - **Acceptance**: Generate valid manifests + allowlist snippet in one command; safe defaults (`--dry-run`); never prints/writes secret keys.
+  - **Plan Update Record**: `.planning/260109-PHASE2_CI_GATE_AND_MIGRATION_TOOLING_PLAN_UPDATE_RECORD.md`
 - [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low ✅ *Completed (Phase 3A)*
 - [x] **A2**: Integrate ruff linter (replace flake8/isort) - 🟢 Low ✅ *Completed (Phase 3A)*
@@ -398,7 +431,19 @@ graph TD
 
 ### 3.5 Testing (in progress)
 
-*Sorted by priority (High → Low):*
+*Sorted by priority (High → Low), then by item number:*
+
+- [ ] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High
+  - **Goal**: Make Phase 2 hardening non-regressable (required checks before merge/release).
+  - **Gate**: `pytest -q tests/test_plugins_security.py`, `tests/test_metadata_contract.py`, `tests/test_pipeline_dependency_policy.py`, `tests/test_outbound_payload_safety.py`, plus `npm test`.
+  - **Acceptance**: Branch protection requires the gate; stable runtime (< ~3 minutes typical).
+  - **Plan Update Record**: `.planning/260109-PHASE2_CI_GATE_AND_MIGRATION_TOOLING_PLAN_UPDATE_RECORD.md`
+
+- [ ] **T12**: Outbound Funnel Static CI Gate (Plan 6.2) - 🟡 Medium
+  - **Goal**: Fail CI if new outbound call paths bypass `outbound.py` / `sanitize_outbound_payload(...)`.
+  - **Approach**: Grep guard (fast) or AST scan (precise) to detect suspicious raw-field usage outside `outbound.py`.
+  - **Acceptance**: CI fails on bypass attempts; low false-positive rate.
+  - **Plan Update Record**: `.planning/260109-PHASE2_CI_GATE_AND_MIGRATION_TOOLING_PLAN_UPDATE_RECORD.md`
 
 - [x] **T8**: Pattern Validation CI - 🟡 Medium ✅ *Completed (2026-01-03)*
   - **Problem**: Pattern format errors and i18n gaps can break the system
@@ -422,12 +467,12 @@ graph TD
   - **Implementation**:
     - Test harness loads full Doctor UI without ComfyUI ✅
     - Mock ComfyUI environment (app, api, extensionManager) ✅
-    - Settings panel tests (12 tests): toggle, language selector, provider selector, inputs ✅
-    - Chat interface tests (8 tests): messages area, input/send/clear buttons, error context ✅
-    - Statistics dashboard tests (18 tests): panel, cards, patterns, categories, i18n ✅
-    - Preact loader tests (8 tests): module loading, flags, error handling ✅
+    - Settings panel tests (13 tests): toggle, selectors, persistence, trust/health refresh ✅
+    - Chat interface tests (15 tests): messages, inputs, error context, sanitization status, analyze CTA ✅
+    - Statistics dashboard tests (19 tests): panel, cards, categories, i18n, resolution actions ✅
+    - Preact loader tests (14 tests): module loading, flags, vendor failure fallback ✅
     - API endpoint mocks for backend calls ✅
-  - **Test Results**: 100% pass rate (46/46 tests)
+  - **Test Results**: 100% pass rate (61/61 tests)
   - **Execution time**: ~16 seconds for full test suite (Chromium, 10 workers)
   - **How to Run Tests**:
     <details>
@@ -449,7 +494,11 @@ graph TD
 
     </details>
   - **Implementation Record**: `.planning/260103-T2_playwright_test_infrastructure.md`
+  - **Follow-up Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
   - **Foundation for**: CI/CD integration, UI regression detection
+- [x] **T10**: Playwright E2E Runner Hardening (WSL `/mnt/c`) - 🟢 Low ✅ *Completed (2026-01-09)*
+  - **Goal**: Make `npm test` stable on WSL + Windows-mounted paths (transform cache / temp permissions + python shim).
+  - **Implementation Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
 - [ ] **T9**: External Environment Test Coverage Expansion (Non-ComfyUI) - 🟡 Medium
   - **Goal**: Cover pipeline integration, SSE/REST contracts, and UI contracts without a live ComfyUI runtime
   - **Phases**:
@@ -469,6 +518,10 @@ graph TD
 - [ ] **D1**: OpenAPI/Swagger spec - 🟡 Medium ⚠️ *Use dev branch*
 - [ ] **D2**: Architecture documentation - 🟢 Low
 - [ ] **D3**: Contribution guide - 🟢 Low
+- [x] **D4**: Plugin Trust/Signature Documentation - 🟢 Low ✅ *Completed (2026-01-09)*
+  - **Scope**: clarify plugin trust model + HMAC threat model (shared-secret integrity, not public signing)
+  - **Files**: `README.md`, `docs/PLUGIN_GUIDE.md`, `ROADMAP.md`
+  - **Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
 
 > [Note]
 > Items marked with ⚠️ should be developed on a separate `dev` branch. Merge to `main` only after thorough testing.
@@ -611,10 +664,11 @@ graph TD
 **Completed Tasks**:
 
 - [x] **T2** Frontend Interaction Tests (Playwright) ✅ *Completed (2026-01-04)*
-  - 46 end-to-end tests for Doctor UI (settings panel, chat interface, statistics dashboard, preact loader)
+  - 61 end-to-end tests for Doctor UI (settings panel, chat interface, statistics dashboard, preact loader, trust/health)
   - 100% pass rate, execution time ~16 seconds (Chromium, 10 workers)
   - Ready for CI/CD integration
   - See `.planning/260103-T2_playwright_test_infrastructure.md`
+  - Runner hardening for WSL `/mnt/c` environments: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
 
 **Pending UI i18n Completion** (from Phase 4B):
 
@@ -636,7 +690,7 @@ graph TD
   - API: `/doctor/statistics` (GET) and `/doctor/mark_resolved` (POST)
   - Frontend: Collapsible statistics panel in sidebar with error trends, top patterns, category breakdown, and resolution tracking
   - Features: 24h/7d/30d time ranges, Top 5 error patterns, resolution rate tracking (resolved/unresolved/ignored)
-  - Testing: 17/17 backend unit tests passed; statistics E2E tests 18/18 passed; full Playwright suite 46/46 passed
+  - Testing: 159/159 Python tests passed; full Playwright suite 61/61 passed (latest)
   - i18n: Fully translated across all 9 languages
   - See `.planning/260104-F4_STATISTICS_RECORD.md` for implementation details
 - [ ] **R6-R7** Network reliability improvements

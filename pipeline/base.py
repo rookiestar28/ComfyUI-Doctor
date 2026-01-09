@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable, List
 from .context import AnalysisContext
 
 @runtime_checkable
@@ -11,6 +11,11 @@ class PipelineStage(Protocol):
     def name(self) -> str:
         """Name of the stage for logging and metadata."""
         ...
+
+    stage_id: str
+    requires: List[str]
+    provides: List[str]
+    version: str
         
     def process(self, context: AnalysisContext) -> None:
         """

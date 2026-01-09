@@ -20,6 +20,10 @@ class SanitizerStage(PipelineStage):
     
     def __init__(self, use_cached_instance=True):
         self._name = "SanitizerStage"
+        self.stage_id = "sanitizer"
+        self.requires = ["traceback"]
+        self.provides = ["sanitized_traceback", "metadata.sanitization"]
+        self.version = "1.0"
         self.use_cached_instance = use_cached_instance
 
     @property

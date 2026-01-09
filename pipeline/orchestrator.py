@@ -3,6 +3,7 @@ import logging
 import traceback
 from .base import PipelineStage
 from .context import AnalysisContext
+from .metadata_contract import validate_metadata_contract
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,27 @@ class AnalysisPipeline:
         Returns:
             The processed analysis context.
         """
+        stage_errors = context.metadata.setdefault("stage_errors", [])
+        pipeline_status = context.metadata.get("pipeline_status", "ok")
+        if pipeline_status not in {"ok", "degraded", "failed"}:
+            pipeline_status = "ok"
+
         for stage in self.stages:
             stage_name = getattr(stage, "name", str(type(stage).__name__))
+            stage_id = getattr(stage, "stage_id", stage_name)
+            requires = getattr(stage, "requires", []) or []
+
+            missing = self._missing_requirements(context, requires)
+            if missing:
+                stage_errors.append({
+                    "stage_id": stage_id,
+                    "error": "missing_requirements",
+                    "missing": missing,
+                })
+                if pipeline_status == "ok":
+                    pipeline_status = "degraded"
+                continue
+
             try:
                 # logger.debug(f"Executing stage: {stage_name}")
                 stage.process(context)
@@ -48,12 +68,48 @@ class AnalysisPipeline:
                 # we return partial results (e.g. from earlier stages) if possible.
                 error_msg = f"Stage {stage_name} failed: {str(e)}"
                 logger.error(error_msg, exc_info=True)
-                
-                # Record stage failure in metadata
+
+                stage_errors.append({
+                    "stage_id": stage_id,
+                    "error": str(e),
+                })
+                pipeline_status = "failed"
+
+                # Record stage failure in metadata (legacy key)
                 meta_key = f"stage_error_{stage_name}"
                 context.add_metadata(meta_key, str(e))
                 
                 # Optional: Add trace to system info if needed for debugging
                 # context.system_info[f"{stage_name}_traceback"] = traceback.format_exc()
-                
+
+        context.metadata["pipeline_status"] = pipeline_status
+        context.metadata = validate_metadata_contract(context.metadata)
         return context
+
+    @staticmethod
+    def _missing_requirements(context: AnalysisContext, requires: List[str]) -> List[str]:
+        missing = []
+        for requirement in requires:
+            if not requirement:
+                continue
+            options = [option.strip() for option in requirement.split("|") if option.strip()]
+            if not options:
+                continue
+
+            satisfied = False
+            for option in options:
+                if option.startswith("metadata."):
+                    key = option.split(".", 1)[1]
+                    value = context.metadata.get(key)
+                    if value is not None and not (isinstance(value, str) and value == ""):
+                        satisfied = True
+                        break
+                else:
+                    value = getattr(context, option, None)
+                    if value is not None and not (isinstance(value, str) and value == ""):
+                        satisfied = True
+                        break
+
+            if not satisfied:
+                missing.append(requirement)
+        return missing

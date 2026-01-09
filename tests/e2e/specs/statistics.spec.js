@@ -455,12 +455,17 @@ test.describe('Statistics Dashboard', () => {
       });
     });
 
+    // Some modes auto-switch tabs on new errors; ensure we stay on Stats.
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(200);
+
     // Wait for component to poll and pick up the new context (poll interval is 2s)
     await page.waitForTimeout(2500);
 
     // Now the button should be enabled - click it
     const resolvedBtn = page.locator('#btn-mark-resolved');
     await expect(resolvedBtn).toBeEnabled();
+    await expect(resolvedBtn).toBeVisible();
     await resolvedBtn.click();
     await page.waitForTimeout(500);
 

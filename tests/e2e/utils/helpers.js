@@ -12,12 +12,19 @@ export async function waitForDoctorReady(page) {
     timeout: 20000,
   });
 
-  // Ensure at least one tab content panel has mounted; tab render is async after ready.
+  // Ensure at least one tab's content has actually mounted (preact or vanilla).
   await page.waitForFunction(() => {
     return Boolean(
-      document.querySelector('#doctor-messages') ||
+      // Settings tab
+      document.querySelector('#doctor-settings-panel') ||
+      // Stats tab
+      document.querySelector('#doctor-statistics-panel') ||
       document.querySelector('#doctor-stats-content') ||
-      document.querySelector('#doctor-settings-panel')
+      // Chat tab (vanilla + preact)
+      document.querySelector('#doctor-error-context') ||
+      document.querySelector('#doctor-sanitization-status') ||
+      document.querySelector('#doctor-messages') ||
+      document.querySelector('.chat-messages')
     );
   }, { timeout: 20000 });
 }

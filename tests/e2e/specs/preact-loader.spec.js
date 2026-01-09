@@ -32,8 +32,8 @@ test.describe('Preact Loader', () => {
         // Navigate to test harness
         await page.goto('test-harness.html');
 
-        // Wait for Doctor UI to be ready
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 10000 });
+        // Wait for Doctor UI to be ready (can be slower on /mnt/c + sandboxed environments)
+        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 20000 });
     });
 
     test.describe('Module Loading', () => {
@@ -372,4 +372,3 @@ test.describe('Preact Loader', () => {
         });
     });
 });
-

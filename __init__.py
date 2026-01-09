@@ -46,14 +46,15 @@ from logging.handlers import RotatingFileHandler
 # ⚠️ CRITICAL: DO NOT change these to absolute imports
 # These MUST be relative imports for ComfyUI compatibility
 # ═══════════════════════════════════════════════════════════════════════════
-from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history
+from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history, get_logger_metrics
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
 from .config import CONFIG
 from .session_manager import SessionManager
 from .system_info import get_system_environment, format_env_for_llm
 from .sanitizer import PIISanitizer, SanitizationLevel
-from .security import is_local_llm_url, validate_ssrf_url
+from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_ssrf_metrics
+from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -70,7 +71,9 @@ LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
 
 def is_anthropic(base_url: str) -> bool:
     """Check if the base URL is for Anthropic API."""
-    return "anthropic.com" in base_url.lower()
+    info = parse_base_url(base_url)
+    hostname = (info.get("hostname") if info else "") or ""
+    return hostname.lower().endswith("anthropic.com")
 
 # --- 1. Setup Log Directory (Local to Node) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -126,6 +129,26 @@ else:
 
 # --- 4. Install/Upgrade to Full Smart Logger ---
 # This will replace the minimal PrestartupLogger with the full-featured SmartLogger
+def _handoff_prestartup_logger():
+    """
+    Best-effort cleanup of the prestartup logger to avoid leaked file handles.
+    This does NOT import prestartup_script.py to avoid re-running its side effects.
+    """
+    for module in list(sys.modules.values()):
+        module_file = getattr(module, "__file__", "")
+        if not module_file:
+            continue
+        if module_file.endswith("prestartup_script.py"):
+            pre_logger = getattr(module, "PrestartupLogger", None)
+            if pre_logger and hasattr(pre_logger, "uninstall"):
+                try:
+                    pre_logger.uninstall()
+                    logging.info("[Doctor] Prestartup logger handoff complete")
+                except Exception as handoff_error:
+                    logging.warning(f"[Doctor] Prestartup logger handoff failed: {handoff_error}")
+            break
+
+_handoff_prestartup_logger()
 SmartLogger.install(log_path)
 
 
@@ -966,12 +989,9 @@ try:
                 return web.json_response({"error": "No error text provided"}, status=400)
 
             # S6: PII Sanitization - Remove sensitive info before sending to LLM
-            try:
-                sanitization_level = SanitizationLevel(privacy_mode)
-            except ValueError:
-                sanitization_level = SanitizationLevel.BASIC
-
-            sanitizer = PIISanitizer(sanitization_level)
+            sanitizer, downgraded = get_outbound_sanitizer(base_url, privacy_mode)
+            if downgraded:
+                logger.warning("privacy_mode=none is only allowed for verified local providers; using basic")
 
             # Sanitize error text
             sanitization_result = sanitizer.sanitize(error_text)
@@ -983,7 +1003,7 @@ try:
 
             # Sanitize node context (paths, custom_node_path)
             if node_context:
-                node_context = sanitizer.sanitize_dict(node_context)
+                node_context = sanitizer.sanitize_dict(node_context, keys_to_sanitize=[])
 
             # Truncate error text to prevent token overflow (roughly 8000 chars ≈ 2000 tokens)
             MAX_ERROR_LENGTH = 8000
@@ -1038,8 +1058,12 @@ try:
             # Normalize Base URL
             base_url = base_url.rstrip("/")
 
+            base_info = parse_base_url(base_url)
+            hostname = (base_info.get("hostname") if base_info else "") or ""
+            is_local = is_local_llm_url(base_url)
+
             # Determine API type
-            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+            is_ollama = is_local and base_info and base_info.get("port") == 11434
             is_anthropic_api = is_anthropic(base_url)
 
             # Prepare headers and payload based on API type
@@ -1084,7 +1108,7 @@ try:
                     "Content-Type": "application/json"
                 }
                 # Auto-append /v1 if missing and looks like a standard provider
-                if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
+                if not base_url.endswith("/v1") and hostname.lower().endswith(("openai.com", "deepseek.com")):
                     base_url += "/v1"
                 url = f"{base_url}/chat/completions"
                 payload = {
@@ -1097,7 +1121,8 @@ try:
                 }
 
             session = await SessionManager.get_session()
-            async with session.post(url, json=payload, headers=headers) as response:
+            payload = sanitize_outbound_payload(payload, sanitizer)
+            async with session.post(url, json=payload, headers=headers, allow_redirects=False) as response:
                 if response.status != 200:
                     error_msg = await response.text()
                     # Truncate error message for readability
@@ -1186,12 +1211,9 @@ try:
                 return web.json_response({"error": "No messages provided"}, status=400)
 
             # S6: PII Sanitization - Remove sensitive info before sending to LLM
-            try:
-                sanitization_level = SanitizationLevel(privacy_mode)
-            except ValueError:
-                sanitization_level = SanitizationLevel.BASIC
-
-            sanitizer = PIISanitizer(sanitization_level)
+            sanitizer, downgraded = get_outbound_sanitizer(base_url, privacy_mode)
+            if downgraded:
+                logger.warning("privacy_mode=none is only allowed for verified local providers; using basic")
 
             # Build system prompt with error context
             error_text = error_context.get("error", "")
@@ -1202,7 +1224,7 @@ try:
             if error_text:
                 error_text = sanitizer.sanitize(error_text).sanitized_text
             if node_context:
-                node_context = sanitizer.sanitize_dict(node_context)
+                node_context = sanitizer.sanitize_dict(node_context, keys_to_sanitize=[])
 
             # Sanitize user messages (only user role, not assistant responses)
             for msg in messages:
@@ -1341,8 +1363,12 @@ try:
             # Prepare request
             base_url = base_url.rstrip("/")
 
+            base_info = parse_base_url(base_url)
+            hostname = (base_info.get("hostname") if base_info else "") or ""
+            is_local = is_local_llm_url(base_url)
+
             # Determine API type
-            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+            is_ollama = is_local and base_info and base_info.get("port") == 11434
             is_anthropic_api = is_anthropic(base_url)
 
             # Limit conversation history to prevent token overflow
@@ -1383,7 +1409,7 @@ try:
                 }
             else:
                 # OpenAI-compatible: auto-append /v1 if needed
-                if not base_url.endswith("/v1") and any(p in base_url for p in ["openai.com", "deepseek.com"]):
+                if not base_url.endswith("/v1") and hostname.lower().endswith(("openai.com", "deepseek.com")):
                     base_url += "/v1"
                 url = f"{base_url}/chat/completions"
                 headers = {
@@ -1404,7 +1430,8 @@ try:
             if not stream:
                 # Non-streaming fallback
                 session = await SessionManager.get_session()
-                async with session.post(url, json=payload, headers=headers) as response:
+                payload = sanitize_outbound_payload(payload, sanitizer)
+                async with session.post(url, json=payload, headers=headers, allow_redirects=False) as response:
                     if response.status != 200:
                         error_msg = await response.text()
                         logger.error(f"LLM non-stream error: {error_msg[:200]}")
@@ -1437,7 +1464,8 @@ try:
             
             try:
                 session = await SessionManager.get_session()
-                async with session.post(url, json=payload, headers=headers) as llm_response:
+                payload = sanitize_outbound_payload(payload, sanitizer)
+                async with session.post(url, json=payload, headers=headers, allow_redirects=False) as llm_response:
                     if llm_response.status != 200:
                         error_msg = await llm_response.text()
                         logger.error(f"LLM stream error: {error_msg[:200]}")
@@ -1695,7 +1723,7 @@ try:
             url = f"{base_url}/models"
             
             session = await SessionManager.get_session()
-            async with session.get(url, headers=headers) as response:
+            async with session.get(url, headers=headers, allow_redirects=False) as response:
                 if response.status == 200:
                     msg = "API key is valid" if not is_local else "Local LLM connection successful"
                     logger.info(f"API key verification successful - base_url={base_url}, is_local={is_local}")
@@ -1761,11 +1789,12 @@ try:
                 })
             
             base_url = base_url.rstrip("/")
+            base_info = parse_base_url(base_url)
             if is_local and not api_key:
                 api_key = "local-llm"
 
             # Determine if this is Ollama or OpenAI-compatible API
-            is_ollama = is_local_llm_url(base_url) and ("11434" in base_url or "ollama" in base_url.lower())
+            is_ollama = is_local and base_info and base_info.get("port") == 11434
 
             if is_ollama:
                 # Ollama uses /api/tags endpoint (remove /v1 if present)
@@ -1778,7 +1807,7 @@ try:
             headers = {"Authorization": f"Bearer {api_key}"}
             
             session = await SessionManager.get_session()
-            async with session.get(url, headers=headers) as response:
+            async with session.get(url, headers=headers, allow_redirects=False) as response:
                 if response.status != 200:
                     return web.json_response({
                         "success": False,
@@ -1921,6 +1950,90 @@ try:
         except Exception as e:
             logger.error(f"Mark resolved API error: {str(e)}")
             return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/health")
+    async def api_health(request):
+        """
+        Health endpoint for internal diagnostics.
+        Returns logger queue stats, SSRF counters, and last analysis state.
+        """
+        try:
+            last_analysis = get_last_analysis()
+            analysis_meta = last_analysis.get("analysis_metadata") or {}
+            payload = {
+                "logger": get_logger_metrics(),
+                "ssrf": get_ssrf_metrics(),
+                "last_analysis": {
+                    "timestamp": last_analysis.get("timestamp"),
+                    "pipeline_status": analysis_meta.get("pipeline_status"),
+                },
+            }
+            return web.json_response({"success": True, "health": payload})
+        except Exception as e:
+            logger.error(f"Health API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/plugins")
+    async def api_plugins(request):
+        """
+        Plugin trust report (scan-only).
+        Returns the trust classification for each discovered community plugin without importing code.
+        """
+        try:
+            from pathlib import Path
+            from .pipeline.plugins import scan_plugins
+            from config import CONFIG
+
+            plugin_dir = Path(__file__).resolve().parent / "pipeline" / "plugins" / "community"
+            report = scan_plugins(plugin_dir)
+
+            def sanitize_manifest(manifest):
+                if not isinstance(manifest, dict):
+                    return None
+                keys = [
+                    "id",
+                    "name",
+                    "version",
+                    "author",
+                    "min_doctor_version",
+                    "signature_alg",
+                ]
+                out = {k: manifest.get(k) for k in keys if k in manifest}
+                if "signature" in manifest:
+                    out["has_signature"] = bool(manifest.get("signature"))
+                return out
+
+            plugins = []
+            trust_counts = {}
+            for entry in report:
+                trust = entry.get("trust")
+                trust_counts[trust] = trust_counts.get(trust, 0) + 1
+                plugins.append(
+                    {
+                        "file": getattr(entry.get("file"), "name", str(entry.get("file"))),
+                        "plugin_id": entry.get("plugin_id"),
+                        "trust": trust,
+                        "reason": entry.get("reason"),
+                        "manifest": sanitize_manifest(entry.get("manifest")),
+                    }
+                )
+
+            payload = {
+                "config": {
+                    "enabled": bool(getattr(CONFIG, "enable_community_plugins", False)),
+                    "allowlist_count": len(getattr(CONFIG, "plugin_allowlist", []) or []),
+                    "blocklist_count": len(getattr(CONFIG, "plugin_blocklist", []) or []),
+                    "signature_required": bool(getattr(CONFIG, "plugin_signature_required", False)),
+                    "signature_alg": getattr(CONFIG, "plugin_signature_alg", "hmac-sha256"),
+                    "signature_key_configured": bool(getattr(CONFIG, "plugin_signature_key", "") or ""),
+                },
+                "trust_counts": trust_counts,
+                "plugins": plugins,
+            }
+            return web.json_response({"success": True, "plugins": payload})
+        except Exception as e:
+            logger.error(f"Plugins API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
         
     print("[ComfyUI-Doctor] 🌐 API Hooks registered:")
     print("  - GET  /debugger/last_analysis")
@@ -1933,6 +2046,8 @@ try:
     print("  - POST /doctor/list_models")
     print("  - GET  /doctor/statistics (F4)")
     print("  - POST /doctor/mark_resolved (F4)")
+    print("  - GET  /doctor/health")
+    print("  - GET  /doctor/plugins")
     print("\n")
     print("💬 Questions? Updates? Suggestions and Contributions are welcome!")
     print("⭐ Give us a Star on GitHub - it's always good for the Doctor's health! 💝")

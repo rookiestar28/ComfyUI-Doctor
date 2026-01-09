@@ -4,6 +4,13 @@ from typing import List, Tuple, Optional, Any
 from ..base import PipelineStage
 from ..context import AnalysisContext
 from ..plugins import discover_plugins
+try:
+    from config import CONFIG
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+    from config import CONFIG
 
 # Import dependencies (wrappers usually)
 try:
@@ -45,10 +52,22 @@ class PatternMatcherStage(PipelineStage):
     3. Legacy Hardcoded Patterns (fallback)
     """
     
-    def __init__(self, legacy_patterns: List[Tuple[str, str, bool]] = None, load_plugins=True):
+    def __init__(self, legacy_patterns: List[Tuple[str, str, bool]] = None, load_plugins=None):
         self._name = "PatternMatcherStage"
+        self.stage_id = "pattern_matcher"
+        self.requires = ["sanitized_traceback|traceback"]
+        self.provides = [
+            "suggestion",
+            "metadata.matched_pattern_id",
+            "metadata.category",
+            "metadata.priority",
+            "metadata.match_source",
+        ]
+        self.version = "1.0"
         self.legacy_patterns = legacy_patterns or []
         self.plugins = []
+        if load_plugins is None:
+            load_plugins = getattr(CONFIG, "enable_community_plugins", False)
         if load_plugins:
             # We assume plugins are in pipeline/plugins/community
             import pathlib
@@ -70,10 +89,14 @@ class PatternMatcherStage(PipelineStage):
         for matcher_func in self.plugins:
             try:
                 result = matcher_func(text_to_analyze)
-                if result:
-                    suggestion, metadata = result
+                plugin_id = getattr(matcher_func, "__plugin_id__", None) or "community.plugin"
+                normalized = self._normalize_plugin_result(result, plugin_id)
+                if normalized:
+                    suggestion, metadata, promoted = normalized
                     context.suggestion = suggestion
-                    context.metadata.update(metadata)
+                    context.metadata.setdefault("plugin", {})
+                    context.metadata["plugin"][plugin_id] = metadata
+                    context.metadata.update(promoted)
                     context.add_metadata("match_source", "plugin")
                     return  # Short-circuit
             except Exception as e:
@@ -152,3 +175,41 @@ class PatternMatcherStage(PipelineStage):
             'priority': priority,
             'match_source': source
         })
+
+    def _normalize_plugin_result(self, result: Any, plugin_id: str):
+        if not result:
+            return None
+
+        suggestion = None
+        metadata = {}
+
+        if isinstance(result, dict):
+            suggestion = result.get("suggestion") or result.get("message")
+            metadata = result.get("metadata", {})
+        elif isinstance(result, (tuple, list)) and len(result) >= 2:
+            suggestion = result[0]
+            metadata = result[1]
+        else:
+            logger.warning(f"Plugin {plugin_id} returned unsupported result type")
+            return None
+
+        if not isinstance(suggestion, str) or not suggestion.strip():
+            logger.warning(f"Plugin {plugin_id} returned empty suggestion")
+            return None
+
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        promoted = {}
+        if "matched_pattern_id" in metadata:
+            promoted["matched_pattern_id"] = metadata["matched_pattern_id"]
+        if "category" in metadata:
+            promoted["category"] = metadata["category"]
+        if "priority" in metadata:
+            promoted["priority"] = metadata["priority"]
+
+        promoted.setdefault("matched_pattern_id", plugin_id)
+        promoted.setdefault("category", "plugin")
+        promoted.setdefault("priority", 100)
+
+        return suggestion, metadata, promoted

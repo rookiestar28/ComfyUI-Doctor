@@ -716,6 +716,31 @@ Create `config.json` to customize behavior:
 - `enable_api`: Enable API endpoints
 - `privacy_mode`: PII sanitization level - `"none"`, `"basic"` (default), or `"strict"` (see Privacy Mode section above)
 
+### Community Plugins (Advanced)
+
+Community plugins extend pattern matching with custom Python logic. For safety, they are **disabled by default** and are only loaded if they pass the trust policy.
+
+Enable via `config.json`:
+
+```json
+{
+  "enable_community_plugins": true,
+  "plugin_allowlist": ["example.plugin"],
+  "plugin_blocklist": [],
+  "plugin_signature_required": false,
+  "plugin_signature_key": "",
+  "plugin_signature_alg": "hmac-sha256"
+}
+```
+
+Notes:
+
+- Plugins live under `pipeline/plugins/community/` and require a manifest (`*.json` next to the plugin, or `plugin.json` if there is only one plugin file).
+- Trust rules include allowlist, manifest/sha256 verification, filesystem hardening (containment, symlink rejection, size/scan limits), and optional HMAC verification.
+- **HMAC signature is a shared-secret integrity check**, not a public-key signature; keep `plugin_signature_key` secret and never commit it to Git.
+
+See `docs/PLUGIN_GUIDE.md` for the manifest schema and details.
+
 ---
 
 ## Supported Error Patterns

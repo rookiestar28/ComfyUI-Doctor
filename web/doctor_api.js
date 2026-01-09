@@ -236,6 +236,34 @@ export const DoctorAPI = {
     },
 
     /**
+     * Get internal health metrics
+     * @returns {Promise<{success: boolean, health?: any, error?: string}>}
+     */
+    async getHealth() {
+        try {
+            const response = await fetch('/doctor/health');
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to fetch health:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
+     * Get plugin trust report (scan-only)
+     * @returns {Promise<{success: boolean, plugins?: any, error?: string}>}
+     */
+    async getPluginsReport() {
+        try {
+            const response = await fetch('/doctor/plugins');
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to fetch plugin report:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
      * F4: Mark an error as resolved/unresolved/ignored
      * @param {string} timestamp - Error timestamp
      * @param {string} status - Status: 'resolved', 'unresolved', or 'ignored'

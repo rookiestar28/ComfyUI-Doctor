@@ -5,8 +5,8 @@ Provides centralized, JSON-overridable configuration.
 
 import os
 import json
-from dataclasses import dataclass, asdict
-from typing import Optional
+from dataclasses import dataclass, asdict, field
+from typing import Optional, List
 
 
 @dataclass
@@ -17,6 +17,7 @@ class DiagnosticsConfig:
     max_log_files: int = 10
     buffer_limit: int = 100
     traceback_timeout_seconds: float = 5.0
+    log_queue_maxsize: int = 1000
     
     # History
     history_size: int = 20
@@ -27,6 +28,17 @@ class DiagnosticsConfig:
     # Features
     enable_web_panel: bool = True
     enable_api: bool = True
+
+    # Plugins (P0 hardening)
+    enable_community_plugins: bool = False
+    plugin_allowlist: List[str] = field(default_factory=list)
+    plugin_blocklist: List[str] = field(default_factory=list)
+    plugin_max_file_size_bytes: int = 262144  # 256 KiB
+    plugin_max_scan_files: int = 50
+    plugin_reject_symlinks: bool = True
+    plugin_signature_required: bool = False
+    plugin_signature_key: str = ""
+    plugin_signature_alg: str = "hmac-sha256"
     
     def to_dict(self) -> dict:
         """Convert config to dictionary."""

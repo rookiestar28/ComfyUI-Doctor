@@ -76,7 +76,7 @@ class PIISanitizer:
 
         # API keys (common patterns: sk-..., key_..., token_...)
         "api_key": (
-            r'\b(?:sk-[a-zA-Z0-9_-]{20,}|key_[a-zA-Z0-9]{20,}|token_[a-zA-Z0-9]{20,}|(?<!SHA256:)[a-f0-9]{32,64})\b',
+            r'\b(?:sk-[a-zA-Z0-9_-]{20,}|key_[a-zA-Z0-9]{20,}|token_[a-zA-Z0-9]{20,})\b',
             r'<API_KEY>'
         ),
 
@@ -124,6 +124,12 @@ class PIISanitizer:
         "ssh_fingerprint": (
             r'SHA256:[A-Za-z0-9+/=]{32,}|:(?:[0-9a-f]{2}:){15}[0-9a-f]{2}',
             r'<SSH_FINGERPRINT>'
+        ),
+
+        # Long hex tokens (privacy-first; avoid false positives in BASIC)
+        "api_key_hex": (
+            r'\b(?<!SHA256:)[a-f0-9]{32,64}\b',
+            r'<API_KEY>'
         ),
     }
 
@@ -216,7 +222,7 @@ class PIISanitizer:
             return data
 
         if keys_to_sanitize is None:
-            keys_to_sanitize = ["error", "traceback", "message", "path", "custom_node_path"]
+            keys_to_sanitize = []
 
         sanitized_data = {}
         for key, value in data.items():

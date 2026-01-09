@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
+from .metadata_contract import METADATA_SCHEMA_VERSION
 
 # Forward reference for NodeContext to avoid circular import if needed in future,
 # but for now we can define it or import it if it's moved.
@@ -56,6 +57,13 @@ class AnalysisContext:
     
     # R12 / LLM Data
     llm_context: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self) -> None:
+        # Ensure metadata contract version is always present
+        if "metadata_schema_version" not in self.metadata:
+            self.metadata["metadata_schema_version"] = METADATA_SCHEMA_VERSION
+        self.metadata.setdefault("pipeline_status", "ok")
+        self.metadata.setdefault("stage_errors", [])
     
     def add_metadata(self, key: str, value: Any):
         """Helper to safely add metadata."""
