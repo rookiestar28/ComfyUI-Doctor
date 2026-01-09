@@ -107,6 +107,25 @@ export function render(container) {
                 </div>
                 <div id="doctor-plugins-output" style="margin-top: 10px; font-size: 12px; color: #bbb; line-height: 1.4;"></div>
             </div>
+            <div id="doctor-telemetry-panel" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #aaa;">
+                        📊 <span>${doctorUI.getUIText('telemetry_label') || 'Anonymous Telemetry'}</span>
+                    </div>
+                    <label class="doctor-toggle" style="position: relative; display: inline-block; width: 40px; height: 22px;">
+                        <input type="checkbox" id="doctor-telemetry-toggle" style="opacity: 0; width: 0; height: 0;">
+                        <span class="doctor-toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 22px;"></span>
+                    </label>
+                </div>
+                <div style="font-size: 12px; color: #888; margin-top: 5px;">${doctorUI.getUIText('telemetry_description') || 'Send anonymous usage data to help improve Doctor'}</div>
+                <div id="doctor-telemetry-stats" style="font-size: 11px; color: #666; margin-top: 5px;"></div>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button id="doctor-telemetry-view-btn" style="flex: 1; padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 11px;">${doctorUI.getUIText('telemetry_view_buffer') || 'View Buffer'}</button>
+                    <button id="doctor-telemetry-clear-btn" style="flex: 1; padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 11px;">${doctorUI.getUIText('telemetry_clear_all') || 'Clear All'}</button>
+                    <button id="doctor-telemetry-export-btn" style="flex: 1; padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 11px;">${doctorUI.getUIText('telemetry_export') || 'Export'}</button>
+                </div>
+                <div style="font-size: 11px; color: #666; margin-top: 5px;">${doctorUI.getUIText('telemetry_upload_none') || 'Upload destination: None (local only)'}</div>
+            </div>
             <button id="doctor-save-settings-btn" style="width: 100%; padding: 10px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px;">💾 ${doctorUI.getUIText('save_settings_btn')}</button>
         </div>
     `;
@@ -346,7 +365,132 @@ export function render(container) {
         trustHealthBtn.onclick = () => refreshTrustHealth();
     }
 
-    // Save
+    // ---- Telemetry Controls ----
+    const telemetryToggle = settingsPanel.querySelector('#doctor-telemetry-toggle');
+    const telemetryStats = settingsPanel.querySelector('#doctor-telemetry-stats');
+    const telemetryViewBtn = settingsPanel.querySelector('#doctor-telemetry-view-btn');
+    const telemetryClearBtn = settingsPanel.querySelector('#doctor-telemetry-clear-btn');
+    const telemetryExportBtn = settingsPanel.querySelector('#doctor-telemetry-export-btn');
+
+    const updateTelemetryStats = async () => {
+        try {
+            const res = await fetch('/doctor/telemetry/status');
+            const data = await res.json();
+            if (data.success) {
+                telemetryToggle.checked = data.enabled;
+                updateToggleSlider(telemetryToggle);
+                const count = data.stats?.count || 0;
+                const oldest = data.stats?.oldest ? new Date(data.stats.oldest).toLocaleDateString() : '-';
+                telemetryStats.textContent = `${doctorUI.getUIText('telemetry_buffer_count')?.replace('{n}', count) || `Currently buffered: ${count} events`}`;
+            }
+        } catch (e) {
+            telemetryStats.textContent = 'Status unavailable';
+        }
+    };
+
+    const updateToggleSlider = (toggle) => {
+        const slider = toggle.nextElementSibling;
+        if (slider) {
+            if (toggle.checked) {
+                slider.style.background = '#4caf50';
+                slider.innerHTML = '<span style="position:absolute;left:4px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s;transform:translateX(18px);"></span>';
+            } else {
+                slider.style.background = '#444';
+                slider.innerHTML = '<span style="position:absolute;left:4px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s;"></span>';
+            }
+        }
+    };
+
+    if (telemetryToggle) {
+        telemetryToggle.onchange = async () => {
+            try {
+                const res = await fetch('/doctor/telemetry/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: telemetryToggle.checked })
+                });
+                const data = await res.json();
+                telemetryToggle.checked = data.enabled;
+                updateToggleSlider(telemetryToggle);
+                updateTelemetryStats();
+            } catch (e) {
+                console.error('[ComfyUI-Doctor] Telemetry toggle error:', e);
+            }
+        };
+        updateToggleSlider(telemetryToggle);
+    }
+
+    if (telemetryViewBtn) {
+        telemetryViewBtn.onclick = async () => {
+            try {
+                const res = await fetch('/doctor/telemetry/buffer');
+                const data = await res.json();
+                if (data.success) {
+                    const events = data.events || [];
+                    const content = events.length > 0
+                        ? JSON.stringify(events.slice(-20), null, 2) // Show last 20
+                        : 'No events buffered';
+                    alert(`Telemetry Buffer (${events.length} events):\n\n${content.slice(0, 2000)}`);
+                }
+            } catch (e) {
+                alert('Failed to load buffer');
+            }
+        };
+    }
+
+    if (telemetryClearBtn) {
+        telemetryClearBtn.onclick = async () => {
+            if (!confirm(doctorUI.getUIText('telemetry_confirm_clear') || 'Clear all telemetry data?')) {
+                return;
+            }
+            try {
+                const res = await fetch('/doctor/telemetry/clear', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    telemetryClearBtn.textContent = '✅';
+                    setTimeout(() => {
+                        telemetryClearBtn.textContent = doctorUI.getUIText('telemetry_clear_all') || 'Clear All';
+                    }, 1500);
+                    updateTelemetryStats();
+                }
+            } catch (e) {
+                telemetryClearBtn.textContent = '❌';
+                setTimeout(() => {
+                    telemetryClearBtn.textContent = doctorUI.getUIText('telemetry_clear_all') || 'Clear All';
+                }, 1500);
+            }
+        };
+    }
+
+    if (telemetryExportBtn) {
+        telemetryExportBtn.onclick = async () => {
+            try {
+                const res = await fetch('/doctor/telemetry/export');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'telemetry_export.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                telemetryExportBtn.textContent = '✅';
+                setTimeout(() => {
+                    telemetryExportBtn.textContent = doctorUI.getUIText('telemetry_export') || 'Export';
+                }, 1500);
+            } catch (e) {
+                telemetryExportBtn.textContent = '❌';
+                setTimeout(() => {
+                    telemetryExportBtn.textContent = doctorUI.getUIText('telemetry_export') || 'Export';
+                }, 1500);
+            }
+        };
+    }
+
+    // Load telemetry status on init
+    updateTelemetryStats();
+
     const saveBtn = settingsPanel.querySelector('#doctor-save-settings-btn');
     saveBtn.onclick = async () => {
         const langSelect = settingsPanel.querySelector('#doctor-language-select');

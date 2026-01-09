@@ -104,7 +104,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
 
       - name: Set up Python 3.10 (for HTTP server)
         uses: actions/setup-python@v5
@@ -117,10 +116,16 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
+      - name: Verify Python is available
+        run: |
+          python3 --version
+          which python3
+
       - name: Run E2E tests
         run: npm test
         env:
           CI: true
+          PW_PYTHON: python3
         timeout-minutes: 8
 
       - name: Upload test results

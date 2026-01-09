@@ -243,8 +243,23 @@ graph TD
   - **Compliance**: OWASP Top 10, CWE Top 25, GDPR
   - **Deliverable**: `.planning/SECURITY_AUDIT_YYYY_QX.md`
   - **Trigger**: GitHub Actions cron job every 90 days
-- [ ] **S1**: Add Content-Security-Policy headers - 🟢 Low
-- [ ] **S3**: Implement telemetry (opt-in, anonymous) - 🟢 Low
+- [x] **S1**: Document CSP Compliance/Limitations - 🟢 Low ✅ *Code Audit Complete (2026-01-09)*
+  - **Scope Changed**: From "Add CSP headers" to "Document CSP compliance"
+  - ComfyUI core manages CSP headers; extensions cannot override
+  - Verified all Doctor assets load locally (`web/lib/`)
+  - CDN references are fallback-only
+  - **Documentation**: README.md CSP section, `.planning/260109-S1_VERIFICATION_REPORT.md`
+  - ⚠️ **Pending**: Manual verification with `--disable-api-nodes` + screenshots (user required)
+- [x] **S3**: Implement telemetry (opt-in, anonymous) - 🟢 Low ✅ *Completed (2026-01-09)*
+  - **Scope**: Local-only telemetry (Phase 1-3); no network upload
+  - Backend: `telemetry.py` (TelemetryStore, RateLimiter, PII detection, 27 unit tests)
+  - Config: `config.py` `telemetry_enabled` setting (default: false)
+  - 6 API endpoints: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
+  - Security: Origin check (403 for cross-origin), 1KB payload limit, field whitelist
+  - Frontend: `doctor_telemetry.js`, Settings UI controls
+  - i18n: 81 strings (9 keys × 9 languages)
+  - E2E tests: 8 tests in `telemetry.spec.js`
+  - **Plan/Record**: `.planning/260109-S3_TELEMETRY_IMPLEMENTATION_PLAN.md`
 
 ### 3.2 Robustness (in progress)
 

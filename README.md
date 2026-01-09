@@ -793,6 +793,22 @@ python scripts/phase2_gate.py --fast
 
 ---
 
+## CSP Compatibility
+
+ComfyUI-Doctor is **Content Security Policy (CSP) compliant** by design:
+
+- ✅ **Server-side LLM calls**: All AI analysis requests are made from the backend, not the browser
+- ✅ **Local asset bundling**: JavaScript libraries (Preact, marked.js, highlight.js, DOMPurify) are bundled locally in `web/lib/`
+- ✅ **CDN fallback only**: External CDN URLs exist only as fallback paths that execute only if local files fail to load
+- ✅ **Verified with `--disable-api-nodes`**: Works correctly when ComfyUI enforces strict CSP headers
+
+**For strict CSP environments**:
+
+- Ensure the backend server can reach your LLM provider endpoints (not blocked by firewall/proxy)
+- For air-gapped or highly restricted networks, use local LLMs (Ollama, LMStudio) instead of cloud providers
+
+---
+
 ## Tips
 
 1. **Pair with ComfyUI Manager**: Install missing custom nodes automatically

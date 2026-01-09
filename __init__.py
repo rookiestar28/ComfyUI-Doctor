@@ -1973,6 +1973,156 @@ try:
             logger.error(f"Health API error: {str(e)}")
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
+    # ---- S3: Telemetry API Endpoints ----
+    from telemetry import get_telemetry_store
+    
+    # Initialize telemetry with config setting
+    _telemetry_store = get_telemetry_store()
+    _telemetry_store.enabled = CONFIG.telemetry_enabled
+
+    @server.PromptServer.instance.routes.get("/doctor/telemetry/status")
+    async def api_telemetry_status(request):
+        """
+        Get telemetry status and buffer stats.
+        Returns: {"success": bool, "enabled": bool, "stats": {...}}
+        """
+        try:
+            store = get_telemetry_store()
+            stats = store.get_stats()
+            return web.json_response({
+                "success": True,
+                "enabled": store.enabled,
+                "stats": stats,
+                "upload_destination": None,  # Phase 1-3: local only
+            })
+        except Exception as e:
+            logger.error(f"Telemetry status API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/telemetry/buffer")
+    async def api_telemetry_buffer(request):
+        """
+        Get buffered telemetry events.
+        Returns: {"success": bool, "events": [...]}
+        """
+        try:
+            store = get_telemetry_store()
+            events = store.get_buffer()
+            return web.json_response({
+                "success": True,
+                "events": events,
+                "count": len(events),
+            })
+        except Exception as e:
+            logger.error(f"Telemetry buffer API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.post("/doctor/telemetry/track")
+    async def api_telemetry_track(request):
+        """
+        Record a telemetry event.
+        Body: {"category": str, "action": str, "label"?: str, "value"?: int}
+        Returns: {"success": bool, "message": str}
+        """
+        try:
+            # Security: Same-origin check (reject cross-origin requests)
+            origin = request.headers.get("Origin", "")
+            host = request.headers.get("Host", "")
+            if origin:
+                # Extract host from origin (e.g., "http://localhost:8188" -> "localhost:8188")
+                from urllib.parse import urlparse
+                origin_host = urlparse(origin).netloc
+                if origin_host and host and origin_host != host:
+                    return web.Response(status=403, text="Cross-origin request rejected")
+            
+            # Security: Check Content-Type
+            content_type = request.headers.get("Content-Type", "")
+            if "application/json" not in content_type:
+                return web.Response(status=400, text="Content-Type must be application/json")
+            
+            # Security: Payload size limit (1KB)
+            content_length = request.content_length or 0
+            if content_length > 1024:
+                return web.Response(status=413, text="Payload too large")
+            
+            # Parse JSON
+            try:
+                data = await request.json()
+            except Exception:
+                return web.Response(status=400, text="Invalid JSON")
+            
+            # Security: Reject unexpected fields
+            allowed_fields = {"category", "action", "label", "value"}
+            if set(data.keys()) - allowed_fields:
+                return web.Response(status=400, text="Unexpected fields")
+            
+            # Track event
+            store = get_telemetry_store()
+            success, message = store.track(data)
+            
+            return web.json_response({"success": success, "message": message})
+        except Exception as e:
+            logger.error(f"Telemetry track API error: {str(e)}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.post("/doctor/telemetry/clear")
+    async def api_telemetry_clear(request):
+        """
+        Clear all buffered telemetry events.
+        Returns: {"success": bool, "message": str}
+        """
+        try:
+            store = get_telemetry_store()
+            store.clear()
+            return web.json_response({"success": True, "message": "Buffer cleared"})
+        except Exception as e:
+            logger.error(f"Telemetry clear API error: {str(e)}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/telemetry/export")
+    async def api_telemetry_export(request):
+        """
+        Export telemetry buffer as downloadable JSON file.
+        Returns: JSON file download
+        """
+        try:
+            store = get_telemetry_store()
+            json_data = store.export_json()
+            
+            return web.Response(
+                body=json_data,
+                content_type="application/json",
+                headers={
+                    "Content-Disposition": "attachment; filename=telemetry_export.json"
+                }
+            )
+        except Exception as e:
+            logger.error(f"Telemetry export API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.post("/doctor/telemetry/toggle")
+    async def api_telemetry_toggle(request):
+        """
+        Toggle telemetry enabled/disabled state.
+        Body: {"enabled": bool}
+        Returns: {"success": bool, "enabled": bool}
+        """
+        try:
+            data = await request.json()
+            enabled = data.get("enabled", False)
+            
+            store = get_telemetry_store()
+            store.enabled = bool(enabled)
+            
+            return web.json_response({
+                "success": True,
+                "enabled": store.enabled,
+                "message": "Telemetry enabled" if store.enabled else "Telemetry disabled"
+            })
+        except Exception as e:
+            logger.error(f"Telemetry toggle API error: {str(e)}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+
     @server.PromptServer.instance.routes.get("/doctor/plugins")
     async def api_plugins(request):
         """
@@ -2048,6 +2198,12 @@ try:
     print("  - POST /doctor/mark_resolved (F4)")
     print("  - GET  /doctor/health")
     print("  - GET  /doctor/plugins")
+    print("  - GET  /doctor/telemetry/status (S3)")
+    print("  - GET  /doctor/telemetry/buffer (S3)")
+    print("  - POST /doctor/telemetry/track (S3)")
+    print("  - POST /doctor/telemetry/clear (S3)")
+    print("  - GET  /doctor/telemetry/export (S3)")
+    print("  - POST /doctor/telemetry/toggle (S3)")
     print("\n")
     print("💬 Questions? Updates? Suggestions and Contributions are welcome!")
     print("⭐ Give us a Star on GitHub - it's always good for the Doctor's health! 💝")

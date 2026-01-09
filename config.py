@@ -40,6 +40,9 @@ class DiagnosticsConfig:
     plugin_signature_key: str = ""
     plugin_signature_alg: str = "hmac-sha256"
     
+    # Telemetry (S3)
+    telemetry_enabled: bool = False  # Opt-in: disabled by default
+    
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
         return asdict(self)
