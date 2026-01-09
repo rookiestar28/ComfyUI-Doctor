@@ -1,0 +1,42 @@
+name: Outbound Safety Check
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - '**/*.py'
+      - 'scripts/check_outbound_safety.py'
+      - '.github/workflows/outbound-safety.yml'
+  pull_request:
+    paths:
+      - '**/*.py'
+      - 'scripts/check_outbound_safety.py'
+  workflow_dispatch:
+
+jobs:
+  outbound-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Run outbound safety check
+        run: |
+          python scripts/check_outbound_safety.py
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ Outbound safety check passed!"
+          echo "- No raw context fields in outbound payloads"
+          echo "- All POST requests use sanitize_outbound_payload()"
+          echo "- No dangerous fallback patterns detected"

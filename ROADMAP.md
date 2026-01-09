@@ -419,11 +419,12 @@ graph TD
   - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
   - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
-- [ ] **A8**: Plugin Migration Tooling (Plan 6.3) - 🟡 Medium
+- [x] **A8**: Plugin Migration Tooling (Plan 6.3) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Reduce configuration friction for safe-by-default plugin policy (manifest + allowlist helpers; optional HMAC signer).
-  - **Deliverables**: `scripts/plugin_manifest.py`, `scripts/plugin_allowlist.py`, optional `scripts/plugin_hmac_sign.py`
+  - **Deliverables**: `scripts/plugin_manifest.py`, `scripts/plugin_allowlist.py`, `scripts/plugin_validator.py`, optional `scripts/plugin_hmac_sign.py`
   - **Acceptance**: Generate valid manifests + allowlist snippet in one command; safe defaults (`--dry-run`); never prints/writes secret keys.
   - **Plan Update Record**: `.planning/260109-PHASE2_CI_GATE_AND_MIGRATION_TOOLING_PLAN_UPDATE_RECORD.md`
+  - **Implementation Record**: `.planning/260109-T11_T12_A8_IMPLEMENTATION_RECORD.md`
 - [ ] **A4**: Convert `NodeContext` to `@dataclass(frozen=True)` + validation - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A1**: Add `py.typed` marker + mypy config in pyproject.toml - 🟢 Low ✅ *Completed (Phase 3A)*
 - [x] **A2**: Integrate ruff linter (replace flake8/isort) - 🟢 Low ✅ *Completed (Phase 3A)*
@@ -433,17 +434,19 @@ graph TD
 
 *Sorted by priority (High → Low), then by item number:*
 
-- [ ] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High
+- [x] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High ✅ *Completed (2026-01-09)*
   - **Goal**: Make Phase 2 hardening non-regressable (required checks before merge/release).
   - **Gate**: `pytest -q tests/test_plugins_security.py`, `tests/test_metadata_contract.py`, `tests/test_pipeline_dependency_policy.py`, `tests/test_outbound_payload_safety.py`, plus `npm test`.
   - **Acceptance**: Branch protection requires the gate; stable runtime (< ~3 minutes typical).
   - **Plan Update Record**: `.planning/260109-PHASE2_CI_GATE_AND_MIGRATION_TOOLING_PLAN_UPDATE_RECORD.md`
+  - **Implementation Record**: `.planning/260109-T11_T12_A8_IMPLEMENTATION_RECORD.md`
 
-- [ ] **T12**: Outbound Funnel Static CI Gate (Plan 6.2) - 🟡 Medium
+- [x] **T12**: Outbound Funnel Static CI Gate (Plan 6.2) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Fail CI if new outbound call paths bypass `outbound.py` / `sanitize_outbound_payload(...)`.
-  - **Approach**: Grep guard (fast) or AST scan (precise) to detect suspicious raw-field usage outside `outbound.py`.
+  - **Approach**: AST-based checker (`scripts/check_outbound_safety.py`) + CI workflow (`.github/workflows/outbound-safety.yml`) + tests (`tests/test_outbound_safety_gate.py`) + docs (`docs/OUTBOUND_SAFETY.md`).
   - **Acceptance**: CI fails on bypass attempts; low false-positive rate.
   - **Plan Update Record**: `.planning/260109-PHASE2_CI_GATE_AND_MIGRATION_TOOLING_PLAN_UPDATE_RECORD.md`
+  - **Implementation Record**: `.planning/260109-T11_T12_A8_IMPLEMENTATION_RECORD.md`
 
 - [x] **T8**: Pattern Validation CI - 🟡 Medium ✅ *Completed (2026-01-03)*
   - **Problem**: Pattern format errors and i18n gaps can break the system

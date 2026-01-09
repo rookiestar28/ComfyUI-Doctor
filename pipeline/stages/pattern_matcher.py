@@ -55,7 +55,7 @@ class PatternMatcherStage(PipelineStage):
     def __init__(self, legacy_patterns: List[Tuple[str, str, bool]] = None, load_plugins=None):
         self._name = "PatternMatcherStage"
         self.stage_id = "pattern_matcher"
-        self.requires = ["sanitized_traceback|traceback"]
+        self.requires = ["sanitized_traceback"]
         self.provides = [
             "suggestion",
             "metadata.matched_pattern_id",
@@ -79,8 +79,7 @@ class PatternMatcherStage(PipelineStage):
         return self._name
 
     def process(self, context: AnalysisContext) -> None:
-        # Use sanitized traceback if available, otherwise original
-        text_to_analyze = context.sanitized_traceback or context.traceback
+        text_to_analyze = context.sanitized_traceback
         
         if not text_to_analyze:
             return

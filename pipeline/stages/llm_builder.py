@@ -31,7 +31,7 @@ class LLMContextBuilderStage(PipelineStage):
         """
         self._name = "LLMContextBuilderStage"
         self.stage_id = "llm_context_builder"
-        self.requires = ["sanitized_traceback|traceback"]
+        self.requires = ["sanitized_traceback"]
         self.provides = ["llm_context", "metadata.estimated_tokens"]
         self.version = "1.0"
         self.pruner = workflow_pruner
@@ -44,6 +44,9 @@ class LLMContextBuilderStage(PipelineStage):
         """
         Builds the LLM context.
         """
+        if not context.sanitized_traceback:
+            return
+
         # 1. Prune Workflow if available
         pruned_workflow = None
         if context.workflow_json and context.node_context and context.node_context.node_id:
@@ -60,7 +63,7 @@ class LLMContextBuilderStage(PipelineStage):
 
         # 2. Build LLM Context Dict
         llm_data = {
-            "traceback": context.sanitized_traceback or context.traceback,
+            "traceback": context.sanitized_traceback,
             "node_info": context.node_context.to_dict() if context.node_context else {},
             "workflow_subset": pruned_workflow,
             "system_info": context.system_info

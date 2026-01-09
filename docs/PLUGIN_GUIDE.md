@@ -80,3 +80,105 @@ Security note:
 ## Testing
 
 You can test your plugin by triggering the error in ComfyUI or adding a unit test in `tests/`.
+
+---
+
+## Migration Tooling
+
+ComfyUI-Doctor provides automated tools to simplify plugin management:
+
+### Generate Manifest
+
+```bash
+# Create manifest with SHA256 hash
+python scripts/plugin_manifest.py pipeline/plugins/community/myplugin.py --write
+```
+
+**What it does**:
+- Computes SHA256 hash automatically
+- Prompts for metadata (ID, name, version, etc.)
+- Creates `myplugin.json` next to your plugin
+
+### Generate Allowlist
+
+```bash
+# Scan all plugins and suggest allowlist
+python scripts/plugin_allowlist.py --report
+```
+
+**What it does**:
+- Scans `pipeline/plugins/community/` directory
+- Classifies plugins by trust level (TRUSTED/UNSIGNED/UNTRUSTED)
+- Generates `config.json` snippet with allowlist
+
+### Validate Plugins
+
+```bash
+# Validate all plugins
+python scripts/plugin_validator.py
+
+# Validate specific plugin
+python scripts/plugin_validator.py community.example
+
+# Check config consistency
+python scripts/plugin_validator.py --check-config
+```
+
+**What it checks**:
+- Manifest exists and parses correctly
+- All required fields present
+- SHA256 matches actual file
+- Version compatibility
+- (Optional) HMAC signature validity
+
+### Sign Plugins (Optional)
+
+```bash
+# Add HMAC signature to manifest
+DOCTOR_PLUGIN_HMAC_KEY="your-secret" python scripts/plugin_hmac_sign.py myplugin.py
+```
+
+**What it does**:
+- Computes HMAC-SHA256 of plugin file
+- Updates manifest with `signature` field
+
+---
+
+## Complete Workflow
+
+```bash
+# 1. Create your plugin
+cat > pipeline/plugins/community/myplugin.py << 'EOF'
+def register_matchers(traceback: str):
+    if "MyError" in traceback:
+        return ("My fix suggestion", {"priority": 80})
+    return None
+EOF
+
+# 2. Generate manifest
+python scripts/plugin_manifest.py pipeline/plugins/community/myplugin.py --write
+
+# 3. Generate allowlist
+python scripts/plugin_allowlist.py --report
+
+# 4. Update config.json (add plugin ID to allowlist)
+# Set enable_community_plugins: true
+
+# 5. Validate
+python scripts/plugin_validator.py community.myplugin
+
+# 6. (Optional) Sign
+DOCTOR_PLUGIN_HMAC_KEY="secret" python scripts/plugin_hmac_sign.py myplugin.py
+
+# 7. Restart ComfyUI
+```
+
+---
+
+## Resources
+
+- **Migration Guide**: `docs/PLUGIN_MIGRATION.md` - Step-by-step migration instructions
+- **Manifest Generator**: `scripts/plugin_manifest.py` - Automate manifest creation
+- **Allowlist Suggester**: `scripts/plugin_allowlist.py` - Scan and suggest allowlist
+- **Validator**: `scripts/plugin_validator.py` - Verify plugin integrity
+- **HMAC Signer**: `scripts/plugin_hmac_sign.py` - Add signatures to manifests

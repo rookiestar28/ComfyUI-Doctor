@@ -767,6 +767,32 @@ And more...
 
 ---
 
+## Phase 2 Release Gate
+
+Before merging Phase 2 changes (pipeline, security, plugin hardening), all code must pass the **Phase 2 Release Gate**.
+
+### Required Checks
+
+- **Plugin security suite** (10 tests) - Allowlist, trust states, DoS limits
+- **Metadata contract suite** (1 test) - Schema validation
+- **Dependency policy suite** (2 tests) - Requires/provides enforcement
+- **Outbound payload safety suite** (4 tests) - Sanitization funnel
+- **E2E regression suite** (61 tests) - UI stability
+
+### Run Locally
+
+```bash
+# Full gate (Python + E2E)
+python scripts/phase2_gate.py
+
+# Fast mode (Python only, < 2 minutes)
+python scripts/phase2_gate.py --fast
+```
+
+**CI Status**: The gate runs automatically on push/PR to `main` and `dev` branches.
+
+---
+
 ## Tips
 
 1. **Pair with ComfyUI Manager**: Install missing custom nodes automatically

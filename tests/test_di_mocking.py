@@ -17,6 +17,7 @@ def test_llm_builder_di():
     
     # 3. Create Context
     ctx = AnalysisContext(traceback="error")
+    ctx.sanitized_traceback = "error"
     ctx.workflow_json = {"nodes": ["full", "graph"]}
     ctx.node_context = NodeContext(node_id="123")
     
