@@ -232,7 +232,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "Failed to update status",
         # S3: Telemetry UI
         "telemetry_label": "Anonymous Telemetry",
-        "telemetry_description": "Send anonymous usage data to help improve Doctor",
+        "telemetry_description": "Send anonymous usage data to help improve Doctor (Under Construction)",
         "telemetry_view_buffer": "View Buffer",
         "telemetry_clear_all": "Clear All",
         "telemetry_export": "Export",
@@ -240,6 +240,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "Upload destination: None (local only)",
         "telemetry_cleared": "Telemetry buffer cleared",
         "telemetry_confirm_clear": "Clear all telemetry data?",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "Trust & Health",
+        "trust_health_hint": "Fetch /doctor/health and plugin trust report (scan-only).",
+        "refresh_btn": "Refresh",
+        "plugins_none_found": "No plugins found.",
     },
     "zh_TW": {
         "info_title": "資訊",
@@ -371,7 +376,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "更新狀態失敗",
         # S3: Telemetry UI
         "telemetry_label": "匿名遙測",
-        "telemetry_description": "發送匿名使用資料以幫助改善 Doctor",
+        "telemetry_description": "發送匿名使用資料以幫助改善 Doctor (建設中)",
         "telemetry_view_buffer": "查看緩衝區",
         "telemetry_clear_all": "全部清除",
         "telemetry_export": "匯出",
@@ -379,6 +384,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "上傳目的地：無（僅本地）",
         "telemetry_cleared": "遙測緩衝區已清除",
         "telemetry_confirm_clear": "清除所有遙測資料？",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "信任與健康",
+        "trust_health_hint": "取得 /doctor/health 與插件信任報告（僅掃描）。",
+        "refresh_btn": "重新整理",
+        "plugins_none_found": "找不到插件。",
     },
     "zh_CN": {
         "info_title": "信息",
@@ -509,7 +519,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "更新状态失败",
         # S3: Telemetry UI
         "telemetry_label": "匿名遥测",
-        "telemetry_description": "发送匿名使用数据以帮助改进 Doctor",
+        "telemetry_description": "发送匿名使用数据以帮助改进 Doctor (建设中)",
         "telemetry_view_buffer": "查看缓冲区",
         "telemetry_clear_all": "全部清除",
         "telemetry_export": "导出",
@@ -517,6 +527,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "上传目的地：无（仅本地）",
         "telemetry_cleared": "遥测缓冲区已清除",
         "telemetry_confirm_clear": "清除所有遥测数据？",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "信任与健康",
+        "trust_health_hint": "获取 /doctor/health 和插件信任报告（仅扫描）。",
+        "refresh_btn": "刷新",
+        "plugins_none_found": "未找到插件。",
     },
     "ja": {
         "info_title": "情報",
@@ -647,7 +662,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "ステータスの更新に失敗しました",
         # S3: Telemetry UI
         "telemetry_label": "匿名テレメトリ",
-        "telemetry_description": "Doctor の改善のために匿名の使用データを送信",
+        "telemetry_description": "Doctor の改善のために匿名の使用データを送信 (建設中)",
         "telemetry_view_buffer": "バッファを表示",
         "telemetry_clear_all": "すべてクリア",
         "telemetry_export": "エクスポート",
@@ -655,6 +670,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "アップロード先: なし（ローカルのみ）",
         "telemetry_cleared": "テレメトリバッファがクリアされました",
         "telemetry_confirm_clear": "すべてのテレメトリデータをクリアしますか？",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "信頼と健全性",
+        "trust_health_hint": "/doctor/health とプラグイン信頼レポートを取得（スキャンのみ）。",
+        "refresh_btn": "更新",
+        "plugins_none_found": "プラグインが見つかりません。",
     },
     "de": {
         "info_title": "INFO",
@@ -785,7 +805,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "Status konnte nicht aktualisiert werden",
         # S3: Telemetry UI
         "telemetry_label": "Anonyme Telemetrie",
-        "telemetry_description": "Anonyme Nutzungsdaten senden, um Doctor zu verbessern",
+        "telemetry_description": "Anonyme Nutzungsdaten senden, um Doctor zu verbessern (Im Aufbau)",
         "telemetry_view_buffer": "Puffer anzeigen",
         "telemetry_clear_all": "Alle löschen",
         "telemetry_export": "Exportieren",
@@ -793,6 +813,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "Upload-Ziel: Keins (nur lokal)",
         "telemetry_cleared": "Telemetrie-Puffer geleert",
         "telemetry_confirm_clear": "Alle Telemetriedaten löschen?",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "Vertrauen & Gesundheit",
+        "trust_health_hint": "/doctor/health und Plugin-Vertrauensbericht abrufen (nur Scannen).",
+        "refresh_btn": "Aktualisieren",
+        "plugins_none_found": "Keine Plugins gefunden.",
     },
     "fr": {
         "info_title": "INFO",
@@ -923,7 +948,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "Échec de la mise à jour du statut",
         # S3: Telemetry UI
         "telemetry_label": "Télémétrie anonyme",
-        "telemetry_description": "Envoyer des données d'utilisation anonymes pour améliorer Doctor",
+        "telemetry_description": "Envoyer des données d'utilisation anonymes pour améliorer Doctor (En construction)",
         "telemetry_view_buffer": "Voir le tampon",
         "telemetry_clear_all": "Tout effacer",
         "telemetry_export": "Exporter",
@@ -931,6 +956,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "Destination : Aucune (local uniquement)",
         "telemetry_cleared": "Tampon de télémétrie effacé",
         "telemetry_confirm_clear": "Effacer toutes les données de télémétrie ?",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "Confiance et Santé",
+        "trust_health_hint": "Récupérer /doctor/health et le rapport de confiance des plugins (scan uniquement).",
+        "refresh_btn": "Actualiser",
+        "plugins_none_found": "Aucun plugin trouvé.",
     },
     "it": {
         "info_title": "INFO",
@@ -1061,7 +1091,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "Aggiornamento stato fallito",
         # S3: Telemetry UI
         "telemetry_label": "Telemetria anonima",
-        "telemetry_description": "Invia dati di utilizzo anonimi per migliorare Doctor",
+        "telemetry_description": "Invia dati di utilizzo anonimi per migliorare Doctor (In costruzione)",
         "telemetry_view_buffer": "Visualizza buffer",
         "telemetry_clear_all": "Cancella tutto",
         "telemetry_export": "Esporta",
@@ -1069,6 +1099,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "Destinazione: Nessuna (solo locale)",
         "telemetry_cleared": "Buffer di telemetria cancellato",
         "telemetry_confirm_clear": "Cancellare tutti i dati di telemetria?",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "Fiducia e Salute",
+        "trust_health_hint": "Recupera /doctor/health e rapporto sulla fiducia dei plugin (solo scansione).",
+        "refresh_btn": "Aggiorna",
+        "plugins_none_found": "Nessun plugin trovato.",
     },
     "es": {
         "info_title": "INFO",
@@ -1199,7 +1234,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "Error al actualizar el estado",
         # S3: Telemetry UI
         "telemetry_label": "Telemetría anónima",
-        "telemetry_description": "Enviar datos de uso anónimos para mejorar Doctor",
+        "telemetry_description": "Enviar datos de uso anónimos para mejorar Doctor (En construcción)",
         "telemetry_view_buffer": "Ver búfer",
         "telemetry_clear_all": "Borrar todo",
         "telemetry_export": "Exportar",
@@ -1207,6 +1242,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "Destino: Ninguno (solo local)",
         "telemetry_cleared": "Búfer de telemetría borrado",
         "telemetry_confirm_clear": "¿Borrar todos los datos de telemetría?",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "Confianza y Salud",
+        "trust_health_hint": "Obtener /doctor/health y reporte de confianza de plugins (solo escaneo).",
+        "refresh_btn": "Actualizar",
+        "plugins_none_found": "No se encontraron plugins.",
     },
     "ko": {
         "info_title": "정보",
@@ -1337,7 +1377,7 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "status_update_failed": "상태 업데이트 실패",
         # S3: Telemetry UI
         "telemetry_label": "익명 텔레메트리",
-        "telemetry_description": "Doctor 개선을 위해 익명 사용 데이터 전송",
+        "telemetry_description": "Doctor 개선을 위해 익명 사용 데이터 전송 (공사 중)",
         "telemetry_view_buffer": "버퍼 보기",
         "telemetry_clear_all": "모두 삭제",
         "telemetry_export": "내보내기",
@@ -1345,6 +1385,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "telemetry_upload_none": "업로드 대상: 없음 (로컬만)",
         "telemetry_cleared": "텔레메트리 버퍼 삭제됨",
         "telemetry_confirm_clear": "모든 텔레메트리 데이터를 삭제하시겠습니까?",
+        # Trust & Health Panel (Phase 2)
+        "trust_health_title": "신뢰 및 상태",
+        "trust_health_hint": "/doctor/health 및 플러그인 신뢰 보고서 가져오기(스캔 전용).",
+        "refresh_btn": "새로고침",
+        "plugins_none_found": "플러그인을 찾을 수 없습니다.",
     },
 }
 

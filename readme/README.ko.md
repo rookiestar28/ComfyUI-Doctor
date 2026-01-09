@@ -7,12 +7,115 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ## 최신 업데이트 (2026년 1월)
 
 <details>
-<summary><strong>업데이트 (v1.4.1, 2026년 1월)</strong> - 클릭하여 펼치기</summary>
+<summary><strong>🔴 주요 수정 #1: R0/R13 파이프라인 거버넌스 & 플러그인 보안 (v1.4.5)</strong></summary>
+
+**보안 강화:**
+
+- **SSRF 보호++**: 하위 문자열 검사를 Host/Port 파싱으로 대체; 아웃바운드 리디렉션 차단 (`allow_redirects=False`)
+- **아웃바운드 위생 깔때기 (Sanitization Funnel)**: 단일 경계 (`outbound.py`)에서 모든 외부 페이로드 위생 처리 보장; 검증된 로컬 LLM에만 `privacy_mode=none` 허용
+
+**플러그인 신뢰 시스템:**
+
+- **기본 안전 (Safe-by-default)**: 플러그인 기본 비활성화, 명시적 허용 목록 (Allowlist) + 매니페스트/SHA256 필요
+- **신뢰 분류**: `trusted` (신뢰됨) | `unsigned` (서명 없음) | `untrusted` (신뢰되지 않음) | `blocked` (차단됨)
+- **파일 시스템 강화**: 실제 경로 제한 (realpath containment), 심볼릭 링크 거부, 크기 제한, 엄격한 파일명 규칙
+- **선택적 HMAC 서명**: 공유 비밀 무결성 검증 (공개 키 서명 아님)
+
+**파이프라인 거버넌스:**
+
+- **메타데이터 계약**: 스키마 버전 관리 + 실행 종료 후 검증 + 잘못된 키 격리 (Quarantine)
+- **종속성 정책**: `requires/provides` 강제; 종속성 누락 → 단계 건너뛰기, 상태 `degraded` (저하됨)
+- **Logger 배압 (Backpressure)**: 우선순위 인식 `DroppingQueue` + 드롭 메트릭
+- **시동 전 핸드오프**: SmartLogger가 인계받기 전 깨끗한 Logger 제거
+
+**관측 가능성:**
+
+- `/doctor/health` 엔드포인트: 큐 메트릭, 드롭 카운트, SSRF 차단 수, 파이프라인 상태 제공
+
+**테스트 결과**: 159개 Python 테스트 통과 | 17개 Phase 2 게이트 테스트
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 기능 향상: T11/T12/A8 - CI 게이트 & 플러그인 도구</strong></summary>
+
+**T11 - Phase 2 릴리스 CI 게이트:**
+
+- GitHub Actions 워크플로 (`phase2-release-gate.yml`): 4개 pytest 제품군 + E2E 강제
+- 로컬 검증 스크립트 (`scripts/phase2_gate.py`): `--fast` 및 `--e2e` 모드 지원
+
+**T12 - 아웃바운드 안전성 정적 검사기:**
+
+- AST 기반 분석기 (`scripts/check_outbound_safety.py`)로 우회 패턴 감지
+- 6개 감지 규칙: `RAW_FIELD_IN_PAYLOAD`, `DANGEROUS_FALLBACK`, `POST_WITHOUT_SANITIZATION` 등
+- CI 워크플로 + 8개 단위 테스트 + 문서 (`docs/OUTBOUND_SAFETY.md`)
+
+**A8 - 플러그인 마이그레이션 도구:**
+
+- `scripts/plugin_manifest.py`: SHA256 해시 포함 매니페스트 생성
+- `scripts/plugin_allowlist.py`: 플러그인 스캔 및 설정 제안
+- `scripts/plugin_validator.py`: 매니페스트 및 설정 검증
+- `scripts/plugin_hmac_sign.py`: 선택적 HMAC 서명 생성
+- 문서 업데이트: `docs/PLUGIN_MIGRATION.md`, `docs/PLUGIN_GUIDE.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 기능 향상: S1/S3 - CSP 문서 & 텔레메트리</strong></summary>
+
+**S1 - CSP 규정 준수 문서:**
+
+- 모든 자산이 로컬 로드됨을 검증 (`web/lib/`); CDN URL은 폴백 전용
+- README에 "CSP Compatibility" 섹션 추가
+- 코드 감사 완료 (수동 검증 대기 중)
+
+**S3 - 로컬 텔레메트리 인프라:**
+
+- 백엔드: `telemetry.py` (TelemetryStore, RateLimiter, PII 감지)
+- 6개 API 엔드포인트: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
+- 프런트엔드: 텔레메트리 관리를 위한 설정 UI 컨트롤
+- 보안: 출처 검사 (403 Cross-Origin), 1KB 페이로드 제한, 필드 허용 목록
+- **기본 OFF**: 명시적으로 활성화하지 않는 한 기록/네트워크 없음
+- 81개 i18n 문자열 (9 keys × 9 languages)
+
+**테스트 결과**: 27개 텔레메트리 단위 테스트 | 8개 E2E 테스트
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 기능 향상: E2E 러너 강화 & 신뢰/상태 UI</strong></summary>
+
+**E2E 러너 강화 (WSL `/mnt/c` 지원):**
+
+- WSL에서 Playwright 변환 캐시 권한 문제 수정
+- 리포지토리 아래 쓰기 가능한 임시 디렉터리 (`.tmp/playwright`) 추가
+- 크로스 플랫폼 호환성을 위한 `PW_PYTHON` 재정의
+
+**신뢰 & 상태 UI 패널:**
+
+- 설정 탭에 "Trust & Health" 패널 추가
+- 표시: pipeline_status, ssrf_blocked, dropped_logs
+- 플러그인 신뢰 목록 (배지 및 사유 포함)
+- `GET /doctor/plugins` 스캔 전용 엔드포인트 (코드 가져오기 없음)
+
+**테스트 결과**: 61/61개 E2E 테스트 통과 | 159/159개 Python 테스트 통과
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟢 이전 업데이트 (v1.4.0, Jan 2026)</strong></summary>
 
 - A7 Preact 마이그레이션 완료 (5A–5C 단계: Chat/Stats 아일랜드, 레지스트리, 공유 렌더링, 견고한 폴백).
-- F15 해결 상태 표시: 통계 탭에서 최신 오류를 해결됨/미해결/무시로 표시; 상태가 저장되고 로드 시 반영됩니다.
-- 통합 강화: resolution_status 백엔드 데이터 흐름 보강 및 Playwright E2E 커버리지 강화.
-- UI 수정: Locate Node 버튼 지속성 및 사이드바 툴팁 타이밍 수정.
+- 통합 강화: Playwright E2E 커버리지 강화.
+- UI 수정: 사이드바 툴팁 타이밍 수정.
 
 </details>
 

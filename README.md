@@ -7,12 +7,115 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Jan 2026)
 
 <details>
-<summary><strong>Update (v1.4.1, Jan 2026)</strong> - Click to expand</summary>
+<summary><strong>🔴 Major Fix: R0/R13 Pipeline Governance & Plugin Security (v1.4.5)</strong></summary>
+
+**Security Hardening:**
+
+- **SSRF Protection++**: Replaced substring checks with host/port parsing; blocked outbound redirects (`allow_redirects=False`)
+- **Outbound Sanitization Funnel**: Single boundary (`outbound.py`) ensuring all external payloads are sanitized; `privacy_mode=none` only for verified local LLMs
+
+**Plugin Trust System:**
+
+- **Safe-by-default**: Plugins disabled by default, requires explicit allowlist + manifest/SHA256
+- **Trust Taxonomy**: `trusted | unsigned | untrusted | blocked` classification
+- **Filesystem Hardening**: realpath containment, symlink rejection, size limits, strict filename rules
+- **Optional HMAC Signature**: Shared-secret integrity verification (not public-key signing)
+
+**Pipeline Governance:**
+
+- **Metadata Contract**: Schema versioning + end-of-run validation + quarantine for invalid keys
+- **Dependency Policy**: `requires/provides` enforcement; missing deps → stage skipped, status `degraded`
+- **Logger Backpressure**: `DroppingQueue` with priority-aware eviction + drop metrics
+- **Prestartup Handoff**: Clean logger uninstall before SmartLogger takes over
+
+**Observability:**
+
+- `/doctor/health` endpoint with queue metrics, drop counters, SSRF blocks, pipeline status
+
+**Test Results**: 159 Python tests passed | 17 Phase 2 gate tests
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 Enhancement: T11/T12/A8 - CI Gates & Plugin Tooling</strong></summary>
+
+**T11 - Phase 2 Release CI Gate:**
+
+- GitHub Actions workflow (`phase2-release-gate.yml`) enforcing 4 pytest suites + E2E
+- Local validator script (`scripts/phase2_gate.py`) with `--fast` and `--e2e` modes
+
+**T12 - Outbound Safety Static Checker:**
+
+- AST-based analyzer (`scripts/check_outbound_safety.py`) detecting bypass patterns
+- 6 detection rules: `RAW_FIELD_IN_PAYLOAD`, `DANGEROUS_FALLBACK`, `POST_WITHOUT_SANITIZATION`, etc.
+- CI workflow + 8 unit tests + documentation (`docs/OUTBOUND_SAFETY.md`)
+
+**A8 - Plugin Migration Tooling:**
+
+- `scripts/plugin_manifest.py`: Generate manifest with SHA256 hash
+- `scripts/plugin_allowlist.py`: Scan plugins and suggest config
+- `scripts/plugin_validator.py`: Validate manifests and config
+- `scripts/plugin_hmac_sign.py`: Optional HMAC signature generation
+- Documentation: `docs/PLUGIN_MIGRATION.md`, `docs/PLUGIN_GUIDE.md` updates
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 Enhancement: S1/S3 - CSP Documentation & Telemetry</strong></summary>
+
+**S1 - CSP Compliance Documentation:**
+
+- Verified all assets load locally (`web/lib/`); CDN URLs are fallback-only
+- Added "CSP Compatibility" section to README
+- Code audit complete (manual verification pending)
+
+**S3 - Local Telemetry Infrastructure:**
+
+- Backend: `telemetry.py` with TelemetryStore, RateLimiter, PII detection
+- 6 API endpoints: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
+- Frontend: Settings UI controls for telemetry management
+- Security: Origin check (403 cross-origin), 1KB payload limit, field whitelist
+- **Default OFF**: No recording/network until explicitly enabled
+- 81 i18n strings (9 keys × 9 languages)
+
+**Test Results**: 27 telemetry unit tests | 8 E2E tests
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 Enhancement: E2E Runner Hardening & Trust/Health UI</strong></summary>
+
+**E2E Runner Hardening (WSL `/mnt/c` Support):**
+
+- Fixed Playwright transform cache permission issues on WSL
+- Added writable temp dir under repo (`.tmp/playwright`)
+- `PW_PYTHON` override for cross-platform compatibility
+
+**Trust & Health UI Panel:**
+
+- Added "Trust & Health" panel in Settings tab
+- Displays: pipeline_status, ssrf_blocked, dropped_logs
+- Plugin trust list with badges and reasons
+- `GET /doctor/plugins` scan-only endpoint (no code import)
+
+**Test Results**: 61/61 E2E tests | 159/159 Python tests
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟢 Previous Update (v1.4.0)</strong></summary>
 
 - A7 Preact migration completed across Phases 5A–5C (Chat/Stats islands, registry, shared rendering, robust fallbacks).
-- F15 Resolution Marking UI: mark the latest error as Resolved/Unresolved/Ignored from Statistics; status persists and reflects on load.
-- Integration hardening: fixed resolution_status plumbing and strengthened Playwright E2E coverage.
-- UI fixes: Locate Node button persistence and sidebar tooltip timing.
+- Integration hardening: strengthened Playwright E2E coverage.
+- UI fixes: Sidebar tooltip timing.
 
 </details>
 

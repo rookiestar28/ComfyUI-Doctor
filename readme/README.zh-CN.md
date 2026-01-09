@@ -4,95 +4,118 @@
 
 这是一个 ComfyUI 专用的全时即时运行阶段诊断套件。能自动拦截启动后的所有终端输出，捕捉完整的 Python 追踪回溯 (Tracebacks)，并通过节点层级 (Node-level) 的上下文提取，提供具优先顺序的修复建议。内置 57+ 种错误模式（22 个内置 + 35 个社区模式）、采用 JSON 热重载模式，让使用者自行维护管理其他 Error 类型；目前已支持 9 种语言、具备日志持久化功能，并提供便于前端整合的 RESTful API。
 
-## 最新更新（2026 年 1 月）
+## 最新更新 (2026 年 1 月)
 
 <details>
-<summary><strong>更新 (v1.4.1, 2026 年 1 月)</strong> - 点击展开</summary>
+<summary><strong>🔴 重大修复 #1: R0/R13 管道治理与插件安全性 (v1.4.5)</strong></summary>
 
-- A7 Preact 迁移完成（Phase 5A–5C：Chat/Stats islands、registry、shared rendering、稳健 fallback）。
-- F15 解决状态标记：在统计标签页将最新错误标记为 已解决/未解决/已忽略；状态持久化并在加载时反映。
-- 整合加固：补齐 resolution_status 后端数据流并强化 Playwright E2E 覆盖。
-- UI 修复：Locate Node 按钮保留、Sidebar tooltip 加载时序修正。
+**安全性强化:**
+
+- **SSRF 防护升级**: 将子字符串检查替换为 Host/Port 解析；阻挡外送请求的重定向 (`allow_redirects=False`)
+- **外送数据净化漏斗**: 单一边界 (`outbound.py`) 确保所有外部 payload 皆经过净化；仅已验证的本地 LLM 允许使用 `privacy_mode=none`
+
+**插件信任系统:**
+
+- **预设安全**: 插件预设停用，需要明确的允许清单 (Allowlist) + 信息清单 (Manifest) / SHA256 哈希
+- **信任分类**: `trusted` (受信任) | `unsigned` (未签署) | `untrusted` (不受信任) | `blocked` (已封锁)
+- **文件系统强化**: 真实路径限制 (realpath containment)、符号链接 (symlink) 拒绝、文件大小限制、严格的文件名规则
+- **可选 HMAC 签名**: 共享密钥完整性验证 (非公开密钥签署)
+
+**管道治理:**
+
+- **元数据契约**: Schema 版本控制 + 执行结束后验证 + 无效键值隔离区 (Quarantine)
+- **依赖策略**: `requires/provides` 强制执行；缺少依赖 → 跳过阶段，状态设为 `degraded` (降级)
+- **Logger 背压**: 具备优先级感知的 `DroppingQueue` + 丢弃指标 (drop metrics)
+- **启动前交接**: 在 SmartLogger 接管前执行干净的 Logger 卸载
+
+**可观测性:**
+
+- `/doctor/health` 端点提供队列指标、丢弃计数、SSRF 阻挡数、管道状态
+
+**测试结果**: 通过 159 个 Python 测试 | 17 个 Phase 2 闸道测试
 
 </details>
 
 ---
 
 <details>
-<summary><strong>F4：统计仪表板</strong> - 点击展开</summary>
+<summary><strong>🟡 增强功能: T11/T12/A8 - CI 闸道与插件工具</strong></summary>
 
-**一眼掌握 ComfyUI 稳定性！**
+**T11 - Phase 2 发布 CI 闸道:**
 
-ComfyUI-Doctor 现在包含**统计仪表板**，提供错误趋势、常见问题与解决进度的深入洞察。
+- GitHub Actions 工作流 (`phase2-release-gate.yml`) 强制执行 4 个 pytest 套件 + E2E 测试
+- 本地验证脚本 (`scripts/phase2_gate.py`) 支持 `--fast` 和 `--e2e` 模式
 
-**功能特色**：
+**T12 - 外送安全性静态检查器:**
 
-- 📊 **错误趋势**：追踪 24 小时/7 天/30 天的错误统计
-- 🔥 **Top 5 模式**：查看最常发生的错误类型
-- 📈 **分类统计**：依类别可视化错误分布（内存、工作流、模型加载等）
-- ✅ **解决追踪**：监控已解决 vs. 未解决的错误
-- 🌍 **完整 i18n 支持**：支持全部 9 种语言
+- 基于 AST 的分析器 (`scripts/check_outbound_safety.py`) 侦测绕过模式
+- 6 条侦测规则: `RAW_FIELD_IN_PAYLOAD`, `DANGEROUS_FALLBACK`, `POST_WITHOUT_SANITIZATION` 等
+- CI 工作流 + 8 个单元测试 + 文档 (`docs/OUTBOUND_SAFETY.md`)
 
-![统计仪表板](assets/statistics_panel.png)
+**A8 - 插件迁移工具:**
 
-**使用方法**：
-
-1. 打开 Doctor 侧边栏面板（点击左侧 🏥 图标）
-2. 展开“📊 错误统计”区块
-3. 检视实时错误分析与趋势
-4. 将错误标记为已解决/已忽略以追踪进度
-
-**后端 API**：
-
-- `GET /doctor/statistics?time_range_days=30` - 获取统计资料
-- `POST /doctor/mark_resolved` - 更新解决状态
-
-**测试覆盖率**：17/17 后端测试 ✅ | 14/18 E2E 测试（78% 通过率）
-
-**实作细节**：见 `.planning/260104-F4_STATISTICS_RECORD.md`
+- `scripts/plugin_manifest.py`: 生成带有 SHA256 哈希的信息清单
+- `scripts/plugin_allowlist.py`: 扫描插件并建议配置
+- `scripts/plugin_validator.py`: 验证信息清单和配置
+- `scripts/plugin_hmac_sign.py`: 可选的 HMAC 签名生成
+- 文档更新: `docs/PLUGIN_MIGRATION.md`, `docs/PLUGIN_GUIDE.md`
 
 </details>
 
 ---
 
 <details>
-<summary><strong>T8：Pattern 验证 CI </strong> - 点击展开</summary>
+<summary><strong>🟡 增强功能: S1/S3 - CSP 文档与遥测</strong></summary>
 
-**自动化质量检查现在保护 pattern 完整性！**
+**S1 - CSP 合规性文档:**
 
-ComfyUI-Doctor 现在包含**持续集成测试**，用于所有错误模式，确保零缺陷贡献。
+- 验证所有资产皆为本地加载 (`web/lib/`)；CDN URL 仅作为备援
+- 在 README 新增 "CSP Compatibility" 章节
+- 代码审计完成 (手动验证待处理)
 
-**T8 验证项目**：
+**S3 - 本地遥测基础设施:**
 
-- ✅ **JSON 格式**：全部 8 个 pattern 文件正确编译
-- ✅ **Regex 语法**：全部 57 个 patterns 具有有效的正则表达式
-- ✅ **i18n 完整性**：100% 翻译覆盖率（57 patterns × 9 语言 = 513 项检查）
-- ✅ **Schema 符合性**：必填字段（`id`、`regex`、`error_key`、`priority`、`category`）
-- ✅ **Metadata 质量**：有效的 priority 范围（50-95）、唯一 ID、正确的类别
+- 后端: `telemetry.py` 包含 TelemetryStore, RateLimiter, PII 侦测
+- 6 个 API 端点: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
+- 前端: 设置用于遥测管理的 UI 控件
+- 安全性: 来源检查 (403 跨来源), 1KB payload 限制, 字段白名单
+- **预设关闭**: 除非明确启用，否则不记录/不联网
+- 81 个 i18n 字符串 (9 keys × 9 languages)
 
-**GitHub Actions 整合**：
+**测试结果**: 27 个遥测单元测试 | 8 个 E2E 测试
 
-- 在每次 push/PR 影响 `patterns/`、`i18n.py` 或测试时触发
-- 约 3 秒内执行，成本为 $0（GitHub Actions 免费额度）
-- 如果验证失败则阻止合并
+</details>
 
-**对于贡献者**：
+---
 
-```bash
-# 在 commit 前本地验证
-python run_pattern_tests.py
+<details>
+<summary><strong>🟡 增强功能: E2E 执行器强化与信任/健康 UI</strong></summary>
 
-# 输出：
-✅ All 57 patterns have required fields
-✅ All 57 regex patterns compile successfully
-✅ en: All 57 patterns have translations
-✅ zh_TW: All 57 patterns have translations
-... (共 9 种语言)
-```
+**E2E 执行器强化 (WSL `/mnt/c` 支持):**
 
-**测试结果**：所有检查均以 100% 通过率通过
+- 修复 WSL 上的 Playwright 转换缓存权限问题
+- 在 repo 下新增可写入的暂存目录 (`.tmp/playwright`)
+- `PW_PYTHON` 覆盖以支持跨平台兼容性
 
-**实作细节**：见 `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+**信任与健康 UI 面板:**
+
+- 在设置标签页新增 "Trust & Health" 面板
+- 显示: pipeline_status, ssrf_blocked, dropped_logs
+- 插件信任列表 (附带徽章和原因)
+- `GET /doctor/plugins` 仅扫描端点 (不导入代码)
+
+**测试结果**: 通过 61/61 个 E2E 测试 | 159/159 个 Python 测试
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟢 先前更新 (v1.4.0, Jan 2026)</strong></summary>
+
+- A7 Preact 迁移完成，涵盖 Phase 5A–5C (Chat/Stats islands, registry, shared rendering, robust fallbacks)。
+- 整合强化: 加强 Playwright E2E 覆盖率。
+- UI 修复: 侧边栏工具提示时序问题。
 
 </details>
 

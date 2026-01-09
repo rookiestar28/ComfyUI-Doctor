@@ -4,15 +4,118 @@
 
 ComfyUIのための継続的かつリアルタイムなランタイム診断スイートです。**LLM（大規模言語モデル）による分析**、**対話型デバッグチャット**、**50以上の修復パターン** を備えています。起動時からすべてのターミナル出力を自動的にインターセプトし、完全なPythonトレースバックをキャプチャし、ノードレベルのコンテキスト抽出とともに優先順位付けされた修復提案を提供します。**JSONベースのパターン管理**（ホットリロード対応）と、9言語（en, zh_TW, zh_CN, ja, de, fr, it, es, ko）の**完全なi18nサポート**に対応しました。
 
-## 最新のアップデート（2026年1月）
+## 最新のアップデート (2026年1月)
 
 <details>
-<summary><strong>アップデート (v1.4.1, 2026年1月)</strong> - クリックして展開</summary>
+<summary><strong>🔴 メジャー修正 #1: R0/R13 パイプラインガバナンス & プラグインセキュリティ (v1.4.5)</strong></summary>
 
-- A7 Preact移行完了（フェーズ5A–5C：Chat/Stats islands、レジストリ、共有レンダリング、堅牢なフォールバック）。
-- F15 解決ステータスのマーキング：統計タブから最新エラーを 解決済み/未解決/無視 に設定。状態は永続化され、読み込み時に反映。
-- 統合強化：resolution_status のバックエンド連携を補完し、Playwright E2E を強化。
-- UI修正：Locate Nodeボタンの維持とサイドバーツールチップのタイミング修正。
+**セキュリティ強化:**
+
+- **SSRF保護++**: 部分文字列チェックをHost/Port解析に置換; 外部へのリダイレクトをブロック (`allow_redirects=False`)
+- **外部データサニタイズファネル**: 単一の境界 (`outbound.py`) で全ての外部ペイロードのサニタイズを保証; `privacy_mode=none` は検証済みのローカルLLMのみ許可
+
+**プラグイン信頼システム:**
+
+- **デフォルトセキュア**: プラグインはデフォルトで無効、明示的な許可リスト (Allowlist) + マニフェスト/SHA256 が必要
+- **信頼分類**: `trusted` (信頼済み) | `unsigned` (未署名) | `untrusted` (信頼なし) | `blocked` (ブロック済み)
+- **ファイルシステム強化**: realpathによる封じ込め、シンボリックリンク拒否、サイズ制限、厳格なファイル名ルール
+- **オプションのHMAC署名**: 共有秘密鍵による整合性検証 (公開鍵署名ではない)
+
+**パイプラインガバナンス:**
+
+- **メタデータ契約**: スキーマバージョン管理 + 実行終了後検証 + 無効なキーの隔離 (Quarantine)
+- **依存関係ポリシー**: `requires/provides` の強制; 依存不足 → ステージスキップ、ステータス `degraded` (低下)
+- **Loggerバックプレッシャー**: 優先度認識付き `DroppingQueue` + ドロップメトリクス
+- **起動前ハンドオフ**: SmartLoggerが引き継ぐ前にLoggerをクリーンにアンインストール
+
+**観測可能性:**
+
+- `/doctor/health` エンドポイント: キューメトリクス、ドロップ数、SSRFブロック数、パイプラインステータスを提供
+
+**テスト結果**: 159個のPythonテスト合格 | 17個のPhase 2ゲートテスト
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 機能強化: T11/T12/A8 - CIゲート & プラグインツール</strong></summary>
+
+**T11 - Phase 2 リリースCIゲート:**
+
+- GitHub Actionsワークフロー (`phase2-release-gate.yml`): 4つのpytestスイート + E2Eを強制
+- ローカル検証スクリプト (`scripts/phase2_gate.py`): `--fast` および `--e2e` モードをサポート
+
+**T12 - 外部安全性静的チェッカー:**
+
+- ASTベースの解析器 (`scripts/check_outbound_safety.py`) でバイパスパターンを検出
+- 6つの検出ルール: `RAW_FIELD_IN_PAYLOAD`, `DANGEROUS_FALLBACK`, `POST_WITHOUT_SANITIZATION` など
+- CIワークフロー + 8つのユニットテスト + ドキュメント (`docs/OUTBOUND_SAFETY.md`)
+
+**A8 - プラグイン移行ツール:**
+
+- `scripts/plugin_manifest.py`: SHA256ハッシュ付きマニフェスト生成
+- `scripts/plugin_allowlist.py`: プラグインスキャンと設定提案
+- `scripts/plugin_validator.py`: マニフェストと設定の検証
+- `scripts/plugin_hmac_sign.py`: オプションのHMAC署名生成
+- ドキュメント更新: `docs/PLUGIN_MIGRATION.md`, `docs/PLUGIN_GUIDE.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 機能強化: S1/S3 - CSPドキュメント & テレメトリ</strong></summary>
+
+**S1 - CSPコンプライアンスドキュメント:**
+
+- 全てのアセットがローカルロードされることを検証 (`web/lib/`); CDN URLはフォールバックのみ
+- READMEに "CSP Compatibility" セクションを追加
+- コード監査完了 (手動検証待ち)
+
+**S3 - ローカルテレメトリインフラ:**
+
+- バックエンド: `telemetry.py` (TelemetryStore, RateLimiter, PII検出)
+- 6つのAPIエンドポイント: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
+- フロントエンド: テレメトリ管理用の設定UIコントロール
+- セキュリティ: オリジンチェック (403 クロスオリジン), 1KBペイロード制限, フィールドホワイトリスト
+- **デフォルトOFF**: 明示的に有効化しない限り記録/通信なし
+- 81個のi18n文字列 (9 keys × 9 languages)
+
+**テスト結果**: 27個のテレメトリユニットテスト | 8個のE2Eテスト
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 機能強化: E2Eランナー強化 & 信頼/健全性UI</strong></summary>
+
+**E2Eランナー強化 (WSL `/mnt/c` サポート):**
+
+- WSL上でのPlaywright変換キャッシュ権限問題を修正
+- リポジトリ配下に書き込み可能な一時ディレクトリ (`.tmp/playwright`) を追加
+- `PW_PYTHON` オーバーライドによるクロスプラットフォーム互換性
+
+**信頼 & 健全性UIパネル:**
+
+- 設定タブに "Trust & Health" パネルを追加
+- 表示: pipeline_status, ssrf_blocked, dropped_logs
+- プラグイン信頼リスト (バッジと理由付き)
+- `GET /doctor/plugins` スキャン専用エンドポイント (コードインポートなし)
+
+**テスト結果**: 61/61個のE2Eテスト合格 | 159/159個のPythonテスト合格
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟢 以前のアップデート (v1.4.0, Jan 2026)</strong></summary>
+
+- A7 Preact移行完了 (Phase 5A–5C: Chat/Stats islands, registry, shared rendering, robust fallbacks)。
+- 統合強化: Playwright E2Eカバレッジを強化。
+- UI修正: サイドバーツールチップのタイミング修正。
 
 </details>
 
