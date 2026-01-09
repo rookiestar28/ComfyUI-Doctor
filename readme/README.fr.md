@@ -7,12 +7,115 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ## Dernières mises à jour (Jan 2026)
 
 <details>
-<summary><strong>Mise à jour (v1.4.1, Jan 2026)</strong> - Cliquer pour développer</summary>
+<summary><strong>🔴 Correctif Majeur #1 : R0/R13 Gouvernance du Pipeline & Sécurité des Plugins (v1.4.5)</strong></summary>
 
-- Migration A7 Preact terminée sur les phases 5A–5C (îlots Chat/Stats, registre, rendu partagé, solutions de repli robustes).
-- F15 Marquage de statut : marquer la dernière erreur comme Résolu/Non résolu/Ignoré depuis l’onglet Statistiques ; statut persistant et reflété au chargement.
-- Renforcement de l'intégration : correction du flux resolution_status et couverture Playwright E2E renforcée.
-- Correctifs UI : persistance du bouton "Locate Node" et correction du timing de l'info-bulle de la barre latérale.
+**Renforcement de la Sécurité :**
+
+- **Protection SSRF++** : Remplacement des vérifications de sous-chaînes par une analyse Host/Port appropriée ; blocage des redirections sortantes (`allow_redirects=False`)
+- **Entonnoir de Nettoyage Sortant** : Une limite unique (`outbound.py`) garantit le nettoyage de TOUTES les charges utiles externes ; `privacy_mode=none` autorisé uniquement pour les LLM locaux vérifiés
+
+**Système de Confiance des Plugins :**
+
+- **Sécurisé par défaut** : Plugins désactivés par défaut, nécessitent une liste d'autorisation explicite (Allowlist) + Manifeste/SHA256
+- **Classification de Confiance** : `trusted` (approuvé) | `unsigned` (non signé) | `untrusted` (non approuvé) | `blocked` (bloqué)
+- **Confinement du Système de Fichiers** : Confinement par realpath, refus des liens symboliques, limites de taille, règles strictes de nom de fichier
+- **Signature HMAC Optionnelle** : Vérification de l'intégrité par secret partagé (pas de signature à clé publique)
+
+**Gouvernance du Pipeline :**
+
+- **Contrats de Métadonnées** : Versionnage de schéma + validation post-exécution + Quarantaine pour les clés invalides
+- **Politique de Dépendance** : Application de `requires/provides` ; dépendance manquante → étape ignorée, statut `degraded` (dégradé)
+- **Contre-pression du Logger** : `DroppingQueue` avec gestion des priorités + métriques de rejet
+- **Transfert avant démarrage** : Désinstallation propre du Logger avant la prise en charge par SmartLogger
+
+**Observabilité :**
+
+- Point de terminaison `/doctor/health` : Expose les métriques de file d'attente, les comptes de rejets, les blocages SSRF et le statut du pipeline
+
+**Résultats des Tests** : 159 tests Python réussis | 17 tests de Gate Phase 2
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 Amélioration : T11/T12/A8 - CI Gates & Outillage Plugins</strong></summary>
+
+**T11 - CI Gate de Version Phase 2 :**
+
+- Workflow GitHub Actions (`phase2-release-gate.yml`) : Impose 4 suites pytest + E2E
+- Script de validation locale (`scripts/phase2_gate.py`) : Supporte les modes `--fast` et `--e2e`
+
+**T12 - Vérificateur Statique de Sécurité Sortante :**
+
+- Analyseur basé sur AST (`scripts/check_outbound_safety.py`) détecte les modèles de contournement
+- 6 règles de détection : `RAW_FIELD_IN_PAYLOAD`, `DANGEROUS_FALLBACK`, `POST_WITHOUT_SANITIZATION`, etc.
+- Workflow CI + 8 tests unitaires + Documentation (`docs/OUTBOUND_SAFETY.md`)
+
+**A8 - Outillage de Migration de Plugin :**
+
+- `scripts/plugin_manifest.py` : Génère un manifeste avec des hachages SHA256
+- `scripts/plugin_allowlist.py` : Scanne les plugins et suggère une configuration
+- `scripts/plugin_validator.py` : Valide le manifeste et la configuration
+- `scripts/plugin_hmac_sign.py` : Génère des signatures HMAC optionnelles
+- Documentation mise à jour : `docs/PLUGIN_MIGRATION.md`, `docs/PLUGIN_GUIDE.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 Amélioration : S1/S3 - Docs CSP & Télémétrie</strong></summary>
+
+**S1 - Docs de Conformité CSP :**
+
+- Vérification que tous les actifs se chargent localement (`web/lib/`) ; les URL CDN sont uniquement en secours
+- Ajout de la section "CSP Compatibility" au README
+- Audit de code terminé (en attente de vérification manuelle)
+
+**S3 - Infrastructure de Télémétrie Locale :**
+
+- Backend : `telemetry.py` (TelemetryStore, RateLimiter, détection PII)
+- 6 Points de Terminaison API : `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
+- Frontend : Contrôles UI des paramètres pour la gestion de la télémétrie
+- Sécurité : Vérification de l'origine (403 Cross-Origin), limite de charge utile 1KB, liste blanche de champs
+- **Désactivé par défaut** : Aucun enregistrement/Réseau sauf activation explicite
+- 81 chaînes i18n (9 clés × 9 langues)
+
+**Résultats des Tests** : 27 Tests Unitaires Télémétrie | 8 Tests E2E
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟡 Amélioration : Renforcement Runner E2E & UI Confiance/Santé</strong></summary>
+
+**Renforcement Runner E2E (Support WSL `/mnt/c`) :**
+
+- Correction des problèmes de permission du cache de traduction Playwright sur WSL
+- Ajout d'un répertoire temporaire accessible en écriture (`.tmp/playwright`) sous le repo
+- Remplacement `PW_PYTHON` pour la compatibilité multiplateforme
+
+**Panneau UI Confiance & Santé :**
+
+- Ajout du panneau "Trust & Health" à l'onglet Paramètres
+- Affiche : pipeline_status, ssrf_blocked, dropped_logs
+- Liste de confiance des plugins (avec badges et raisons)
+- Point de terminaison de scan uniquement `GET /doctor/plugins` (pas d'importation de code)
+
+**Résultats des Tests** : 61/61 Tests E2E Réussis | 159/159 Tests Python Réussis
+
+</details>
+
+---
+
+<details>
+<summary><strong>🟢 Mises à jour précédentes (v1.4.0, Jan 2026)</strong></summary>
+
+- Migration A7 Preact Terminée (Phase 5A–5C : Îlots Chat/Stats, registre, rendu partagé, solutions de repli robustes).
+- Renforcement de l'Intégration : Couverture Playwright E2E renforcée.
+- Correctifs UI : Correction du timing de l'infobulle de la barre latérale.
 
 </details>
 

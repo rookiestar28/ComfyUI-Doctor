@@ -40,7 +40,16 @@
     "stats_last_30d": "Last 30d",
     "stats_top_patterns": "Top Patterns",
     "stats_resolution_rate": "Resolution Rate",
-    "stats_categories": "Categories"
+    "stats_categories": "Categories",
+    "telemetry_label": "Anonymous Telemetry",
+    "telemetry_description": "Send anonymous usage data to help improve Doctor (Under Construction)",
+    "telemetry_view_buffer": "View Buffer",
+    "telemetry_clear_all": "Clear All",
+    "telemetry_export": "Export",
+    "telemetry_buffer_count": "Currently buffered: {n} events",
+    "telemetry_upload_none": "Upload destination: None (local only)",
+    "telemetry_cleared": "Telemetry buffer cleared",
+    "telemetry_confirm_clear": "Clear all telemetry data?"
   },
   "ja": {
     "sidebar_doctor_title": "ComfyUI Doctor",
