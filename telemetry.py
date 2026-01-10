@@ -119,32 +119,8 @@ class TelemetryEvent:
 # RATE LIMITER
 # ═══════════════════════════════════════════════════════════════════════════
 
-class RateLimiter:
-    """Token bucket rate limiter."""
-    
-    def __init__(self, max_per_minute: int = 60):
-        self.max_tokens = max_per_minute
-        self.tokens = float(max_per_minute)
-        self.last_refill = time.time()
-        self._lock = threading.Lock()
-    
-    def allow(self) -> bool:
-        """Check if request is allowed (consumes one token if yes)."""
-        with self._lock:
-            self._refill()
-            if self.tokens >= 1:
-                self.tokens -= 1
-                return True
-            return False
-    
-    def _refill(self) -> None:
-        """Refill tokens based on elapsed time."""
-        now = time.time()
-        elapsed = now - self.last_refill
-        # Refill at rate of max_tokens per 60 seconds
-        refill_amount = elapsed * (self.max_tokens / 60.0)
-        self.tokens = min(self.max_tokens, self.tokens + refill_amount)
-        self.last_refill = now
+# R7: Import shared RateLimiter from rate_limiter.py (avoid code duplication)
+from rate_limiter import RateLimiter
 
 
 # ═══════════════════════════════════════════════════════════════════════════

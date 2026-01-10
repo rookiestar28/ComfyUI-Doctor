@@ -55,6 +55,24 @@ from .system_info import get_system_environment, format_env_for_llm
 from .sanitizer import PIISanitizer, SanitizationLevel
 from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_ssrf_metrics
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
+from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
+
+# R7: Apply configurable rate/concurrency limits from CONFIG
+SessionManager.configure_limits(
+    core_rate_limit=getattr(CONFIG, "llm_core_rate_limit", None),
+    light_rate_limit=getattr(CONFIG, "llm_light_rate_limit", None),
+    max_concurrent=getattr(CONFIG, "llm_max_concurrent", None),
+)
+
+
+def _close_retry_response(result: RetryResult) -> None:
+    resp = getattr(result, "response", None)
+    if resp is None:
+        return
+    try:
+        resp.close()
+    except Exception:
+        pass
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -1120,39 +1138,72 @@ try:
                     "temperature": 0.5
                 }
 
-            session = await SessionManager.get_session()
-            payload = sanitize_outbound_payload(payload, sanitizer)
-            async with session.post(url, json=payload, headers=headers, allow_redirects=False) as response:
-                if response.status != 200:
-                    error_msg = await response.text()
-                    # Truncate error message for readability
-                    if len(error_msg) > 500:
-                        error_msg = error_msg[:500] + "..."
+            # R7: Rate limit check (core limiter for heavy endpoint)
+            if not SessionManager.get_core_limiter().allow():
+                logger.warning("Rate limit exceeded for /doctor/analyze")
+                return web.json_response(
+                    {"error": "Rate limit exceeded. Please wait before retrying."},
+                    status=429
+                )
+            
+            # R7: Concurrency limit (prevent connection pool exhaustion)
+            async with SessionManager.get_concurrency_limiter():
+                session = await SessionManager.get_session()
+                payload = sanitize_outbound_payload(payload, sanitizer)
+                
+                # R6: Request with retry logic
+                retry_config = RetryConfig(
+                    max_retries=CONFIG.llm_max_retries,
+                    request_timeout_seconds=CONFIG.llm_request_timeout,
+                    total_timeout_seconds=CONFIG.llm_total_timeout,
+                    retry_on_5xx=False,  # Conservative for non-streaming
+                )
+                result = await llm_request_with_retry(
+                    session, "POST", url,
+                    json=payload, headers=headers,
+                    config=retry_config,
+                )
+                
+                if not result.success:
+                    _close_retry_response(result)
+                    error_msg = result.error or "Unknown error"
+                    logger.error(f"LLM request failed after {result.attempts} attempts: {error_msg}")
                     return web.json_response(
-                        {"error": f"LLM Provider Error ({response.status}): {error_msg}"},
-                        status=response.status
+                        {"error": f"LLM Error: {error_msg}"},
+                        status=503
                     )
+                
+                async with result.response as response:
+                    if response.status != 200:
+                        error_msg = await response.text()
+                        # Truncate error message for readability
+                        if len(error_msg) > 500:
+                            error_msg = error_msg[:500] + "..."
+                        return web.json_response(
+                            {"error": f"LLM Provider Error ({response.status}): {error_msg}"},
+                            status=response.status
+                        )
 
-                # Safely parse JSON response
-                try:
-                    result = await response.json()
-                    # Handle Anthropic, Ollama, and OpenAI response formats
-                    if is_anthropic_api:
-                        # Anthropic format: {"content": [{"text": "..."}]}
-                        content = result.get('content', [{}])[0].get('text', '')
-                    elif is_ollama:
-                        content = result.get('message', {}).get('content', '')
-                    else:
-                        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-                    if not content:
-                        return web.json_response({"error": "Empty response from LLM"}, status=502)
-                    logger.info(f"Analysis successful, response length={len(content)}")
-                    return web.json_response({"analysis": content})
-                except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
-                    return web.json_response(
-                        {"error": f"Failed to parse LLM response: {str(parse_err)}"}, 
-                        status=502
-                    )
+                    # Safely parse JSON response
+                    try:
+                        resp_data = await response.json()
+                        # Handle Anthropic, Ollama, and OpenAI response formats
+                        if is_anthropic_api:
+                            # Anthropic format: {"content": [{"text": "..."}]}
+                            content = resp_data.get('content', [{}])[0].get('text', '')
+                        elif is_ollama:
+                            content = resp_data.get('message', {}).get('content', '')
+                        else:
+                            content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                        if not content:
+                            return web.json_response({"error": "Empty response from LLM"}, status=502)
+                        logger.info(f"Analysis successful, response length={len(content)}, attempts={result.attempts}")
+                        return web.json_response({"analysis": content})
+                    except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
+                        return web.json_response(
+                            {"error": f"Failed to parse LLM response: {str(parse_err)}"}, 
+                            status=502
+                        )
 
         except aiohttp.ClientError as e:
             # Network-level errors (timeout, connection refused, etc.)
@@ -1427,139 +1478,194 @@ try:
 
             logger.info(f"Connecting to LLM: {url}")
             
-            if not stream:
-                # Non-streaming fallback
-                session = await SessionManager.get_session()
-                payload = sanitize_outbound_payload(payload, sanitizer)
-                async with session.post(url, json=payload, headers=headers, allow_redirects=False) as response:
-                    if response.status != 200:
-                        error_msg = await response.text()
-                        logger.error(f"LLM non-stream error: {error_msg[:200]}")
-                        return web.json_response({"error": f"LLM Error: {error_msg[:500]}"}, status=response.status)
-                    
-                    result = await response.json()
-                    # Handle Anthropic, Ollama, and OpenAI response formats
-                    if is_anthropic_api:
-                        content = result.get('content', [{}])[0].get('text', '')
-                    elif is_ollama:
-                        content = result.get('message', {}).get('content', '')
-                    else:
-                        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-                    logger.info(f"LLM response received (non-stream), length={len(content)}")
-                    return web.json_response({"content": content, "done": True})
-
-            # SSE Streaming response
-            logger.info("Starting SSE stream...")
-            response = web.StreamResponse(
-                status=200,
-                reason='OK',
-                headers={
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                    'X-Accel-Buffering': 'no',
-                }
-            )
-            await response.prepare(request)
+            # R7: Rate limit check (core limiter for heavy endpoint)
+            if not SessionManager.get_core_limiter().allow():
+                logger.warning("Rate limit exceeded for /doctor/chat")
+                return web.json_response(
+                    {"error": "Rate limit exceeded. Please wait before retrying."},
+                    status=429
+                )
             
-            try:
-                session = await SessionManager.get_session()
-                payload = sanitize_outbound_payload(payload, sanitizer)
-                async with session.post(url, json=payload, headers=headers, allow_redirects=False) as llm_response:
-                    if llm_response.status != 200:
-                        error_msg = await llm_response.text()
-                        logger.error(f"LLM stream error: {error_msg[:200]}")
-                        error_data = json.dumps({"error": f"LLM Error: {error_msg[:200]}", "done": True})
+            # R7: Concurrency limit (prevent connection pool exhaustion)
+            async with SessionManager.get_concurrency_limiter():
+                if not stream:
+                    # Non-streaming fallback with retry
+                    session = await SessionManager.get_session()
+                    payload = sanitize_outbound_payload(payload, sanitizer)
+                    
+                    # R6: Request with retry logic
+                    retry_config = RetryConfig(
+                        max_retries=CONFIG.llm_max_retries,
+                        request_timeout_seconds=CONFIG.llm_request_timeout,
+                        total_timeout_seconds=CONFIG.llm_total_timeout,
+                        retry_on_5xx=False,
+                    )
+                    result = await llm_request_with_retry(
+                        session, "POST", url,
+                        json=payload, headers=headers,
+                        config=retry_config,
+                    )
+                    
+                    if not result.success:
+                        _close_retry_response(result)
+                        error_msg = result.error or "Unknown error"
+                        logger.error(f"LLM non-stream failed after {result.attempts} attempts: {error_msg}")
+                        return web.json_response({"error": f"LLM Error: {error_msg}"}, status=503)
+                    
+                    async with result.response as response:
+                        if response.status != 200:
+                            error_msg = await response.text()
+                            logger.error(f"LLM non-stream error: {error_msg[:200]}")
+                            return web.json_response({"error": f"LLM Error: {error_msg[:500]}"}, status=response.status)
+                        
+                        resp_data = await response.json()
+                        # Handle Anthropic, Ollama, and OpenAI response formats
+                        if is_anthropic_api:
+                            content = resp_data.get('content', [{}])[0].get('text', '')
+                        elif is_ollama:
+                            content = resp_data.get('message', {}).get('content', '')
+                        else:
+                            content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                        logger.info(f"LLM response received (non-stream), length={len(content)}, attempts={result.attempts}")
+                        return web.json_response({"content": content, "done": True})
+
+                # SSE Streaming response
+                logger.info("Starting SSE stream...")
+                response = web.StreamResponse(
+                    status=200,
+                    reason='OK',
+                    headers={
+                        'Content-Type': 'text/event-stream',
+                        'Cache-Control': 'no-cache',
+                        'Connection': 'keep-alive',
+                        'X-Accel-Buffering': 'no',
+                    }
+                )
+                await response.prepare(request)
+                
+                try:
+                    session = await SessionManager.get_session()
+                    payload = sanitize_outbound_payload(payload, sanitizer)
+                    
+                    # R6: Pre-stream retry (only retry before streaming starts)
+                    # Once streaming begins, we cannot retry
+                    retry_config = RetryConfig(
+                        max_retries=CONFIG.llm_max_retries,
+                        request_timeout_seconds=CONFIG.llm_request_timeout,
+                        total_timeout_seconds=CONFIG.llm_total_timeout,
+                        retry_on_5xx=False,
+                    )
+                    result = await llm_request_with_retry(
+                        session, "POST", url,
+                        json=payload, headers=headers,
+                        config=retry_config,
+                        is_streaming=True,
+                    )
+                    
+                    if not result.success or result.response is None:
+                        _close_retry_response(result)
+                        error_msg = result.error or "Unknown error"
+                        logger.error(f"LLM stream connection failed after {result.attempts} attempts: {error_msg}")
+                        error_data = json.dumps({"error": f"LLM Error: {error_msg}", "done": True})
                         await response.write(f"data: {error_data}\n\n".encode('utf-8'))
                         return response
                     
-                    # Stream chunks with newline buffering to handle partial lines
-                    buffer = ""
-                    stream_done = False
-                    # F7: Accumulate full content for fix detection
-                    full_content = ""
-                    async for chunk in llm_response.content.iter_chunked(1024):
-                        buffer += chunk.decode('utf-8', errors='ignore')
+                    # Note: From here on, NO RETRY - streaming has begun
+                    async with result.response as llm_response:
+                        if llm_response.status != 200:
+                            error_msg = await llm_response.text()
+                            logger.error(f"LLM stream error: {error_msg[:200]}")
+                            error_data = json.dumps({"error": f"LLM Error: {error_msg[:200]}", "done": True})
+                            await response.write(f"data: {error_data}\n\n".encode('utf-8'))
+                            return response
+                    
+                        # Stream chunks with newline buffering to handle partial lines
+                        buffer = ""
+                        stream_done = False
+                        # F7: Accumulate full content for fix detection
+                        full_content = ""
+                        async for chunk in llm_response.content.iter_chunked(1024):
+                            buffer += chunk.decode('utf-8', errors='ignore')
 
-                        while '\n' in buffer:
-                            line, buffer = buffer.split('\n', 1)
-                            line = line.strip()
-                            if not line:
-                                continue
-
-                            # Handle different streaming formats
-                            if is_anthropic_api:
-                                # Anthropic uses SSE format with different event types
-                                if not line.startswith('data:'):
-                                    # Skip event: type lines
+                            while '\n' in buffer:
+                                line, buffer = buffer.split('\n', 1)
+                                line = line.strip()
+                                if not line:
                                     continue
 
-                                payload_str = line[5:].strip()
-                                if not payload_str:
-                                    continue
+                                # Handle different streaming formats
+                                if is_anthropic_api:
+                                    # Anthropic uses SSE format with different event types
+                                    if not line.startswith('data:'):
+                                        # Skip event: type lines
+                                        continue
 
-                                try:
-                                    chunk_json = json.loads(payload_str)
-                                    event_type = chunk_json.get('type', '')
+                                    payload_str = line[5:].strip()
+                                    if not payload_str:
+                                        continue
 
-                                    if event_type == 'message_stop':
-                                        done_data = json.dumps({"delta": "", "done": True})
-                                        await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                        stream_done = True
-                                        break
-                                    elif event_type == 'content_block_delta':
-                                        delta = chunk_json.get('delta', {}).get('text', '')
+                                    try:
+                                        chunk_json = json.loads(payload_str)
+                                        event_type = chunk_json.get('type', '')
+
+                                        if event_type == 'message_stop':
+                                            done_data = json.dumps({"delta": "", "done": True})
+                                            await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                            stream_done = True
+                                            break
+                                        elif event_type == 'content_block_delta':
+                                            delta = chunk_json.get('delta', {}).get('text', '')
+                                            if delta:
+                                                full_content += delta  # F7: Accumulate
+                                                chunk_data = json.dumps({"delta": delta, "done": False})
+                                                await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                                    except json.JSONDecodeError:
+                                        continue
+                                elif is_ollama:
+                                    # Ollama uses newline-delimited JSON (not SSE)
+                                    try:
+                                        chunk_json = json.loads(line)
+                                        # Check if stream is done
+                                        if chunk_json.get('done', False):
+                                            done_data = json.dumps({"delta": "", "done": True})
+                                            await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                            stream_done = True
+                                            break
+                                        # Extract content delta
+                                        delta = chunk_json.get('message', {}).get('content', '')
                                         if delta:
                                             full_content += delta  # F7: Accumulate
                                             chunk_data = json.dumps({"delta": delta, "done": False})
                                             await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                except json.JSONDecodeError:
-                                    continue
-                            elif is_ollama:
-                                # Ollama uses newline-delimited JSON (not SSE)
-                                try:
-                                    chunk_json = json.loads(line)
-                                    # Check if stream is done
-                                    if chunk_json.get('done', False):
+                                    except json.JSONDecodeError:
+                                        continue
+                                else:
+                                    # OpenAI uses SSE format
+                                    if not line.startswith('data:'):
+                                        continue
+
+                                    payload_str = line[5:].strip()
+                                    if payload_str == '[DONE]':
                                         done_data = json.dumps({"delta": "", "done": True})
                                         await response.write(f"data: {done_data}\n\n".encode('utf-8'))
                                         stream_done = True
                                         break
-                                    # Extract content delta
-                                    delta = chunk_json.get('message', {}).get('content', '')
-                                    if delta:
-                                        full_content += delta  # F7: Accumulate
-                                        chunk_data = json.dumps({"delta": delta, "done": False})
-                                        await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                except json.JSONDecodeError:
-                                    continue
-                            else:
-                                # OpenAI uses SSE format
-                                if not line.startswith('data:'):
-                                    continue
 
-                                payload_str = line[5:].strip()
-                                if payload_str == '[DONE]':
-                                    done_data = json.dumps({"delta": "", "done": True})
-                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                    stream_done = True
-                                    break
+                                    if not payload_str:
+                                        continue
 
-                                if not payload_str:
-                                    continue
+                                    try:
+                                        chunk_json = json.loads(payload_str)
+                                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                        if delta:
+                                            full_content += delta  # F7: Accumulate
+                                            chunk_data = json.dumps({"delta": delta, "done": False})
+                                            await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                                    except json.JSONDecodeError:
+                                        continue
 
-                                try:
-                                    chunk_json = json.loads(payload_str)
-                                    delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                                    if delta:
-                                        full_content += delta  # F7: Accumulate
-                                        chunk_data = json.dumps({"delta": delta, "done": False})
-                                        await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                except json.JSONDecodeError:
-                                    continue
-
-                        if stream_done:
-                            break
+                            if stream_done:
+                                break
                     
                     # Process any remaining buffered line if stream ended without newline
                     if not stream_done and buffer.strip():
@@ -1615,9 +1721,9 @@ try:
                             except json.JSONDecodeError:
                                 pass  # Invalid JSON, ignore
 
-            except Exception as stream_err:
-                error_data = json.dumps({"error": str(stream_err), "done": True})
-                await response.write(f"data: {error_data}\n\n".encode('utf-8'))
+                except Exception as stream_err:
+                    error_data = json.dumps({"error": str(stream_err), "done": True})
+                    await response.write(f"data: {error_data}\n\n".encode('utf-8'))
             
             return response
             
@@ -1722,6 +1828,15 @@ try:
             headers = {"Authorization": f"Bearer {api_key}"}
             url = f"{base_url}/models"
             
+            # R7: Rate limit check (light limiter for quick requests)
+            if not SessionManager.get_light_limiter().allow():
+                logger.warning("Rate limit exceeded for /doctor/verify_key")
+                return web.json_response({
+                    "success": False,
+                    "message": "Rate limit exceeded. Please wait before retrying.",
+                    "is_local": is_local
+                })
+            
             session = await SessionManager.get_session()
             async with session.get(url, headers=headers, allow_redirects=False) as response:
                 if response.status == 200:
@@ -1805,6 +1920,15 @@ try:
                 url = f"{base_url}/models"
 
             headers = {"Authorization": f"Bearer {api_key}"}
+            
+            # R7: Rate limit check (light limiter for quick requests)
+            if not SessionManager.get_light_limiter().allow():
+                logger.warning("Rate limit exceeded for /doctor/list_models")
+                return web.json_response({
+                    "success": False,
+                    "models": [],
+                    "message": "Rate limit exceeded. Please wait before retrying."
+                })
             
             session = await SessionManager.get_session()
             async with session.get(url, headers=headers, allow_redirects=False) as response:

@@ -285,8 +285,15 @@ graph TD
   - **Prerequisite**: Works best with A6 Pipeline architecture
   - **Note**: Requires A/B testing to ensure analysis accuracy ≥ 95%
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
-- [ ] **R6**: Network retry logic with exponential backoff - 🟢 Low
-- [ ] **R7**: Rate limiting for LLM API calls - 🟢 Low
+- [x] **R6**: Network retry logic with exponential backoff - 🟢 Low ✅ *Completed (2026-01-10)*
+  - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
+  - Exponential backoff with jitter, Retry-After header support
+  - Pre-stream retry for SSE endpoints (no retry after streaming begins)
+- [x] **R7**: Rate limiting for LLM API calls - 🟢 Low ✅ *Completed (2026-01-10)*
+  - Created `rate_limiter.py` (RateLimiter + ConcurrencyLimiter)
+  - Core limiter (30/min) for `/doctor/analyze`, `/doctor/chat`
+  - Light limiter (10/min) for `/doctor/verify_key`, `/doctor/list_models`
+  - Concurrency semaphore (max 3 simultaneous LLM requests)
 - [x] **R11**: Fix validation error capture to collect all failures - 🟢 Low ✅ *Completed (2025-12-31)*
   - Modified logger to accumulate multiple "Failed to validate prompt" errors
   - Use "Executing prompt:" as completion marker instead of resetting buffer
@@ -711,7 +718,7 @@ graph TD
   - Testing: 159/159 Python tests passed; full Playwright suite 61/61 passed (latest)
   - i18n: Fully translated across all 9 languages
   - See `.planning/260104-F4_STATISTICS_RECORD.md` for implementation details
-- [ ] **R6-R7** Network reliability improvements
+- [x] **R6-R7** Network reliability improvements ✅ *Completed (2026-01-10)* (see §3.2 `R6`, `R7`)
 - [ ] **T2-T5** Comprehensive testing suite
 
 **Chat Interface Improvements**:

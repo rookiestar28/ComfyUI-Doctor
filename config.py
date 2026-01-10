@@ -43,6 +43,16 @@ class DiagnosticsConfig:
     # Telemetry (S3)
     telemetry_enabled: bool = False  # Opt-in: disabled by default
     
+    # R7: Rate limiting
+    llm_core_rate_limit: int = 30     # req/min for analyze, chat
+    llm_light_rate_limit: int = 10    # req/min for verify_key, list_models
+    llm_max_concurrent: int = 3       # max simultaneous LLM requests
+    
+    # R6: Retry configuration
+    llm_max_retries: int = 2
+    llm_request_timeout: float = 60.0   # per-attempt timeout (seconds)
+    llm_total_timeout: float = 180.0    # total operation timeout (seconds)
+    
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
         return asdict(self)

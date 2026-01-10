@@ -3,12 +3,16 @@ Session Manager for ComfyUI-Doctor.
 
 Manages a reusable aiohttp ClientSession for LLM API calls to reduce
 resource overhead and prevent "Unclosed client session" warnings.
+
+R7 Enhancement: Adds rate limiting and concurrency control for LLM requests.
 """
 
 import asyncio
 import aiohttp
 import atexit
 from typing import Optional
+
+from rate_limiter import RateLimiter, ConcurrencyLimiter
 
 
 class SessionManager:
@@ -32,12 +36,88 @@ class SessionManager:
     # Default timeout for LLM API calls
     DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=60)
     
+    # R7: Rate limiters (shared across all requests)
+    _core_limiter: Optional[RateLimiter] = None       # analyze, chat
+    _light_limiter: Optional[RateLimiter] = None      # verify_key, list_models
+    _concurrency: Optional[ConcurrencyLimiter] = None # max concurrent LLM calls
+    
+    # R7: Default limits (configurable via CONFIG)
+    DEFAULT_CORE_RATE = 30    # req/min for heavy endpoints
+    DEFAULT_LIGHT_RATE = 10   # req/min for light endpoints
+    DEFAULT_CONCURRENCY = 3   # simultaneous LLM requests
+
+    @classmethod
+    def configure_limits(
+        cls,
+        *,
+        core_rate_limit: Optional[int] = None,
+        light_rate_limit: Optional[int] = None,
+        max_concurrent: Optional[int] = None,
+    ) -> None:
+        """
+        Configure rate/concurrency limits (typically from config).
+
+        This resets cached limiter instances so new values take effect.
+        """
+        def _coerce_positive_int(value: Optional[int], default: int) -> int:
+            if value is None:
+                return default
+            try:
+                coerced = int(value)
+            except (TypeError, ValueError):
+                return default
+            return coerced if coerced > 0 else default
+
+        cls.DEFAULT_CORE_RATE = _coerce_positive_int(core_rate_limit, cls.DEFAULT_CORE_RATE)
+        cls.DEFAULT_LIGHT_RATE = _coerce_positive_int(light_rate_limit, cls.DEFAULT_LIGHT_RATE)
+        cls.DEFAULT_CONCURRENCY = _coerce_positive_int(max_concurrent, cls.DEFAULT_CONCURRENCY)
+
+        cls._core_limiter = None
+        cls._light_limiter = None
+        cls._concurrency = None
+    
     @classmethod
     def _get_lock(cls) -> asyncio.Lock:
         """Get or create the async lock (must be created in event loop)."""
         if cls._lock is None:
             cls._lock = asyncio.Lock()
         return cls._lock
+    
+    @classmethod
+    def get_core_limiter(cls) -> RateLimiter:
+        """
+        Get rate limiter for heavy LLM endpoints (analyze, chat).
+        
+        Returns:
+            RateLimiter: Shared rate limiter instance (30 req/min default).
+        """
+        if cls._core_limiter is None:
+            cls._core_limiter = RateLimiter(max_per_minute=cls.DEFAULT_CORE_RATE)
+        return cls._core_limiter
+    
+    @classmethod
+    def get_light_limiter(cls) -> RateLimiter:
+        """
+        Get rate limiter for light endpoints (verify_key, list_models).
+        
+        Returns:
+            RateLimiter: Shared rate limiter instance (10 req/min default).
+        """
+        if cls._light_limiter is None:
+            cls._light_limiter = RateLimiter(max_per_minute=cls.DEFAULT_LIGHT_RATE)
+        return cls._light_limiter
+    
+    @classmethod
+    def get_concurrency_limiter(cls) -> ConcurrencyLimiter:
+        """
+        Get concurrency limiter for LLM requests.
+        
+        Returns:
+            ConcurrencyLimiter: Shared semaphore (3 concurrent default).
+        """
+        if cls._concurrency is None:
+            cls._concurrency = ConcurrencyLimiter(max_concurrent=cls.DEFAULT_CONCURRENCY)
+        return cls._concurrency
     
     @classmethod
     async def get_session(cls) -> aiohttp.ClientSession:
@@ -90,6 +170,9 @@ class SessionManager:
         cls._session = None
         cls._lock = None
         cls._closed = False
+        cls._core_limiter = None
+        cls._light_limiter = None
+        cls._concurrency = None
 
 
 def _sync_close_session():
