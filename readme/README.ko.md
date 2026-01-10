@@ -4,10 +4,38 @@
 
 ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **LLM 기반 분석**, **대화형 디버깅 채팅**, **50개 이상의 수정 패턴**을 특징으로 합니다. 시작 시부터 모든 터미널 출력을 자동으로 가로채고, 완전한 Python 트레이스백을 캡처하며, 노드 수준의 컨텍스트 추출과 함께 우선순위가 지정된 수정 제안을 제공합니다. 이제 핫 리로드가 가능한 **JSON 기반 패턴 관리**와 9개 언어(en, zh_TW, zh_CN, ja, de, fr, it, es, ko)에 대한 **완전한 i18n 지원**을 제공합니다.
 
-## 최신 업데이트 (2026년 1월)
+## 최신 업데이트 (2026년 1월) - 클릭하여 펼치기
 
 <details>
-<summary><strong>🔴 주요 수정 #1: R0/R13 파이프라인 거버넌스 & 플러그인 보안 (v1.4.5)</strong></summary>
+<summary><strong>스마트 토큰 예산 관리 (v1.5.0)</strong></summary>
+
+**스마트 컨텍스트 관리 (비용 최적화):**
+
+- **자동 트리밍**: 원격 LLM 자동 컨텍스트 트리밍 (토큰 60-80% 절감)
+- **점진적 전략**: 워크플로우 가지치기 → 시스템 정보 제거 → 트레이스백 자르기
+- **로컬 옵트인**: Ollama/LMStudio를 위한 완화된 트리밍 (12K/16K 제한)
+- **가시성 향상**: 단계별 토큰 추적 & A/B 검증 도구
+
+**네트워크 복원력:**
+
+- **지수 백오프**: 429/5xx 오류 자동 재시도 (지터 포함)
+- **스트리밍 보호**: 중단된 SSE 청크에 대한 30초 타임아웃 감시
+- **속도 & 동시성 제한**: 토큰 버킷 (30회/분) + 동시성 세마포어 (최대 3)
+
+**새로운 설정:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | 스마트 예산 활성화 (원격) |
+| `retry_max_attempts` | `3` | 최대 재시도 횟수 |
+| `stream_chunk_timeout` | `30` | 스트림 타임아웃 (초) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>주요 수정: 파이프라인 거버넌스 & 플러그인 보안 (v1.4.5)</strong></summary>
 
 **보안 강화:**
 
@@ -39,7 +67,7 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ---
 
 <details>
-<summary><strong>🟡 기능 향상: T11/T12/A8 - CI 게이트 & 플러그인 도구</strong></summary>
+<summary><strong>기능 향상: CI 게이트 & 플러그인 도구</strong></summary>
 
 **T11 - Phase 2 릴리스 CI 게이트:**
 
@@ -65,7 +93,7 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ---
 
 <details>
-<summary><strong>🟡 기능 향상: S1/S3 - CSP 문서 & 텔레메트리</strong></summary>
+<summary><strong>기능 향상: CSP 문서 & 텔레메트리</strong></summary>
 
 **S1 - CSP 규정 준수 문서:**
 
@@ -89,7 +117,7 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ---
 
 <details>
-<summary><strong>🟡 기능 향상: E2E 러너 강화 & 신뢰/상태 UI</strong></summary>
+<summary><strong>기능 향상: E2E 러너 강화 & 신뢰/상태 UI</strong></summary>
 
 **E2E 러너 강화 (WSL `/mnt/c` 지원):**
 
@@ -111,7 +139,7 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ---
 
 <details>
-<summary><strong>🟢 이전 업데이트 (v1.4.0, Jan 2026)</strong></summary>
+<summary><strong>이전 업데이트 (v1.4.0, Jan 2026)</strong></summary>
 
 - A7 Preact 마이그레이션 완료 (5A–5C 단계: Chat/Stats 아일랜드, 레지스트리, 공유 렌더링, 견고한 폴백).
 - 통합 강화: Playwright E2E 커버리지 강화.
@@ -122,7 +150,7 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ---
 
 <details>
-<summary><strong>F4: 통계 대시보드</strong> - 클릭하여 펼치기</summary>
+<summary><strong>통계 대시보드</strong></summary>
 
 **ComfyUI 안정성을 한눈에 파악하세요!**
 
@@ -159,7 +187,7 @@ ComfyUI-Doctor에 오류 추세, 일반적인 문제 및 해결 진행 상황에
 ---
 
 <details>
-<summary><strong>T8: 패턴 검증 CI</strong> - 클릭하여 펼치기</summary>
+<summary><strong>패턴 검증 CI</strong></summary>
 
 **자동화된 품질 검사로 이제 패턴 무결성을 보호합니다!**
 
@@ -202,7 +230,7 @@ python run_pattern_tests.py
 ---
 
 <details>
-<summary><strong>4B 단계: 패턴 시스템 개편 (1-3단계 완료)</strong> - 클릭하여 펼치기</summary>
+<summary><strong>패턴 시스템 개편 (1-3단계 완료)</strong></summary>
 
 ComfyUI-Doctor는 **57개 이상의 오류 패턴**과 **JSON 기반 패턴 관리**를 통해 대대적인 아키텍처 업그레이드를 거쳤습니다!
 
@@ -244,7 +272,7 @@ ComfyUI-Doctor는 **57개 이상의 오류 패턴**과 **JSON 기반 패턴 관�
 ---
 
 <details>
-<summary><strong>이전 업데이트 (2025년 12월)</strong> - 클릭하여 펼치기</summary>
+<summary><strong>이전 업데이트 (2025년 12월)</strong></summary>
 
 ### F9: 다국어 지원 확장
 

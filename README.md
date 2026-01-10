@@ -4,10 +4,36 @@
 
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Latest Updates (Jan 2026)
+## Latest Updates (Jan 2026) - Click to expand
 
 <details>
-<summary><strong>🔴 Major Fix: R0/R13 Pipeline Governance & Plugin Security (v1.4.5)</strong></summary>
+<summary><strong> (v1.5.0) Smart Token Budget Management</strong></summary>
+
+**Smart Context Management (Cost Optimization):**
+
+- **Automatic trimming** for remote LLMs (60-80% token reduction)
+- **Progressive strategy**: workflow pruning → system info removal → traceback truncation
+- **Local Opt-in**: Gentle trimming for Ollama/LMStudio (12K/16K limits)
+- **Enhanced Observability**: Step-by-step token tracking & A/B validation harness
+
+**Network Resilience:**
+
+- **Exponential Backoff**: Automatic retry for 429/5xx errors with jitter
+- **Streaming Protection**: 30s timeout watchdog for stalled SSE chunks
+- **Rate & Concurrency Limits**: Token bucket (30/min) + Concurrency semaphore (max 3)
+
+**New Configuration:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | Enable Smart Budget (Remote) |
+| `retry_max_attempts` | `3` | Max retry attempts |
+| `stream_chunk_timeout` | `30` | Stream stall timeout (sec) |
+
+</details>
+
+<details>
+<summary><strong>(v1.4.5) Major Fix: Pipeline Governance & Plugin Security</strong></summary>
 
 **Security Hardening:**
 
@@ -36,10 +62,8 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 </details>
 
----
-
 <details>
-<summary><strong>🟡 Enhancement: T11/T12/A8 - CI Gates & Plugin Tooling</strong></summary>
+<summary><strong>Enhancement: CI Gates & Plugin Tooling</strong></summary>
 
 **T11 - Phase 2 Release CI Gate:**
 
@@ -62,10 +86,8 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 </details>
 
----
-
 <details>
-<summary><strong>🟡 Enhancement: S1/S3 - CSP Documentation & Telemetry</strong></summary>
+<summary><strong>Enhancement: CSP Documentation & Telemetry</strong></summary>
 
 **S1 - CSP Compliance Documentation:**
 
@@ -86,10 +108,8 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 </details>
 
----
-
 <details>
-<summary><strong>🟡 Enhancement: E2E Runner Hardening & Trust/Health UI</strong></summary>
+<summary><strong>Enhancement: E2E Runner Hardening & Trust/Health UI</strong></summary>
 
 **E2E Runner Hardening (WSL `/mnt/c` Support):**
 
@@ -108,10 +128,8 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 </details>
 
----
-
 <details>
-<summary><strong>🟢 Previous Update (v1.4.0)</strong></summary>
+<summary><strong> (v1.4.0) Previous Update</strong></summary>
 
 - A7 Preact migration completed across Phases 5A–5C (Chat/Stats islands, registry, shared rendering, robust fallbacks).
 - Integration hardening: strengthened Playwright E2E coverage.
@@ -119,10 +137,8 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 </details>
 
----
-
 <details>
-<summary><strong>F4: Statistics Dashboard</strong> - Click to expand</summary>
+<summary><strong>Statistics Dashboard</strong></summary>
 
 **Track your ComfyUI stability at a glance!**
 
@@ -156,10 +172,8 @@ ComfyUI-Doctor now includes a **Statistics Dashboard** that provides insights in
 
 </details>
 
----
-
 <details>
-<summary><strong>T8: Pattern Validation CI </strong> - Click to expand</summary>
+<summary><strong>Pattern Validation CI </strong></summary>
 
 **Automated quality checks now protect pattern integrity!**
 
@@ -199,10 +213,8 @@ python run_pattern_tests.py
 
 </details>
 
----
-
 <details>
-<summary><strong>Phase 4B: Pattern System Overhaul (STAGE 1-3 Complete)</strong> - Click to expand</summary>
+<summary><strong>Pattern System Overhaul (STAGE 1-3 Complete)</strong></summary>
 
 ComfyUI-Doctor has undergone a major architecture upgrade with **57+ error patterns** and **JSON-based pattern management**!
 
@@ -241,10 +253,8 @@ ComfyUI-Doctor has undergone a major architecture upgrade with **57+ error patte
 
 </details>
 
----
-
 <details>
-<summary><strong>Previous Updates (Dec 2025)</strong> - Click to expand</summary>
+<summary><strong>Previous Updates (Dec 2025)</strong></summary>
 
 ### F9: Multi-language Support Expansion
 

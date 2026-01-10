@@ -4,10 +4,38 @@
 
 Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **analisi basata su LLM**, **chat di debug interattiva** e **50+ modelli di correzione**. Intercetta automaticamente tutto l'output del terminale dall'avvio, cattura traceback Python completi e fornisce suggerimenti di correzione priorizzati con estrazione del contesto a livello di nodo. Ora supporta la **gestione dei pattern basata su JSON** con hot-reload e **supporto i18n completo** per 9 lingue (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Ultimi aggiornamenti (Gen 2026)
+## Ultimi aggiornamenti (Gen 2026) - Clicca per espandere
 
 <details>
-<summary><strong>🔴 Correzione Importante #1: R0/R13 Governance della Pipeline & Sicurezza dei Plugin (v1.4.5)</strong></summary>
+<summary><strong>Gestione Intelligente del Budget dei Token (v1.5.0)</strong></summary>
+
+**Gestione Contestuale Intelligente (Ottimizzazione dei Costi):**
+
+- **Taglio automatico**: Per LLM remoti (riduzione del 60-80% dei token)
+- **Strategia progressiva**: Potatura del flusso di lavoro → rimozione info sistema → troncamento traccia
+- **Opt-in Locale**: Taglio leggero per Ollama/LMStudio (limiti 12K/16K)
+- **Osservabilità Migliorata**: Tracciamento token passo-passo & Strumento di convalida A/B
+
+**Resilienza di Rete:**
+
+- **Backoff Esponenziale**: Riprova automatica per errori 429/5xx (con jitter)
+- **Protezione Streaming**: Watchdog di 30s per chunk SSE bloccati
+- **Limiti di Velocità & Concorrenza**: Token bucket (30/min) + Semaforo concorrenza (max 3)
+
+**Nuova Configurazione:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | Abilita budget intelligente (Remoto) |
+| `retry_max_attempts` | `3` | Max tentativi |
+| `stream_chunk_timeout` | `30` | Timeout flusso (sec) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Correzione Importante: Governance della Pipeline & Sicurezza dei Plugin (v1.4.5)</strong></summary>
 
 **Rafforzamento della Sicurezza:**
 
@@ -39,7 +67,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ---
 
 <details>
-<summary><strong>🟡 Miglioramento: T11/T12/A8 - CI Gates & Strumenti Plugin</strong></summary>
+<summary><strong>Miglioramento: CI Gates & Strumenti Plugin</strong></summary>
 
 **T11 - Gate di Rilascio CI Fase 2:**
 
@@ -65,7 +93,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ---
 
 <details>
-<summary><strong>🟡 Miglioramento: S1/S3 - Doc CSP & Telemetria</strong></summary>
+<summary><strong>Miglioramento: Doc CSP & Telemetria</strong></summary>
 
 **S1 - Doc Conformità CSP:**
 
@@ -89,7 +117,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ---
 
 <details>
-<summary><strong>🟡 Miglioramento: Rafforzamento Runner E2E & UI Fiducia/Salute</strong></summary>
+<summary><strong>Miglioramento: Rafforzamento Runner E2E & UI Fiducia/Salute</strong></summary>
 
 **Rafforzamento Runner E2E (Supporto WSL `/mnt/c`):**
 
@@ -111,7 +139,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ---
 
 <details>
-<summary><strong>🟢 Aggiornamenti Precedenti (v1.4.0, Gen 2026)</strong></summary>
+<summary><strong>Aggiornamenti Precedenti (v1.4.0, Gen 2026)</strong></summary>
 
 - Migrazione A7 Preact Completata (Fase 5A–5C: Isole Chat/Stats, registro, rendering condiviso, fallback robusti).
 - Rafforzamento Integrazione: Potenziata copertura Playwright E2E.
@@ -122,7 +150,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ---
 
 <details>
-<summary><strong>F4: Dashboard statistiche</strong> - Clicca per espandere</summary>
+<summary><strong>Dashboard statistiche</strong></summary>
 
 **Tieni traccia della stabilità di ComfyUI a colpo d'occhio!**
 
@@ -159,13 +187,13 @@ ComfyUI-Doctor ora include una **Dashboard statistiche** che fornisce approfondi
 ---
 
 <details>
-<summary><strong>T8: CI validazione pattern</strong> - Clicca per espandere</summary>
+<summary><strong>CI validazione pattern</strong></summary>
 
 **I controlli di qualità automatizzati ora proteggono l'integrità dei pattern!**
 
 ComfyUI-Doctor ora include **test di integrazione continua** per tutti i pattern di errore, garantendo contributi a zero difetti.
 
-**Cosa convalida T8**:
+**Cosa convalida**:
 
 - ✅ **Formato JSON**: Tutti gli 8 file di pattern compilano correttamente
 - ✅ **Sintassi Regex**: Tutti i 57 pattern hanno espressioni regolari valide
@@ -202,7 +230,7 @@ python run_pattern_tests.py
 ---
 
 <details>
-<summary><strong>Fase 4B: Revisione del sistema pattern (STAGE 1-3 Completato)</strong> - Clicca per espandere</summary>
+<summary><strong>Revisione del sistema pattern (STAGE 1-3 Completato)</strong></summary>
 
 ComfyUI-Doctor ha subito un importante aggiornamento dell'architettura con **57+ pattern di errore** e **gestione pattern basata su JSON**!
 
@@ -244,7 +272,7 @@ ComfyUI-Doctor ha subito un importante aggiornamento dell'architettura con **57+
 ---
 
 <details>
-<summary><strong>Aggiornamenti precedenti (Dic 2025)</strong> - Clicca per espandere</summary>
+<summary><strong>Aggiornamenti precedenti (Dic 2025)</strong></summary>
 
 ### F9: Espansione supporto multilingua
 

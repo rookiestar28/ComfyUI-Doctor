@@ -4,10 +4,38 @@
 
 Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gestützter Analyse**, **interaktivem Debugging-Chat** und **50+ Fehlerbehebungsmustern**. Fängt automatisch alle Terminalausgaben ab dem Start ab, erfasst vollständige Python-Tracebacks und liefert priorisierte Korrekturvorschläge mit Kontext-Extraktion auf Knotenebene. Unterstützt jetzt **JSON-basiertes Mustermanagement** mit Hot-Reload und **vollständige i18n-Unterstützung** für 9 Sprachen (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Neueste Updates (Jan 2026)
+## Neueste Updates (Jan 2026) - Zum Erweitern klicken
 
 <details>
-<summary><strong>🔴 Wichtige Korrektur #1: R0/R13 Pipeline-Governance & Plugin-Sicherheit (v1.4.5)</strong></summary>
+<summary><strong>Smart Token Budget Management (v1.5.0)</strong></summary>
+
+**Intelligentes Kontextmanagement (Kostenoptimierung):**
+
+- **Automatisches Trimming**: Für Remote-LLMs (60-80% Token-Reduktion)
+- **Progressive Strategie**: Workflow-Pruning → Systeminfo entfernen → Traceback kürzen
+- **Lokaler Opt-in**: Sanftes Trimming für Ollama/LMStudio (12K/16K Limits)
+- **Erweiterte Observability**: Schritt-für-Schritt Token-Tracking & A/B Validierung
+
+**Netzwerk-Resilienz:**
+
+- **Exponentieller Backoff**: Automatischer Retry bei 429/5xx Fehlern (mit Jitter)
+- **Streaming-Schutz**: 30s Timeout-Watchdog für blockierte SSE-Chunks
+- **Rate & Concurrency Limits**: Token Bucket (30/Min) + Concurrency Semaphore (max 3)
+
+**Neue Konfiguration:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | Smart Budget aktivieren (Remote) |
+| `retry_max_attempts` | `3` | Max Retries |
+| `stream_chunk_timeout` | `30` | Stream Timeout (Sek) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Wichtige Korrektur: R0/R13 Pipeline-Governance & Plugin-Sicherheit (v1.4.5)</strong></summary>
 
 **Sicherheits-Härtung:**
 
@@ -39,7 +67,7 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ---
 
 <details>
-<summary><strong>🟡 Verbesserung: T11/T12/A8 - CI Gates & Plugin-Tools</strong></summary>
+<summary><strong>Verbesserung: CI Gates & Plugin-Tools</strong></summary>
 
 **T11 - Phase 2 Release CI Gate:**
 
@@ -65,7 +93,7 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ---
 
 <details>
-<summary><strong>🟡 Verbesserung: S1/S3 - CSP-Doku & Telemetrie</strong></summary>
+<summary><strong>Verbesserung: CSP-Doku & Telemetrie</strong></summary>
 
 **S1 - CSP-Compliance-Doku:**
 
@@ -89,7 +117,7 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ---
 
 <details>
-<summary><strong>🟡 Verbesserung: E2E-Runner-Härtung & Vertrauens/Gesundheits-UI</strong></summary>
+<summary><strong>Verbesserung: E2E-Runner-Härtung & Vertrauens/Gesundheits-UI</strong></summary>
 
 **E2E-Runner-Härtung (WSL `/mnt/c` Support):**
 
@@ -111,7 +139,7 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ---
 
 <details>
-<summary><strong>🟢 Frühere Updates (v1.4.0, Jan 2026)</strong></summary>
+<summary><strong>Frühere Updates (v1.4.0, Jan 2026)</strong></summary>
 
 - A7 Preact-Migration abgeschlossen (Phase 5A–5C: Chat/Stats Islands, Registry, Shared Rendering, robuste Fallbacks).
 - Integrationshärtung: Playwright E2E-Abdeckung gestärkt.
@@ -122,7 +150,7 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ---
 
 <details>
-<summary><strong>F4: Statistik-Dashboard</strong> - Zum Erweitern klicken</summary>
+<summary><strong>Statistik-Dashboard</strong></summary>
 
 **Verfolgen Sie Ihre ComfyUI-Stabilität auf einen Blick!**
 
@@ -159,7 +187,7 @@ ComfyUI-Doctor enthält jetzt ein **Statistik-Dashboard**, das Einblicke in Fehl
 ---
 
 <details>
-<summary><strong>T8: Pattern-Validierung CI</strong> - Zum Erweitern klicken</summary>
+<summary><strong>Pattern-Validierung CI</strong></summary>
 
 **Automatisierte Qualitätsprüfungen schützen jetzt die Pattern-Integrität!**
 
@@ -202,7 +230,7 @@ python run_pattern_tests.py
 ---
 
 <details>
-<summary><strong>Phase 4B: Überarbeitung des Mustersystems (STAGE 1-3 abgeschlossen)</strong> - Zum Erweitern klicken</summary>
+<summary><strong>Überarbeitung des Mustersystems (STAGE 1-3 abgeschlossen)</strong></summary>
 
 ComfyUI-Doctor wurde einem umfassenden Architektur-Upgrade unterzogen mit **57+ Fehlermustern** und **JSON-basiertem Mustermanagement**!
 
@@ -244,7 +272,7 @@ ComfyUI-Doctor wurde einem umfassenden Architektur-Upgrade unterzogen mit **57+ 
 ---
 
 <details>
-<summary><strong>Frühere Updates (Dez 2025)</strong> - Zum Erweitern klicken</summary>
+<summary><strong>Frühere Updates (Dez 2025)</strong></summary>
 
 ### F9: Erweiterung der Mehrsprachenunterstützung
 

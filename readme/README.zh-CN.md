@@ -4,10 +4,38 @@
 
 这是一个 ComfyUI 专用的全时即时运行阶段诊断套件。能自动拦截启动后的所有终端输出，捕捉完整的 Python 追踪回溯 (Tracebacks)，并通过节点层级 (Node-level) 的上下文提取，提供具优先顺序的修复建议。内置 57+ 种错误模式（22 个内置 + 35 个社区模式）、采用 JSON 热重载模式，让使用者自行维护管理其他 Error 类型；目前已支持 9 种语言、具备日志持久化功能，并提供便于前端整合的 RESTful API。
 
-## 最新更新 (2026 年 1 月)
+## 最新更新 (2026 年 1 月) - 点击展开
 
 <details>
-<summary><strong>🔴 重大修复 #1: R0/R13 管道治理与插件安全性 (v1.4.5)</strong></summary>
+<summary><strong>Smart Token 预算管理 (v1.5.0)</strong></summary>
+
+**智能上下文管理 (成本优化):**
+
+- **自动修剪**：针对云端 LLM 自动缩减上下文 (减少 60-80% Token 用量)
+- **渐进式策略**：工作流修剪 → 移除系统信息 → 截断 Traceback
+- **本地模式选项**：针对 Ollama/LMStudio 的温和修剪 (12K/16K 限制)
+- **增强可观测性**：逐步 Token 追踪 & A/B 验证工具
+
+**网络韧性:**
+
+- **指数退避重试**：自动重试 429/5xx 错误 (含抖动机制)
+- **流式保护**：30秒超时监控，防止 SSE 流卡住
+- **速率与并发限制**：令牌桶 (30次/分) + 并发信号量 (最大 3)
+
+**新配置:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | 启用智能预算 (远程) |
+| `retry_max_attempts` | `3` | 最大重试次数 |
+| `stream_chunk_timeout` | `30` | 流超时 (秒) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>重大修复: 管道治理与插件安全性 (v1.4.5)</strong></summary>
 
 **安全性强化:**
 
@@ -39,7 +67,7 @@
 ---
 
 <details>
-<summary><strong>🟡 增强功能: T11/T12/A8 - CI 闸道与插件工具</strong></summary>
+<summary><strong>增强功能: CI 闸道与插件工具</strong></summary>
 
 **T11 - Phase 2 发布 CI 闸道:**
 
@@ -65,7 +93,7 @@
 ---
 
 <details>
-<summary><strong>🟡 增强功能: S1/S3 - CSP 文档与遥测</strong></summary>
+<summary><strong>增强功能: CSP 文档与遥测</strong></summary>
 
 **S1 - CSP 合规性文档:**
 
@@ -89,7 +117,7 @@
 ---
 
 <details>
-<summary><strong>🟡 增强功能: E2E 执行器强化与信任/健康 UI</strong></summary>
+<summary><strong>增强功能: E2E 执行器强化与信任/健康 UI</strong></summary>
 
 **E2E 执行器强化 (WSL `/mnt/c` 支持):**
 
@@ -111,7 +139,7 @@
 ---
 
 <details>
-<summary><strong>🟢 先前更新 (v1.4.0, Jan 2026)</strong></summary>
+<summary><strong>先前更新 (v1.4.0, Jan 2026)</strong></summary>
 
 - A7 Preact 迁移完成，涵盖 Phase 5A–5C (Chat/Stats islands, registry, shared rendering, robust fallbacks)。
 - 整合强化: 加强 Playwright E2E 覆盖率。
@@ -122,7 +150,87 @@
 ---
 
 <details>
-<summary><strong>Phase 4B：模式系统全面升级（阶段 1-3 完成）</strong> - 点击展开</summary>
+<summary><strong>统计仪表板</strong></summary>
+
+**一目了然地追踪 ComfyUI 稳定性！**
+
+ComfyUI-Doctor 现已包含**统计仪表板**，提供错误趋势、常见问题及解决进度的深入分析。
+
+**功能特色**：
+
+- 📊 **错误趋势**：追踪 24小时/7天/30天 内的错误数据
+- 🔥 **Top 5 模式**：查看最常发生的错误类型
+- 📈 **分类细项**：依类别可视化错误（内存、工作流、模型加载等）
+- ✅ **解决追踪**：监控已解决与未解决的错误
+- 🌍 **完整 i18n 支持**：支持所有 9 种语言
+
+![统计仪表板](assets/statistics_panel.png)
+
+**使用方法**：
+
+1. 打开 Doctor 侧边栏面板（点击左侧 🏥 图示）
+2. 展开 "📊 错误统计" 区块
+3. 查看实时错误分析与趋势
+4. 将错误标记为已解决/忽略以追踪进度
+
+**后端 API**：
+
+- `GET /doctor/statistics?time_range_days=30` - 取得统计数据
+- `POST /doctor/mark_resolved` - 更新解决状态
+
+**测试覆盖率**：17/17 后端测试 ✅ | 14/18 E2E 测试 (78% 通过率)
+
+**实现细节**：请参阅 `.planning/260104-F4_STATISTICS_RECORD.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>模式验证 CI</strong></summary>
+
+**自动化质量检查现在守护模式完整性！**
+
+ComfyUI-Doctor 现已包含针对所有错误模式的**持续集成测试**，确保零瑕疵的代码贡献。
+
+**T8 验证项目**：
+
+- ✅ **JSON 格式**：所有 8 个模式文件皆正确编译
+- ✅ **Regex 语法**：所有 57 个模式皆有有效的正则表达式
+- ✅ **i18n 完整性**：100% 翻译覆盖率（57 模式 × 9 语言 = 513 项检查）
+- ✅ **Schema 合规**：必要字段 (`id`, `regex`, `error_key`, `priority`, `category`)
+- ✅ **Metadata 质量**：有效优先级范围 (50-95)、唯一 ID、正确分类
+
+**GitHub Actions 整合**：
+
+- 针对影响 `patterns/`、`i18n.py` 或测试的每次 push/PR 触发
+- 执行约需 3 秒，花费 $0（GitHub Actions 免费额度）
+- 若验证失败则阻挡合并
+
+**给贡献者**：
+
+```bash
+# 提交前的本地验证
+python run_pattern_tests.py
+
+# 输出:
+✅ All 57 patterns have required fields
+✅ All 57 regex patterns compile successfully
+✅ en: All 57 patterns have translations
+✅ zh_TW: All 57 patterns have translations
+... (共 9 种语言)
+```
+
+**测试结果**：所有检查 100% 通过率
+
+**实现细节**：请参阅 `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>模式系统全面升级（阶段 1-3 完成）</strong></summary>
 
 ComfyUI-Doctor 完成重大架构升级，具备 **57+ 错误模式**与 **JSON 热重载模式管理**！
 
@@ -165,7 +273,7 @@ ComfyUI-Doctor 完成重大架构升级，具备 **57+ 错误模式**与 **JSON 
 ---
 
 <details>
-<summary><strong>先前更新（2025 年 12 月）</strong> - 点击展开</summary>
+<summary><strong>先前更新（2025 年 12 月）</strong></summary>
 
 ### F9：多语系支持扩展
 

@@ -4,10 +4,38 @@
 
 Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI comprenant **une analyse alimentée par LLM**, **un chat de débogage interactif** et **plus de 50 modèles de correction**. Intercepte automatiquement toutes les sorties du terminal dès le démarrage, capture des traces Python complètes (tracebacks) et fournit des suggestions de correction priorisées avec extraction de contexte au niveau du nœud. Prend désormais en charge la **gestion des motifs basée sur JSON** avec rechargement à chaud et **prise en charge i18n complète** pour 9 langues (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Dernières mises à jour (Jan 2026)
+## Dernières mises à jour (Jan 2026) - Cliquer pour développer
 
 <details>
-<summary><strong>🔴 Correctif Majeur #1 : R0/R13 Gouvernance du Pipeline & Sécurité des Plugins (v1.4.5)</strong></summary>
+<summary><strong>Gestion Intelligente du Budget de Jetons (v1.5.0)</strong></summary>
+
+**Gestion Contextuelle Intelligente (Optimisation des Coûts) :**
+
+- **Découpage automatique** : Pour les LLM distants (réduction de 60-80% des jetons)
+- **Stratégie progressive** : Élagage du workflow → suppression des infos système → troncature de la trace
+- **Opt-in Local** : Découpage léger pour Ollama/LMStudio (limites de 12K/16K)
+- **Observabilité Améliorée** : Suivi des jetons étape par étape & Outil de validation A/B
+
+**Résilience Réseau :**
+
+- **Backoff Exponentiel** : Réessai automatique pour erreurs 429/5xx avec jitter
+- **Protection du Streaming** : Watchdog de 30s pour chunks SSE bloqués
+- **Limites de Débit & Concurrence** : Token bucket (30/min) + Sémaphore de concurrence (max 3)
+
+**Nouvelle Configuration :**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | Activer le budget intelligent (Remote) |
+| `retry_max_attempts` | `3` | Max réessais |
+| `stream_chunk_timeout` | `30` | Timeout de flux (sec) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>Correctif Majeur: Gouvernance du Pipeline & Sécurité des Plugins (v1.4.5)</strong></summary>
 
 **Renforcement de la Sécurité :**
 
@@ -39,7 +67,7 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ---
 
 <details>
-<summary><strong>🟡 Amélioration : T11/T12/A8 - CI Gates & Outillage Plugins</strong></summary>
+<summary><strong>Amélioration: CI Gates & Outillage Plugins</strong></summary>
 
 **T11 - CI Gate de Version Phase 2 :**
 
@@ -65,7 +93,7 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ---
 
 <details>
-<summary><strong>🟡 Amélioration : S1/S3 - Docs CSP & Télémétrie</strong></summary>
+<summary><strong>Amélioration: Docs CSP & Télémétrie</strong></summary>
 
 **S1 - Docs de Conformité CSP :**
 
@@ -89,7 +117,7 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ---
 
 <details>
-<summary><strong>🟡 Amélioration : Renforcement Runner E2E & UI Confiance/Santé</strong></summary>
+<summary><strong>Amélioration : Renforcement Runner E2E & UI Confiance/Santé</strong></summary>
 
 **Renforcement Runner E2E (Support WSL `/mnt/c`) :**
 
@@ -111,7 +139,7 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ---
 
 <details>
-<summary><strong>🟢 Mises à jour précédentes (v1.4.0, Jan 2026)</strong></summary>
+<summary><strong>Mises à jour précédentes (v1.4.0, Jan 2026)</strong></summary>
 
 - Migration A7 Preact Terminée (Phase 5A–5C : Îlots Chat/Stats, registre, rendu partagé, solutions de repli robustes).
 - Renforcement de l'Intégration : Couverture Playwright E2E renforcée.
@@ -122,7 +150,7 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ---
 
 <details>
-<summary><strong>F4 : Tableau de bord statistiques</strong> - Cliquer pour développer</summary>
+<summary><strong>Tableau de bord statistiques</strong></summary>
 
 **Suivez votre stabilité ComfyUI en un coup d'œil !**
 
@@ -159,7 +187,7 @@ ComfyUI-Doctor inclut désormais un **Tableau de bord statistiques** qui fournit
 ---
 
 <details>
-<summary><strong>T8 : CI de validation des motifs</strong> - Cliquer pour développer</summary>
+<summary><strong>CI de validation des motifs</strong></summary>
 
 **Des contrôles qualités automatisés protègent désormais l'intégrité des motifs !**
 
@@ -202,7 +230,7 @@ python run_pattern_tests.py
 ---
 
 <details>
-<summary><strong>Phase 4B : Refonte du système de motifs (ÉTAPE 1-3 Terminée)</strong> - Cliquer pour développer</summary>
+<summary><strong>Refonte du système de motifs (ÉTAPE 1-3 Terminée)</strong></summary>
 
 ComfyUI-Doctor a subi une mise à niveau architecturale majeure avec **plus de 57 motifs d'erreur** et une **gestion des motifs basée sur JSON** !
 
@@ -244,7 +272,7 @@ ComfyUI-Doctor a subi une mise à niveau architecturale majeure avec **plus de 5
 ---
 
 <details>
-<summary><strong>Mises à jour précédentes (Déc 2025)</strong> - Cliquer pour développer</summary>
+<summary><strong>Mises à jour précédentes (Déc 2025)</strong></summary>
 
 ### F9 : Extension du support multilingue
 

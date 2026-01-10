@@ -4,10 +4,38 @@
 
 ComfyUIのための継続的かつリアルタイムなランタイム診断スイートです。**LLM（大規模言語モデル）による分析**、**対話型デバッグチャット**、**50以上の修復パターン** を備えています。起動時からすべてのターミナル出力を自動的にインターセプトし、完全なPythonトレースバックをキャプチャし、ノードレベルのコンテキスト抽出とともに優先順位付けされた修復提案を提供します。**JSONベースのパターン管理**（ホットリロード対応）と、9言語（en, zh_TW, zh_CN, ja, de, fr, it, es, ko）の**完全なi18nサポート**に対応しました。
 
-## 最新のアップデート (2026年1月)
+## 最新のアップデート (2026年1月) - クリックして展開
 
 <details>
-<summary><strong>🔴 メジャー修正 #1: R0/R13 パイプラインガバナンス & プラグインセキュリティ (v1.4.5)</strong></summary>
+<summary><strong>スマートトークン予算管理 (v1.5.0)</strong></summary>
+
+**スマートコンテキスト管理 (コスト最適化):**
+
+- **自動トリミング**：リモートLLM向けにコンテキストを自動削減 (Token 60-80% 削減)
+- **段階的戦略**：ワークフロー剪定 → システム情報削除 → トレースバック切り捨て
+- **ローカルオプトイン**：Ollama/LMStudio向けの穏やかなトリミング (12K/16K 制限)
+- **可観測性の向上**：ステップバイステップのToken追跡 & A/B検証ハーネス
+
+**ネットワークレジリエンス:**
+
+- **指数バックオフ**：429/5xxエラーの自動リトライ (ジッター付き)
+- **ストリーミング保護**：ストールしたSSEチャンクに対する30秒タイムアウト監視
+- **レート & 同時実行制限**：トークンバケット (30回/分) + 同時実行セマフォ (最大 3)
+
+**新しい設定:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | スマート予算を有効化 (リモート) |
+| `retry_max_attempts` | `3` | 最大リトライ回数 |
+| `stream_chunk_timeout` | `30` | ストリームタイムアウト (秒) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>メジャー修正: パイプラインガバナンス & プラグインセキュリティ (v1.4.5)</strong></summary>
 
 **セキュリティ強化:**
 
@@ -39,20 +67,20 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 ---
 
 <details>
-<summary><strong>🟡 機能強化: T11/T12/A8 - CIゲート & プラグインツール</strong></summary>
+<summary><strong>機能強化: CIゲート & プラグインツール</strong></summary>
 
-**T11 - Phase 2 リリースCIゲート:**
+**Phase 2 リリースCIゲート:**
 
 - GitHub Actionsワークフロー (`phase2-release-gate.yml`): 4つのpytestスイート + E2Eを強制
 - ローカル検証スクリプト (`scripts/phase2_gate.py`): `--fast` および `--e2e` モードをサポート
 
-**T12 - 外部安全性静的チェッカー:**
+**外部安全性静的チェッカー:**
 
 - ASTベースの解析器 (`scripts/check_outbound_safety.py`) でバイパスパターンを検出
 - 6つの検出ルール: `RAW_FIELD_IN_PAYLOAD`, `DANGEROUS_FALLBACK`, `POST_WITHOUT_SANITIZATION` など
 - CIワークフロー + 8つのユニットテスト + ドキュメント (`docs/OUTBOUND_SAFETY.md`)
 
-**A8 - プラグイン移行ツール:**
+**プラグイン移行ツール:**
 
 - `scripts/plugin_manifest.py`: SHA256ハッシュ付きマニフェスト生成
 - `scripts/plugin_allowlist.py`: プラグインスキャンと設定提案
@@ -65,7 +93,7 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 ---
 
 <details>
-<summary><strong>🟡 機能強化: S1/S3 - CSPドキュメント & テレメトリ</strong></summary>
+<summary><strong>機能強化: CSPドキュメント & テレメトリ</strong></summary>
 
 **S1 - CSPコンプライアンスドキュメント:**
 
@@ -89,7 +117,7 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 ---
 
 <details>
-<summary><strong>🟡 機能強化: E2Eランナー強化 & 信頼/健全性UI</strong></summary>
+<summary><strong>機能強化: E2Eランナー強化 & 信頼/健全性UI</strong></summary>
 
 **E2Eランナー強化 (WSL `/mnt/c` サポート):**
 
@@ -111,7 +139,7 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 ---
 
 <details>
-<summary><strong>🟢 以前のアップデート (v1.4.0, Jan 2026)</strong></summary>
+<summary><strong>以前のアップデート (v1.4.0, Jan 2026)</strong></summary>
 
 - A7 Preact移行完了 (Phase 5A–5C: Chat/Stats islands, registry, shared rendering, robust fallbacks)。
 - 統合強化: Playwright E2Eカバレッジを強化。
@@ -122,7 +150,7 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 ---
 
 <details>
-<summary><strong>F4: 統計ダッシュボード</strong> - クリックして展開</summary>
+<summary><strong>統計ダッシュボード</strong></summary>
 
 **ComfyUIの安定性を一目で把握！**
 
@@ -159,7 +187,7 @@ ComfyUI-Doctorに**統計ダッシュボード**が追加されました。エ�
 ---
 
 <details>
-<summary><strong>T8: パターン検証CI</strong> - クリックして展開</summary>
+<summary><strong>パターン検証CI</strong></summary>
 
 **自動品質チェックがパターンの完全性を保護します！**
 
@@ -202,7 +230,7 @@ python run_pattern_tests.py
 ---
 
 <details>
-<summary><strong>フェーズ4B: パターンシステムの刷新 (STAGE 1-3 完了)</strong> - クリックして展開</summary>
+<summary><strong>パターンシステムの刷新 (STAGE 1-3 完了)</strong></summary>
 
 ComfyUI-Doctorは、**57以上のエラーパターン**と**JSONベースのパターン管理**を備えた大規模なアーキテクチャアップグレードを実施しました！
 
@@ -244,7 +272,7 @@ ComfyUI-Doctorは、**57以上のエラーパターン**と**JSONベースのパ
 ---
 
 <details>
-<summary><strong>以前のアップデート (2025年12月)</strong> - クリックして展開</summary>
+<summary><strong>以前のアップデート (2025年12月)</strong></summary>
 
 ### F9: 多言語サポートの拡大
 

@@ -4,10 +4,38 @@
 
 這是一個 ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動後的所有終端機輸出，捕捉完整的 Python 追蹤回溯 (Tracebacks)，並透過節點層級 (Node-level) 的上下文提取，提供具優先順序的修復建議。內建 57+ 種錯誤模式（22 個內建 + 35 個社群模式）、採用 JSON 熱重載模式，讓使用者自行維護管理其他 Error 類型；目前已支援 9 種語言、具備日誌持久化功能，並提供便於前端整合的 RESTful API。
 
-## 最新更新 (2026 年 1 月)
+## 最新更新 (2026 年 1 月) - 點擊展開
 
 <details>
-<summary><strong>🔴 重大修復 #1: R0/R13 管道治理與插件安全性 (v1.4.5)</strong></summary>
+<summary><strong>Smart Token 預算管理 (v1.5.0)</strong></summary>
+
+**智慧上下文管理 (成本優化):**
+
+- **自動修剪**：針對雲端 LLM 自動縮減上下文 (減少 60-80% Token 用量)
+- **漸進式策略**：工作流修剪 → 移除系統資訊 → 截斷 Traceback
+- **本地模式選項**：針對 Ollama/LMStudio 的溫和修剪 (12K/16K 限制)
+- **增強可觀測性**：逐步 Token 追蹤 & A/B 驗證工具
+
+**網路韌性:**
+
+- **指數退避重試**：自動重試 429/5xx 錯誤 (含抖動機制)
+- **串流保護**：30秒逾時監控，防止 SSE 串流卡住
+- **速率與並發限制**：令牌桶 (30次/分) + 並發信號量 (最大 3)
+
+**新配置:**
+
+| Config Key | Default | Description |
+|------------|---------|-------------|
+| `r12_enabled_remote` | `true` | 啟用智慧預算 (遠端) |
+| `retry_max_attempts` | `3` | 最大重試次數 |
+| `stream_chunk_timeout` | `30` | 串流逾時 (秒) |
+
+</details>
+
+---
+
+<details>
+<summary><strong>重大修復: 管道治理與插件安全性 (v1.4.5)</strong></summary>
 
 **安全性強化:**
 
@@ -39,7 +67,7 @@
 ---
 
 <details>
-<summary><strong>🟡 增強功能: T11/T12/A8 - CI 閘道與插件工具</strong></summary>
+<summary><strong>增強功能: CI 閘道與插件工具</strong></summary>
 
 **T11 - Phase 2 發布 CI 閘道:**
 
@@ -65,7 +93,7 @@
 ---
 
 <details>
-<summary><strong>🟡 增強功能: S1/S3 - CSP 文件與遙測</strong></summary>
+<summary><strong>增強功能: S1/S3 - CSP 文件與遙測</strong></summary>
 
 **S1 - CSP 合規性文件:**
 
@@ -89,7 +117,7 @@
 ---
 
 <details>
-<summary><strong>🟡 增強功能: E2E 執行器強化與信任/健康 UI</strong></summary>
+<summary><strong>增強功能: E2E 執行器強化與信任/健康 UI</strong></summary>
 
 **E2E 執行器強化 (WSL `/mnt/c` 支援):**
 
@@ -111,7 +139,7 @@
 ---
 
 <details>
-<summary><strong>🟢 先前更新 (v1.4.0, Jan 2026)</strong></summary>
+<summary><strong>先前更新 (v1.4.0, Jan 2026)</strong></summary>
 
 - A7 Preact 遷移完成，涵蓋 Phase 5A–5C (Chat/Stats islands, registry, shared rendering, robust fallbacks)。
 - 整合強化: 加強 Playwright E2E 覆蓋率。
@@ -122,7 +150,87 @@
 ---
 
 <details>
-<summary><strong>Phase 4B：模式系統全面升級（階段 1-3 完成）</strong> - 點擊展開</summary>
+<summary><strong>統計儀表板</strong></summary>
+
+**一目了然地追蹤 ComfyUI 穩定性！**
+
+ComfyUI-Doctor 現已包含**統計儀表板**，提供錯誤趨勢、常見問題及解決進度的深入分析。
+
+**功能特色**：
+
+- 📊 **錯誤趨勢**：追蹤 24小時/7天/30天 內的錯誤數據
+- 🔥 **Top 5 模式**：查看最常發生的錯誤類型
+- 📈 **分類細項**：依類別視覺化錯誤（記憶體、工作流、模型載入等）
+- ✅ **解決追蹤**：監控已解決與未解決的錯誤
+- 🌍 **完整 i18n 支援**：支援所有 9 種語言
+
+![統計儀表板](assets/statistics_panel.png)
+
+**使用方法**：
+
+1. 打開 Doctor 側邊欄面板（點擊左側 🏥 圖示）
+2. 展開 "📊 錯誤統計" 區塊
+3. 查看即時錯誤分析與趨勢
+4. 將錯誤標記為已解決/忽略以追蹤進度
+
+**後端 API**：
+
+- `GET /doctor/statistics?time_range_days=30` - 取得統計數據
+- `POST /doctor/mark_resolved` - 更新解決狀態
+
+**測試覆蓋率**：17/17 後端測試 ✅ | 14/18 E2E 測試 (78% 通過率)
+
+**實作細節**：請參閱 `.planning/260104-F4_STATISTICS_RECORD.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>模式驗證 CI</strong></summary>
+
+**自動化品質檢查現在守護模式完整性！**
+
+ComfyUI-Doctor 現已包含針對所有錯誤模式的**持續整合測試**，確保零瑕疵的代碼貢獻。
+
+**T8 驗證項目**：
+
+- ✅ **JSON 格式**：所有 8 個模式檔案皆正確編譯
+- ✅ **Regex 語法**：所有 57 個模式皆有有效的正規表達式
+- ✅ **i18n 完整性**：100% 翻譯覆蓋率（57 模式 × 9 語言 = 513 項檢查）
+- ✅ **Schema 合規**：必要欄位 (`id`, `regex`, `error_key`, `priority`, `category`)
+- ✅ **Metadata 品質**：有效優先級範圍 (50-95)、唯一 ID、正確分類
+
+**GitHub Actions 整合**：
+
+- 針對影響 `patterns/`、`i18n.py` 或測試的每次 push/PR 觸發
+- 執行約需 3 秒，花費 $0（GitHub Actions 免費額度）
+- 若驗證失敗則阻擋合併
+
+**給貢獻者**：
+
+```bash
+# 提交前的本地驗證
+python run_pattern_tests.py
+
+# 輸出:
+✅ All 57 patterns have required fields
+✅ All 57 regex patterns compile successfully
+✅ en: All 57 patterns have translations
+✅ zh_TW: All 57 patterns have translations
+... (共 9 種語言)
+```
+
+**測試結果**：所有檢查 100% 通過率
+
+**實作細節**：請參閱 `.planning/260103-T8_IMPLEMENTATION_RECORD.md`
+
+</details>
+
+---
+
+<details>
+<summary><strong>模式系統全面升級（階段 1-3 完成）</strong></summary>
 
 ComfyUI-Doctor 完成重大架構升級，具備 **57+ 錯誤模式**與 **JSON 熱重載模式管理**！
 
@@ -165,9 +273,9 @@ ComfyUI-Doctor 完成重大架構升級，具備 **57+ 錯誤模式**與 **JSON 
 ---
 
 <details>
-<summary><strong>先前更新（2025 年 12 月）</strong> - 點擊展開</summary>
+<summary><strong>先前更新（2025 年 12 月）</strong></summary>
 
-### F9：多語系支援擴展
+### 多語系支援擴展
 
 已將語系支援從 4 種擴展至 9 種！ComfyUI-Doctor 現在能以以下語言提供錯誤建議：
 
@@ -183,7 +291,7 @@ ComfyUI-Doctor 完成重大架構升級，具備 **57+ 錯誤模式**與 **JSON 
 
 所有 57 種錯誤模式已完整翻譯至所有語言，確保一致的診斷品質。
 
-### F8：側邊欄設定整合
+### 側邊欄設定整合
 
 設定已簡化！直接從側邊欄配置 Doctor：
 
