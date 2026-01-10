@@ -1,6 +1,9 @@
 /**
  * E2E Tests for Telemetry Feature (S3)
  * 
+ * NOTE: These tests require a running ComfyUI backend (port 8188).
+ * They are skipped in CI environments without ComfyUI.
+ * 
  * Tests:
  * 1. Toggle OFF → no events recorded
  * 2. Toggle ON → events recorded
@@ -11,19 +14,18 @@
 
 const { test, expect } = require('@playwright/test');
 
-// Base URL for ComfyUI
+// Base URL for ComfyUI API (not the test harness)
 const BASE_URL = process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
+
+// Skip all tests if in CI (no ComfyUI backend available)
+// These are integration tests that require the real backend
+const isCI = !!process.env.CI;
 
 test.describe('S3: Telemetry Feature', () => {
 
-    test.beforeEach(async ({ page }) => {
-        // Navigate to ComfyUI
-        await page.goto(BASE_URL);
-        await page.waitForLoadState('networkidle');
+    // Skip entire suite in CI - these require running ComfyUI
+    test.skip(isCI, 'Skipping telemetry tests in CI - requires running ComfyUI backend');
 
-        // Wait for Doctor sidebar to be available
-        await page.waitForTimeout(2000);
-    });
 
     test('telemetry status endpoint returns correct format', async ({ request }) => {
         const response = await request.get(`${BASE_URL}/doctor/telemetry/status`);
