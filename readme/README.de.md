@@ -661,6 +661,40 @@ Sie können das Verhalten von ComfyUI-Doctor über das ComfyUI-Einstellungsfeld 
 - Modelle werden automatisch von der API Ihres ausgewählten Anbieters abgerufen, wenn Sie den Anbieter ändern oder auf Aktualisieren klicken.
 - Für lokale LLMs (Ollama/LMStudio) zeigt das Dropdown alle lokal verfügbaren Modelle an.
 
+### 10. Vertrauen & Gesundheit (Trust & Health)
+
+**Funktion**: Systemstatus und Plugin-Vertrauensbericht anzeigen.
+**Verwendung**: Klicken Sie auf die Schaltfläche 🔄 Aktualisieren, um `/doctor/health` Daten abzurufen.
+
+**Anzeigen**:
+
+- **Pipeline Status**: Aktueller Status der Analysepipeline
+- **SSRF Blocked**: Anzahl blockierter verdächtiger ausgehender Anfragen
+- **Dropped Logs**: Anzahl der aufgrund von Backpressure verworfenen Log-Nachrichten
+- **Plugin Trust List**: Zeigt alle erkannten Plugins mit Vertrauensstatus-Badges:
+  - 🟢 **Trusted**: Zugelassene Plugins mit gültigem Manifest
+  - 🟡 **Unsigned**: Plugins ohne Manifest (mit Vorsicht verwenden)
+  - 🔴 **Blocked**: Blockierte Plugins
+
+### 11. Anonyme Telemetrie (Im Bau 🚧)
+
+**Funktion**: Opt-in zur Sammlung anonymer Nutzungsdaten zur Verbesserung von Doctor.
+**Status**: **Im Bau** — Derzeit nur lokal, kein Netzwerk-Upload.
+
+**Steuerung**:
+
+- **Toggle**: Telemetrieaufzeichnung aktivieren/deaktivieren (Standard: AUS)
+- **View Buffer**: Gepufferte Ereignisse vor dem Upload prüfen
+- **Clear All**: Alle gepufferten Telemetriedaten löschen
+- **Export**: Gepufferte Daten als JSON zur Überprüfung herunterladen
+
+**Datenschutzgarantien**:
+
+- ✅ **Nur Opt-in**: Es werden keine Daten aufgezeichnet, bis dies explizit aktiviert wird
+- ✅ **Nur Lokal**: Speichert Daten derzeit nur lokal (`Upload destination: None`)
+- ✅ **PII-Erkennung**: Filtert sensible Daten automatisch
+- ✅ **Volle Transparenz**: Alle Daten vor jedem zukünftigen Upload anzeigen/exportieren
+
 ---
 
 ## API-Endpunkte

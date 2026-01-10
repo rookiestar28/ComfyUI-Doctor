@@ -661,6 +661,40 @@ Vous pouvez personnaliser le comportement de ComfyUI-Doctor via le panneau Param
 - Les modèles sont automatiquement récupérés depuis l'API de votre fournisseur sélectionné lorsque vous changez de fournisseur ou cliquez sur actualiser.
 - Pour les LLM locaux (Ollama/LMStudio), la liste déroulante affiche tous les modèles disponibles localement.
 
+### 10. Confiance et Santé (Trust & Health)
+
+**Fonction** : Voir l'état de santé du système et le rapport de confiance des plugins.
+**Utilisation** : Cliquez sur le bouton 🔄 d'actualisation pour récupérer les données `/doctor/health`.
+
+**Affichages** :
+
+- **Pipeline Status** : État actuel du pipeline d'analyse
+- **SSRF Blocked** : Nombre de requêtes sortantes suspectes bloquées
+- **Dropped Logs** : Nombre de messages de journal rejetés en raison de la contre-pression
+- **Plugin Trust List** : Affiche tous les plugins détectés avec des badges de statut :
+  - 🟢 **Trusted** : Plugins sur liste blanche avec manifeste valide
+  - 🟡 **Unsigned** : Plugins sans manifeste (utiliser avec prudence)
+  - 🔴 **Blocked** : Plugins sur liste noire
+
+### 11. Télémétrie Anonyme (En Construction 🚧)
+
+**Fonction** : Participer à la collecte de données d'utilisation anonymes pour aider à améliorer Doctor.
+**Statut** : **En Construction** — Actuellement local uniquement, aucun téléchargement réseau.
+
+**Commandes** :
+
+- **Toggle** : Activer/désactiver l'enregistrement de la télémétrie (par défaut : OFF)
+- **View Buffer** : Inspecter les événements mis en mémoire tampon avant le téléchargement
+- **Clear All** : Supprimer toutes les données de télémétrie mises en mémoire tampon
+- **Export** : Télécharger les données mises en mémoire tampon au format JSON pour examen
+
+**Garanties de Confidentialité** :
+
+- ✅ **Opt-in uniquement** : Aucune donnée n'est enregistrée tant qu'elle n'est pas explicitement activée
+- ✅ **Local uniquement** : Stocke actuellement les données localement uniquement (`Upload destination: None`)
+- ✅ **Détection PII** : Filtre automatiquement les informations sensibles
+- ✅ **Transparence totale** : Voir/exporter toutes les données avant tout futur téléchargement
+
 ---
 
 ## Points de terminaison API

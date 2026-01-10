@@ -659,6 +659,40 @@ You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear i
 - Models are automatically fetched from your selected provider's API when you change providers or click refresh.
 - For local LLMs (Ollama/LMStudio), the dropdown displays all locally available models.
 
+### 10. Trust & Health
+
+**Function**: View system health status and plugin trust report.
+**Usage**: Click the 🔄 refresh button to fetch `/doctor/health` endpoint data.
+
+**Displays**:
+
+- **Pipeline Status**: Current analysis pipeline state
+- **SSRF Blocked**: Count of blocked suspicious outbound requests
+- **Dropped Logs**: Count of log messages dropped due to backpressure
+- **Plugin Trust List**: Shows all detected plugins with trust status badges:
+  - 🟢 **Trusted**: Allowlisted plugins with valid manifest
+  - 🟡 **Unsigned**: Plugins without manifest (use with caution)
+  - 🔴 **Blocked**: Plugins on blocklist
+
+### 11. Anonymous Telemetry (Under Construction 🚧)
+
+**Function**: Opt-in anonymous usage data collection to help improve Doctor.
+**Status**: **Under Construction** — Currently local-only, no network upload.
+
+**Controls**:
+
+- **Toggle**: Enable/disable telemetry recording (default: OFF)
+- **View Buffer**: Inspect buffered events before upload
+- **Clear All**: Delete all buffered telemetry data
+- **Export**: Download buffered data as JSON for review
+
+**Privacy Guarantees**:
+
+- ✅ **Opt-in only**: No data is recorded until explicitly enabled
+- ✅ **Local-only**: Currently stores data locally only (`Upload destination: None`)
+- ✅ **PII detection**: Automatically filters sensitive information
+- ✅ **Full transparency**: View/export all data before any future upload
+
 ---
 
 ## API Endpoints
