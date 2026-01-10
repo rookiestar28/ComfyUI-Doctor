@@ -52,6 +52,20 @@ class DiagnosticsConfig:
     llm_max_retries: int = 2
     llm_request_timeout: float = 60.0   # per-attempt timeout (seconds)
     llm_total_timeout: float = 180.0    # total operation timeout (seconds)
+
+    # R12: Token Budget Management
+    r12_enabled_remote: bool = True
+    r12_enabled_local: bool = False
+    r12_soft_max_tokens_remote: int = 4500
+    r12_hard_max_tokens_remote: int = 6000
+    r12_soft_max_tokens_local: int = 12000
+    r12_hard_max_tokens_local: int = 16000
+    r12_policy_profile: str = "remote_strict"  # remote_strict, local_soft
+    r12_estimator_fallback_cpt: float = 4.0
+    r12_estimator_safety_mult: float = 1.15
+    r12_prune_default_depth: int = 3
+    r12_prune_default_nodes: int = 40
+    r12_overhead_fixed: int = 1000  # Fixed overhead (reserved tokens for structure)
     
     def to_dict(self) -> dict:
         """Convert config to dictionary."""

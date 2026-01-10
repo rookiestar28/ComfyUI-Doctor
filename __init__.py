@@ -56,6 +56,11 @@ from .sanitizer import PIISanitizer, SanitizationLevel
 from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_ssrf_metrics
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
+from .services.token_budget import TokenBudgetService, BudgetConfig
+
+# Global R12 Service
+TOKEN_BUDGET_SERVICE = TokenBudgetService()
+
 
 # R7: Apply configurable rate/concurrency limits from CONFIG
 SessionManager.configure_limits(
@@ -1261,6 +1266,65 @@ try:
             if not messages:
                 return web.json_response({"error": "No messages provided"}, status=400)
 
+            # R12: Smart Token Budget
+            # Apply budget metrics and trimming BEFORE sanitization and prompt construction
+            # This ensures we operate on the raw context keys
+            # Supports both remote (strict) and local (opt-in soft) modes
+            r12_meta = {}
+            r12_should_apply = (CONFIG.r12_enabled_remote and not is_local) or (CONFIG.r12_enabled_local and is_local)
+            
+            if r12_should_apply:
+                try:
+                    from .services.token_estimator import EstimatorConfig
+                    
+                    # Select appropriate limits and policy based on provider type
+                    if is_local:
+                        # Local mode: use local limits with local_soft policy
+                        soft_max = CONFIG.r12_soft_max_tokens_local
+                        hard_max = CONFIG.r12_hard_max_tokens_local
+                        policy = "local_soft"
+                    else:
+                        # Remote mode: use remote limits with configured policy
+                        soft_max = CONFIG.r12_soft_max_tokens_remote
+                        hard_max = CONFIG.r12_hard_max_tokens_remote
+                        policy = CONFIG.r12_policy_profile
+                    
+                    budget_config = BudgetConfig(
+                        enabled_remote=CONFIG.r12_enabled_remote,
+                        enabled_local=CONFIG.r12_enabled_local,
+                        soft_max_tokens=soft_max,
+                        hard_max_tokens=hard_max,
+                        trimming_policy=policy,
+                        estimator_config=EstimatorConfig(
+                            chars_per_token=CONFIG.r12_estimator_fallback_cpt,
+                            safety_multiplier=CONFIG.r12_estimator_safety_mult
+                        ),
+                        prune_default_depth=CONFIG.r12_prune_default_depth,
+                        prune_default_nodes=CONFIG.r12_prune_default_nodes,
+                        overhead_fixed=CONFIG.r12_overhead_fixed
+                    )
+                    
+                    # Create context wrapper
+                    budget_context = {
+                        "messages": messages,
+                        "error_context": error_context
+                    }
+                    
+                    # Apply
+                    budgeted_context, r12_meta = TOKEN_BUDGET_SERVICE.apply_token_budget(
+                        budget_context,
+                        is_remote_provider=not is_local,
+                        config=budget_config
+                    )
+                    
+                    # Update local refs with trimmed versions
+                    if "messages" in budgeted_context:
+                        messages = budgeted_context["messages"]
+                    if "error_context" in budgeted_context:
+                        error_context = budgeted_context["error_context"]
+                except Exception as r12_err:
+                    logger.warning(f"R12 Budget application failed, proceeding with original payload: {r12_err}")
+
             # S6: PII Sanitization - Remove sensitive info before sending to LLM
             sanitizer, downgraded = get_outbound_sanitizer(base_url, privacy_mode)
             if downgraded:
@@ -1527,7 +1591,7 @@ try:
                         else:
                             content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
                         logger.info(f"LLM response received (non-stream), length={len(content)}, attempts={result.attempts}")
-                        return web.json_response({"content": content, "done": True})
+                        return web.json_response({"content": content, "done": True, "metadata": r12_meta})
 
                 # SSE Streaming response
                 logger.info("Starting SSE stream...")
@@ -1542,6 +1606,11 @@ try:
                     }
                 )
                 await response.prepare(request)
+                
+                # Send R12 metadata as early SSE event if available
+                if r12_meta:
+                    meta_event = json.dumps({"type": "usage_metadata", "data": r12_meta})
+                    await response.write(f"data: {meta_event}\n\n".encode('utf-8'))
                 
                 try:
                     session = await SessionManager.get_session()

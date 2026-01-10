@@ -15,6 +15,15 @@ graph TD
     B --> HH[statistics.py]
     B --> SEC[security.py]
     B --> OUT[outbound.py]
+    
+    %% R6/R7: Network Resilience
+    B --> SM[session_manager.py]
+    SM --> RL[rate_limiter.py]
+    SM --> LLC[llm_client.py]
+    RL --> RL1[RateLimiter]
+    RL --> RL2[ConcurrencyLimiter]
+    LLC --> LLC1[Retry + Backoff]
+    LLC --> LLC2[Idempotency-Key]
 
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
@@ -100,6 +109,9 @@ graph TD
 | `security.py` | 300+ | SSRF hardening helpers + counters for health endpoint |
 | `outbound.py` | 150+ | Non-bypassable outbound sanitization boundary for remote requests |
 | `sanitizer.py` | 400+ | PII sanitization engine with `none/basic/strict` modes |
+| `session_manager.py` | 130+ | R7: Shared aiohttp session, rate/concurrency limiter management |
+| `rate_limiter.py` | 130+ | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
+| `llm_client.py` | 290+ | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
 | `services/` | 50+ | R12: Workflow pruning and pip validation services |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
@@ -265,7 +277,7 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **R12**: Smart Token Budget Management - 🟡 Medium ⚠️ *Use dev branch*
+- [x] **R12**: Smart Token Budget Management - 🟡 Medium ✅ *Completed (2026-01-10)*
   - **Core Strategy**: Implement `WorkflowPruner` service class for intelligent context reduction
   - **Workflow Pruning**:
     - Graph-based dependency tracking using BFS (Breadth-First Search)
@@ -280,8 +292,8 @@ graph TD
   - **Configurable token budget** per provider (GPT-4: 8K, Claude: 100K)
   - **Real-time token estimation** with `tiktoken` library
   - **Cost impact**: 60-80% token reduction, saving $40-60 per 1000 analyses (GPT-4)
-  - **Implementation**: Complete code available in `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
-  - **Integration**: Add as `services/workflow_pruner.py`, call from `analyzer.py`
+  - **Implementation**: `.planning/260110-R12_SMART_TOKEN_BUDGET_IMPLEMENTATION_RECORD.md`
+  - **Integration**: Added as `services/workflow_pruner.py`, called from `__init__.py`
   - **Prerequisite**: Works best with A6 Pipeline architecture
   - **Note**: Requires A/B testing to ensure analysis accuracy ≥ 95%
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
@@ -673,11 +685,11 @@ graph TD
   - Foundation for F2, F12
   - Can implement immediately (GitHub Actions)
   - **NOTE**: Test strategy needs redesign (no static fixtures)
-- [ ] **R12** Smart Token Budget Management
+- [x] **R12** Smart Token Budget Management ✅ *Completed (2026-01-10)*
   - 50-67% cost reduction for LLM calls
   - Requires `tiktoken` integration
   - Best with A6 Pipeline, but can implement standalone
-  - Develop on `feature/token-budget` branch
+  - Implemented in `services/token_budget.py`
   - **Prerequisite**: A/B testing framework
 
 #### Phase 4C: UX Polish & Analytics
