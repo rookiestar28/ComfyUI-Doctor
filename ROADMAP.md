@@ -41,7 +41,12 @@ graph TD
     S1 --> SAN[sanitizer.py]
     S2 --> H[pattern_loader.py]
     S2 --> PLUG[pipeline/plugins/]
+    %% R12: Smart Token Budget
+    S4 --> TE[services/token_estimator.py]
+    S4 --> TB[services/token_budget.py]
     S4 --> SERV[services/workflow_pruner.py]
+    TE --> TB
+    SERV --> TB
     OUT --> SAN
 
     H --> N[patterns/builtin/]
@@ -112,7 +117,7 @@ graph TD
 | `session_manager.py` | 130+ | R7: Shared aiohttp session, rate/concurrency limiter management |
 | `rate_limiter.py` | 130+ | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
 | `llm_client.py` | 290+ | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
-| `services/` | 50+ | R12: Workflow pruning and pip validation services |
+| `services/` | 600+ | R12: Token estimation, budget management, workflow pruning |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
 | `config.py` | 65 | Config management: dataclass + JSON persistence |
