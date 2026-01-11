@@ -105,19 +105,19 @@ graph TD
 
 | Module | Lines | Function |
 |--------|-------|----------|
-| `prestartup_script.py` | 102 | Earliest log interception hook (before custom_nodes load) |
-| `__init__.py` | 1900+ | Main entry: full Logger install, API endpoints, LLM integration, env var support |
-| `logger.py` | 400+ | SafeStreamWrapper + queue-based processing, DoctorLogProcessor background thread, async writes |
-| `analyzer.py` | 320+ | Wrapper for AnalysisPipeline, legacy API compatibility |
-| `pipeline/` | 400+ | A6: Error analysis pipeline (Sanitizer, Matcher, Context, LLMBuilder) |
+| `prestartup_script.py` | ~100 | Earliest log interception hook (before custom_nodes load) |
+| `__init__.py` | ~2400 | Main entry: full Logger install, API endpoints, LLM integration, env var support |
+| `logger.py` | ~750 | SafeStreamWrapper + queue-based processing, DoctorLogProcessor background thread, async writes |
+| `analyzer.py` | ~250 | Wrapper for AnalysisPipeline, legacy API compatibility |
+| `pipeline/` | ~1100 | A6: Error analysis pipeline (Sanitizer, Matcher, Context, LLMBuilder) + metadata contract |
 | `pipeline/metadata_contract.py` | ~120 | Metadata schema versioning + end-of-run validation/quarantine |
-| `security.py` | 300+ | SSRF hardening helpers + counters for health endpoint |
-| `outbound.py` | 150+ | Non-bypassable outbound sanitization boundary for remote requests |
-| `sanitizer.py` | 400+ | PII sanitization engine with `none/basic/strict` modes |
-| `session_manager.py` | 130+ | R7: Shared aiohttp session, rate/concurrency limiter management |
-| `rate_limiter.py` | 130+ | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
-| `llm_client.py` | 290+ | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
-| `services/` | 600+ | R12: Token estimation, budget management, workflow pruning |
+| `security.py` | ~150 | SSRF hardening helpers + counters for health endpoint |
+| `outbound.py` | ~60 | Non-bypassable outbound sanitization boundary for remote requests |
+| `sanitizer.py` | ~320 | PII sanitization engine with `none/basic/strict` modes |
+| `session_manager.py` | ~210 | R7: Shared aiohttp session, rate/concurrency limiter management |
+| `rate_limiter.py` | ~130 | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
+| `llm_client.py` | ~290 | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
+| `services/` | ~670 | R12: Token estimation, budget management, workflow pruning |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
 | `config.py` | 65 | Config management: dataclass + JSON persistence |
@@ -205,7 +205,7 @@ graph TD
 - [x] **R0**: Risk & Refactor Mitigation (Security + Logger + Pipeline + Sanitization) - 🔴 Highest ✅ *Completed (2026-01-10)*
   - **Scope**: SSRF hardening, logger backpressure, pipeline health, prestartup handoff, sanitization boundary
   - **Plan**: `.planning/260108-RISK_REFACTOR_MITIGATION_PLAN.md`
-  - **Implementation Record**: `.planning/260110-R0_R13_PIPELINE_GOVERNANCE_IMPLEMENTATION_RECORD.md`
+  - **Implementation Record**: `.planning/260109-R0_R13_PIPELINE_GOVERNANCE_IMPLEMENTATION_RECORD.md`
   - **Progress**:
     - ✅ **R0-P0**: SSRF hardening + redirect blocking for outbound requests
     - ✅ **R0-P1**: Single outbound payload sanitization funnel (privacy_mode=none only for verified local)
@@ -216,7 +216,7 @@ graph TD
 - [x] **R13**: Pipeline + Plugin Hardening (Phase 2 Assessment) - 🔴 Highest ✅ *Completed (2026-01-10)*
   - **Scope**: plugin gating + manifest/allowlist, metadata contract, pipeline dependency policy, expanded sanitization boundary, context extraction provenance
   - **Plan**: `.planning/260109-PHASE2_PIPELINE_PLUGIN_HARDENING_PLAN.md`
-  - **Implementation Record**: `.planning/260110-R0_R13_PIPELINE_GOVERNANCE_IMPLEMENTATION_RECORD.md`
+  - **Implementation Record**: `.planning/260109-R0_R13_PIPELINE_GOVERNANCE_IMPLEMENTATION_RECORD.md`
   - **Follow-up Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
   - **Progress**:
     - ✅ **R13-P0**: Plugin loader safe-by-default (default OFF + allowlist/manifest/sha256 + trust taxonomy + filesystem hardening)
@@ -247,7 +247,7 @@ graph TD
     - ⏸️ Audit log UI: Not implemented (backend logging only)
   - **Critical for enterprise adoption** - blocks B2B market without this
   - **Foundation for**: A6 Pipeline Stage 1 (Sanitizer)
-  - **Documentation**: See `.planning/S6_PII_SANITIZATION.md`
+  - **Documentation**: See `.planning/251231-S6_PII_SANITIZATION.md`
 - [ ] **S7**: Quarterly Security Audits - 🟢 Low (recurring)
   - **Automated** (CI/CD):
     - OWASP ZAP penetration testing
@@ -258,14 +258,16 @@ graph TD
     - XSS injection tests (chat inputs, settings fields)
     - Path traversal attempts
   - **Compliance**: OWASP Top 10, CWE Top 25, GDPR
-  - **Deliverable**: `.planning/SECURITY_AUDIT_YYYY_QX.md`
+  - **Deliverable**: Security audit reports in `.planning/` (format: `YYYYMMDD-SECURITY_AUDIT_QX.md`)
   - **Trigger**: GitHub Actions cron job every 90 days
+  - **Note**: No audits conducted yet; this is a recurring future task
 - [x] **S1**: Document CSP Compliance/Limitations - 🟢 Low ✅ *Code Audit Complete (2026-01-09)*
   - **Scope Changed**: From "Add CSP headers" to "Document CSP compliance"
   - ComfyUI core manages CSP headers; extensions cannot override
   - Verified all Doctor assets load locally (`web/lib/`)
   - CDN references are fallback-only
-  - **Documentation**: README.md CSP section, `.planning/260109-S1_VERIFICATION_REPORT.md`
+  - **Documentation**: README.md CSP section
+  - **Implementation**: `.planning/260109-S1_S3_IMPLEMENTATION_RECORD.md`
   - ⚠️ **Pending**: Manual verification with `--disable-api-nodes` + screenshots (user required)
 - [x] **S3**: Implement telemetry (opt-in, anonymous) - 🟢 Low ✅ *Completed (2026-01-09)*
   - **Scope**: Local-only telemetry (Phase 1-3); no network upload
@@ -276,41 +278,46 @@ graph TD
   - Frontend: `doctor_telemetry.js`, Settings UI controls
   - i18n: 81 strings (9 keys × 9 languages)
   - E2E tests: 8 tests in `telemetry.spec.js`
-  - **Plan/Record**: `.planning/260109-S3_TELEMETRY_IMPLEMENTATION_PLAN.md`
+  - **Implementation**: `.planning/260109-S1_S3_IMPLEMENTATION_RECORD.md`
 
 ### 3.2 Robustness (in progress)
 
 *Sorted by priority (High → Low):*
 
 - [x] **R12**: Smart Token Budget Management - 🟡 Medium ✅ *Completed (2026-01-10)*
-  - **Core Strategy**: Implement `WorkflowPruner` service class for intelligent context reduction
-  - **Workflow Pruning**:
-    - Graph-based dependency tracking using BFS (Breadth-First Search)
-    - Trace upstream nodes from error node (configurable max_depth: 4, max_nodes: 20)
-    - Support both ComfyUI API format and UI-saved format
-    - Remove irrelevant branches (e.g., Note nodes, unrelated Image Save)
-  - **Smart pip list filtering**:
-    - Core package whitelist (torch, numpy, transformers, etc.)
-    - Keyword extraction from error message
-    - Fallback to top 50 packages if filtering too aggressive
-  - **Stack frame collapsing**: Keep first 5 + last 5, omit middle repetitive frames
-  - **Configurable token budget** per provider (GPT-4: 8K, Claude: 100K)
-  - **Real-time token estimation** with `tiktoken` library
-  - **Cost impact**: 60-80% token reduction, saving $40-60 per 1000 analyses (GPT-4)
+  - **Core Strategy**: Progressive trimming system with token estimation for LLM context management
+  - **Implemented Features**:
+    - **Token Estimation**: Real-time estimation with `tiktoken` library (or configurable fallback)
+    - **Workflow Pruning**: Graph-based dependency tracking using BFS (Breadth-First Search)
+      - Trace upstream nodes from error node (configurable max_depth: 3, max_nodes: 40)
+      - Support both ComfyUI API format and UI-saved format
+      - Remove irrelevant branches (e.g., Note nodes, unrelated Image Save)
+    - **Progressive Trimming**: By-section token tracking with degradation steps
+    - **Provider-Aware Budgets**: Separate limits for remote/local providers
+      - Remote: 4500 soft / 6000 hard tokens
+      - Local: 12000 soft / 16000 hard tokens (opt-in)
+    - **Enhanced Metadata**: R12Metadata v1.0 schema for observability
+    - **A/B Validation Harness**: Quality metrics tracking (`scripts/r12_ab_harness.py`)
+  - **Deferred Features** (not implemented):
+    - ⏸️ Smart pip list filtering (keyword extraction from errors)
+    - ⏸️ Stack frame collapsing (first 5 + last 5 frames)
+  - **Cost Impact**: 40-60% token reduction estimated, saving $24-36 per 1000 analyses (GPT-4)
   - **Implementation**: `.planning/260110-R12_SMART_TOKEN_BUDGET_IMPLEMENTATION_RECORD.md`
-  - **Integration**: Added as `services/workflow_pruner.py`, called from `__init__.py`
-  - **Prerequisite**: Works best with A6 Pipeline architecture
-  - **Note**: Requires A/B testing to ensure analysis accuracy ≥ 95%
+  - **Integration**: `services/token_estimator.py`, `services/workflow_pruner.py`, `services/token_budget.py`
+  - **Prerequisite**: Works with A6 Pipeline architecture
+  - **Note**: A/B testing framework ready; requires production samples for full validation
 - [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **R6**: Network retry logic with exponential backoff - 🟢 Low ✅ *Completed (2026-01-10)*
   - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
   - Exponential backoff with jitter, Retry-After header support
   - Pre-stream retry for SSE endpoints (no retry after streaming begins)
+  - **Implementation**: `.planning/260110-R6_R7_IMPLEMENTATION_RECORD.md`
 - [x] **R7**: Rate limiting for LLM API calls - 🟢 Low ✅ *Completed (2026-01-10)*
   - Created `rate_limiter.py` (RateLimiter + ConcurrencyLimiter)
   - Core limiter (30/min) for `/doctor/analyze`, `/doctor/chat`
   - Light limiter (10/min) for `/doctor/verify_key`, `/doctor/list_models`
   - Concurrency semaphore (max 3 simultaneous LLM requests)
+  - **Implementation**: `.planning/260110-R6_R7_IMPLEMENTATION_RECORD.md`
 - [x] **R11**: Fix validation error capture to collect all failures - 🟢 Low ✅ *Completed (2025-12-31)*
   - Modified logger to accumulate multiple "Failed to validate prompt" errors
   - Use "Executing prompt:" as completion marker instead of resetting buffer
@@ -355,7 +362,7 @@ graph TD
     - Confidence scoring with matched keywords
     - Suggested fix approach for each category
   - **Impact**: Better LLM root cause analysis through richer context
-  - **Implementation**: `.planning/OPTION_B_PHASE1_RECORD.md`, `OPTION_B_PHASE2_RECORD.md`
+  - **Implementation**: `.planning/260101-F7_PHASE1_RECORD.md`, `.planning/260101-F7_PHASE2_RECORD.md`
   - **Code Added**: ~752 lines (5 new functions + 9 language templates + integration)
 - [x] **F12**: Expand offline error pattern coverage to 50+ - 🔴 High ✅ *Completed (2026-01-03)*
   - **Current**: 57 patterns, **Target**: 50+ patterns
@@ -433,30 +440,29 @@ graph TD
   - **Verification**: Full regression suite passed (132 tests), see `walkthrough.md`
   - **Implementation Record**: `.planning/260106-A6_IMPLEMENTATION_RECORD.md`
   - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
-- [ ] **A7**: Frontend Architecture Modernization (Preact Migration) - 🟡 Medium ⚠️ *Use dev branch*
+- [x] **A7**: Frontend Architecture Modernization (Preact Migration) - 🟡 Medium ✅ *Completed (2026-01-08)*
   - **Problem**: v2.0 Chat Interface creates state management complexity with Vanilla JS
   - **Solution**: "Island Architecture" - Preact (3KB) for complex components, keep Vanilla JS for simple UI
   - **Migration Strategy**:
-    - **Phase 1**: Keep existing `doctor_ui.js` for settings panel (Vanilla JS)
-    - **Phase 2**: Migrate Chat Interface to Preact component mounted in sidebar DOM
-    - **Phase 3**: Gradually wrap other complex UI in Preact islands as needed
+    - **Phase 4D**: Planning and Preact loader infrastructure ✅
+    - **Phase 5A**: Migrate Chat & Statistics to Preact islands ✅
+    - **Phase 5B**: Integration hardening with fallbacks ✅
+    - **Phase 5C**: Extensibility layer (registry, error boundaries) ✅
   - **Technical Approach**:
     - Use ESM CDN for Preact (no build step, aligns with ComfyUI extension patterns)
     - Preact Signals for reactive state management (replaces manual DOM manipulation)
-    - Coexistence: Vanilla JS and Preact can run side-by-side
+    - Coexistence: Vanilla JS and Preact can run side-by-side with fallback
   - **Benefits**:
     - **No manual DOM updates** (eliminates error-prone `.innerHTML` calls)
     - **Component reusability** (MessageItem, ChatInterface, StreamingIndicator)
     - **Easier testing** (render components in isolation with Playwright)
     - **Better maintainability** for SSE streaming and real-time updates
-  - **Why Preact**:
-    - Already used in ComfyUI core (proven compatibility)
-    - No build step required (ESM CDN: `https://esm.sh/preact`)
-    - Low learning curve (React-like API)
-    - Tiny footprint (3KB gzipped)
-  - **Trigger**: BEFORE v2.0 Chat Interface expansion begins
+  - **Implementation Records**:
+    - `.planning/260105-A7(Phase 4D)_IMPLEMENTATION_RECORD.md`
+    - `.planning/260106-A7_(Phase 5A)_IMPLEMENTATION_RECORD.md`
+    - `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
+    - `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
   - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
-  - **Design Reference**: See `.planning/ComfyUI-Doctor Architecture In-Depth Analysis and Optimization Blueprint.md`
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A8**: Plugin Migration Tooling (Plan 6.3) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Reduce configuration friction for safe-by-default plugin policy (manifest + allowlist helpers; optional HMAC signer).
@@ -637,12 +643,12 @@ graph TD
   - ✅ Zero risk, pure preprocessing
   - ✅ Implemented on `main` branch
   - ✅ Comprehensive unit tests (21 tests)
-  - See `.planning/S6_PII_SANITIZATION.md` for details
+  - See `.planning/251231-S6_PII_SANITIZATION.md` for details
 - [x] **F7** Enhanced Error Analysis (Multi-Language + Categorization) ✅ *Completed (2026-01-01)*
   - Phase 1: Enhanced error context (stack traces, logs, workflow structure)
   - Phase 2: Automatic error categorization (5 categories with confidence scoring)
   - Multi-language prompt templates (9 languages)
-  - See `.planning/OPTION_B_PHASE1_RECORD.md` and `OPTION_B_PHASE2_RECORD.md`
+  - See `.planning/260101-F7_PHASE1_RECORD.md` and `.planning/260101-F7_PHASE2_RECORD.md`
 
 #### Phase 4B: Robustness & Cost Optimization
 
@@ -684,12 +690,7 @@ graph TD
   - **Results**: All 57 patterns load successfully, pattern matching verified, frontend i18n integrated
   - **Branch**: `dev`
   - **Known Issue**: Some UI text keys missing for non-CJK languages (tracked in Phase 4C)
-- [ ] **T8** Regex Pattern Compatibility CI
-  - Daily automated testing vs PyTorch/ComfyUI nightly builds
-  - Prevents silent pattern regression
-  - Foundation for F2, F12
-  - Can implement immediately (GitHub Actions)
-  - **NOTE**: Test strategy needs redesign (no static fixtures)
+  - **Future Enhancement** (T8 Phase 2): Dynamic pattern compatibility testing against PyTorch/ComfyUI nightly builds (deferred - requires real error corpus)
 - [x] **R12** Smart Token Budget Management ✅ *Completed (2026-01-10)*
   - 50-67% cost reduction for LLM calls
   - Requires `tiktoken` integration
@@ -726,13 +727,12 @@ graph TD
 
 **UX Enhancements**:
 
-- [ ] **F6** Multi-LLM provider quick switch
 - [x] **F4** Statistics Dashboard ✅ *Completed (2026-01-04)*
   - Backend: `StatisticsManager` for error aggregation and trend analysis
   - API: `/doctor/statistics` (GET) and `/doctor/mark_resolved` (POST)
   - Frontend: Collapsible statistics panel in sidebar with error trends, top patterns, category breakdown, and resolution tracking
   - Features: 24h/7d/30d time ranges, Top 5 error patterns, resolution rate tracking (resolved/unresolved/ignored)
-  - Testing: 159/159 Python tests passed; full Playwright suite 61/61 passed (latest)
+  - Testing: 159/159 Python tests passed; full Playwright suite 61/61 passed (i18n issues fixed in Phase 2 follow-up)
   - i18n: Fully translated across all 9 languages
   - See `.planning/260104-F4_STATISTICS_RECORD.md` for implementation details
 - [x] **R6-R7** Network reliability improvements ✅ *Completed (2026-01-10)* (see §3.2 `R6`, `R7`)
@@ -749,26 +749,23 @@ graph TD
 
 **Priority**: Medium (long-term health)
 
-- [ ] **S7** Quarterly Security Audits
-  - OWASP ZAP, Snyk, Semgrep automation
-  - Manual penetration testing
-  - Deliverable: Security audit reports
 - [x] **A7** Frontend Architecture Planning ✅ *Completed (2026-01-05)*
   - ✅ Created `preact-loader.js` with single-instance CDN loading
   - ✅ Implemented `PREACT_ISLANDS_ENABLED` feature flag
   - ✅ Added `chat-island.js` example component with fallback UI
   - ✅ Vendor files bundled in `web/lib/` (preact, hooks, signals, htm)
-  - **Implementation**: `.planning/260105-A7_IMPLEMENTATION_RECORD.md`
+  - **Implementation**: `.planning/260105-A7(Phase 4D)_IMPLEMENTATION_RECORD.md`
   - **Next Phase**: ✅ Completed Phase 5A–5C Preact migration (2026-01-08)
 
 ### Phase 5: Major Refactoring (Future)
 
 **Focus**: Architecture optimization and community ecosystem
 
-#### Phase 5A: Pipeline Architecture + Frontend Modernization
+#### Phase 5A: Pipeline Architecture + Frontend Modernization ✅ COMPLETED
 
 **Priority**: High
-**Branch**: `dev` (REQUIRED)
+**Status**: ✅ All items completed (2026-01-08)
+**Branch**: Merged to `main`
 
 - [x] **A6** Plugin-based Pipeline refactor ✅ *Completed (2026-01-06)*
   - **Stage 1**: Sanitizer (implements S6 backend)
@@ -777,13 +774,18 @@ graph TD
   - **Stage 4**: LLMContextBuilder (implements R12 foundation)
   - Foundation for S6, R12, F7 integration
   - Enables community plugin ecosystem
-  - **Status**: Merged to main after verification
+  - **Record**: `.planning/260106-A6_IMPLEMENTATION_RECORD.md`
 - [x] **A7** Preact Migration (Phase 5A–5C) ✅ *Completed (2026-01-08)*
-  - **Prerequisite**: F13 (Sidebar Tab Refactoring) completed
-  - **5A**: Chat/Stats islands migrated to Preact with vanilla fallback
-  - **5B**: Integration hardening (fallbacks, E2E coverage, lifecycle checks)
-  - **5C**: Extensibility layer (island registry, selectors, shared rendering, error boundary, E2E helpers)
-  - **Records**: `.planning/260106-A7_PHASE_5A_IMPLEMENTATION_RECORD.md`, `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`, `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
+  - **Prerequisite**: F13 (Sidebar Tab Refactoring) completed ✅
+  - **Phase 4D**: Planning + Preact loader infrastructure ✅
+  - **Phase 5A**: Chat/Stats islands migrated to Preact with vanilla fallback ✅
+  - **Phase 5B**: Integration hardening (fallbacks, E2E coverage, lifecycle checks) ✅
+  - **Phase 5C**: Extensibility layer (island registry, selectors, error boundary, E2E helpers) ✅
+  - **Records**:
+    - `.planning/260105-A7(Phase 4D)_IMPLEMENTATION_RECORD.md`
+    - `.planning/260106-A7_(Phase 5A)_IMPLEMENTATION_RECORD.md`
+    - `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
+    - `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
 
 #### Phase 5B: Type Safety & Advanced Features
 
