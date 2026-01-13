@@ -1,0 +1,151 @@
+/**
+ * Error Boundary CSS
+ * ==================
+ * Styling for the ErrorBoundary component.
+ * R5: Frontend Error Boundaries
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ERROR BOUNDARY CONTAINER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.error-boundary-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    min-height: 200px;
+    background: var(--bg-color, #1e1e1e);
+    border: 2px solid var(--error-color, #f44336);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.error-boundary-container.permanent {
+    border-color: var(--error-dark, #c62828);
+    background: rgba(198, 40, 40, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ICON
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.error-boundary-icon {
+    font-size: 48px;
+    margin-bottom: 1rem;
+    line-height: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TITLE & MESSAGE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.error-boundary-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--error-color, #f44336);
+}
+
+.error-boundary-message {
+    margin: 0 0 1.5rem 0;
+    color: var(--text-color, #ccc);
+    font-size: 0.9rem;
+    max-width: 300px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.error-boundary-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.error-boundary-btn {
+    padding: 0.5rem 1rem;
+    background: var(--primary-color, #2196f3);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.error-boundary-btn:hover {
+    background: var(--primary-dark, #1976d2);
+    transform: translateY(-1px);
+}
+
+.error-boundary-btn:active {
+    transform: translateY(0);
+}
+
+.error-boundary-btn.reload-btn {
+    background: var(--warning-color, #ff9800);
+}
+
+.error-boundary-btn.reload-btn:hover {
+    background: var(--warning-dark, #f57c00);
+}
+
+.error-boundary-btn.copy-btn {
+    background: var(--secondary-color, #666);
+}
+
+.error-boundary-btn.copy-btn:hover {
+    background: var(--secondary-dark, #555);
+}
+
+.error-boundary-btn.copied {
+    background: var(--success-color, #4caf50) !important;
+}
+
+.error-boundary-btn.failed {
+    background: var(--error-color, #f44336) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ERROR ID
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.error-boundary-error-id {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--text-muted, #888);
+}
+
+.error-boundary-error-id code {
+    font-family: 'Courier New', 'Fira Code', monospace;
+    background: var(--code-bg, #2a2a2a);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    margin-left: 0.25rem;
+    user-select: all;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 400px) {
+    .error-boundary-container {
+        padding: 1.5rem 1rem;
+    }
+
+    .error-boundary-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .error-boundary-btn {
+        width: 100%;
+    }
+}

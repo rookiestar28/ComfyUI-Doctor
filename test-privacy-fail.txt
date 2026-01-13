@@ -1,0 +1,64 @@
+
+Running 1 test using 1 worker
+
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /tests/e2e/test-harness.html HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /tests/e2e/mocks/comfyui-app.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_ui.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_api.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/preact-loader.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/tabs/chat_tab.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_tabs.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/tabs/stats_tab.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/tabs/settings_tab.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/global_error_handler.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_chat.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_state.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/island_registry.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/chat-island.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/statistics-island.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/privacy_utils.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_fix_handler.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_rendering.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_selectors.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/doctor_actions.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/ErrorBoundary.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:35] "GET /web/error_boundary.css HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:37] "GET /web/lib/preact.module.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:37] "GET /web/lib/preact-hooks.module.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:37] "GET /web/lib/preact-signals.module.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:37] "GET /web/lib/htm.module.js HTTP/1.1" 200 -
+[WebServer] ::ffff:127.0.0.1 - - [13/Jan/2026 18:43:37] "GET /web/lib/signals-core.module.js HTTP/1.1" 200 -
+  ✘  1 [chromium] › tests\e2e\specs\error-boundaries.spec.js:323:9 › Error Boundaries › privacy mode should sanitize PII in error logs (2.9s)
+
+
+  1) [chromium] › tests\e2e\specs\error-boundaries.spec.js:323:9 › Error Boundaries › privacy mode should sanitize PII in error logs 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32mtrue[39m
+    Received: [31mfalse[39m
+
+      374 |         const piiHandledCorrectly = !hasRawUsername || hasSanitizedPath || !hasRawApiKey || hasSanitizedApiKey;
+      375 |
+    > 376 |         expect(piiHandledCorrectly).toBe(true);
+          |                                     ^
+      377 |     });
+      378 | });
+      379 |
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:376:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\error-boundaries-Error-Bou-25406--sanitize-PII-in-error-logs-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\error-boundaries-Error-Bou-25406--sanitize-PII-in-error-logs-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\error-boundaries-Error-Bou-25406--sanitize-PII-in-error-logs-chromium\error-context.md
+
+  1 failed
+    [chromium] › tests\e2e\specs\error-boundaries.spec.js:323:9 › Error Boundaries › privacy mode should sanitize PII in error logs 
+
+[36m  Serving HTML report at http://localhost:9323. Press Ctrl+C to quit.[39m

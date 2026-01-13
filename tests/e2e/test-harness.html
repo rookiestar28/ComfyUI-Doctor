@@ -61,6 +61,15 @@
     window.__doctorTestError = null;
 
     console.log('[Test Harness] ComfyUI mocks initialized');
+
+    // R5: Capture console.error for E2E test assertions
+    window.errorLogs = [];
+    const originalConsoleError = console.error;
+    console.error = function(...args) {
+        window.errorLogs.push(args);
+        originalConsoleError.apply(console, args);
+    };
+
     console.log('[Test Harness] Loading Doctor UI modules...');
 
     try {

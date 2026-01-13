@@ -1,0 +1,150 @@
+
+Running 8 tests using 1 worker
+
+  ✘  1 specs\error-boundaries.spec.js:23:9 › Error Boundaries › should show ErrorBoundary UI when chat island crashes (88ms)
+  ✘  2 specs\error-boundaries.spec.js:51:9 › Error Boundaries › should reload component on button click (one-time error) (87ms)
+  ✘  3 specs\error-boundaries.spec.js:77:9 › Error Boundaries › should show permanent error after 3 reload attempts (89ms)
+  ✘  4 specs\error-boundaries.spec.js:112:9 › Error Boundaries › should copy error ID to clipboard (94ms)
+  ✘  5 specs\error-boundaries.spec.js:144:9 › Error Boundaries › statistics island should remain functional when chat crashes (89ms)
+  ✘  6 specs\error-boundaries.spec.js:175:9 › Error Boundaries › should log errors to console with [ComfyUI-Doctor] prefix (91ms)
+  ✘  7 specs\error-boundaries.spec.js:206:9 › Error Boundaries › normal operation without error injection (85ms)
+  ✘  8 specs\error-boundaries.spec.js:219:9 › Error Boundaries › privacy mode should sanitize PII in error logs (93ms)
+
+
+  1) specs\error-boundaries.spec.js:23:9 › Error Boundaries › should show ErrorBoundary UI when chat island crashes 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      32 |
+      33 |         // Navigate to test harness
+    > 34 |         await page.goto('test-harness.html');
+         |                    ^
+      35 |
+      36 |         // Wait for Doctor UI to initialize
+      37 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:34:20
+
+  2) specs\error-boundaries.spec.js:51:9 › Error Boundaries › should reload component on button click (one-time error) 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      59 |         });
+      60 |
+    > 61 |         await page.goto('test-harness.html');
+         |                    ^
+      62 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      63 |
+      64 |         // Verify error UI appears
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:61:20
+
+  3) specs\error-boundaries.spec.js:77:9 › Error Boundaries › should show permanent error after 3 reload attempts 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      85 |         });
+      86 |
+    > 87 |         await page.goto('test-harness.html');
+         |                    ^
+      88 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      89 |
+      90 |         // Verify error UI appears
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:87:20
+
+  4) specs\error-boundaries.spec.js:112:9 › Error Boundaries › should copy error ID to clipboard ───
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      122 |         });
+      123 |
+    > 124 |         await page.goto('test-harness.html');
+          |                    ^
+      125 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      126 |
+      127 |         // Wait for error UI
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:124:20
+
+  5) specs\error-boundaries.spec.js:144:9 › Error Boundaries › statistics island should remain functional when chat crashes 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      152 |         });
+      153 |
+    > 154 |         await page.goto('test-harness.html');
+          |                    ^
+      155 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      156 |
+      157 |         // Chat should show error
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:154:20
+
+  6) specs\error-boundaries.spec.js:175:9 › Error Boundaries › should log errors to console with [ComfyUI-Doctor] prefix 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      190 |         });
+      191 |
+    > 192 |         await page.goto('test-harness.html');
+          |                    ^
+      193 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      194 |
+      195 |         // Wait for error and logging
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:192:20
+
+  7) specs\error-boundaries.spec.js:206:9 › Error Boundaries › normal operation without error injection 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      206 |     test('normal operation without error injection', async ({ page }) => {
+      207 |         // No error injection - normal operation
+    > 208 |         await page.goto('test-harness.html');
+          |                    ^
+      209 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      210 |
+      211 |         // Error boundary should NOT appear
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:208:20
+
+  8) specs\error-boundaries.spec.js:219:9 › Error Boundaries › privacy mode should sanitize PII in error logs 
+
+    Error: page.goto: Protocol error (Page.navigate): Cannot navigate to invalid URL
+    Call log:
+    [2m  - navigating to "test-harness.html", waiting until "load"[22m
+
+
+      229 |         });
+      230 |
+    > 231 |         await page.goto('test-harness.html');
+          |                    ^
+      232 |         await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+      233 |
+      234 |         // Wait for error boundary to appear and logs to be captured
+        at C:\Users\Win\Documents\我的專案\ComfyUI-Doctor\tests\e2e\specs\error-boundaries.spec.js:231:20
+
+  8 failed
+    specs\error-boundaries.spec.js:23:9 › Error Boundaries › should show ErrorBoundary UI when chat island crashes 
+    specs\error-boundaries.spec.js:51:9 › Error Boundaries › should reload component on button click (one-time error) 
+    specs\error-boundaries.spec.js:77:9 › Error Boundaries › should show permanent error after 3 reload attempts 
+    specs\error-boundaries.spec.js:112:9 › Error Boundaries › should copy error ID to clipboard ────
+    specs\error-boundaries.spec.js:144:9 › Error Boundaries › statistics island should remain functional when chat crashes 
+    specs\error-boundaries.spec.js:175:9 › Error Boundaries › should log errors to console with [ComfyUI-Doctor] prefix 
+    specs\error-boundaries.spec.js:206:9 › Error Boundaries › normal operation without error injection 
+    specs\error-boundaries.spec.js:219:9 › Error Boundaries › privacy mode should sanitize PII in error logs 

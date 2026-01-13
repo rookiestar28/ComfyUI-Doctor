@@ -9,10 +9,32 @@ import { DoctorAPI } from './doctor_api.js';
 // 5C.2: Use selectors for UI text
 import { getUIText, getWorkflowContext } from './doctor_selectors.js';
 import { setState } from './doctor_actions.js';
+// R5: Error Boundaries
+import { createErrorBoundaryAsync } from './ErrorBoundary.js';
 
 let preactModules = null;
 let islandMounted = false;
 let currentContainer = null;
+
+// =========================================================
+// R5: ERROR BOUNDARIES FEATURE FLAG
+// =========================================================
+
+/**
+ * Check if Error Boundaries feature is enabled.
+ * Must match the check in doctor.js.
+ */
+function isErrorBoundariesEnabled() {
+    try {
+        const setting = window.app?.ui?.settings?.getSettingValue?.(
+            'Doctor.General.ErrorBoundaries',
+            true // Default: enabled
+        );
+        return setting !== false;
+    } catch (err) {
+        return true; // Default to enabled if settings unavailable
+    }
+}
 
 // =========================================================
 // HELPERS
@@ -313,6 +335,22 @@ function CategoryBreakdown({ breakdown, total, uiText }) {
 function StatisticsIsland({ uiText }) {
     const { html, useState, useEffect } = preactModules;
 
+    // ⚠️ R5: E2E test injection point (production-safe double-guard)
+    const isTestHarness = window.location.pathname.includes('test-harness.html') ||
+        typeof window.__testMocks !== 'undefined';
+    if (isTestHarness &&
+        typeof window.__testErrorInjection !== 'undefined' &&
+        window.__testErrorInjection.enabled &&
+        window.__testErrorInjection.throwIn === 'statistics') {
+
+        if (window.__testErrorInjection.mode === 'always') {
+            throw new Error('E2E Test: Permanent statistics crash');
+        } else if (window.__testErrorInjection.mode === 'once') {
+            window.__testErrorInjection.mode = 'off'; // One-time
+            throw new Error('E2E Test: One-time statistics crash');
+        }
+    }
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -442,7 +480,23 @@ export async function renderStatisticsIsland(container, props = {}, options = {}
         if (options.replace) {
             container.innerHTML = '';
         }
-        render(html`<${StatisticsIsland} ...${props} />`, container);
+
+        // R5: Wrap with ErrorBoundary if feature is enabled
+        if (isErrorBoundariesEnabled()) {
+            const ErrorBoundary = await createErrorBoundaryAsync();
+            render(html`
+                <${ErrorBoundary}
+                    islandId="statistics"
+                    uiText=${props.uiText || {}}
+                >
+                    <${StatisticsIsland} ...${props} />
+                </${ErrorBoundary}>
+            `, container);
+        } else {
+            // Render without ErrorBoundary (fallback to island_registry try-catch)
+            render(html`<${StatisticsIsland} ...${props} />`, container);
+        }
+
         islandMounted = true;
         return true;
     } catch (e) {

@@ -21,6 +21,8 @@ import {
 import {
     loadRenderingAssets, sanitizeHtml, highlightCodeBlocks, addCopyButtons
 } from './doctor_rendering.js';
+// R5: Error Boundaries
+import { createErrorBoundaryAsync } from './ErrorBoundary.js';
 
 // Shared State
 let preactModules = null;
@@ -29,6 +31,26 @@ let currentContainer = null;
 let fixHandler = null;
 
 // 5C.3: Local loadAssets, loadScript, sanitizeHtml removed - using shared doctor_rendering.js
+
+// =========================================================
+// R5: ERROR BOUNDARIES FEATURE FLAG
+// =========================================================
+
+/**
+ * Check if Error Boundaries feature is enabled.
+ * Must match the check in doctor.js.
+ */
+function isErrorBoundariesEnabled() {
+    try {
+        const setting = window.app?.ui?.settings?.getSettingValue?.(
+            'Doctor.General.ErrorBoundaries',
+            true // Default: enabled
+        );
+        return setting !== false;
+    } catch (err) {
+        return true; // Default to enabled if settings unavailable
+    }
+}
 
 // =========================================================
 // COMPONENTS
@@ -188,6 +210,28 @@ function MessageItem({ msg, uiText }) {
 
 function ChatIsland({ uiText }) {
     const { html, useState, useEffect, useRef, useCallback } = preactModules;
+
+    // ⚠️ R5: E2E test injection point (production-safe double-guard)
+    const isTestHarness = window.location.pathname.includes('test-harness.html') ||
+        typeof window.__testMocks !== 'undefined';
+    if (isTestHarness &&
+        typeof window.__testErrorInjection !== 'undefined' &&
+        window.__testErrorInjection.enabled &&
+        window.__testErrorInjection.throwIn === 'chat') {
+
+        // Support custom error message for PII sanitization testing
+        const errorMsg = window.__testErrorInjection.customMessage ||
+            (window.__testErrorInjection.mode === 'always'
+                ? 'E2E Test: Permanent chat crash'
+                : 'E2E Test: One-time chat crash');
+
+        if (window.__testErrorInjection.mode === 'always') {
+            throw new Error(errorMsg);
+        } else if (window.__testErrorInjection.mode === 'once') {
+            window.__testErrorInjection.mode = 'off'; // One-time
+            throw new Error(errorMsg);
+        }
+    }
 
     // State
     const [messages, setMessages] = useState([]);
@@ -460,7 +504,23 @@ export async function renderChatIsland(container, props = {}, options = {}) {
         if (options.replace) {
             container.innerHTML = '';
         }
-        render(html`<${ChatIsland} ...${props} />`, container);
+
+        // R5: Wrap with ErrorBoundary if feature is enabled
+        if (isErrorBoundariesEnabled()) {
+            const ErrorBoundary = await createErrorBoundaryAsync();
+            render(html`
+                <${ErrorBoundary}
+                    islandId="chat"
+                    uiText=${props.uiText || {}}
+                >
+                    <${ChatIsland} ...${props} />
+                </${ErrorBoundary}>
+            `, container);
+        } else {
+            // Render without ErrorBoundary (fallback to island_registry try-catch)
+            render(html`<${ChatIsland} ...${props} />`, container);
+        }
+
         islandMounted = true;
         return true;
     } catch (e) {

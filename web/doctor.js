@@ -11,6 +11,8 @@ import { tabRegistry, TabManager } from "./doctor_tabs.js";
 import * as ChatTab from "./tabs/chat_tab.js";
 import * as StatsTab from "./tabs/stats_tab.js";
 import * as SettingsTab from "./tabs/settings_tab.js";
+// R5: Error Boundaries
+import { installGlobalErrorHandlers } from "./global_error_handler.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // A7: PREACT ISLANDS FEATURE FLAG
@@ -66,6 +68,26 @@ let PROVIDER_DEFAULTS = {
     "custom": ""
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// R5: ERROR BOUNDARIES FEATURE FLAG
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if Error Boundaries feature is enabled.
+ * Used to gate global error handler installation and CSS injection.
+ */
+function isErrorBoundariesEnabled() {
+    try {
+        const setting = app?.ui?.settings?.getSettingValue?.(
+            'Doctor.General.ErrorBoundaries',
+            true // Default: enabled
+        );
+        return setting !== false;
+    } catch (err) {
+        return true; // Default to enabled if settings unavailable
+    }
+}
+
 // Fetch provider defaults from backend (supports env vars)
 async function loadProviderDefaults() {
     try {
@@ -114,6 +136,17 @@ app.registerExtension({
             defaultValue: true,
             onChange: (newVal, oldVal) => {
                 console.log(`[ComfyUI-Doctor] Enable changed: ${oldVal} -> ${newVal}`);
+            },
+        });
+
+        // R5: Error Boundaries Feature Flag
+        app.ui.settings.addSetting({
+            id: "Doctor.General.ErrorBoundaries",
+            name: "Enable Error Boundaries (requires restart)",
+            type: "boolean",
+            defaultValue: true,
+            onChange: (newVal, oldVal) => {
+                console.log(`[ComfyUI-Doctor] ErrorBoundaries changed: ${oldVal} -> ${newVal}`);
             },
         });
 
@@ -579,5 +612,26 @@ app.registerExtension({
         }
 
         console.log("[ComfyUI-Doctor] Settings registered successfully");
+
+        // ═══════════════════════════════════════════════════════════════════
+        // R5: ERROR BOUNDARIES INITIALIZATION
+        // ═══════════════════════════════════════════════════════════════════
+        if (isErrorBoundariesEnabled()) {
+            // 1. Inject Error Boundary CSS
+            if (!document.getElementById('doctor-error-boundary-styles')) {
+                const link = document.createElement('link');
+                link.id = 'doctor-error-boundary-styles';
+                link.rel = 'stylesheet';
+                link.href = new URL('./error_boundary.css', import.meta.url).href;
+                document.head.appendChild(link);
+            }
+
+            // 2. Install global error handlers
+            installGlobalErrorHandlers();
+
+            console.log('[ComfyUI-Doctor] ✅ Error boundaries active');
+        } else {
+            console.log('[ComfyUI-Doctor] Error boundaries disabled by user setting');
+        }
     }
 });

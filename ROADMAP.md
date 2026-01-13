@@ -97,6 +97,8 @@ graph TD
     AU --> AY[specs/sidebar.spec.js - 15 tests]
     AU --> AZ[specs/statistics.spec.js - 19 tests]
     AU --> BA[specs/preact-loader.spec.js - 14 tests]
+    AU --> BB[specs/error-boundaries.spec.js - 8 tests]
+    AU --> BC[specs/telemetry.spec.js - 8 tests (requires ComfyUI backend)]
     AV --> AH
     AV --> AJ
 ```
@@ -132,12 +134,18 @@ graph TD
 | `web/doctor_ui.js` | 1400+ | Sidebar UI, error cards, AI analysis trigger, i18n integration |
 | `web/doctor_api.js` | 260+ | API wrapper layer with streaming support, statistics API |
 | `web/doctor_chat.js` | 600+ | Multi-turn chat interface, SSE streaming, markdown rendering |
+| `web/ErrorBoundary.js` | 180+ | R5: Preact error boundary for islands (isolation, reload, error ID copy) |
+| `web/global_error_handler.js` | 170+ | R5: Global error handlers (uncaught + unhandledrejection) with dedup + LRU |
+| `web/privacy_utils.js` | 115+ | R5: Frontend privacy sanitization helpers (none/basic/strict) |
+| `web/error_boundary.css` | 140+ | R5: Error boundary UI styling |
 | `tests/e2e/test-harness.html` | 104 | Isolated test environment for Doctor UI (loads full extension without ComfyUI) |
 | `tests/e2e/mocks/comfyui-app.js` | 155 | Mock ComfyUI app/api objects for testing |
 | `tests/e2e/specs/settings.spec.js` | 217 | Settings panel tests (13 tests): toggle, selectors, inputs, persistence, trust/health refresh |
 | `tests/e2e/specs/sidebar.spec.js` | 190 | Chat interface tests (15 tests): messages, input, buttons, error context, sanitization status |
 | `tests/e2e/specs/statistics.spec.js` | 470+ | Statistics dashboard tests (19 tests): panel, cards, patterns, categories, i18n, resolution actions |
 | `tests/e2e/specs/preact-loader.spec.js` | 200+ | Preact loader tests (14 tests): module loading, flags, error handling, vendor fallback |
+| `tests/e2e/specs/error-boundaries.spec.js` | 350+ | R5: Error boundary regression tests (8 tests): UI, reload, isolation, privacy |
+| `tests/e2e/specs/telemetry.spec.js` | 200+ | S3: Telemetry integration tests (8 tests, requires live ComfyUI backend) |
 | `playwright.config.js` | 89 | Playwright configuration for E2E tests |
 
 ---
@@ -284,6 +292,14 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
+- [ ] **R14**: Error context extraction & prompt packaging optimization - 🔴 High ⚠️ *Use dev branch*
+  - **Problem**: LLM context is often dominated by raw tracebacks; log context capture is unreliable; env/pip list can waste tokens.
+  - **Approach**:
+    - Add `error_summary` before full traceback (exception line + optional pattern/category)
+    - Reliable execution log context via a dedicated ring buffer (not dependent on ComfyUI logger handlers)
+    - Expand non-traceback error triggers (single-line fatals, validation failures) with strict dedup/noise filtering
+    - Build structured LLM context via pipeline (`llm_builder.py`) + token budgets (R12) instead of ad-hoc string concatenation
+  - **Plan**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_OPTIMIZATION_PLAN.md`
 - [x] **R12**: Smart Token Budget Management - 🟡 Medium ✅ *Completed (2026-01-10)*
   - **Core Strategy**: Progressive trimming system with token estimation for LLM context management
   - **Implemented Features**:
@@ -299,14 +315,22 @@ graph TD
     - **Enhanced Metadata**: R12Metadata v1.0 schema for observability
     - **A/B Validation Harness**: Quality metrics tracking (`scripts/r12_ab_harness.py`)
   - **Deferred Features** (not implemented):
-    - ⏸️ Smart pip list filtering (keyword extraction from errors)
-    - ⏸️ Stack frame collapsing (first 5 + last 5 frames)
+    - ⏸️ Smart pip list filtering (keyword extraction from errors) → planned in **R14**
+    - ⏸️ Stack frame collapsing (first 5 + last 5 frames) → planned in **R14**
   - **Cost Impact**: 40-60% token reduction estimated, saving $24-36 per 1000 analyses (GPT-4)
   - **Implementation**: `.planning/260110-R12_SMART_TOKEN_BUDGET_IMPLEMENTATION_RECORD.md`
   - **Integration**: `services/token_estimator.py`, `services/workflow_pruner.py`, `services/token_budget.py`
   - **Prerequisite**: Works with A6 Pipeline architecture
   - **Note**: A/B testing framework ready; requires production samples for full validation
-- [ ] **R5**: Frontend error boundaries - 🟡 Medium ⚠️ *Use dev branch*
+- [x] **R5**: Frontend error boundaries - 🟡 Medium ✅ *Completed (2026-01-13)*
+  - **Goal**: Prevent isolated UI crashes (Chat/Stats islands) from taking down the entire sidebar.
+  - **Scope**:
+    - Preact `ErrorBoundary` wrapper around islands (reload attempts + stable fallback UI)
+    - Global error handlers for uncaught exceptions and unhandled rejections (Doctor-only filtering + dedup)
+    - Frontend privacy sanitization (`none/basic/strict`) for error logs and stacks
+    - Feature flag: `Doctor.General.ErrorBoundaries` (default enabled)
+  - **Plan**: `.planning/260112-R5_FRONTEND_ERROR_BOUNDARIES_PLAN.md`
+  - **Implementation Record**: `.planning/260113-R5_FRONTEND_ERROR_BOUNDARIES_RECORD.md`
 - [x] **R6**: Network retry logic with exponential backoff - 🟢 Low ✅ *Completed (2026-01-10)*
   - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
   - Exponential backoff with jitter, Retry-After header support

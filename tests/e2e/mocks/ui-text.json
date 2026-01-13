@@ -49,7 +49,17 @@
     "telemetry_buffer_count": "Currently buffered: {n} events",
     "telemetry_upload_none": "Upload destination: None (local only)",
     "telemetry_cleared": "Telemetry buffer cleared",
-    "telemetry_confirm_clear": "Clear all telemetry data?"
+    "telemetry_confirm_clear": "Clear all telemetry data?",
+    "error_boundary_title": "Component Error",
+    "error_boundary_msg": "This component encountered an error.",
+    "error_boundary_reload_btn": "Reload Component",
+    "error_boundary_copy_id_btn": "Copy Error ID",
+    "error_boundary_copied": "Copied!",
+    "error_boundary_copy_failed": "Copy Failed",
+    "error_boundary_permanent_title": "Component Failed to Load",
+    "error_boundary_permanent_msg": "This component failed after 3 reload attempts.",
+    "error_boundary_error_id_label": "Error ID:",
+    "global_error_banner_title": "An error occurred"
   },
   "ja": {
     "sidebar_doctor_title": "ComfyUI Doctor",
