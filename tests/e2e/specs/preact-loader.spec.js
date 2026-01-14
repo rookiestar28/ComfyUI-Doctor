@@ -130,18 +130,27 @@ test.describe('Preact Loader', () => {
 
             expect(hasFlag).toBe(true);
         });
-    });
+	    });
 
-    test.describe('Error Handling', () => {
-        test('should handle complete load failure gracefully', async ({ page }) => {
-            // Block both local vendor files AND esm.sh CDN to simulate complete failure
-            await page.route('**/web/lib/**', route => route.abort());
-            await page.route('**/esm.sh/**', route => route.abort());
+	    test.describe('Error Handling', () => {
+	        test.beforeEach(async ({ page }) => {
+	            // Important: block BEFORE (re)loading the harness; otherwise preact modules may already be loaded.
+	            // Block only Preact-related vendor modules (do not block markdown/highlight assets).
+	            await page.route('**/web/lib/preact*.module.js', route => route.abort());
+	            await page.route('**/web/lib/htm.module.js', route => route.abort());
+	            await page.route('**/web/lib/signals-core.module.js', route => route.abort());
+	            await page.route('**/esm.sh/**', route => route.abort());
 
-            const result = await page.evaluate(async () => {
-                // Reset the loader state first
-                const loader = await import('/web/preact-loader.js');
-                if (loader.resetLoader) {
+	            // Re-navigate so the blocking routes apply before any module imports happen.
+	            await page.goto('test-harness.html');
+	            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 20000 });
+	        });
+
+	        test('should handle complete load failure gracefully', async ({ page }) => {
+	            const result = await page.evaluate(async () => {
+	                // Reset the loader state first
+	                const loader = await import('/web/preact-loader.js');
+	                if (loader.resetLoader) {
                     loader.resetLoader();
                 }
 
@@ -157,17 +166,13 @@ test.describe('Preact Loader', () => {
             expect(result.success).toBe(false);
             // Error message should indicate failure (may vary)
             expect(result.error).toBeTruthy();
-        });
+	        });
 
-        test('should report error via getLoadError after failure', async ({ page }) => {
-            // Block both local vendor files AND CDN
-            await page.route('**/web/lib/**', route => route.abort());
-            await page.route('**/esm.sh/**', route => route.abort());
-
-            const result = await page.evaluate(async () => {
-                const loader = await import('/web/preact-loader.js');
-                if (loader.resetLoader) {
-                    loader.resetLoader();
+	        test('should report error via getLoadError after failure', async ({ page }) => {
+	            const result = await page.evaluate(async () => {
+	                const loader = await import('/web/preact-loader.js');
+	                if (loader.resetLoader) {
+	                    loader.resetLoader();
                 }
 
                 try {
