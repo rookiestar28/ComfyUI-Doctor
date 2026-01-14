@@ -57,6 +57,10 @@ class AnalysisContext:
     
     # R12 / LLM Data
     llm_context: Optional[Dict[str, Any]] = None
+    
+    # R14: Error Context Extraction
+    error_summary: Optional[str] = None  # Short summary (exception type + message)
+    execution_logs: List[str] = field(default_factory=list)  # Recent log lines from ring buffer
 
     def __post_init__(self) -> None:
         # Ensure metadata contract version is always present

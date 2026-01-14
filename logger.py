@@ -28,11 +28,21 @@ try:
     from .analyzer import ErrorAnalyzer
     from .config import CONFIG
     from .history_store import HistoryStore, HistoryEntry
+    from services.log_ring_buffer import get_ring_buffer
+    from services.context_extractor import detect_fatal_pattern
 except ImportError:
     # Fallback for direct execution (tests)
     from analyzer import ErrorAnalyzer
     from config import CONFIG
     from history_store import HistoryStore, HistoryEntry
+    try:
+        from services.log_ring_buffer import get_ring_buffer
+    except ImportError:
+        get_ring_buffer = None
+    try:
+        from services.context_extractor import detect_fatal_pattern
+    except ImportError:
+        detect_fatal_pattern = None
 
 
 # ==============================================================================
@@ -281,6 +291,14 @@ class SafeStreamWrapper:
             self._queue.put_nowait(data, priority=priority)
         except Exception:
             pass
+        
+        # R14: Add to ring buffer for reliable log context capture
+        try:
+            if get_ring_buffer:
+                ring_buffer = get_ring_buffer()
+                ring_buffer.add_line(data)
+        except Exception:
+            pass  # Never fail on ring buffer operations
 
     def flush(self):
         """Flush original stream."""
@@ -370,7 +388,17 @@ class DoctorLogProcessor(threading.Thread):
                 return  # Skip Doctor's own output to prevent recursion
 
         # P3: Urgent single-line warnings (immediate analysis)
-        if "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message:
+        # R14: Enhanced with detect_fatal_pattern for non-traceback errors
+        is_urgent = "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message
+        
+        # R14: Check for fatal patterns (CUDA OOM, CRITICAL, etc.)
+        if not is_urgent and detect_fatal_pattern:
+            fatal_marker = detect_fatal_pattern(message)
+            if fatal_marker:
+                is_urgent = True
+                logging.debug(f"[Doctor] R14 fatal pattern detected: {fatal_marker}")
+        
+        if is_urgent:
             result = ErrorAnalyzer.analyze(message)
             suggestion, metadata = result if result else (None, None)
             if suggestion:

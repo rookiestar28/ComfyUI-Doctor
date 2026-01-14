@@ -292,7 +292,7 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **R14**: Error context extraction & prompt packaging optimization - 🔴 High ⚠️ *Use dev branch*
+- [x] **R14**: Error context extraction & prompt packaging optimization - 🔴 High ✅ *Completed (2026-01-14)*
   - **Problem**: LLM context is often dominated by raw tracebacks; log context capture is unreliable; env/pip list can waste tokens.
   - **Approach**:
     - Add `error_summary` before full traceback (exception line + optional pattern/category)
@@ -300,6 +300,16 @@ graph TD
     - Expand non-traceback error triggers (single-line fatals, validation failures) with strict dedup/noise filtering
     - Build structured LLM context via pipeline (`llm_builder.py`) + token budgets (R12) instead of ad-hoc string concatenation
   - **Plan**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_OPTIMIZATION_PLAN.md`
+  - **Implementation Record**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_IMPLEMENTATION_RECORD.md`
+- [ ] **R15**: Canonicalize `system_info` + populate pipeline `execution_logs` - 🟡 Medium 🧩 *Follow-up*
+  - **Context**: R14 core is complete; remaining improvements are quality/consistency enhancements (not gating R14 acceptance).
+  - **Scope**:
+    - Normalize `get_system_environment()` output into a PromptComposer-friendly canonical shape (single schema across endpoints)
+    - Implement smart package selection for `system_info.packages` (keyword-based filtering; strict cap by default)
+    - Populate pipeline context `execution_logs` from `LogRingBuffer` (so pipeline and endpoints share the same log source)
+  - **Acceptance**:
+    - Prompts show consistent `system_info` formatting regardless of endpoint
+    - Pipeline-produced LLM context includes recent execution logs without relying on ComfyUI handler `.buffer`
 - [x] **R12**: Smart Token Budget Management - 🟡 Medium ✅ *Completed (2026-01-10)*
   - **Core Strategy**: Progressive trimming system with token estimation for LLM context management
   - **Implemented Features**:
@@ -315,8 +325,8 @@ graph TD
     - **Enhanced Metadata**: R12Metadata v1.0 schema for observability
     - **A/B Validation Harness**: Quality metrics tracking (`scripts/r12_ab_harness.py`)
   - **Deferred Features** (not implemented):
-    - ⏸️ Smart pip list filtering (keyword extraction from errors) → planned in **R14**
-    - ⏸️ Stack frame collapsing (first 5 + last 5 frames) → planned in **R14**
+    - ⏸️ Smart pip list filtering (keyword extraction from errors) → follow-up in **R15**
+    - ✅ Stack frame collapsing (first N + last M frames) → delivered in **R14**
   - **Cost Impact**: 40-60% token reduction estimated, saving $24-36 per 1000 analyses (GPT-4)
   - **Implementation**: `.planning/260110-R12_SMART_TOKEN_BUDGET_IMPLEMENTATION_RECORD.md`
   - **Integration**: `services/token_estimator.py`, `services/workflow_pruner.py`, `services/token_budget.py`

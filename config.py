@@ -67,6 +67,10 @@ class DiagnosticsConfig:
     r12_prune_default_nodes: int = 40
     r12_overhead_fixed: int = 1000  # Fixed overhead (reserved tokens for structure)
     
+    # R14: Error Context Extraction & Prompt Optimization
+    r14_use_prompt_composer: bool = True  # Use PromptComposer for unified context formatting
+    r14_use_legacy_format: bool = False   # Fallback to legacy format (traceback-first)
+    
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
         return asdict(self)

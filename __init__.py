@@ -57,6 +57,7 @@ from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_s
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig
+from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
 
 # Global R12 Service
 TOKEN_BUDGET_SERVICE = TokenBudgetService()
@@ -326,19 +327,23 @@ def collect_error_context(error_data, workflow_data):
     if "traceback" in error_data:
         context["traceback"] = error_data["traceback"]
 
-    # 2. Get recent ComfyUI logs (last 50 lines)
-    # Try to read from ComfyUI's logger buffer
+    # 2. Get recent execution logs (R14: Prefer ring buffer for reliability)
+    # Ring buffer captures ALL stdout/stderr lines, not just ComfyUI logger output
     try:
-        comfy_logger = logging.getLogger("comfyui")
-        if hasattr(comfy_logger, 'handlers'):
-            for handler in comfy_logger.handlers:
-                if hasattr(handler, 'buffer'):
-                    # Get last 50 log entries
-                    context["execution_logs"] = handler.buffer[-50:]
-                    break
+        from services.log_ring_buffer import get_ring_buffer
+        ring_buffer = get_ring_buffer()
+        context["execution_logs"] = ring_buffer.get_recent(50)
     except Exception:
-        # Fallback: No logs available
-        pass
+        # Fallback: Try ComfyUI's logger buffer (legacy behavior)
+        try:
+            comfy_logger = logging.getLogger("comfyui")
+            if hasattr(comfy_logger, 'handlers'):
+                for handler in comfy_logger.handlers:
+                    if hasattr(handler, 'buffer'):
+                        context["execution_logs"] = handler.buffer[-50:]
+                        break
+        except Exception:
+            pass  # No logs available
 
     # 3. Get failed node details
     node_id = error_data.get("node_id")
@@ -1060,23 +1065,63 @@ try:
                 f"Respond in {language}. Be concise but thorough."
             )
             
-            user_prompt = f"Error:\n{error_text}\n\n"
-            if node_context:
-                user_prompt += f"Node Context: {json.dumps(node_context, indent=2)}\n\n"
+            # R14: Use PromptComposer for unified context formatting
+            if CONFIG.r14_use_prompt_composer:
+                try:
+                    from services.context_extractor import extract_error_summary
+                    
+                    # Extract error summary for summary-first ordering
+                    error_summary_obj = extract_error_summary(error_text)
+                    error_summary_str = error_summary_obj.to_string() if error_summary_obj else error_text[:200]
+                    
+                    # Build llm_context compatible with PromptComposer
+                    llm_context = {
+                        "error_summary": error_summary_str,
+                        "node_info": node_context if node_context else {},
+                        "traceback": error_text,
+                        "execution_logs": [],  # Not available in analyze endpoint
+                        "workflow_subset": workflow,
+                        "system_info": {}  # Will be added below
+                    }
+                    
+                    # F10: Add system environment
+                    try:
+                        env_info = get_system_environment()
+                        llm_context["system_info"] = env_info
+                    except Exception:
+                        pass
+                    
+                    composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
+                    prompt_composer = get_prompt_composer()
+                    user_prompt = prompt_composer.compose(llm_context, composer_config)
+                    
+                    logger.info("[R14] PromptComposer used for /doctor/analyze")
+                except Exception as r14_err:
+                    logger.warning(f"[R14] PromptComposer failed in /doctor/analyze, falling back to legacy: {r14_err}")
+                    # Fall through to legacy format
+                    user_prompt = None
+            else:
+                user_prompt = None
+            
+            # Legacy format (fallback or when R14 disabled)
+            if user_prompt is None:
+                user_prompt = f"Error:\n{error_text}\n\n"
+                if node_context:
+                    user_prompt += f"Node Context: {json.dumps(node_context, indent=2)}\n\n"
 
-            # F3: Include workflow context if available
-            if workflow:
-                user_prompt += f"Workflow Structure (simplified):\n{workflow}\n\n"
+                # F3: Include workflow context if available
+                if workflow:
+                    user_prompt += f"Workflow Structure (simplified):\n{workflow}\n\n"
 
-            # F10: Include system environment context for better debugging
-            try:
-                env_info = get_system_environment()
-                env_text = format_env_for_llm(env_info, max_packages=30)
-                user_prompt += f"{env_text}\n\n"
-            except Exception as env_err:
-                # Don't fail the entire analysis if env collection fails
-                logger.warning(f"Failed to collect environment info: {env_err}")
-                user_prompt += "[System environment info unavailable]\n\n"
+                # F10: Include system environment context for better debugging
+                try:
+                    env_info = get_system_environment()
+                    env_text = format_env_for_llm(env_info, max_packages=30)
+                    user_prompt += f"{env_text}\n\n"
+                except Exception as env_err:
+                    # Don't fail the entire analysis if env collection fails
+                    logger.warning(f"Failed to collect environment info: {env_err}")
+                    user_prompt += "[System environment info unavailable]\n\n"
             
             # Normalize Base URL
             base_url = base_url.rstrip("/")
@@ -1331,7 +1376,8 @@ try:
                 logger.warning("privacy_mode=none is only allowed for verified local providers; using basic")
 
             # Build system prompt with error context
-            error_text = error_context.get("error", "")
+            # R14: Support both "error" and "last_error" keys for compatibility
+            error_text = error_context.get("error") or error_context.get("last_error", "")
             node_context = error_context.get("node_context", {})
             workflow = error_context.get("workflow", "")
 
@@ -1369,20 +1415,21 @@ try:
                     logger.warning("Failed to parse workflow JSON for enhanced context")
 
             # Option B Phase 1: Collect enhanced error context
+            # R14: Support both "error" and "last_error" keys
             enriched_context = None
-            if error_context and error_context.get("error"):
+            canonical_error = error_context.get("error") or error_context.get("last_error")
+            if error_context and canonical_error:
                 # Build error_data dict from error_context
                 error_data = {
-                    "exception_message": error_context.get("error", ""),
+                    "exception_message": canonical_error,
                     "exception_type": error_context.get("error_type", "Unknown"),
                     "node_id": node_context.get("node_id") if node_context else None,
                     "traceback": error_context.get("traceback")
                 }
                 enriched_context = collect_error_context(error_data, workflow_data)
 
-            # Option B Phase 2: Categorize error type using keyword matching
             error_category = None
-            if error_context and error_context.get("error"):
+            if error_context and canonical_error:
                 # Categorize using the full error_context dict for better keyword matching
                 error_category = categorize_error(error_context)
                 logger.info(f"Error categorized as: {error_category['category']} (confidence: {error_category['confidence']:.0%})")
@@ -1411,45 +1458,94 @@ try:
                     # Use enhanced error analysis template with language directive
                     system_prompt = get_error_analysis_prompt(user_lang_code)
 
-                    # Add enriched error context
-                    system_prompt += f"\n\n**ERROR CONTEXT**:\n"
-                    system_prompt += f"Error Type: {enriched_context['error_type']}\n"
-                    system_prompt += f"Error Message: {enriched_context['error_message']}\n"
+                    # R14: Use PromptComposer for unified context formatting
+                    r14_composer_succeeded = False  # Track success for fallback logic
+                    if CONFIG.r14_use_prompt_composer:
+                        try:
+                            r14_composer_succeeded = True  # Assume success until exception
+                            # Build llm_context compatible with PromptComposer
+                            from services.context_extractor import extract_error_summary
+                            
+                            # Extract error summary for summary-first ordering
+                            traceback_text = str(enriched_context.get('traceback', ''))
+                            error_summary_obj = extract_error_summary(traceback_text)
+                            error_summary_str = error_summary_obj.to_string() if error_summary_obj else enriched_context['error_message']
+                            
+                            llm_context = {
+                                "error_summary": error_summary_str,
+                                "node_info": {
+                                    "node_id": enriched_context.get('failed_node', {}).get('id'),
+                                    "node_name": enriched_context.get('failed_node', {}).get('title'),
+                                    "node_class": enriched_context.get('failed_node', {}).get('class_type'),
+                                },
+                                "traceback": traceback_text,
+                                "execution_logs": enriched_context.get('execution_logs', []),
+                                "workflow_subset": enriched_context.get('workflow_structure'),
+                                "system_info": {}  # Added by F10 below
+                            }
+                            
+                            composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
+                            prompt_composer = get_prompt_composer()
+                            context_block = prompt_composer.compose(llm_context, composer_config)
+                            
+                            system_prompt += f"\n\n{context_block}"
+                            
+                            # Add error category if available
+                            if error_category:
+                                system_prompt += f"\n\n**ERROR CATEGORY** (auto-detected):\n"
+                                system_prompt += f"Category: {error_category['category']}\n"
+                                system_prompt += f"Confidence: {error_category['confidence']:.0%}\n"
+                                system_prompt += f"Suggested Approach: {error_category['suggested_approach']}\n"
+                            
+                            logger.info("[R14] PromptComposer used for context formatting")
+                        except Exception as r14_err:
+                            logger.warning(f"[R14] PromptComposer failed, falling back to legacy: {r14_err}")
+                            # R14: Use local flag, NOT global CONFIG mutation
+                            r14_composer_succeeded = False
+                    else:
+                        r14_composer_succeeded = False
+                    
+                    # Legacy format (fallback or when R14 disabled)
+                    if not r14_composer_succeeded:
+                        # Add enriched error context (legacy format)
+                        system_prompt += f"\n\n**ERROR CONTEXT**:\n"
+                        system_prompt += f"Error Type: {enriched_context['error_type']}\n"
+                        system_prompt += f"Error Message: {enriched_context['error_message']}\n"
 
-                    # Option B Phase 2: Add error category with suggested approach
-                    if error_category:
-                        system_prompt += f"\n**ERROR CATEGORY** (auto-detected):\n"
-                        system_prompt += f"Category: {error_category['category']}\n"
-                        system_prompt += f"Confidence: {error_category['confidence']:.0%}\n"
-                        system_prompt += f"Suggested Approach: {error_category['suggested_approach']}\n"
-                        if error_category['keywords_matched']:
-                            matched_kw_str = ', '.join(error_category['keywords_matched'][:5])  # Limit to 5
-                            system_prompt += f"Matched Keywords: {matched_kw_str}\n"
+                        # Option B Phase 2: Add error category with suggested approach
+                        if error_category:
+                            system_prompt += f"\n**ERROR CATEGORY** (auto-detected):\n"
+                            system_prompt += f"Category: {error_category['category']}\n"
+                            system_prompt += f"Confidence: {error_category['confidence']:.0%}\n"
+                            system_prompt += f"Suggested Approach: {error_category['suggested_approach']}\n"
+                            if error_category['keywords_matched']:
+                                matched_kw_str = ', '.join(error_category['keywords_matched'][:5])  # Limit to 5
+                                system_prompt += f"Matched Keywords: {matched_kw_str}\n"
 
-                    if enriched_context.get('traceback'):
-                        # Truncate traceback to prevent token overflow
-                        traceback_text = str(enriched_context['traceback'])
-                        if len(traceback_text) > 2000:
-                            traceback_text = traceback_text[:2000] + "\n[... truncated ...]"
-                        system_prompt += f"\nPython Stack Trace:\n```\n{traceback_text}\n```\n"
+                        if enriched_context.get('traceback'):
+                            # Truncate traceback to prevent token overflow
+                            traceback_text = str(enriched_context['traceback'])
+                            if len(traceback_text) > 2000:
+                                traceback_text = traceback_text[:2000] + "\n[... truncated ...]"
+                            system_prompt += f"\nPython Stack Trace:\n```\n{traceback_text}\n```\n"
 
-                    if enriched_context.get('failed_node'):
-                        node = enriched_context['failed_node']
-                        system_prompt += f"\nFailed Node: {node['class_type']} (ID: {node['id']})\n"
-                        if node.get('title'):
-                            system_prompt += f"Node Title: {node['title']}\n"
-                        system_prompt += f"Node Inputs: {json.dumps(node['inputs'], indent=2)}\n"
+                        if enriched_context.get('failed_node'):
+                            node = enriched_context['failed_node']
+                            system_prompt += f"\nFailed Node: {node['class_type']} (ID: {node['id']})\n"
+                            if node.get('title'):
+                                system_prompt += f"Node Title: {node['title']}\n"
+                            system_prompt += f"Node Inputs: {json.dumps(node['inputs'], indent=2)}\n"
 
-                    if enriched_context['workflow_structure'].get('upstream_nodes'):
-                        upstream_nodes = enriched_context['workflow_structure']['upstream_nodes']
-                        system_prompt += f"\nUpstream Nodes: {len(upstream_nodes)} connected\n"
-                        for up in upstream_nodes[:5]:  # Limit to 5 to prevent token overflow
-                            system_prompt += f"  - {up['class_type']} → {up['connection']}\n"
+                        if enriched_context['workflow_structure'].get('upstream_nodes'):
+                            upstream_nodes = enriched_context['workflow_structure']['upstream_nodes']
+                            system_prompt += f"\nUpstream Nodes: {len(upstream_nodes)} connected\n"
+                            for up in upstream_nodes[:5]:  # Limit to 5 to prevent token overflow
+                                system_prompt += f"  - {up['class_type']} → {up['connection']}\n"
 
-                    if enriched_context['workflow_structure'].get('missing_connections'):
-                        system_prompt += f"\n⚠️ Missing Required Connections:\n"
-                        for missing in enriched_context['workflow_structure']['missing_connections']:
-                            system_prompt += f"  - {missing['input']} (type: {missing['type']})\n"
+                        if enriched_context['workflow_structure'].get('missing_connections'):
+                            system_prompt += f"\n⚠️ Missing Required Connections:\n"
+                            for missing in enriched_context['workflow_structure']['missing_connections']:
+                                system_prompt += f"  - {missing['input']} (type: {missing['type']})\n"
                 else:
                     # Fallback to simple chat/debug prompt
                     system_prompt = (
