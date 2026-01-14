@@ -211,7 +211,7 @@ ComfyUI-Doctorは、すべてのエラーパターンに対して**継続的イ�
 
 ```bash
 # コミット前のローカル検証
-python run_pattern_tests.py
+python scripts/run_pattern_tests.py
 
 # 出力:
 ✅ All 57 patterns have required fields

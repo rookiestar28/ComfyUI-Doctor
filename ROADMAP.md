@@ -28,6 +28,8 @@ graph TD
     C --> I[AsyncFileWriter]
     C --> J[SafeStreamWrapper]
     C --> K[DoctorLogProcessor]
+    %% R14/R15: Log context ring buffer
+    C --> LRB[services/log_ring_buffer.py]
 
     %% A6 Pipeline Architecture
     D --> PIPE[pipeline/orchestrator.py]
@@ -48,6 +50,9 @@ graph TD
     TE --> TB
     SERV --> TB
     OUT --> SAN
+    %% R15: Pipeline context enrichment
+    S4 --> SYSI[system_info.py]
+    S4 --> LRB
 
     H --> N[patterns/builtin/]
     H --> O[patterns/community/]
@@ -101,6 +106,12 @@ graph TD
     AU --> BC[specs/telemetry.spec.js - 8 tests (requires ComfyUI backend)]
     AV --> AH
     AV --> AJ
+    
+    %% R14/R15: Prompt composition + canonical system info
+    B --> PC[services/prompt_composer.py]
+    AB --> PC
+    AG --> PC
+    PC --> SYSI
 ```
 
 ### 1.2 Module Overview
@@ -116,10 +127,13 @@ graph TD
 | `security.py` | ~150 | SSRF hardening helpers + counters for health endpoint |
 | `outbound.py` | ~60 | Non-bypassable outbound sanitization boundary for remote requests |
 | `sanitizer.py` | ~320 | PII sanitization engine with `none/basic/strict` modes |
+| `system_info.py` | ~400 | Environment collection + R15 canonical `system_info` schema (capped, keyword-prioritized packages) |
 | `session_manager.py` | ~210 | R7: Shared aiohttp session, rate/concurrency limiter management |
 | `rate_limiter.py` | ~130 | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
 | `llm_client.py` | ~290 | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
 | `services/` | ~670 | R12: Token estimation, budget management, workflow pruning |
+| `services/prompt_composer.py` | ~260 | R14: Unified structured context → prompt formatting (summary-first) |
+| `services/log_ring_buffer.py` | ~190 | R14/R15: Bounded execution log capture for context building |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
 | `i18n.py` | 1400+ | Internationalization: 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko), 57 pattern translations |
 | `config.py` | 65 | Config management: dataclass + JSON persistence |
@@ -194,7 +208,7 @@ graph TD
 #### Testing (Phase 1-3)
 
 - ✅ **T1**: API endpoint unit tests
-- ✅ **T6**: Fix test import issues (use `run_tests.ps1`)
+- ✅ **T6**: Fix test import issues (use `scripts/run_tests.ps1`)
 - ✅ **T7**: SSE/chat safety tests (stream parser + sanitizer)
 
 #### Features (Phase 2-3)
@@ -301,15 +315,13 @@ graph TD
     - Build structured LLM context via pipeline (`llm_builder.py`) + token budgets (R12) instead of ad-hoc string concatenation
   - **Plan**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_OPTIMIZATION_PLAN.md`
   - **Implementation Record**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_IMPLEMENTATION_RECORD.md`
-- [ ] **R15**: Canonicalize `system_info` + populate pipeline `execution_logs` - 🟡 Medium 🧩 *Follow-up*
-  - **Context**: R14 core is complete; remaining improvements are quality/consistency enhancements (not gating R14 acceptance).
+- [x] **R15**: Canonicalize `system_info` + populate pipeline `execution_logs` - 🟡 Medium ✅ *Completed (2026-01-14)*
   - **Scope**:
-    - Normalize `get_system_environment()` output into a PromptComposer-friendly canonical shape (single schema across endpoints)
-    - Implement smart package selection for `system_info.packages` (keyword-based filtering; strict cap by default)
+    - Canonicalize `get_system_environment()` output into a PromptComposer-friendly schema (OS/Python/CUDA/PyTorch + capped packages)
+    - Smart package selection for `system_info.packages` (error-keyword-based; strict cap by default)
     - Populate pipeline context `execution_logs` from `LogRingBuffer` (so pipeline and endpoints share the same log source)
-  - **Acceptance**:
-    - Prompts show consistent `system_info` formatting regardless of endpoint
-    - Pipeline-produced LLM context includes recent execution logs without relying on ComfyUI handler `.buffer`
+  - **Plan**: `.planning/260114-R15_SYSTEM_INFO_CANONICALIZATION_AND_PIPELINE_LOGS_PLAN.md`
+  - **Implementation Record**: `.planning/260114-R15_SYSTEM_INFO_CANONICALIZATION_AND_PIPELINE_LOGS_RECORD.md`
 - [x] **R12**: Smart Token Budget Management - 🟡 Medium ✅ *Completed (2026-01-10)*
   - **Core Strategy**: Progressive trimming system with token estimation for LLM context management
   - **Implemented Features**:
@@ -325,7 +337,7 @@ graph TD
     - **Enhanced Metadata**: R12Metadata v1.0 schema for observability
     - **A/B Validation Harness**: Quality metrics tracking (`scripts/r12_ab_harness.py`)
   - **Deferred Features** (not implemented):
-    - ⏸️ Smart pip list filtering (keyword extraction from errors) → follow-up in **R15**
+    - ✅ Smart pip list filtering (keyword extraction from errors) → delivered in **R15**
     - ✅ Stack frame collapsing (first N + last M frames) → delivered in **R14**
   - **Cost Impact**: 40-60% token reduction estimated, saving $24-36 per 1000 analyses (GPT-4)
   - **Implementation**: `.planning/260110-R12_SMART_TOKEN_BUDGET_IMPLEMENTATION_RECORD.md`

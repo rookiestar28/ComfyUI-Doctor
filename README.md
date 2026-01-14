@@ -1,6 +1,6 @@
 # ComfyUI-Doctor
 
-[繁中](readme/README.zh-TW.md) | [简中](readme/README.zh-CN.md) | [日本語](readme/README.ja.md) | [한국어](readme/README.ko.md) | [Deutsch](readme/README.de.md) | [Français](readme/README.fr.md) | [Italiano](readme/README.it.md) | [Español](readme/README.es.md) | English | [Roadmap & Development Status](ROADMAP.md)
+[繁中](docs/readme/README.zh-TW.md) | [简中](docs/readme/README.zh-CN.md) | [日本語](docs/readme/README.ja.md) | [한국어](docs/readme/README.ko.md) | [Deutsch](docs/readme/README.de.md) | [Français](docs/readme/README.fr.md) | [Italiano](docs/readme/README.it.md) | [Español](docs/readme/README.es.md) | English | [Roadmap & Development Status](ROADMAP.md)
 
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
@@ -197,7 +197,7 @@ ComfyUI-Doctor now includes **continuous integration testing** for all error pat
 
 ```bash
 # Local validation before commit
-python run_pattern_tests.py
+python scripts/run_pattern_tests.py
 
 # Output:
 ✅ All 57 patterns have required fields

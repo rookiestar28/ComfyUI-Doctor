@@ -1,5 +1,5 @@
 # PowerShell script for linting and type checking
-# Usage: .\lint.ps1 [--fix]
+# Usage: .\scripts\lint.ps1 [--fix]
 
 param(
     [switch]$Fix
@@ -33,7 +33,7 @@ if ($Fix) {
 }
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "⚠️  Ruff found issues. Run '.\lint.ps1 -Fix' to auto-fix." -ForegroundColor Yellow
+    Write-Host "⚠️  Ruff found issues. Run '.\scripts\\lint.ps1 -Fix' to auto-fix." -ForegroundColor Yellow
 }
 
 Write-Host "`n🔎 Step 2: MyPy Type Checker" -ForegroundColor Yellow

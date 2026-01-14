@@ -4,7 +4,8 @@
 *.pyd
 .DS_Store
 .vscode/
-REFERENCE/*
+REFERENCE/
+docs/reference/
 logs/*
 !logs/.gitkeep
 AGENT_CONTEXT.md

@@ -8,8 +8,8 @@
     relative imports in __init__.py (T6 issue).
     
 .EXAMPLE
-    .\run_tests.ps1
-    .\run_tests.ps1 -Verbose
+    .\scripts\run_tests.ps1
+    .\scripts\run_tests.ps1 -Verbose
 #>
 
 param(

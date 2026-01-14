@@ -211,7 +211,7 @@ ComfyUI-Doctor에는 모든 오류 패턴에 대한 **지속적인 통합 테스
 
 ```bash
 # 커밋 전 로컬 검증
-python run_pattern_tests.py
+python scripts/run_pattern_tests.py
 
 # 출력:
 ✅ All 57 patterns have required fields

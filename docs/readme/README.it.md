@@ -211,7 +211,7 @@ ComfyUI-Doctor ora include **test di integrazione continua** per tutti i pattern
 
 ```bash
 # Validazione locale prima del commit
-python run_pattern_tests.py
+python scripts/run_pattern_tests.py
 
 # Output:
 ✅ All 57 patterns have required fields

@@ -278,7 +278,7 @@ def should_check_file(file_path: Path, project_root: Path) -> bool:
         '.venv/',
         'venv/',
         'node_modules/',
-        'REFERENCE/',
+        'docs/reference/',
         '__pycache__',
     ]
 

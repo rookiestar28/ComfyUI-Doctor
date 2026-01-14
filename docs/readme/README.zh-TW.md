@@ -211,7 +211,7 @@ ComfyUI-Doctor 現已包含針對所有錯誤模式的**持續整合測試**，�
 
 ```bash
 # 提交前的本地驗證
-python run_pattern_tests.py
+python scripts/run_pattern_tests.py
 
 # 輸出:
 ✅ All 57 patterns have required fields
