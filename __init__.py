@@ -51,7 +51,7 @@ from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
 from .config import CONFIG
 from .session_manager import SessionManager
-from .system_info import get_system_environment, format_env_for_llm
+from .system_info import get_system_environment, format_env_for_llm, canonicalize_system_info
 from .sanitizer import PIISanitizer, SanitizationLevel
 from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_ssrf_metrics
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
@@ -1084,10 +1084,14 @@ try:
                         "system_info": {}  # Will be added below
                     }
                     
-                    # F10: Add system environment
+                    # R15: Add canonicalized system environment
                     try:
                         env_info = get_system_environment()
-                        llm_context["system_info"] = env_info
+                        llm_context["system_info"] = canonicalize_system_info(
+                            env_info, 
+                            error_text=error_text,
+                            privacy_mode=privacy_mode
+                        )
                     except Exception:
                         pass
                     
@@ -1481,8 +1485,19 @@ try:
                                 "traceback": traceback_text,
                                 "execution_logs": enriched_context.get('execution_logs', []),
                                 "workflow_subset": enriched_context.get('workflow_structure'),
-                                "system_info": {}  # Added by F10 below
+                                "system_info": {}  # R15: Added below
                             }
+                            
+                            # R15: Add canonicalized system environment to llm_context
+                            try:
+                                _env_info = get_system_environment()
+                                llm_context["system_info"] = canonicalize_system_info(
+                                    _env_info, 
+                                    error_text=traceback_text,
+                                    privacy_mode=privacy_mode
+                                )
+                            except Exception:
+                                pass
                             
                             composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
                             prompt_composer = get_prompt_composer()
@@ -1497,7 +1512,7 @@ try:
                                 system_prompt += f"Confidence: {error_category['confidence']:.0%}\n"
                                 system_prompt += f"Suggested Approach: {error_category['suggested_approach']}\n"
                             
-                            logger.info("[R14] PromptComposer used for context formatting")
+                            logger.info("[R14/R15] PromptComposer used for context formatting with canonical system_info")
                         except Exception as r14_err:
                             logger.warning(f"[R14] PromptComposer failed, falling back to legacy: {r14_err}")
                             # R14: Use local flag, NOT global CONFIG mutation
@@ -1563,13 +1578,15 @@ try:
                     if workflow:
                         system_prompt += f"**Workflow (simplified):** {workflow}\n\n"
 
-            # F10: Include system environment context
-            try:
-                env_info = get_system_environment()
-                env_text = format_env_for_llm(env_info, max_packages=20)
-                system_prompt += f"\n{env_text}\n\n"
-            except Exception as env_err:
-                logger.warning(f"Failed to collect environment info for chat: {env_err}")
+            # F10/R15: Include system environment context
+            # R15: Only append legacy format if PromptComposer was NOT used (avoid duplicate env)
+            if not r14_composer_succeeded:
+                try:
+                    env_info = get_system_environment()
+                    env_text = format_env_for_llm(env_info, max_packages=20)
+                    system_prompt += f"\n{env_text}\n\n"
+                except Exception as env_err:
+                    logger.warning(f"Failed to collect environment info for chat: {env_err}")
 
             # Prepare request
             base_url = base_url.rstrip("/")

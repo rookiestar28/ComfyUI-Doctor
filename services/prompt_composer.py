@@ -159,7 +159,20 @@ class PromptComposer:
             return ""
     
     def _format_system_info(self, sys_info: Dict[str, Any], max_chars: int) -> str:
-        """Format system info with selective inclusion."""
+        """Format system info with selective inclusion.
+        
+        R15: Supports both canonical (torch_version, packages list) and legacy
+        (pytorch_info dict, installed_packages string) schemas by auto-detecting
+        and normalizing to canonical format.
+        """
+        # R15: Auto-canonicalize legacy format if needed
+        if not isinstance(sys_info.get("packages"), list) or "torch_version" not in sys_info:
+            try:
+                from system_info import canonicalize_system_info
+                sys_info = canonicalize_system_info(sys_info, max_packages=20)
+            except ImportError:
+                pass  # Fall through to best-effort formatting
+        
         parts = []
         
         # Include key info
@@ -171,6 +184,10 @@ class PromptComposer:
             parts.append(f"- CUDA: {'Available' if sys_info['cuda_available'] else 'Not Available'}")
         if sys_info.get("torch_version"):
             parts.append(f"- PyTorch: {sys_info['torch_version']}")
+        if sys_info.get("cuda_version"):
+            parts.append(f"- CUDA Version: {sys_info['cuda_version']}")
+        if sys_info.get("gpu_count"):
+            parts.append(f"- GPU Count: {sys_info['gpu_count']}")
         
         # Include error-referenced packages only
         if sys_info.get("packages"):

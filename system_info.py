@@ -7,7 +7,7 @@ import sys
 import platform
 import subprocess
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from functools import lru_cache
 
 
@@ -185,3 +185,221 @@ def clear_cache() -> None:
     _cache_timestamp = None
     _cached_env_info = None
     _get_torch_info.cache_clear()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# R15: SYSTEM INFO CANONICALIZATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Baseline packages always included (if present in pip freeze)
+_BASELINE_PACKAGES = frozenset([
+    'torch', 'pytorch', 'comfy', 'comfyui', 'numpy', 'pillow', 'pil',
+    'opencv', 'cv2', 'diffusers', 'transformers', 'safetensors',
+    'accelerate', 'xformers', 'triton'
+])
+
+# Runtime-related packages to prioritize when seen in error text
+_RUNTIME_KEYWORDS = frozenset([
+    'xformers', 'triton', 'onnx', 'onnxruntime', 'insightface',
+    'torch', 'cuda', 'tensorrt', 'bitsandbytes', 'flash_attn',
+    'segment_anything', 'groundingdino', 'mediapipe', 'ultralytics'
+])
+
+
+def _extract_package_keywords_from_error(error_text: str) -> set:
+    """
+    Extract package names referenced in error messages.
+    
+    Handles:
+    - ModuleNotFoundError: No module named 'pkg.sub'
+    - ImportError: cannot import name ... from 'pkg'
+    - Generic mentions of package names in traceback
+    
+    Returns:
+        Set of package name keywords (lowercase)
+    """
+    if not error_text:
+        return set()
+    
+    import re
+    keywords = set()
+    
+    # Pattern 1: ModuleNotFoundError: No module named 'pkg' or 'pkg.sub'
+    for match in re.finditer(r"No module named ['\"]([^'\"\.]+)", error_text, re.IGNORECASE):
+        keywords.add(match.group(1).lower())
+    
+    # Pattern 2: ImportError: cannot import name ... from 'pkg'
+    for match in re.finditer(r"cannot import name .+ from ['\"]([^'\"\.]+)", error_text, re.IGNORECASE):
+        keywords.add(match.group(1).lower())
+    
+    # Pattern 3: ModuleNotFoundError with full path like 'pkg.submodule'
+    for match in re.finditer(r"No module named ['\"]([^'\"]+)['\"]", error_text, re.IGNORECASE):
+        full_path = match.group(1)
+        if '.' in full_path:
+            keywords.add(full_path.split('.')[0].lower())
+    
+    # Pattern 4: Runtime keywords mentioned anywhere in error
+    error_lower = error_text.lower()
+    for kw in _RUNTIME_KEYWORDS:
+        if kw in error_lower:
+            keywords.add(kw)
+    
+    return keywords
+
+
+def _parse_packages_from_freeze(freeze_str: str) -> Dict[str, str]:
+    """
+    Parse pip freeze output into dict of {package_name_lower: 'pkg==version'}.
+    
+    Returns:
+        Dict mapping lowercase package name to original freeze line
+    """
+    packages = {}
+    if not freeze_str or freeze_str.startswith('['):
+        return packages
+    
+    for line in freeze_str.strip().split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        # Handle both '==' and other separators like '@' for editable installs
+        if '==' in line:
+            pkg_name = line.split('==')[0].lower().replace('-', '_').replace('.', '_')
+            packages[pkg_name] = line
+        elif '@' in line:
+            pkg_name = line.split('@')[0].strip().lower().replace('-', '_').replace('.', '_')
+            packages[pkg_name] = line
+    
+    return packages
+
+
+def _select_packages(
+    all_packages: Dict[str, str],
+    error_keywords: set,
+    max_packages: int
+) -> List[str]:
+    """
+    Select most relevant packages based on priority:
+    1. Error-referenced packages (from error text)
+    2. Baseline packages (core ML/ComfyUI dependencies)
+    3. Other runtime keywords
+    
+    Returns:
+        List of package strings (e.g., ['torch==2.1.0', 'numpy==1.24.0'])
+    """
+    selected = []
+    used_keys = set()
+    
+    # Priority 1: Error-referenced packages
+    for kw in error_keywords:
+        if kw in all_packages and kw not in used_keys:
+            selected.append(all_packages[kw])
+            used_keys.add(kw)
+            if len(selected) >= max_packages:
+                return selected
+    
+    # Priority 2: Baseline packages
+    for kw in _BASELINE_PACKAGES:
+        if kw in all_packages and kw not in used_keys:
+            selected.append(all_packages[kw])
+            used_keys.add(kw)
+            if len(selected) >= max_packages:
+                return selected
+    
+    # Priority 3: Runtime keywords
+    for kw in _RUNTIME_KEYWORDS:
+        if kw in all_packages and kw not in used_keys:
+            selected.append(all_packages[kw])
+            used_keys.add(kw)
+            if len(selected) >= max_packages:
+                return selected
+    
+    return selected
+
+
+def canonicalize_system_info(
+    env_info: Dict[str, Any],
+    *,
+    error_text: Optional[str] = None,
+    privacy_mode: str = "basic",
+    max_packages: int = 20
+) -> Dict[str, Any]:
+    """
+    R15: Transform raw system_info from get_system_environment() into canonical schema.
+    
+    Canonical schema:
+    {
+        "os": "Windows 11",
+        "python_version": "3.10.11",
+        "torch_version": "2.1.0+cu121",
+        "cuda_available": true,
+        "cuda_version": "12.1",
+        "gpu_count": 1,
+        "packages": ["torch==2.1.0", "xformers==0.0.23", ...],
+        "packages_total": 412,
+        "cache_age_seconds": 3600,
+        "source": "get_system_environment"
+    }
+    
+    Args:
+        env_info: Raw environment dict from get_system_environment() or already canonical
+        error_text: Optional error text for smart package keyword extraction
+        privacy_mode: 'none' | 'basic' | 'strict' - affects future sanitization passes
+        max_packages: Maximum number of packages to include (default 20)
+        
+    Returns:
+        Canonical system_info dict
+    """
+    # Check if already canonical (has flattened torch_version and packages list)
+    if isinstance(env_info.get("packages"), list) and "torch_version" in env_info:
+        # Already canonical, just ensure caps
+        result = dict(env_info)
+        if len(result.get("packages", [])) > max_packages:
+            result["packages"] = result["packages"][:max_packages]
+        return result
+    
+    # Build canonical schema
+    result: Dict[str, Any] = {
+        "source": "get_system_environment"
+    }
+    
+    # OS info (pass through)
+    if env_info.get("os"):
+        os_str = env_info["os"]
+        if env_info.get("os_version"):
+            os_str = f"{os_str} {env_info['os_version']}"
+        result["os"] = os_str
+    
+    # Python version (pass through)
+    if env_info.get("python_version"):
+        result["python_version"] = env_info["python_version"]
+    
+    # Flatten torch info from nested dict
+    pytorch_info = env_info.get("pytorch_info", {})
+    if isinstance(pytorch_info, dict):
+        if pytorch_info.get("pytorch_version"):
+            result["torch_version"] = pytorch_info["pytorch_version"]
+        result["cuda_available"] = pytorch_info.get("cuda_available", False)
+        if pytorch_info.get("cuda_version"):
+            result["cuda_version"] = pytorch_info["cuda_version"]
+        if pytorch_info.get("gpu_count"):
+            result["gpu_count"] = pytorch_info["gpu_count"]
+    
+    # Parse and select packages
+    freeze_str = env_info.get("installed_packages", "")
+    all_packages = _parse_packages_from_freeze(freeze_str)
+    
+    # Extract keywords from error text
+    error_keywords = _extract_package_keywords_from_error(error_text) if error_text else set()
+    
+    # Select packages with priority
+    selected_packages = _select_packages(all_packages, error_keywords, max_packages)
+    
+    result["packages"] = selected_packages
+    result["packages_total"] = len(all_packages)
+    
+    # Cache age (pass through)
+    if env_info.get("cache_age_seconds") is not None:
+        result["cache_age_seconds"] = env_info["cache_age_seconds"]
+    
+    return result
