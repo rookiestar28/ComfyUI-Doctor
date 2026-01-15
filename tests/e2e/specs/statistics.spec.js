@@ -632,11 +632,15 @@ test.describe('Statistics Dashboard', () => {
 
   test('should call reset API and show empty state after confirmation', async ({ page }) => {
     let resetApiCalled = false;
-    let statisticsCallCount = 0;
+    let statsReturnEmpty = false;
+
+    // Remove default handler so this test can deterministically control responses.
+    await page.unroute('**/doctor/statistics*').catch(() => {});
 
     // Override routes to track reset API and return empty stats after reset
     await page.route('**/doctor/statistics/reset', async route => {
       resetApiCalled = true;
+      statsReturnEmpty = true;
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -645,9 +649,9 @@ test.describe('Statistics Dashboard', () => {
     });
 
     await page.route('**/doctor/statistics*', async route => {
-      statisticsCallCount++;
-      // After reset (2nd+ call), return empty statistics
-      const stats = statisticsCallCount <= 1 ? MOCK_STATISTICS : EMPTY_STATISTICS;
+      // Stats requests may happen multiple times on initial mount/activation.
+      // Only switch to EMPTY_STATISTICS after the reset endpoint is called.
+      const stats = statsReturnEmpty ? EMPTY_STATISTICS : MOCK_STATISTICS;
       route.fulfill({
         status: 200,
         contentType: 'application/json',
