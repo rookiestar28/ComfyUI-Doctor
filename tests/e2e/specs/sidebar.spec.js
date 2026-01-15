@@ -289,7 +289,7 @@ test.describe('Doctor Chat Interface', () => {
 
     // Reload to apply flag
     await page.reload();
-    await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 10000 });
+    await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 10000 });
 
     // Use shared helper to assert fallback UI
     await assertChatFallbackUI(page);
@@ -369,7 +369,7 @@ test.describe('Doctor Chat Interface', () => {
 
     // Reload to apply flag
     await page.reload();
-    await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 10000 });
+    await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 10000 });
 
     // Switch to Stats tab
     await page.click('.doctor-tab-button[data-tab-id="stats"]');

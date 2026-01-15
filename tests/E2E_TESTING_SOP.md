@@ -34,6 +34,14 @@ Notes:
   Ensure `python` is available on PATH (WSL2 may only have `python3`).
 - If you use WSL and run from `/mnt/c/...`, set a writable temp directory to avoid
   Playwright transform cache permission errors (e.g. `.tmp/playwright` or `/tmp`).
+- If you use WSL and run from `/mnt/c/...`, Playwright may also fail to delete/write large
+  test artifacts (videos, HTML report) due to Windows/DrvFS permission semantics.
+  - Best: clone/move the repo into the WSL Linux filesystem (e.g. `~/src/ComfyUI-Doctor`).
+  - Alternative: redirect Playwright outputs using `PW_TEST_OUTPUT_DIR` and `PW_HTML_REPORT_DIR`.
+    `scripts/run-playwright.mjs` auto-defaults these to `/tmp/comfyui-doctor/playwright/...`
+    when it detects WSL + `/mnt/*`, so you usually don't need to set them manually.
+- If you run tests from a non-interactive shell (CI/automation/tools), `nvm` may not auto-load.
+  Run `source ~/.nvm/nvm.sh` and confirm `node -v` shows 18+ before `npm test`.
 
 ---
 
@@ -63,6 +71,7 @@ Expected result: `55 passed` with no failures.
 # From the repository root
 source ~/.nvm/nvm.sh
 nvm use 18
+node -v
 python3 --version
 
 # Provide `python` if only python3 exists (local shim)
@@ -115,6 +124,7 @@ npm test
 source ~/.nvm/nvm.sh
 nvm install 18
 nvm use 18
+node -v
 python3 --version
 ```
 

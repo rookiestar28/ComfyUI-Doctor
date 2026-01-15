@@ -9,6 +9,27 @@
 
 import { isPreactEnabled } from './preact-loader.js';
 
+// Default timeout for island render (prevents hangs when CDN/vendor loads stall)
+const DEFAULT_RENDER_TIMEOUT_MS = 8000;
+
+function getRenderTimeoutMs() {
+    const v = Number(globalThis?.__doctorIslandRenderTimeoutMs);
+    if (Number.isFinite(v) && v > 0) return v;
+    return DEFAULT_RENDER_TIMEOUT_MS;
+}
+
+async function withTimeout(promise, timeoutMs, timeoutMessage) {
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+    try {
+        return await Promise.race([promise, timeout]);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES (JSDoc)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -96,7 +117,12 @@ export async function mount(id, container, props = {}) {
 
     // Try to render with error boundary
     try {
-        await config.render(container, props);
+        const timeoutMs = getRenderTimeoutMs();
+        await withTimeout(
+            config.render(container, props),
+            timeoutMs,
+            `[IslandRegistry] Island "${id}" render timeout after ${timeoutMs}ms`
+        );
         mountedContainers.set(id, container);
         console.log(`[IslandRegistry] ✅ ${id} mounted`);
         return true;
@@ -212,4 +238,3 @@ export function _resetRegistry() {
     mountedContainers.clear();
     islandErrors.length = 0;
 }
-

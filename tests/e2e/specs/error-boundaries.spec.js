@@ -138,7 +138,7 @@ test.describe('Error Boundaries', () => {
         await page.goto('test-harness.html');
 
         // Wait for Doctor UI to initialize
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Wait for ErrorBoundary UI to appear
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
@@ -163,7 +163,7 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Verify error UI appears
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
@@ -189,7 +189,7 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Verify error UI appears
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
@@ -226,7 +226,7 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Wait for error UI
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
@@ -256,7 +256,7 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Chat should show error
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
@@ -294,7 +294,7 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Wait for error and logging
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
@@ -310,7 +310,7 @@ test.describe('Error Boundaries', () => {
     test('normal operation without error injection', async ({ page }) => {
         // No error injection - normal operation
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Error boundary should NOT appear
         await page.waitForTimeout(1000);
@@ -333,7 +333,7 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
         // Wait for error boundary to appear and logs to be captured
         await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });

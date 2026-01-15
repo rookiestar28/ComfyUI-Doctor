@@ -8,9 +8,7 @@
  */
 export async function waitForDoctorReady(page) {
   // Wait for the custom ready event
-  await page.waitForFunction(() => window.__doctorTestReady === true, {
-    timeout: 20000,
-  });
+  await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 20000 });
 
   // Ensure at least one tab's content has actually mounted (preact or vanilla).
   await page.waitForFunction(() => {
@@ -26,7 +24,7 @@ export async function waitForDoctorReady(page) {
       document.querySelector('#doctor-messages') ||
       document.querySelector('.chat-messages')
     );
-  }, { timeout: 20000 });
+  }, null, { timeout: 20000 });
 }
 
 /**

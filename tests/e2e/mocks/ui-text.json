@@ -18,6 +18,7 @@
     "save_settings_btn": "Save Settings",
     "language_label": "Language",
     "api_key_label": "API Key",
+    "api_key_tip": "Tip: Prefer using Google AI Studio's free API quota for AI debugging. For more info, see:",
     "api_key_placeholder": "Enter API key",
     "model_label": "Model",
     "model_name_label": "Model",
@@ -69,6 +70,7 @@
     "tab_settings": "設定",
     "no_errors_detected": "エラーなし",
     "system_running_smoothly": "システムは正常に動作中",
+    "api_key_tip": "ヒント：AI デバッグには、まず Google AI Studio の無料 API 枠の利用をおすすめします。詳しくは：",
     "statistics_title": "エラー統計",
     "stats_total_errors": "合計 (30日)",
     "stats_last_24h": "過去24時間"

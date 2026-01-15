@@ -146,9 +146,12 @@ const MOCK_UI_TEXT_JA = {
 /**
  * Setup all required mocks for Doctor statistics
  * IMPORTANT: Call this BEFORE page.goto() to ensure routes intercept requests
- * Each test gets a fresh page instance, so no need to clear previous routes
+ * When re-calling within a test (before reload), old routes are cleared first.
  */
 async function setupMocks(page, options = {}) {
+  // Clear any previously registered routes to avoid stacking conflicts
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+
   const uiText = options.uiText || MOCK_UI_TEXT_EN;
   const statistics = options.statistics || MOCK_STATISTICS;
 
@@ -190,6 +193,80 @@ async function setupMocks(page, options = {}) {
 
   await page.route('**/doctor/mark_resolved', route => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, message: 'Status updated' }) });
+  });
+
+  // Trust & Health mocks (moved from settings.spec.js)
+  await page.route('**/doctor/health', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        health: {
+          logger: { dropped_messages: 2 },
+          ssrf: { blocked_total: 1 },
+          last_analysis: { timestamp: '2026-01-10T00:00:00Z', pipeline_status: 'ok' }
+        }
+      })
+    });
+  });
+
+  await page.route('**/doctor/plugins', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        plugins: {
+          config: { enabled: false, allowlist_count: 0, signature_required: false },
+          trust_counts: { untrusted: 1 },
+          plugins: [
+            { file: 'example.py', plugin_id: 'example.plugin', trust: 'untrusted', reason: 'not_allowlisted' }
+          ]
+        }
+      })
+    });
+  });
+
+  // Telemetry mocks
+  await page.route('**/doctor/telemetry/status', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, enabled: false, stats: { count: 5 } })
+    });
+  });
+
+  await page.route('**/doctor/telemetry/toggle', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, enabled: true })
+    });
+  });
+
+  await page.route('**/doctor/telemetry/buffer', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, events: [{ type: 'test', ts: '2026-01-10T00:00:00Z' }] })
+    });
+  });
+
+  await page.route('**/doctor/telemetry/clear', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true })
+    });
+  });
+
+  await page.route('**/doctor/telemetry/export', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ events: [] })
+    });
   });
 }
 
@@ -475,5 +552,69 @@ test.describe('Statistics Dashboard', () => {
       timestamp: '2026-01-08T12:00:00Z',
       status: 'resolved'
     });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Trust & Health Tests (Moved from Settings tab - 260115 Plan)
+  // ════════════════════════════════════════════════════════════════════════
+
+  test('should display Trust & Health panel in Statistics tab', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(100);
+
+    const trustHealthPanel = page.locator('#doctor-trust-health-panel');
+    await expect(trustHealthPanel).toBeVisible();
+    await expect(trustHealthPanel).toContainText('Trust');
+  });
+
+  test('should load health and plugin trust report on refresh', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+
+    const refreshBtn = page.locator('#doctor-trust-health-refresh-btn');
+    await expect(refreshBtn).toBeVisible();
+    await refreshBtn.click();
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('#doctor-health-output')).toContainText('pipeline_status=ok');
+    await expect(page.locator('#doctor-health-output')).toContainText('ssrf_blocked=1');
+    await expect(page.locator('#doctor-health-output')).toContainText('dropped_logs=2');
+
+    await expect(page.locator('#doctor-plugins-output')).toContainText('example.plugin');
+    await expect(page.locator('#doctor-plugins-output')).toContainText('untrusted');
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Telemetry Tests (Moved from Settings tab - 260115 Plan)
+  // ════════════════════════════════════════════════════════════════════════
+
+  test('should display Telemetry panel in Statistics tab', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(100);
+
+    const telemetryPanel = page.locator('#doctor-telemetry-panel');
+    await expect(telemetryPanel).toBeVisible();
+    await expect(telemetryPanel).toContainText('Telemetry');
+  });
+
+  test('should display telemetry toggle and buttons', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(200);
+
+    const viewBtn = page.locator('#doctor-telemetry-view-btn');
+    const clearBtn = page.locator('#doctor-telemetry-clear-btn');
+    const exportBtn = page.locator('#doctor-telemetry-export-btn');
+
+    await expect(viewBtn).toBeVisible();
+    await expect(clearBtn).toBeVisible();
+    await expect(exportBtn).toBeVisible();
+  });
+
+  test('should show telemetry buffer count', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(300);
+
+    // Mock returns count: 5
+    const statsText = page.locator('#doctor-telemetry-stats');
+    await expect(statsText).toContainText(/5|buffered/i);
   });
 });

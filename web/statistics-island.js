@@ -332,6 +332,215 @@ function CategoryBreakdown({ breakdown, total, uiText }) {
     `;
 }
 
+/**
+ * Trust & Health Section Component (Moved from Settings tab)
+ * Displays /doctor/health and /doctor/plugins info
+ */
+function TrustHealthSection({ uiText }) {
+    const { html, useState } = preactModules;
+
+    const [healthData, setHealthData] = useState(null);
+    const [pluginsData, setPluginsData] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const refreshTrustHealth = async () => {
+        setLoading(true);
+        try {
+            const healthRes = await DoctorAPI.getHealth();
+            setHealthData(healthRes?.success ? healthRes.health : { error: healthRes?.error || 'Failed' });
+
+            const pluginsRes = await DoctorAPI.getPluginsReport();
+            setPluginsData(pluginsRes?.success ? pluginsRes.plugins : { error: pluginsRes?.error || 'Failed' });
+        } catch (e) {
+            setHealthData({ error: e?.message || 'error' });
+            setPluginsData(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const renderBadge = (trust) => {
+        const colors = {
+            trusted: { bg: 'rgba(76, 175, 80, 0.18)', border: 'rgba(76, 175, 80, 0.35)', fg: '#c8f7c5' },
+            unsigned: { bg: 'rgba(255, 193, 7, 0.14)', border: 'rgba(255, 193, 7, 0.35)', fg: '#ffe5b4' },
+            untrusted: { bg: 'rgba(244, 67, 54, 0.14)', border: 'rgba(244, 67, 54, 0.35)', fg: '#ffd6d6' },
+            blocked: { bg: 'rgba(244, 67, 54, 0.20)', border: 'rgba(244, 67, 54, 0.45)', fg: '#ffbdbd' },
+        };
+        const c = colors[trust] || { bg: 'rgba(158,158,158,0.10)', border: 'rgba(158,158,158,0.25)', fg: '#ddd' };
+        return html`<span style="display:inline-block; padding:2px 6px; border-radius:999px; font-size:11px; border:1px solid ${c.border}; background:${c.bg}; color:${c.fg};">${trust || 'unknown'}</span>`;
+    };
+
+    const healthText = healthData?.error
+        ? `Health: ${healthData.error}`
+        : healthData
+            ? `Health: pipeline_status=${healthData.last_analysis?.pipeline_status || 'unknown'}, ssrf_blocked=${healthData.ssrf?.blocked_total ?? 0}, dropped_logs=${healthData.logger?.dropped_messages ?? 0}`
+            : uiText?.trust_health_hint || 'Fetch /doctor/health and plugin trust report (scan-only).';
+
+    return html`
+        <div id="doctor-trust-health-panel" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #aaa;">
+                    🛡️ <span>${uiText?.trust_health_title || 'Trust & Health'}</span>
+                </div>
+                <button id="doctor-trust-health-refresh-btn" onClick=${refreshTrustHealth} disabled=${loading} style="padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 12px;" title="${uiText?.refresh_btn || 'Refresh'}">${loading ? '⏳' : '🔄'}</button>
+            </div>
+            <div id="doctor-health-output" style="margin-top: 10px; font-size: 12px; color: #bbb; line-height: 1.4;">
+                ${healthText}
+            </div>
+            <div id="doctor-plugins-output" style="margin-top: 10px; font-size: 12px; color: #bbb; line-height: 1.4;">
+                ${pluginsData?.error
+            ? `Plugins: ${pluginsData.error}`
+            : pluginsData?.plugins?.length > 0
+                ? html`
+                            <div style="color:#aaa; font-size:12px; margin-bottom:6px;">
+                                Plugins: ${pluginsData.config?.enabled ? 'enabled' : 'disabled'}, allowlist=${pluginsData.config?.allowlist_count ?? 0}, signature=${pluginsData.config?.signature_required ? 'required' : 'optional'}
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                ${pluginsData.plugins.slice(0, 10).map(p => html`
+                                    <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #333; border-radius:6px; background:#161616;">
+                                        ${renderBadge(p.trust)}
+                                        <div style="flex:1; min-width:0;">
+                                            <div style="font-size:12px; color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.plugin_id || p.file || 'unknown'}</div>
+                                            <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.file || ''}${p.reason ? ` • ${p.reason}` : ''}</div>
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
+                            <div style="margin-top:8px; font-size:11px; color:#888;">
+                                Trust counts: ${Object.entries(pluginsData.trust_counts || {}).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}
+                            </div>
+                        `
+                : ''
+        }
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Telemetry Section Component (Moved from Settings tab)
+ * Toggle, view buffer, clear, export telemetry data
+ */
+function TelemetrySection({ uiText }) {
+    const { html, useState, useEffect } = preactModules;
+
+    const [enabled, setEnabled] = useState(false);
+    const [bufferCount, setBufferCount] = useState(0);
+    const [message, setMessage] = useState(null);
+
+    const updateStatus = async () => {
+        try {
+            const res = await fetch('/doctor/telemetry/status');
+            const data = await res.json();
+            if (data.success) {
+                setEnabled(data.enabled);
+                setBufferCount(data.stats?.count || 0);
+            }
+        } catch (e) {
+            console.warn('[TelemetrySection] Status unavailable');
+        }
+    };
+
+    useEffect(() => { updateStatus(); }, []);
+
+    const handleToggle = async () => {
+        try {
+            const res = await fetch('/doctor/telemetry/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !enabled })
+            });
+            const data = await res.json();
+            setEnabled(data.enabled);
+            updateStatus();
+        } catch (e) {
+            console.error('[TelemetrySection] Toggle error:', e);
+        }
+    };
+
+    const handleView = async () => {
+        try {
+            const res = await fetch('/doctor/telemetry/buffer');
+            const data = await res.json();
+            if (data.success) {
+                const events = data.events || [];
+                const content = events.length > 0
+                    ? JSON.stringify(events.slice(-20), null, 2)
+                    : 'No events buffered';
+                alert(`Telemetry Buffer (${events.length} events):\n\n${content.slice(0, 2000)}`);
+            }
+        } catch (e) {
+            alert('Failed to load buffer');
+        }
+    };
+
+    const handleClear = async () => {
+        if (!confirm(uiText?.telemetry_confirm_clear || 'Clear all telemetry data?')) return;
+        try {
+            const res = await fetch('/doctor/telemetry/clear', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                setMessage({ type: 'success', text: '✅' });
+                setTimeout(() => setMessage(null), 1500);
+                updateStatus();
+            }
+        } catch (e) {
+            setMessage({ type: 'error', text: '❌' });
+            setTimeout(() => setMessage(null), 1500);
+        }
+    };
+
+    const handleExport = async () => {
+        try {
+            const res = await fetch('/doctor/telemetry/export');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'telemetry_export.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setMessage({ type: 'success', text: '✅' });
+            setTimeout(() => setMessage(null), 1500);
+        } catch (e) {
+            setMessage({ type: 'error', text: '❌' });
+            setTimeout(() => setMessage(null), 1500);
+        }
+    };
+
+    const toggleStyle = enabled
+        ? 'background: #4caf50;'
+        : 'background: #444;';
+    const knobTransform = enabled ? 'transform: translateX(18px);' : '';
+
+    return html`
+        <div id="doctor-telemetry-panel" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 15px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #aaa;">
+                    📊 <span>${uiText?.telemetry_label || 'Anonymous Telemetry'}</span>
+                </div>
+                <label style="position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer;" onClick=${handleToggle}>
+                    <span style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; ${toggleStyle} transition: .3s; border-radius: 22px;">
+                        <span style="position:absolute;left:4px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.3s;${knobTransform}"></span>
+                    </span>
+                </label>
+            </div>
+            <div style="font-size: 12px; color: #888; margin-top: 5px;">${uiText?.telemetry_description || 'Send anonymous usage data to help improve Doctor'}</div>
+            <div id="doctor-telemetry-stats" style="font-size: 11px; color: #666; margin-top: 5px;">
+                ${uiText?.telemetry_buffer_count?.replace('{n}', bufferCount) || `Currently buffered: ${bufferCount} events`}
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button id="doctor-telemetry-view-btn" onClick=${handleView} style="flex: 1; padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 11px;">${uiText?.telemetry_view_buffer || 'View Buffer'}</button>
+                <button id="doctor-telemetry-clear-btn" onClick=${handleClear} style="flex: 1; padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 11px;">${message?.text === '✅' && message?.type === 'success' ? '✅' : (uiText?.telemetry_clear_all || 'Clear All')}</button>
+                <button id="doctor-telemetry-export-btn" onClick=${handleExport} style="flex: 1; padding: 6px 10px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 11px;">${uiText?.telemetry_export || 'Export'}</button>
+            </div>
+            <div style="font-size: 11px; color: #666; margin-top: 5px;">${uiText?.telemetry_upload_none || 'Upload destination: None (local only)'}</div>
+        </div>
+    `;
+}
+
 function StatisticsIsland({ uiText }) {
     const { html, useState, useEffect } = preactModules;
 
@@ -456,6 +665,12 @@ function StatisticsIsland({ uiText }) {
 
                 <!-- Category Breakdown -->
                 <${CategoryBreakdown} breakdown=${stats.category_breakdown} total=${stats.total_errors} uiText=${uiText} />
+
+                <!-- Trust & Health Section (Moved from Settings) -->
+                <${TrustHealthSection} uiText=${uiText} />
+
+                <!-- Anonymous Telemetry Section (Moved from Settings) -->
+                <${TelemetrySection} uiText=${uiText} />
             </div>
         </div>
     `;

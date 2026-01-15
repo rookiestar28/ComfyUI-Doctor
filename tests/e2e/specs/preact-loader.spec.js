@@ -33,7 +33,7 @@ test.describe('Preact Loader', () => {
         await page.goto('test-harness.html');
 
         // Wait for Doctor UI to be ready (can be slower on /mnt/c + sandboxed environments)
-        await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 20000 });
+        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 20000 });
     });
 
     test.describe('Module Loading', () => {
@@ -104,7 +104,7 @@ test.describe('Preact Loader', () => {
 
             // Reload to apply the flag
             await page.reload();
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 10000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 10000 });
 
             const isEnabled = await page.evaluate(async () => {
                 const { isPreactEnabled } = await import('/web/preact-loader.js');
@@ -143,7 +143,7 @@ test.describe('Preact Loader', () => {
 
 	            // Re-navigate so the blocking routes apply before any module imports happen.
 	            await page.goto('test-harness.html');
-	            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 20000 });
+	            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 20000 });
 	        });
 
 	        test('should handle complete load failure gracefully', async ({ page }) => {
@@ -225,7 +225,7 @@ test.describe('Preact Loader', () => {
 
             // Navigate to test harness (Preact will fail to load)
             await page.goto('test-harness.html');
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
             // Verify Chat UI still renders (vanilla fallback)
             const chatMessages = page.locator('#doctor-messages');
@@ -261,7 +261,7 @@ test.describe('Preact Loader', () => {
 
             // Navigate to test harness
             await page.goto('test-harness.html');
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
             // Switch to Stats tab
             await page.click('.doctor-tab-button[data-tab-id="stats"]');
@@ -280,7 +280,7 @@ test.describe('Preact Loader', () => {
             await simulateVendorLoadFailure(page);
 
             await page.goto('test-harness.html');
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
             // Use shared helper from helpers.js
             await assertChatFallbackUI(page);
@@ -291,7 +291,7 @@ test.describe('Preact Loader', () => {
             await disablePreact(page);
 
             await page.goto('test-harness.html');
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
             // Use shared helper from helpers.js
             await assertChatFallbackUI(page);
@@ -306,7 +306,7 @@ test.describe('Preact Loader', () => {
 
         test('should record error when island render function throws', async ({ page }) => {
             await page.goto('test-harness.html');
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
             // Register a test island that throws on render, then mount it
             const result = await page.evaluate(async () => {
@@ -362,7 +362,7 @@ test.describe('Preact Loader', () => {
             await simulateVendorLoadFailure(page);
 
             await page.goto('test-harness.html');
-            await page.waitForFunction(() => window.__doctorTestReady === true, { timeout: 15000 });
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
 
             // Verify input is fully functional
             const input = page.locator('#doctor-input');

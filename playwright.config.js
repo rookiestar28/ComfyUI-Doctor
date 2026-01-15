@@ -1,9 +1,12 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
+const path = require('node:path');
 
 const webServerPort = Number(process.env.PW_WEB_SERVER_PORT) || 3000;
 const baseURL = process.env.PW_BASE_URL || `http://127.0.0.1:${webServerPort}/tests/e2e/`;
 const pythonCmd = process.platform === 'win32' ? 'python' : (process.env.PW_PYTHON || 'python3');
+const testOutputDir = process.env.PW_TEST_OUTPUT_DIR || 'test-results';
+const htmlReportDir = process.env.PW_HTML_REPORT_DIR || 'playwright-report';
 
 /**
  * Playwright Configuration for ComfyUI-Doctor
@@ -16,6 +19,9 @@ const pythonCmd = process.platform === 'win32' ? 'python' : (process.env.PW_PYTH
 module.exports = defineConfig({
   // Test directory
   testDir: './tests/e2e/specs',
+
+  // Test artifacts output
+  outputDir: path.resolve(testOutputDir),
 
   // Maximum time one test can run
   timeout: 30 * 1000,
@@ -39,7 +45,7 @@ module.exports = defineConfig({
 
   // Reporter to use
   reporter: [
-    ['html'],
+    ['html', { outputFolder: path.resolve(htmlReportDir), open: 'never' }],
     ['list'],
     ...(process.env.CI ? [['github']] : []),
   ],

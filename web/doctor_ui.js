@@ -156,6 +156,7 @@ export class DoctorUI {
                 "ai_analysis_title": "AI Analysis:",
                 "thinking": "Thinking...",
                 "missing_api_key_title": "Missing API Key",
+                "api_key_tip": "Tip: Prefer using Google AI Studio's free API quota for AI debugging. For more info, see:",
                 "connecting_to_ai": "Connecting to AI...",
                 "connecting_to_local_llm": "Connecting to local LLM...",
                 "system_running_smoothly": "System running smoothly",
