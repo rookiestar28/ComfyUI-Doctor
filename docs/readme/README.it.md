@@ -127,7 +127,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 
 **Pannello UI Fiducia & Salute:**
 
-- Aggiunto pannello "Trust & Health" alla scheda Impostazioni
+- Aggiunto pannello "Trust & Health" alla scheda Statistiche (Statistics)
 - Mostra: pipeline_status, ssrf_blocked, dropped_logs
 - Elenco fiducia plugin (con badge e motivazioni)
 - Endpoint solo scansione `GET /doctor/plugins` (nessuna importazione codice)
@@ -594,6 +594,8 @@ La **Dashboard Statistiche** fornisce approfondimenti in tempo reale sui pattern
 - **📈 Ripartizione Categorie**: Ripartizione visiva per categoria di errore (Memoria, Workflow, Caricamento Modelli, Framework, Generico)
 - **✅ Tracciamento Risoluzione**: Traccia errori risolti, irrisolti e ignorati
 - **🧭 Controlli stato**: Marca l’ultimo errore come Risolto / Irrisolto / Ignorato dalla scheda Statistiche
+- **🛡️ Fiducia e Salute (Trust & Health)**: Visualizza le metriche `/doctor/health` e il rapporto di fiducia dei plugin (solo scansione)
+- **📊 Telemetria Anonima (Anonymous Telemetry) (In costruzione 🚧)**: Buffer locale opzionale per eventi di utilizzo (attiva/visualizza/cancella/esporta)
 
 **Come Usare**:
 
@@ -601,6 +603,7 @@ La **Dashboard Statistiche** fornisce approfondimenti in tempo reale sui pattern
 2. Trova la sezione comprimibile **📊 Statistiche Errori**
 3. Clicca per espandere e visualizzare le tue analisi degli errori
 4. Usa i pulsanti **Segna come** per impostare lo stato dell’ultimo errore (Risolto / Irrisolto / Ignorato)
+5. Scorri fino alla fine della scheda Statistiche per trovare **Fiducia e Salute** e **Telemetria Anonima**.
 
 **Controlli dello stato di risoluzione**:
 
@@ -689,39 +692,7 @@ Puoi personalizzare il comportamento di ComfyUI-Doctor tramite il pannello Impos
 - I modelli vengono recuperati automaticamente dall'API del tuo provider selezionato quando cambi provider o clicchi aggiorna.
 - Per gli LLM locali (Ollama/LMStudio), il menu a discesa mostra tutti i modelli disponibili localmente.
 
-### 10. Fiducia e Salute (Trust & Health)
-
-**Funzione**: Visualizza lo stato di salute del sistema e il rapporto di fiducia dei plugin.
-**Utilizzo**: Clicca sul pulsante di aggiornamento 🔄 per recuperare i dati di `/doctor/health`.
-
-**Visualizza**:
-
-- **Pipeline Status**: Stato attuale della pipeline di analisi
-- **SSRF Blocked**: Conteggio delle richieste in uscita sospette bloccate
-- **Dropped Logs**: Conteggio dei messaggi di log scartati a causa della contropressione
-- **Plugin Trust List**: Mostra tutti i plugin rilevati con badge di stato:
-  - 🟢 **Trusted**: Plugin in whitelist con manifesto valido
-  - 🟡 **Unsigned**: Plugin senza manifesto (usare con cautela)
-  - 🔴 **Blocked**: Plugin in blacklist
-
-### 11. Telemetria Anonima (In Costruzione 🚧)
-
-**Funzione**: Adesione facoltativa alla raccolta di dati anonimi sull'utilizzo per aiutare a migliorare Doctor.
-**Stato**: **In Costruzione** — Attualmente solo locale, nessun caricamento in rete.
-
-**Controlli**:
-
-- **Toggle**: Abilita/disabilita la registrazione della telemetria (default: OFF)
-- **View Buffer**: Ispeziona gli eventi nel buffer prima del caricamento
-- **Clear All**: Elimina tutti i dati di telemetria nel buffer
-- **Export**: Scarica i dati nel buffer come JSON per la revisione
-
-**Garanzie di Privacy**:
-
-- ✅ **Solo Opt-in**: Nessun dato viene registrato fino all'attivazione esplicita
-- ✅ **Solo Locale**: Attualmente memorizza i dati solo localmente (`Upload destination: None`)
-- ✅ **Rilevamento PII**: Filtra automaticamente le informazioni sensibili
-- ✅ **Trasparenza Totale**: Visualizza/esporta tutti i dati prima di qualsiasi caricamento futuro
+> Nota: **Fiducia e Salute (Trust & Health)** e **Telemetria Anonima (Anonymous Telemetry)** sono stati spostati nella scheda **Statistiche (Statistics)**.
 
 ---
 

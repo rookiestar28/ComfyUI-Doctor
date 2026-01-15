@@ -99,7 +99,7 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 - Backend: `telemetry.py` with TelemetryStore, RateLimiter, PII detection
 - 6 API endpoints: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
-- Frontend: Settings UI controls for telemetry management
+- Frontend: Statistics UI controls for telemetry management
 - Security: Origin check (403 cross-origin), 1KB payload limit, field whitelist
 - **Default OFF**: No recording/network until explicitly enabled
 - 81 i18n strings (9 keys × 9 languages)
@@ -119,7 +119,7 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 
 **Trust & Health UI Panel:**
 
-- Added "Trust & Health" panel in Settings tab
+- Added "Trust & Health" panel in Statistics tab
 - Displays: pipeline_status, ssrf_blocked, dropped_logs
 - Plugin trust list with badges and reasons
 - `GET /doctor/plugins` scan-only endpoint (no code import)
@@ -574,6 +574,8 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 - **📈 Category Breakdown**: Visual breakdown by error category (Memory, Workflow, Model Loading, Framework, Generic)
 - **✅ Resolution Tracking**: Track resolved, unresolved, and ignored errors
 - **🧭 Status Controls**: Mark the latest error as Resolved / Unresolved / Ignored from the Stats tab
+- **🛡️ Trust & Health**: View `/doctor/health` metrics and plugin trust report (scan-only)
+- **📊 Anonymous Telemetry (Under Construction 🚧)**: Opt-in local-only buffer for usage events (toggle/view/clear/export)
 
 **How to Use**:
 
@@ -581,6 +583,7 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 2. Find the **📊 Error Statistics** collapsible section
 3. Click to expand and view your error analytics
 4. Use **Mark as** buttons to set the latest error status (Resolved / Unresolved / Ignored)
+5. Scroll down to the bottom of the Statistics tab to find **Trust & Health** and **Anonymous Telemetry**
 
 **Resolution Status Controls**:
 
@@ -669,39 +672,7 @@ You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear i
 - Models are automatically fetched from your selected provider's API when you change providers or click refresh.
 - For local LLMs (Ollama/LMStudio), the dropdown displays all locally available models.
 
-### 10. Trust & Health
-
-**Function**: View system health status and plugin trust report.
-**Usage**: Click the 🔄 refresh button to fetch `/doctor/health` endpoint data.
-
-**Displays**:
-
-- **Pipeline Status**: Current analysis pipeline state
-- **SSRF Blocked**: Count of blocked suspicious outbound requests
-- **Dropped Logs**: Count of log messages dropped due to backpressure
-- **Plugin Trust List**: Shows all detected plugins with trust status badges:
-  - 🟢 **Trusted**: Allowlisted plugins with valid manifest
-  - 🟡 **Unsigned**: Plugins without manifest (use with caution)
-  - 🔴 **Blocked**: Plugins on blocklist
-
-### 11. Anonymous Telemetry (Under Construction 🚧)
-
-**Function**: Opt-in anonymous usage data collection to help improve Doctor.
-**Status**: **Under Construction** — Currently local-only, no network upload.
-
-**Controls**:
-
-- **Toggle**: Enable/disable telemetry recording (default: OFF)
-- **View Buffer**: Inspect buffered events before upload
-- **Clear All**: Delete all buffered telemetry data
-- **Export**: Download buffered data as JSON for review
-
-**Privacy Guarantees**:
-
-- ✅ **Opt-in only**: No data is recorded until explicitly enabled
-- ✅ **Local-only**: Currently stores data locally only (`Upload destination: None`)
-- ✅ **PII detection**: Automatically filters sensitive information
-- ✅ **Full transparency**: View/export all data before any future upload
+> Note: **Trust & Health** and **Anonymous Telemetry** have moved to the **Statistics** tab.
 
 ---
 

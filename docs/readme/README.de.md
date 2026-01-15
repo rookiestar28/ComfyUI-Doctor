@@ -127,7 +127,7 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 
 **Vertrauens- & Gesundheits-UI-Panel:**
 
-- "Trust & Health" Panel zum Einstellungs-Tab hinzugefügt
+- "Trust & Health" Panel zum Statistik (Statistics) Tab hinzugefügt
 - Zeigt: pipeline_status, ssrf_blocked, dropped_logs
 - Plugin-Vertrauensliste (mit Badges und Gründen)
 - `GET /doctor/plugins` Nur-Scan-Endpunkt (kein Code-Import)
@@ -594,6 +594,8 @@ Das **Statistik-Dashboard** bietet Echtzeit-Einblicke in Ihre ComfyUI-Fehlermust
 - **📈 Kategorie-Aufschlüsselung**: Visuelle Aufschlüsselung nach Fehlerkategorie (Speicher, Workflow, Modellladen, Framework, Generisch)
 - **✅ Lösungsverfolgung**: Verfolgen Sie gelöste, ungelöste und ignorierte Fehler
 - **🧭 Status-Steuerung**: Den neuesten Fehler im Statistik-Tab als Gelöst / Ungelöst / Ignoriert markieren
+- **🛡️ Vertrauen & Gesundheit (Trust & Health)**: `/doctor/health` Metriken und Plugin-Vertrauensbericht anzeigen (nur Scan)
+- **📊 Anonyme Telemetrie (Anonymous Telemetry) (Im Aufbau 🚧)**: Opt-in lokaler Puffer für Nutzungsereignisse (Umschalten/Anzeigen/Löschen/Exportieren)
 
 **Verwendung**:
 
@@ -601,6 +603,7 @@ Das **Statistik-Dashboard** bietet Echtzeit-Einblicke in Ihre ComfyUI-Fehlermust
 2. Den einklappbaren Abschnitt **📊 Fehlerstatistik** finden
 3. Klicken zum Erweitern und Anzeigen Ihrer Fehleranalysen
 4. Mit den **Mark as**-Schaltflächen den Status des neuesten Fehlers setzen (Gelöst / Ungelöst / Ignoriert)
+5. Scrollen Sie zum Ende des Statistik-Tabs, um **Vertrauen & Gesundheit** und **Anonyme Telemetrie** zu finden.
 
 **Steuerung des Lösungsstatus**:
 
@@ -689,39 +692,7 @@ Sie können das Verhalten von ComfyUI-Doctor über das ComfyUI-Einstellungsfeld 
 - Modelle werden automatisch von der API Ihres ausgewählten Anbieters abgerufen, wenn Sie den Anbieter ändern oder auf Aktualisieren klicken.
 - Für lokale LLMs (Ollama/LMStudio) zeigt das Dropdown alle lokal verfügbaren Modelle an.
 
-### 10. Vertrauen & Gesundheit (Trust & Health)
-
-**Funktion**: Systemstatus und Plugin-Vertrauensbericht anzeigen.
-**Verwendung**: Klicken Sie auf die Schaltfläche 🔄 Aktualisieren, um `/doctor/health` Daten abzurufen.
-
-**Anzeigen**:
-
-- **Pipeline Status**: Aktueller Status der Analysepipeline
-- **SSRF Blocked**: Anzahl blockierter verdächtiger ausgehender Anfragen
-- **Dropped Logs**: Anzahl der aufgrund von Backpressure verworfenen Log-Nachrichten
-- **Plugin Trust List**: Zeigt alle erkannten Plugins mit Vertrauensstatus-Badges:
-  - 🟢 **Trusted**: Zugelassene Plugins mit gültigem Manifest
-  - 🟡 **Unsigned**: Plugins ohne Manifest (mit Vorsicht verwenden)
-  - 🔴 **Blocked**: Blockierte Plugins
-
-### 11. Anonyme Telemetrie (Im Bau 🚧)
-
-**Funktion**: Opt-in zur Sammlung anonymer Nutzungsdaten zur Verbesserung von Doctor.
-**Status**: **Im Bau** — Derzeit nur lokal, kein Netzwerk-Upload.
-
-**Steuerung**:
-
-- **Toggle**: Telemetrieaufzeichnung aktivieren/deaktivieren (Standard: AUS)
-- **View Buffer**: Gepufferte Ereignisse vor dem Upload prüfen
-- **Clear All**: Alle gepufferten Telemetriedaten löschen
-- **Export**: Gepufferte Daten als JSON zur Überprüfung herunterladen
-
-**Datenschutzgarantien**:
-
-- ✅ **Nur Opt-in**: Es werden keine Daten aufgezeichnet, bis dies explizit aktiviert wird
-- ✅ **Nur Lokal**: Speichert Daten derzeit nur lokal (`Upload destination: None`)
-- ✅ **PII-Erkennung**: Filtert sensible Daten automatisch
-- ✅ **Volle Transparenz**: Alle Daten vor jedem zukünftigen Upload anzeigen/exportieren
+> Hinweis: **Vertrauen & Gesundheit (Trust & Health)** und **Anonyme Telemetrie (Anonymous Telemetry)** wurden in den **Statistik (Statistics)** Tab verschoben.
 
 ---
 

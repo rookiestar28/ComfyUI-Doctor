@@ -127,7 +127,7 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 
 **Panneau UI Confiance & Santé :**
 
-- Ajout du panneau "Trust & Health" à l'onglet Paramètres
+- Ajout du panneau "Trust & Health" à l'onglet Statistiques (Statistics)
 - Affiche : pipeline_status, ssrf_blocked, dropped_logs
 - Liste de confiance des plugins (avec badges et raisons)
 - Point de terminaison de scan uniquement `GET /doctor/plugins` (pas d'importation de code)
@@ -594,6 +594,8 @@ Le **Tableau de bord statistiques** fournit des informations en temps réel sur 
 - **📈 Répartition par catégorie** : Répartition visuelle par catégorie d'erreur (Mémoire, Flux de travail, Chargement de modèle, Cadre, Générique)
 - **✅ Suivi de résolution** : Suivez les erreurs résolues, non résolues et ignorées
 - **🧭 Contrôles de statut** : Marquer la dernière erreur comme Résolu / Non résolu / Ignoré depuis l’onglet Statistiques
+- **🛡️ Confiance et Santé (Trust & Health)** : Voir les métriques `/doctor/health` et le rapport de confiance des plugins (scan uniquement)
+- **📊 Télémétrie Anonyme (Anonymous Telemetry) (En construction 🚧)** : Opt-in tampon local pour les événements d'utilisation (basculer/voir/effacer/exporter)
 
 **Comment utiliser** :
 
@@ -601,6 +603,7 @@ Le **Tableau de bord statistiques** fournit des informations en temps réel sur 
 2. Trouvez la section pliable **📊 Statistiques d'erreurs**
 3. Cliquez pour développer et afficher vos analyses d'erreurs
 4. Utilisez les boutons **Marquer comme** pour définir l’état de la dernière erreur (Résolu / Non résolu / Ignoré)
+5. Faites défiler jusqu'au bas de l'onglet Statistiques pour trouver **Confiance et Santé** et **Télémétrie Anonyme**.
 
 **Contrôles du statut** :
 
@@ -689,39 +692,7 @@ Vous pouvez personnaliser le comportement de ComfyUI-Doctor via le panneau Param
 - Les modèles sont automatiquement récupérés depuis l'API de votre fournisseur sélectionné lorsque vous changez de fournisseur ou cliquez sur actualiser.
 - Pour les LLM locaux (Ollama/LMStudio), la liste déroulante affiche tous les modèles disponibles localement.
 
-### 10. Confiance et Santé (Trust & Health)
-
-**Fonction** : Voir l'état de santé du système et le rapport de confiance des plugins.
-**Utilisation** : Cliquez sur le bouton 🔄 d'actualisation pour récupérer les données `/doctor/health`.
-
-**Affichages** :
-
-- **Pipeline Status** : État actuel du pipeline d'analyse
-- **SSRF Blocked** : Nombre de requêtes sortantes suspectes bloquées
-- **Dropped Logs** : Nombre de messages de journal rejetés en raison de la contre-pression
-- **Plugin Trust List** : Affiche tous les plugins détectés avec des badges de statut :
-  - 🟢 **Trusted** : Plugins sur liste blanche avec manifeste valide
-  - 🟡 **Unsigned** : Plugins sans manifeste (utiliser avec prudence)
-  - 🔴 **Blocked** : Plugins sur liste noire
-
-### 11. Télémétrie Anonyme (En Construction 🚧)
-
-**Fonction** : Participer à la collecte de données d'utilisation anonymes pour aider à améliorer Doctor.
-**Statut** : **En Construction** — Actuellement local uniquement, aucun téléchargement réseau.
-
-**Commandes** :
-
-- **Toggle** : Activer/désactiver l'enregistrement de la télémétrie (par défaut : OFF)
-- **View Buffer** : Inspecter les événements mis en mémoire tampon avant le téléchargement
-- **Clear All** : Supprimer toutes les données de télémétrie mises en mémoire tampon
-- **Export** : Télécharger les données mises en mémoire tampon au format JSON pour examen
-
-**Garanties de Confidentialité** :
-
-- ✅ **Opt-in uniquement** : Aucune donnée n'est enregistrée tant qu'elle n'est pas explicitement activée
-- ✅ **Local uniquement** : Stocke actuellement les données localement uniquement (`Upload destination: None`)
-- ✅ **Détection PII** : Filtre automatiquement les informations sensibles
-- ✅ **Transparence totale** : Voir/exporter toutes les données avant tout futur téléchargement
+> Remarque : **Confiance et Santé (Trust & Health)** et **Télémétrie Anonyme (Anonymous Telemetry)** ont été déplacés vers l'onglet **Statistiques (Statistics)**.
 
 ---
 
