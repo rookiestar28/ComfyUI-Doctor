@@ -20,7 +20,8 @@ class DiagnosticsConfig:
     log_queue_maxsize: int = 1000
     
     # History
-    history_size: int = 20
+    # history_size: 0 = unbounded, >0 = max entries
+    history_size: int = 0
     
     # i18n
     default_language: str = "zh_TW"

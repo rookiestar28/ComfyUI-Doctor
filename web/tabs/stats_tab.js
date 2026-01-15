@@ -97,7 +97,14 @@ function renderVanilla(container) {
     // Align empty-state copy with E2E expectations and UX.
     const topPatternsEmptyText = doctorUI.getUIText('stats_no_data') || 'No data yet';
     statsPanel.innerHTML = `
-        <summary style="pointer-events: none; opacity: 0.7; margin-bottom: 15px;">📊 ${doctorUI.getUIText('statistics_title') || 'Error Statistics'}</summary>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <summary style="pointer-events: none; opacity: 0.7; list-style: none;">📊 ${doctorUI.getUIText('statistics_title') || 'Error Statistics'}</summary>
+            <div style="display: flex; gap: 6px;">
+                <button id="doctor-stats-reset-btn" title="${doctorUI.getUIText('stats_reset_btn') || 'Reset'}" style="background: none; border: none; color: #888; cursor: pointer; font-size: 14px;">🗑️</button>
+                <button id="doctor-stats-refresh-btn" title="Refresh" style="background: none; border: none; color: #888; cursor: pointer; font-size: 14px;">🔄</button>
+            </div>
+        </div>
+        <div id="doctor-stats-reset-message" style="display: none; margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px;"></div>
         <div id="doctor-stats-content">
             <div class="stats-grid">
                 <div class="stat-card">
@@ -155,6 +162,9 @@ function renderVanilla(container) {
     container.appendChild(statsPanel);
     doctorUI.sidebarStatsPanel = statsPanel;
 
+    // Wire up Stats Reset button
+    setupStatsResetHandler(statsPanel, doctorUI);
+
     // Wire up Trust & Health button
     setupTrustHealthHandlers(statsPanel, doctorUI);
 
@@ -164,6 +174,64 @@ function renderVanilla(container) {
     if (typeof doctorUI.renderStatistics === 'function') {
         doctorUI.renderStatistics();
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATS RESET HANDLER (R16)
+// ═══════════════════════════════════════════════════════════════
+
+function setupStatsResetHandler(container, doctorUI) {
+    const resetBtn = container.querySelector('#doctor-stats-reset-btn');
+    const refreshBtn = container.querySelector('#doctor-stats-refresh-btn');
+    const messageDiv = container.querySelector('#doctor-stats-reset-message');
+
+    // Wire up refresh button (in vanilla mode)
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            if (typeof doctorUI.renderStatistics === 'function') {
+                doctorUI.renderStatistics();
+            }
+        });
+    }
+
+    if (!resetBtn) return;
+
+    resetBtn.addEventListener('click', async () => {
+        const confirmText = doctorUI.getUIText('stats_reset_confirm') || 'Reset statistics? This will clear all error history.';
+        if (!confirm(confirmText)) return;
+
+        resetBtn.disabled = true;
+        const original = resetBtn.textContent;
+        resetBtn.textContent = '⏳';
+
+        try {
+            const result = await DoctorAPI.resetStatistics();
+            if (result.success) {
+                messageDiv.style.display = 'block';
+                messageDiv.style.background = 'rgba(76, 175, 80, 0.2)';
+                messageDiv.style.color = '#4caf50';
+                messageDiv.textContent = doctorUI.getUIText('stats_reset_success') || 'Statistics reset successfully';
+                // Refresh stats
+                if (typeof doctorUI.renderStatistics === 'function') {
+                    doctorUI.renderStatistics();
+                }
+            } else {
+                messageDiv.style.display = 'block';
+                messageDiv.style.background = 'rgba(244, 67, 54, 0.2)';
+                messageDiv.style.color = '#f44336';
+                messageDiv.textContent = result.message || doctorUI.getUIText('stats_reset_failed') || 'Failed to reset statistics';
+            }
+        } catch (e) {
+            messageDiv.style.display = 'block';
+            messageDiv.style.background = 'rgba(244, 67, 54, 0.2)';
+            messageDiv.style.color = '#f44336';
+            messageDiv.textContent = doctorUI.getUIText('stats_reset_failed') || 'Failed to reset statistics';
+        } finally {
+            resetBtn.disabled = false;
+            resetBtn.textContent = original;
+            setTimeout(() => { messageDiv.style.display = 'none'; }, 3000);
+        }
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════

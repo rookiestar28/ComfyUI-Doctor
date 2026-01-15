@@ -281,5 +281,22 @@ export const DoctorAPI = {
             console.error('[ComfyUI-Doctor] Failed to mark error:', error);
             return { success: false, message: error.message };
         }
+    },
+
+    /**
+     * R16: Reset statistics (clears error history)
+     * @returns {Promise<{success: boolean, message?: string}>}
+     */
+    async resetStatistics() {
+        try {
+            const response = await fetch('/doctor/statistics/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to reset statistics:', error);
+            return { success: false, message: error.message };
+        }
     }
 };

@@ -207,6 +207,62 @@ class TestHistoryStore(unittest.TestCase):
         
         self.assertEqual(len(store), 1)
 
+    # R16: Unbounded mode tests
+    def test_unbounded_mode_zero_maxlen(self):
+        """Test that maxlen=0 allows unlimited entries (unbounded mode)."""
+        store = HistoryStore(self.test_file, maxlen=0)
+        
+        # Add many entries - should not truncate
+        for i in range(100):
+            entry = HistoryEntry(
+                timestamp=f"2025-12-29T14:{i:02d}:00",
+                error=f"Error {i}",
+                suggestion={},
+            )
+            store.append(entry)
+        
+        history = store.get_all()
+        
+        # All 100 entries should be preserved
+        self.assertEqual(len(history), 100)
+        self.assertEqual(history[0]["error"], "Error 99")  # newest first
+        self.assertEqual(history[99]["error"], "Error 0")  # oldest last
+
+    def test_unbounded_mode_negative_maxlen(self):
+        """Test that negative maxlen also enables unbounded mode."""
+        store = HistoryStore(self.test_file, maxlen=-5)
+        
+        for i in range(50):
+            entry = HistoryEntry(
+                timestamp=f"2025-12-29T14:{i:02d}:00",
+                error=f"Error {i}",
+                suggestion={},
+            )
+            store.append(entry)
+        
+        history = store.get_all()
+        
+        # All entries should be preserved
+        self.assertEqual(len(history), 50)
+
+    def test_unbounded_mode_persistence(self):
+        """Test that unbounded mode persists entries across instances."""
+        store1 = HistoryStore(self.test_file, maxlen=0)
+        
+        for i in range(25):
+            entry = HistoryEntry(
+                timestamp=f"2025-12-29T14:{i:02d}:00",
+                error=f"Error {i}",
+                suggestion={},
+            )
+            store1.append(entry)
+        
+        # Create new instance - should load all entries
+        store2 = HistoryStore(self.test_file, maxlen=0)
+        history = store2.get_all()
+        
+        self.assertEqual(len(history), 25)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

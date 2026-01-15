@@ -617,4 +617,94 @@ test.describe('Statistics Dashboard', () => {
     const statsText = page.locator('#doctor-telemetry-stats');
     await expect(statsText).toContainText(/5|buffered/i);
   });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // R16: Statistics Reset Tests
+  // ════════════════════════════════════════════════════════════════════════
+
+  test('should display reset button in statistics panel', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(100);
+
+    const resetBtn = page.locator('#doctor-stats-reset-btn');
+    await expect(resetBtn).toBeVisible();
+  });
+
+  test('should call reset API and show empty state after confirmation', async ({ page }) => {
+    let resetApiCalled = false;
+    let statisticsCallCount = 0;
+
+    // Override routes to track reset API and return empty stats after reset
+    await page.route('**/doctor/statistics/reset', async route => {
+      resetApiCalled = true;
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, message: 'Statistics reset successfully' })
+      });
+    });
+
+    await page.route('**/doctor/statistics*', async route => {
+      statisticsCallCount++;
+      // After reset (2nd+ call), return empty statistics
+      const stats = statisticsCallCount <= 1 ? MOCK_STATISTICS : EMPTY_STATISTICS;
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(stats)
+      });
+    });
+
+    // Navigate to stats tab
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(200);
+
+    // Verify initial stats are shown
+    const total = page.locator('#stats-total');
+    await expect(total).toHaveText('42');
+
+    // Mock window.confirm to auto-accept
+    await page.evaluate(() => {
+      window.confirm = () => true;
+    });
+
+    // Click reset button
+    const resetBtn = page.locator('#doctor-stats-reset-btn');
+    await resetBtn.click();
+    await page.waitForTimeout(500);
+
+    // Verify API was called
+    expect(resetApiCalled).toBe(true);
+
+    // Verify stats refreshed to show empty/0 state
+    await expect(total).toHaveText('0');
+  });
+
+  test('should not call reset API when confirmation is cancelled', async ({ page }) => {
+    let resetApiCalled = false;
+
+    await page.route('**/doctor/statistics/reset', async route => {
+      resetApiCalled = true;
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true })
+      });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(200);
+
+    // Mock window.confirm to cancel
+    await page.evaluate(() => {
+      window.confirm = () => false;
+    });
+
+    const resetBtn = page.locator('#doctor-stats-reset-btn');
+    await resetBtn.click();
+    await page.waitForTimeout(200);
+
+    // API should NOT be called
+    expect(resetApiCalled).toBe(false);
+  });
 });

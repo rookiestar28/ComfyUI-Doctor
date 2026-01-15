@@ -2222,6 +2222,24 @@ try:
                 }
             })
     
+    @server.PromptServer.instance.routes.post("/doctor/statistics/reset")
+    async def api_reset_statistics(request):
+        """
+        API endpoint to reset statistics (clears all error history).
+        
+        Returns: {"success": bool, "message": str}
+        """
+        try:
+            success = clear_analysis_history()
+            if success:
+                logger.info("Statistics reset (history cleared)")
+                return web.json_response({"success": True, "message": "Statistics reset successfully"})
+            else:
+                return web.json_response({"success": False, "message": "Failed to clear history"}, status=500)
+        except Exception as e:
+            logger.error(f"Statistics reset API error: {str(e)}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+    
     @server.PromptServer.instance.routes.post("/doctor/mark_resolved")
     async def api_mark_error_resolved(request):
         """

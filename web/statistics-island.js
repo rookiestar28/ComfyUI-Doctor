@@ -563,6 +563,9 @@ function StatisticsIsland({ uiText }) {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    // R16: Reset state - declared before early-returns to ensure stable hooks order
+    const [resetting, setResetting] = useState(false);
+    const [resetMessage, setResetMessage] = useState(null);
 
     const fetchStats = async () => {
         setLoading(true);
@@ -574,6 +577,27 @@ function StatisticsIsland({ uiText }) {
             setError(result.error || 'Failed to load');
         }
         setLoading(false);
+    };
+
+    // R16: Reset handler
+    const handleReset = async () => {
+        if (!confirm(uiText?.stats_reset_confirm || 'Reset statistics? This will clear all error history.')) return;
+        setResetting(true);
+        setResetMessage(null);
+        try {
+            const result = await DoctorAPI.resetStatistics();
+            if (result.success) {
+                setResetMessage({ type: 'success', text: uiText?.stats_reset_success || 'Statistics reset successfully' });
+                fetchStats(); // Refresh to show empty state
+            } else {
+                setResetMessage({ type: 'error', text: result.message || uiText?.stats_reset_failed || 'Failed to reset statistics' });
+            }
+        } catch (e) {
+            setResetMessage({ type: 'error', text: uiText?.stats_reset_failed || 'Failed to reset statistics' });
+        } finally {
+            setResetting(false);
+            setTimeout(() => setResetMessage(null), 3000);
+        }
     };
 
     useEffect(() => {
@@ -629,8 +653,16 @@ function StatisticsIsland({ uiText }) {
                 <h4 style="margin: 0; display: flex; align-items: center; gap: 6px; opacity: 0.7; font-size: 14px;">
                     📊 ${uiText?.statistics_title || 'Error Statistics'}
                 </h4>
-                <button onClick=${fetchStats} title="Refresh" style="background: none; border: none; color: #888; cursor: pointer; font-size: 14px;">🔄</button>
+                <div style="display: flex; gap: 6px;">
+                    <button id="doctor-stats-reset-btn" onClick=${handleReset} disabled=${resetting} title="${uiText?.stats_reset_btn || 'Reset'}" style="background: none; border: none; color: ${resetting ? '#666' : '#888'}; cursor: ${resetting ? 'not-allowed' : 'pointer'}; font-size: 14px;">🗑️</button>
+                    <button onClick=${fetchStats} title="Refresh" style="background: none; border: none; color: #888; cursor: pointer; font-size: 14px;">🔄</button>
+                </div>
             </div>
+            ${resetMessage ? html`
+                <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; font-size: 12px; background: ${resetMessage.type === 'success' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)'}; color: ${resetMessage.type === 'success' ? '#4caf50' : '#f44336'};">
+                    ${resetMessage.text}
+                </div>
+            ` : null}
 
             <div id="doctor-stats-content">
                 <!-- Grid -->

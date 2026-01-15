@@ -257,6 +257,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "This component failed after 3 reload attempts.",
         "error_boundary_error_id_label": "Error ID:",
         "global_error_banner_title": "An error occurred",
+        # R16: Statistics Reset
+        "stats_reset_btn": "Reset",
+        "stats_reset_confirm": "Reset statistics? This will clear all error history.",
+        "stats_reset_success": "Statistics reset successfully",
+        "stats_reset_failed": "Failed to reset statistics",
     },
     "zh_TW": {
         "info_title": "資訊",
@@ -413,6 +418,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "此組件在 3 次重新載入嘗試後仍然失敗。",
         "error_boundary_error_id_label": "錯誤 ID：",
         "global_error_banner_title": "發生錯誤",
+        # R16: Statistics Reset
+        "stats_reset_btn": "重置",
+        "stats_reset_confirm": "重置統計？這將清除所有錯誤歷史記錄。",
+        "stats_reset_success": "統計資料已重置",
+        "stats_reset_failed": "重置統計失敗",
     },
     "zh_CN": {
         "info_title": "信息",
@@ -568,6 +578,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "此组件在 3 次重新加载尝试后仍然失败。",
         "error_boundary_error_id_label": "错误 ID：",
         "global_error_banner_title": "发生错误",
+        # R16: Statistics Reset
+        "stats_reset_btn": "重置",
+        "stats_reset_confirm": "重置统计？这将清除所有错误历史记录。",
+        "stats_reset_success": "统计数据已重置",
+        "stats_reset_failed": "重置统计失败",
     },
     "ja": {
         "info_title": "情報",
@@ -723,6 +738,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "このコンポーネントは 3 回の再読み込み試行後も失敗しました。",
         "error_boundary_error_id_label": "エラー ID:",
         "global_error_banner_title": "エラーが発生しました",
+        # R16: Statistics Reset
+        "stats_reset_btn": "リセット",
+        "stats_reset_confirm": "統計をリセットしますか？すべてのエラー履歴が削除されます。",
+        "stats_reset_success": "統計がリセットされました",
+        "stats_reset_failed": "統計のリセットに失敗しました",
     },
     "de": {
         "info_title": "INFO",
@@ -878,6 +898,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "Diese Komponente ist nach 3 Neuladen-Versuchen fehlgeschlagen.",
         "error_boundary_error_id_label": "Fehler-ID:",
         "global_error_banner_title": "Ein Fehler ist aufgetreten",
+        # R16: Statistics Reset
+        "stats_reset_btn": "Zurücksetzen",
+        "stats_reset_confirm": "Statistiken zurücksetzen? Dies löscht den gesamten Fehlerverlauf.",
+        "stats_reset_success": "Statistiken erfolgreich zurückgesetzt",
+        "stats_reset_failed": "Statistiken konnten nicht zurückgesetzt werden",
     },
     "fr": {
         "info_title": "INFO",
@@ -1033,6 +1058,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "Ce composant a échoué après 3 tentatives de rechargement.",
         "error_boundary_error_id_label": "ID d'erreur :",
         "global_error_banner_title": "Une erreur s'est produite",
+        # R16: Statistics Reset
+        "stats_reset_btn": "Réinitialiser",
+        "stats_reset_confirm": "Réinitialiser les statistiques ? Cela effacera tout l'historique des erreurs.",
+        "stats_reset_success": "Statistiques réinitialisées avec succès",
+        "stats_reset_failed": "Échec de la réinitialisation des statistiques",
     },
     "it": {
         "info_title": "INFO",
@@ -1188,6 +1218,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "Questo componente ha fallito dopo 3 tentativi di ricaricamento.",
         "error_boundary_error_id_label": "ID errore:",
         "global_error_banner_title": "Si è verificato un errore",
+        # R16: Statistics Reset
+        "stats_reset_btn": "Reimposta",
+        "stats_reset_confirm": "Reimpostare le statistiche? Questo cancellerà tutta la cronologia degli errori.",
+        "stats_reset_success": "Statistiche reimpostate con successo",
+        "stats_reset_failed": "Reimpostazione statistiche fallita",
     },
     "es": {
         "info_title": "INFO",
@@ -1343,6 +1378,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "Este componente falló después de 3 intentos de recarga.",
         "error_boundary_error_id_label": "ID de error:",
         "global_error_banner_title": "Se produjo un error",
+        # R16: Statistics Reset
+        "stats_reset_btn": "Restablecer",
+        "stats_reset_confirm": "¿Restablecer estadísticas? Esto borrará todo el historial de errores.",
+        "stats_reset_success": "Estadísticas restablecidas correctamente",
+        "stats_reset_failed": "Error al restablecer estadísticas",
     },
     "ko": {
         "info_title": "정보",
@@ -1498,6 +1538,11 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "error_boundary_permanent_msg": "이 컴포넌트는 3회 다시 로드 시도 후에도 실패했습니다.",
         "error_boundary_error_id_label": "오류 ID:",
         "global_error_banner_title": "오류가 발생했습니다",
+        # R16: Statistics Reset
+        "stats_reset_btn": "초기화",
+        "stats_reset_confirm": "통계를 초기화하시겠습니까? 모든 오류 기록이 삭제됩니다.",
+        "stats_reset_success": "통계가 초기화되었습니다",
+        "stats_reset_failed": "통계 초기화에 실패했습니다",
     },
 }
 

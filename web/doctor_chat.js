@@ -424,7 +424,14 @@ export class ChatPanel {
         doctorContext.setState({ workflowContext: errorData });
 
         // Auto-trigger analysis when initialized with error context
-        const autoAnalysisPrompt = `Analyze this error and provide debugging suggestions:\n\n**Error:** ${errorData.last_error}\n**Node:** ${errorData.node_context?.node_name || 'Unknown'} (${errorData.node_context?.node_class || 'Unknown'})`;
+        const analyzeTemplate = (app?.Doctor?.getUIText?.('analyze_prompt_label'))
+            || `Analyze this error and provide debugging suggestions:\n\n**Error:** {0}\n**Node:** {1}`;
+        const nodeName = errorData.node_context?.node_name || 'Unknown';
+        const nodeClass = errorData.node_context?.node_class || 'Unknown';
+        const nodeLabel = `${nodeName} (${nodeClass})`;
+        const autoAnalysisPrompt = analyzeTemplate
+            .replace('{0}', errorSummary || 'Unknown Error')
+            .replace('{1}', nodeLabel);
 
         console.log('[ChatPanel] Auto-triggering analysis...');
         this.handleSend(autoAnalysisPrompt, 'chat');

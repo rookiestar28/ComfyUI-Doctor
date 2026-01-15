@@ -77,6 +77,22 @@ function summarizeError(lastError) {
     return lines[lines.length - 1]?.trim() || '';
 }
 
+function buildAutoAnalysisPrompt(workflowContext, uiText) {
+    const nodeName = workflowContext?.node_context?.node_name || 'Unknown';
+    const nodeClass = workflowContext?.node_context?.node_class || 'Unknown';
+    const nodeLabel = `${nodeName} (${nodeClass})`;
+    const errorSummary = workflowContext?.error_summary || summarizeError(workflowContext?.last_error);
+
+    const template = uiText?.analyze_prompt_label
+        || 'Analyze this error and provide debugging suggestions:\n\n**Error:** {0}\n**Node:** {1}';
+
+    // R14: Avoid sending the entire traceback as a user message.
+    // The backend already receives full `error_context` and builds a system prompt (PromptComposer).
+    return template
+        .replace('{0}', errorSummary || 'Unknown Error')
+        .replace('{1}', nodeLabel);
+}
+
 function SanitizationStatus({ metadata, uiText }) {
     const { html } = preactModules;
 
@@ -379,11 +395,9 @@ function ChatIsland({ uiText }) {
 
     const handleAnalyze = useCallback(() => {
         if (!workflowContext?.last_error) return;
-        const nodeName = workflowContext.node_context?.node_name || 'Unknown';
-        const nodeClass = workflowContext.node_context?.node_class || 'Unknown';
-        const prompt = `Analyze this error and provide debugging suggestions:\n\n**Error:** ${workflowContext.last_error}\n**Node:** ${nodeName} (${nodeClass})`;
+        const prompt = buildAutoAnalysisPrompt(workflowContext, uiText);
         runChat(prompt);
-    }, [workflowContext, runChat]);
+    }, [workflowContext, uiText, runChat]);
 
     const handleInput = (e) => {
         setInputValue(e.target.value);

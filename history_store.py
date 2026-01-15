@@ -86,10 +86,11 @@ class HistoryStore:
         
         Args:
             filepath: Path to the JSON file for persistence
-            maxlen: Maximum number of entries to keep (oldest are removed)
+            maxlen: Maximum number of entries to keep (oldest are removed).
+                    If maxlen <= 0, history is unbounded.
         """
         self._filepath = filepath
-        self._maxlen = maxlen
+        self._maxlen = maxlen  # 0 or negative means unbounded
         self._lock = threading.Lock()
         self._history: List[HistoryEntry] = []
         self._loaded = False
@@ -114,8 +115,8 @@ class HistoryStore:
                             for entry in data 
                             if isinstance(entry, dict)
                         ]
-                        # Trim to maxlen
-                        if len(self._history) > self._maxlen:
+                        # Trim to maxlen (only if bounded)
+                        if self._maxlen > 0 and len(self._history) > self._maxlen:
                             self._history = self._history[-self._maxlen:]
         except (json.JSONDecodeError, OSError, TypeError) as e:
             print(f"[ComfyUI-Doctor] Warning: Could not load history file: {e}")
@@ -155,8 +156,8 @@ class HistoryStore:
             self._load()
             self._history.append(entry)
             
-            # Trim to maxlen
-            if len(self._history) > self._maxlen:
+            # Trim to maxlen (only if bounded)
+            if self._maxlen > 0 and len(self._history) > self._maxlen:
                 self._history = self._history[-self._maxlen:]
             
             self._save()

@@ -654,14 +654,28 @@ export class DoctorUI {
             console.log('[Doctor] this.currentErrorData:', this.currentErrorData);
             console.log('[Doctor] this.sidebarMessages:', this.sidebarMessages);
 
+            const errorSummary = data.error_summary
+                || this.extractErrorInfo({ last_error: data.last_error }).errorSummary
+                || 'Unknown Error';
+            const nodeName = data.node_context?.node_name || 'Unknown';
+            const nodeClass = data.node_context?.node_class || 'Unknown';
+            const nodeLabel = `${nodeName} (${nodeClass})`;
+
+            const analyzeTemplate = this.getUIText('analyze_prompt_label')
+                || 'Analyze this error and provide debugging suggestions:\n\n**Error:** {0}\n**Node:** {1}';
+
             // Add system message
             console.log('[Doctor] Adding system message...');
-            this.addChatMessage('system', `Analyzing error: ${data.last_error}`);
+            this.addChatMessage('system', `Analyzing error: ${errorSummary}`);
             console.log('[Doctor] System message added');
 
             // Auto-trigger analysis
             console.log('[Doctor] Calling sendToAI...');
-            await this.sendToAI(`Analyze this error and provide debugging suggestions:\n\n**Error:** ${data.last_error}\n**Node:** ${data.node_context?.node_name || 'Unknown'}`);
+            // R14: Avoid sending full traceback as user message; backend already receives full error_context.
+            const prompt = analyzeTemplate
+                .replace('{0}', errorSummary)
+                .replace('{1}', nodeLabel);
+            await this.sendToAI(prompt);
             console.log('[Doctor] sendToAI completed');
         } catch (error) {
             console.error('[Doctor] startAIChat failed:', error);

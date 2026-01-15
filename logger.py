@@ -59,7 +59,8 @@ _last_analysis: Dict[str, Any] = {
 }
 
 # P1: Error history buffer (ring buffer for last N errors)
-_analysis_history: deque = deque(maxlen=CONFIG.history_size)
+# When history_size=0, use unbounded deque
+_analysis_history: deque = deque() if CONFIG.history_size == 0 else deque(maxlen=CONFIG.history_size)
 
 # F1: Persistent history store
 _current_dir = os.path.dirname(os.path.abspath(__file__))
