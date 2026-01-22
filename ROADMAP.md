@@ -396,6 +396,14 @@ graph TD
   - **Conflict avoidance**: Append-only JSON files under `feedback/`
   - **Auth**: Server-side token (env var) or future device flow
   - **Plan**: `.planning/260108-F16_GITHUB_FEEDBACK_PR_PLAN.md`
+- [ ] **F17**: Toggle Auto-Open for Right Error Report Panel - 🟡 Medium
+  - **Goal**: Add a user-facing switch to control whether the right-side error report panel auto-opens when new errors are detected.
+  - **Scope**:
+    - Add toggle in Doctor Settings tab (Sidebar → Doctor → Settings)
+    - Persist via ComfyUI settings (`Doctor.Behavior.AutoOpenOnError`)
+    - Apply immediately (no restart required)
+    - Full i18n across 9 languages
+  - **Plan**: `.planning/260123-F17_AUTO_OPEN_RIGHT_PANEL_TOGGLE_PLAN.md`
 - [x] **F7**: Enhanced Error Analysis (Multi-Language + Categorization) - 🔴 High ✅ *Completed (2026-01-01)*
   - **Phase 1**: Enhanced Error Context Collection
     - Python stack traces, execution logs (last 50 lines)
