@@ -22,6 +22,7 @@ import queue
 import time
 import os
 import logging
+import hashlib
 from collections import deque
 from typing import Optional, Dict, Any, List
 try:
@@ -313,6 +314,39 @@ class SafeStreamWrapper:
         return getattr(self._original_stream, name)
 
 
+class FlushSafeProxy:
+    """
+    Stream proxy that never raises from write()/flush().
+
+    Purpose:
+    - Some ComfyUI Desktop builds use a LogInterceptor whose flush() can raise
+      `OSError: [Errno 22] Invalid argument` under Windows packaging.
+    - Python's logging.StreamHandler calls flush() after every emit.
+    - If flush raises, logging prints an exception traceback, causing a log storm.
+
+    This proxy keeps the original stream behavior but makes flush safe.
+    It intentionally does NOT enqueue messages for Doctor analysis.
+    """
+
+    def __init__(self, original_stream):
+        self._original_stream = original_stream
+
+    def write(self, data):
+        try:
+            return self._original_stream.write(data)
+        except (OSError, AttributeError, ValueError):
+            return 0
+
+    def flush(self):
+        try:
+            return self._original_stream.flush()
+        except (OSError, AttributeError, ValueError):
+            return None
+
+    def __getattr__(self, name):
+        return getattr(self._original_stream, name)
+
+
 class DoctorLogProcessor(threading.Thread):
     """
     Background thread for log analysis.
@@ -340,6 +374,8 @@ class DoctorLogProcessor(threading.Thread):
         self.buffer = []
         self.in_traceback = False
         self.last_buffer_time = 0
+        self._last_recorded_hash = None
+        self._last_recorded_time = 0.0
 
     def run(self):
         """Main loop: process queued messages."""
@@ -533,6 +569,28 @@ class DoctorLogProcessor(threading.Thread):
         # overwriting legitimate error records
         if not full_traceback:
             return
+
+        # Desktop-specific: ignore ComfyUI logging flush exceptions.
+        # These can create high-frequency "error storms" even when inference isn't running,
+        # rapidly filling error_history.json with non-actionable noise.
+        if (
+            "logging\\__init__.py" in full_traceback
+            and "ComfyUI\\app\\logger.py" in full_traceback
+            and "OSError: [Errno 22] Invalid argument" in full_traceback
+        ):
+            return
+
+        # Deduplicate identical errors in a short window to avoid unbounded growth.
+        # This is critical for environments where the same failure repeats rapidly.
+        try:
+            now = time.time()
+            digest = hashlib.sha256(full_traceback.encode("utf-8", errors="ignore")).hexdigest()
+            if self._last_recorded_hash == digest and (now - self._last_recorded_time) < 2.0:
+                return
+            self._last_recorded_hash = digest
+            self._last_recorded_time = now
+        except Exception:
+            pass
         
         # Explicit exclusion for normal execution messages
         # These messages should NEVER be recorded as errors
@@ -699,6 +757,21 @@ def install(log_path: str):
     # Wrap stdout/stderr
     sys.stdout = SafeStreamWrapper(_original_stdout, _message_queue)
     sys.stderr = SafeStreamWrapper(_original_stderr, _message_queue)
+
+    # ComfyUI Desktop (and some ComfyUI builds) install StreamHandler(s) before Doctor,
+    # capturing the original sys.stdout/sys.stderr object (often LogInterceptor).
+    # If that stream's flush() raises (e.g., OSError 22), Python logging will emit a traceback
+    # for EVERY log record, causing massive log spam and filling Doctor history with noise.
+    #
+    # Patch existing StreamHandler streams to wrap them in a flush-safe proxy.
+    try:
+        root_logger = logging.getLogger()
+        for handler in list(getattr(root_logger, "handlers", []) or []):
+            stream = getattr(handler, "stream", None)
+            if stream in (_original_stdout, _original_stderr) or getattr(type(stream), "__name__", "") == "LogInterceptor":
+                handler.stream = FlushSafeProxy(stream)
+    except Exception:
+        pass
 
     logging.info("[Doctor] Logger installed (SafeStreamWrapper mode)")
     logging.info(f"[Doctor] Original stdout type: {type(_original_stdout).__name__}")
