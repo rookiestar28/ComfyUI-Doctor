@@ -4,6 +4,41 @@
 
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
+## Repository Structure (Quick Jump)
+
+**README sections**
+- [Latest Updates](#latest-updates-jan-2026---click-to-expand)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Frontend UI](#frontend-ui)
+- [Settings](#settings)
+- [API Endpoints](#api-endpoints)
+- [Supported Error Patterns](#supported-error-patterns)
+- [Phase 2 Release Gate](#phase-2-release-gate)
+- [CSP Compatibility](#csp-compatibility)
+- [Contributing](#contributing)
+
+**Key directories / files**
+- [`web/`](web) — Frontend extension (sidebar UI, Preact islands)
+- [`services/`](services) — PromptComposer, diagnostics (F14), token budget, log ring buffer
+- [`pipeline/`](pipeline) — Analysis pipeline stages + plugin system
+- [`patterns/`](patterns) — JSON error patterns (builtin/community/custom) + schema
+- [`tests/`](tests) — Pytest + Playwright E2E (`tests/e2e/`)
+- [`docs/`](docs) — Documentation + reference snapshots
+- [`scripts/`](scripts) — Local tooling (CI gates, validators, migration helpers)
+- [`ROADMAP.md`](ROADMAP.md) — Architecture diagram + development status
+
+```text
+web/        Frontend extension (Doctor sidebar UI)
+services/   Backend services (prompt composer, diagnostics, token budget, log ring buffer)
+pipeline/   Analysis pipeline stages + plugins
+patterns/   JSON error patterns + schema
+tests/      Python tests + Playwright E2E tests
+docs/       Documentation + reference snapshots
+scripts/    Dev/CI tooling and helpers
+```
+
 ## Latest Updates (Jan 2026) - Click to expand
 
 <details>

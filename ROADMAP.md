@@ -509,6 +509,17 @@ graph TD
     - `.planning/260107-A7_PHASE_5B_IMPLEMENTATION_RECORD.md`
     - `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
   - **Foundation for**: v2.0 advanced chat features, v3.0 multi-workspace features
+- [ ] **A9**: Frontend Extension API Modernization (ComfyUI_frontend Compatibility) - 🟡 Medium ⚠️ *Use dev branch*
+  - **Goal**: Reduce coupling to deprecated ComfyUI_frontend APIs so Doctor survives frontend refactors with minimal churn.
+  - **Scope**:
+    - Migrate settings registration to `ComfyExtension.settings` (avoid deprecated `app.ui.settings.addSetting/getSettingValue/setSettingValue`)
+    - Prefer `app.rootGraph` over deprecated `app.graph` for workflow capture and node lookup
+    - Provide `destroy()` for custom sidebar tab to cleanup timers/listeners on unmount
+    - Centralize ComfyUI integration behind a small compat layer (single adapter file) to isolate upstream changes
+  - **Acceptance**:
+    - No reliance on deprecated external settings APIs (where supported)
+    - Sidebar continues to work when tabs mount/unmount repeatedly (no leaked intervals/listeners)
+    - Playwright E2E regression suite stays green
 - [ ] **A5**: Create `LLMProvider` Protocol for unified LLM interface - 🟡 Medium ⚠️ *Use dev branch*
 - [x] **A8**: Plugin Migration Tooling (Plan 6.3) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Reduce configuration friction for safe-by-default plugin policy (manifest + allowlist helpers; optional HMAC signer).
