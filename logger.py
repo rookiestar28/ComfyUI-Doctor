@@ -64,13 +64,55 @@ _analysis_history: deque = deque() if CONFIG.history_size == 0 else deque(maxlen
 
 # F1: Persistent history store
 _current_dir = os.path.dirname(os.path.abspath(__file__))
-_history_file = os.path.join(_current_dir, "logs", "error_history.json")
+
+def _get_history_file_path() -> str:
+    """
+    Choose a writable, stable location for history persistence.
+
+    Why:
+    - ComfyUI Desktop / Manager may treat writes inside the extension folder as "conflicts"
+      and may also place extensions under locations with stricter permissions.
+    - Using ComfyUI's user directory avoids dirtying the extension checkout and is more robust
+      across install modes (portable/git clone/desktop).
+    """
+    # Prefer ComfyUI user directory when available.
+    try:
+        import folder_paths  # type: ignore
+        user_dir = folder_paths.get_user_directory()
+        return os.path.join(user_dir, "comfyui-doctor", "logs", "error_history.json")
+    except Exception:
+        pass
+
+    # Fallback: keep legacy behavior (inside extension folder).
+    return os.path.join(_current_dir, "logs", "error_history.json")
+
+_history_file = _get_history_file_path()
 _history_store: Optional[HistoryStore] = None
 
 def _get_history_store() -> HistoryStore:
     """Lazy initialization of history store."""
     global _history_store
     if _history_store is None:
+        # Best-effort migration: if the new path is empty but the legacy file exists,
+        # move it to the new location so users keep their history and we avoid leaving
+        # writable artifacts in the extension folder (which can trigger "conflict" warnings).
+        try:
+            legacy_path = os.path.join(_current_dir, "logs", "error_history.json")
+            if _history_file != legacy_path and os.path.exists(legacy_path) and not os.path.exists(_history_file):
+                os.makedirs(os.path.dirname(_history_file), exist_ok=True)
+                try:
+                    os.replace(legacy_path, _history_file)
+                except Exception:
+                    # If atomic replace fails (cross-device), fall back to copy+remove.
+                    import shutil
+                    shutil.copy2(legacy_path, _history_file)
+                    try:
+                        os.remove(legacy_path)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         _history_store = HistoryStore(_history_file, maxlen=CONFIG.history_size)
     return _history_store
 
