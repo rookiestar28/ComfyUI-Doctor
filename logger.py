@@ -374,8 +374,15 @@ class DoctorLogProcessor(threading.Thread):
         self.buffer = []
         self.in_traceback = False
         self.last_buffer_time = 0
-        self._last_recorded_hash = None
-        self._last_recorded_time = 0.0
+        self._aggregate_window_seconds = 60
+
+    def _parse_ts(self, ts: str) -> datetime.datetime:
+        try:
+            if not ts:
+                return datetime.datetime.min
+            return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return datetime.datetime.min
 
     def run(self):
         """Main loop: process queued messages."""
@@ -579,18 +586,6 @@ class DoctorLogProcessor(threading.Thread):
             and "OSError: [Errno 22] Invalid argument" in full_traceback
         ):
             return
-
-        # Deduplicate identical errors in a short window to avoid unbounded growth.
-        # This is critical for environments where the same failure repeats rapidly.
-        try:
-            now = time.time()
-            digest = hashlib.sha256(full_traceback.encode("utf-8", errors="ignore")).hexdigest()
-            if self._last_recorded_hash == digest and (now - self._last_recorded_time) < 2.0:
-                return
-            self._last_recorded_hash = digest
-            self._last_recorded_time = now
-        except Exception:
-            pass
         
         # Explicit exclusion for normal execution messages
         # These messages should NEVER be recorded as errors
@@ -631,11 +626,16 @@ class DoctorLogProcessor(threading.Thread):
 
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
         timestamp = datetime.datetime.now().isoformat()
+        error_signature = hashlib.sha256(full_traceback.encode("utf-8", errors="ignore")).hexdigest()
 
         new_analysis = {
             "error": full_traceback,
             "suggestion": suggestion,
             "timestamp": timestamp,
+            "first_seen": timestamp,
+            "last_seen": timestamp,
+            "repeat_count": 1,
+            "error_signature": error_signature,
             "node_context": node_context.to_dict() if node_context else None,
             "analysis_metadata": analysis_metadata,
             "matched_pattern_id": matched_pattern_id,
@@ -648,7 +648,37 @@ class DoctorLogProcessor(threading.Thread):
         with _history_lock:
             global _last_analysis
             _last_analysis = new_analysis
-            _analysis_history.append(new_analysis.copy())
+            # Aggregate repeated identical errors within 60 seconds to avoid unbounded history growth.
+            # NOTE: We still update _last_analysis every time so the UI reflects new occurrences.
+            aggregated = False
+            try:
+                now_ts = self._parse_ts(timestamp)
+                # Look back across recent history to find a matching signature in-window.
+                # Limit scan to keep cost bounded even when history is unbounded.
+                scan_limit = 50
+                hist_len = len(_analysis_history)
+                start_index = max(0, hist_len - scan_limit)
+                for i in range(hist_len - 1, start_index - 1, -1):
+                    existing = _analysis_history[i]
+                    if not isinstance(existing, dict):
+                        continue
+                    if existing.get("error_signature") != error_signature:
+                        continue
+                    last_seen_str = existing.get("last_seen") or existing.get("timestamp") or ""
+                    last_seen_ts = self._parse_ts(last_seen_str)
+                    if (now_ts - last_seen_ts).total_seconds() <= self._aggregate_window_seconds:
+                        existing["repeat_count"] = int(existing.get("repeat_count", 1) or 1) + 1
+                        existing["last_seen"] = timestamp
+                        # Keep first_seen stable
+                        if not existing.get("first_seen"):
+                            existing["first_seen"] = existing.get("timestamp") or timestamp
+                        aggregated = True
+                    break
+            except Exception:
+                pass
+
+            if not aggregated:
+                _analysis_history.append(new_analysis.copy())
 
         # F1: Persist to history store
         try:
@@ -663,6 +693,10 @@ class DoctorLogProcessor(threading.Thread):
                 pattern_priority=pattern_priority,
                 resolution_status="unresolved",
                 analysis_metadata=analysis_metadata,
+                repeat_count=1,
+                first_seen=timestamp,
+                last_seen=timestamp,
+                error_signature=error_signature,
             )
             store.append(entry)
         except Exception:

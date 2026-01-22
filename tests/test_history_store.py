@@ -102,6 +102,52 @@ class TestHistoryStore(unittest.TestCase):
         # get_all returns newest first
         self.assertEqual(history[0]["error"], "Error 2")
         self.assertEqual(history[1]["error"], "Error 1")
+
+    def test_aggregation_within_window(self):
+        """Repeated identical errors within 60s should be aggregated."""
+        store = HistoryStore(self.test_file, maxlen=10)
+
+        entry1 = HistoryEntry(
+            timestamp="2025-12-29T14:00:00",
+            error="Same error",
+            suggestion={},
+        )
+        entry2 = HistoryEntry(
+            timestamp="2025-12-29T14:00:30",
+            error="Same error",
+            suggestion={},
+        )
+
+        store.append(entry1)
+        store.append(entry2)
+
+        history = store.get_all()
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["error"], "Same error")
+        self.assertEqual(history[0].get("repeat_count"), 2)
+        self.assertEqual(history[0].get("first_seen"), "2025-12-29T14:00:00")
+        self.assertEqual(history[0].get("last_seen"), "2025-12-29T14:00:30")
+
+    def test_no_aggregation_outside_window(self):
+        """Repeated identical errors outside 60s window should create new entries."""
+        store = HistoryStore(self.test_file, maxlen=10)
+
+        entry1 = HistoryEntry(
+            timestamp="2025-12-29T14:00:00",
+            error="Same error",
+            suggestion={},
+        )
+        entry2 = HistoryEntry(
+            timestamp="2025-12-29T14:01:10",
+            error="Same error",
+            suggestion={},
+        )
+
+        store.append(entry1)
+        store.append(entry2)
+
+        history = store.get_all()
+        self.assertEqual(len(history), 2)
     
     def test_persistence_across_instances(self):
         """Test that history persists across store instances."""

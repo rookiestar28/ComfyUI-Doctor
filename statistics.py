@@ -52,7 +52,13 @@ class StatisticsCalculator:
             return StatisticsCalculator._empty_stats()
         
         # Calculate metrics
-        total_errors = len(filtered_history)
+        def weight(entry: Dict[str, Any]) -> int:
+            try:
+                return int(entry.get("repeat_count", 1) or 1)
+            except Exception:
+                return 1
+
+        total_errors = sum(weight(e) for e in filtered_history)
         pattern_frequency = StatisticsCalculator._count_patterns(filtered_history)
         category_breakdown = StatisticsCalculator._count_categories(filtered_history)
         top_patterns = StatisticsCalculator._get_top_patterns(filtered_history, limit=5)
@@ -75,7 +81,7 @@ class StatisticsCalculator:
         for entry in history:
             try:
                 # Parse ISO timestamp
-                timestamp_str = entry.get("timestamp", "")
+                timestamp_str = entry.get("last_seen") or entry.get("timestamp", "")
                 if timestamp_str:
                     # Handle multiple ISO formats
                     entry_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
@@ -93,22 +99,32 @@ class StatisticsCalculator:
     @staticmethod
     def _count_patterns(history: List[Dict]) -> Dict[str, int]:
         """Count frequency of each matched pattern."""
-        pattern_ids = [
-            entry.get("matched_pattern_id")
-            for entry in history
-            if entry.get("matched_pattern_id")
-        ]
-        return dict(Counter(pattern_ids))
+        counts: Dict[str, int] = {}
+        for entry in history:
+            pattern_id = entry.get("matched_pattern_id")
+            if not pattern_id:
+                continue
+            try:
+                w = int(entry.get("repeat_count", 1) or 1)
+            except Exception:
+                w = 1
+            counts[pattern_id] = counts.get(pattern_id, 0) + w
+        return counts
     
     @staticmethod
     def _count_categories(history: List[Dict]) -> Dict[str, int]:
         """Count errors by category."""
-        categories = [
-            entry.get("pattern_category", "generic")
-            for entry in history
-            if entry.get("pattern_category")
-        ]
-        return dict(Counter(categories))
+        counts: Dict[str, int] = {}
+        for entry in history:
+            category = entry.get("pattern_category", "generic")
+            if not category:
+                continue
+            try:
+                w = int(entry.get("repeat_count", 1) or 1)
+            except Exception:
+                w = 1
+            counts[category] = counts.get(category, 0) + w
+        return counts
     
     @staticmethod
     def _get_top_patterns(history: List[Dict], limit: int = 5) -> List[Dict[str, Any]]:
@@ -129,7 +145,11 @@ class StatisticsCalculator:
                         "count": 0,
                         "category": entry.get("pattern_category", "generic")
                     }
-                pattern_data[pattern_id]["count"] += 1
+                try:
+                    w = int(entry.get("repeat_count", 1) or 1)
+                except Exception:
+                    w = 1
+                pattern_data[pattern_id]["count"] += w
         
         # Sort by count and return top N
         sorted_patterns = sorted(
@@ -142,16 +162,17 @@ class StatisticsCalculator:
     @staticmethod
     def _calculate_resolution_rate(history: List[Dict]) -> Dict[str, int]:
         """Calculate resolution status breakdown."""
-        statuses = [
-            entry.get("resolution_status", "unresolved")
-            for entry in history
-        ]
-        status_counts = Counter(statuses)
-        return {
-            "resolved": status_counts.get("resolved", 0),
-            "unresolved": status_counts.get("unresolved", 0),
-            "ignored": status_counts.get("ignored", 0)
-        }
+        counts = {"resolved": 0, "unresolved": 0, "ignored": 0}
+        for entry in history:
+            status = entry.get("resolution_status", "unresolved") or "unresolved"
+            try:
+                w = int(entry.get("repeat_count", 1) or 1)
+            except Exception:
+                w = 1
+            if status not in counts:
+                status = "unresolved"
+            counts[status] += w
+        return counts
     
     @staticmethod
     def _calculate_trend(history: List[Dict]) -> Dict[str, int]:
@@ -169,16 +190,21 @@ class StatisticsCalculator:
         
         for entry in history:
             try:
-                timestamp_str = entry.get("timestamp", "")
+                timestamp_str = entry.get("last_seen") or entry.get("timestamp", "")
                 if timestamp_str:
                     entry_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                     # Make entry_time timezone-naive for comparison
                     if entry_time.tzinfo is not None:
                         entry_time = entry_time.replace(tzinfo=None)
+
+                    try:
+                        w = int(entry.get("repeat_count", 1) or 1)
+                    except Exception:
+                        w = 1
                     
                     for window_key, window_time in windows.items():
                         if entry_time >= window_time:
-                            counts[window_key] += 1
+                            counts[window_key] += w
             except (ValueError, TypeError):
                 continue
         
