@@ -365,6 +365,15 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
             // Get workflow from ComfyUI
             const workflow = window.app?.graph?.serialize?.() || {};
 
+            // P1.5 Fix: Inject doctor metadata for privacy checks
+            if (!workflow.extra) workflow.extra = {};
+            workflow.extra.doctor_metadata = {
+                privacy_mode: window.app?.ui?.settings?.getSettingValue?.("Doctor.Privacy.Mode", "basic"),
+                base_url: window.app?.ui?.settings?.getSettingValue?.("Doctor.LLM.BaseUrl", ""),
+                llm_model: window.app?.ui?.settings?.getSettingValue?.("Doctor.LLM.Model", ""),
+                timestamp: Date.now()
+            };
+
             const res = await fetch('/doctor/health_check', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

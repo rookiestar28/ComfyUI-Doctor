@@ -74,12 +74,11 @@ def init_checks():
     runner = get_diagnostics_runner()
 
     # Import check modules to trigger registration
-    # These will be added in P1:
-    # from . import workflow_lint
-    # from . import env_deps
-    # from . import model_assets
-    # from . import privacy_security
-    # from . import runtime_performance
+    from . import workflow_lint
+    from . import env_deps
+    from . import model_assets
+    from . import privacy_security
+    from . import runtime_performance
 
     # Register all discovered checks
     for name, check_fn in _checks.items():
@@ -101,5 +100,5 @@ async def check_placeholder(workflow: Dict[str, Any], request: HealthCheckReques
 
 
 # Auto-initialize when module is imported
-# Commented out for P0 - will be enabled when checks are ready
-# init_checks()
+# Auto-initialize when module is imported
+init_checks()

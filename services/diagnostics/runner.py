@@ -63,6 +63,10 @@ class DiagnosticsRunner:
             name: Human-readable check name for logging
             check_fn: Async function that takes (workflow, request) and returns List[HealthIssue]
         """
+        if name in self._check_names:
+            logger.warning(f"Diagnostic check '{name}' already registered, skipping duplicate.")
+            return
+
         self._checks.append(check_fn)
         self._check_names.append(name)
         logger.info(f"Registered diagnostic check: {name}")
