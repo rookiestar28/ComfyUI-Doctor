@@ -96,6 +96,7 @@ export class DoctorUI {
         // Last Modified: 2026-01-03 (Fixed race condition)
         // ═══════════════════════════════════════════════════════════════
         this.uiText = {};
+        this.meta = null;
 
         this.createStyles();
         this.createMenuButton();
@@ -133,6 +134,7 @@ export class DoctorUI {
             const response = await fetch(`/doctor/ui_text?lang=${this.language}`);
             const data = await response.json();
             this.uiText = data.text || {};
+            this.meta = data.meta || null;
             console.log(`[ComfyUI-Doctor] Loaded UI text for language: ${data.language}, Keys: ${Object.keys(this.uiText).length}`);
             if (this.uiText.statistics_title) console.log(`[ComfyUI-Doctor] statistics_title: ${this.uiText.statistics_title}`);
             else console.log(`[ComfyUI-Doctor] statistics_title MISSING`);
@@ -190,6 +192,11 @@ export class DoctorUI {
                 "category_model_loading": "Model Loading",
                 "category_framework": "Framework",
                 "category_generic": "Generic",
+            };
+            this.meta = {
+                name: "ComfyUI-Doctor",
+                version: "unknown",
+                repository: "https://github.com/rookiestar28/ComfyUI-Doctor",
             };
         }
     }

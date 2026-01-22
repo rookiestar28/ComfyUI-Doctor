@@ -39,8 +39,10 @@ import glob
 import datetime
 import platform
 import json
+import re
 import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ⚠️ CRITICAL: DO NOT change these to absolute imports
@@ -971,9 +973,53 @@ try:
         try:
             lang = request.query.get("lang", get_language())
             ui_text = UI_TEXT.get(lang, UI_TEXT["en"])
+
+            def _get_doctor_meta() -> dict:
+                # Best-effort metadata for UI display (no extra deps).
+                meta = {
+                    "name": "ComfyUI-Doctor",
+                    "version": "unknown",
+                    "repository": "https://github.com/rookiestar28/ComfyUI-Doctor",
+                }
+                try:
+                    import importlib.metadata as _metadata  # py3.8+
+
+                    # Distribution name may differ depending on install method.
+                    for dist_name in ("ComfyUI-Doctor", "comfyui-doctor"):
+                        try:
+                            meta["version"] = _metadata.version(dist_name)
+                            break
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                # Fallback: parse local pyproject.toml (repo install via ComfyUI-Manager).
+                if meta["version"] in ("unknown", "", None):
+                    try:
+                        from pathlib import Path
+                        import re
+
+                        pyproject_path = Path(__file__).resolve().parent / "pyproject.toml"
+                        if pyproject_path.exists():
+                            content = pyproject_path.read_text(encoding="utf-8", errors="ignore")
+                            m = re.search(r'(?m)^version\\s*=\\s*"([^"]+)"\\s*$', content)
+                            if m:
+                                meta["version"] = m.group(1).strip()
+                            m_repo = re.search(
+                                r'(?ms)^\\[project\\.urls\\].*?^Repository\\s*=\\s*"([^"]+)"\\s*$',
+                                content,
+                            )
+                            if m_repo:
+                                meta["repository"] = m_repo.group(1).strip()
+                    except Exception:
+                        pass
+                return meta
+
             return web.json_response({
                 "language": lang,
-                "text": ui_text
+                "text": ui_text,
+                "meta": _get_doctor_meta(),
             })
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
@@ -2543,4 +2589,22 @@ except Exception as e:
 # Web directory for frontend assets (required by ComfyUI)
 WEB_DIRECTORY = "./web"
 
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
+def _read_pyproject_value(pattern: str, fallback: str = "") -> str:
+    try:
+        pyproject_path = Path(__file__).resolve().with_name("pyproject.toml")
+        text = pyproject_path.read_text(encoding="utf-8", errors="ignore")
+        m = re.search(pattern, text)
+        if m:
+            value = (m.group(1) or "").strip()
+            return value or fallback
+    except Exception:
+        pass
+    return fallback
+
+
+# Metadata for "About" / tooling integrations (best-effort, no hard dependency).
+# Many ComfyUI/Manager UIs will display version + repo link when available.
+__version__ = _read_pyproject_value(r'(?m)^version\\s*=\\s*["\\\']([^"\\\']+)["\\\']', fallback="unknown")
+__repository__ = _read_pyproject_value(r'(?m)^Repository\\s*=\\s*["\\\']([^"\\\']+)["\\\']', fallback="https://github.com/rookiestar28/ComfyUI-Doctor")
+
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY", "__version__", "__repository__"]

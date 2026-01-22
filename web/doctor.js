@@ -115,8 +115,19 @@ const SUPPORTED_LANGUAGES = [
     { value: "ko", text: "한국어" },
 ];
 
+// ComfyUI Settings → About panel badges (ComfyUI_frontend AboutPanel.vue)
+const DOCTOR_REPO_URL = "https://github.com/rookiestar28/ComfyUI-Doctor";
+const DOCTOR_ABOUT_BADGES = [
+    {
+        label: "ComfyUI Doctor",
+        url: DOCTOR_REPO_URL,
+        icon: "pi pi-github",
+    },
+];
+
 app.registerExtension({
     name: "ComfyUI-Doctor",
+    aboutPageBadges: DOCTOR_ABOUT_BADGES,
 
     async setup() {
         console.log("[ComfyUI-Doctor] 🟢 Frontend Extension Initialized");
@@ -216,6 +227,19 @@ app.registerExtension({
         // Do not remove this await unless registerSidebarTab no longer uses getUIText().
         if (doctorUI.uiTextReady) {
             await doctorUI.uiTextReady;
+        }
+
+        // Populate Doctor version for ComfyUI Settings → About badge (best effort).
+        // Note: AboutPanel badges are computed and may not be reactive to later updates.
+        // Updating immediately after uiTextReady should be early enough for typical usage.
+        try {
+            const meta = doctorUI?.meta;
+            if (meta?.repository) DOCTOR_ABOUT_BADGES[0].url = meta.repository;
+            if (meta?.version && meta.version !== "unknown") {
+                DOCTOR_ABOUT_BADGES[0].label = `ComfyUI Doctor v${meta.version}`;
+            }
+        } catch (e) {
+            // no-op: keep fallback badge label/url
         }
 
         // ========================================
