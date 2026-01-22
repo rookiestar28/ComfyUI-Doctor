@@ -8,6 +8,7 @@ Supports cross-restart history retrieval and automatic cleanup.
 import json
 import os
 import threading
+import shutil
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -120,6 +121,16 @@ class HistoryStore:
                             self._history = self._history[-self._maxlen:]
         except (json.JSONDecodeError, OSError, TypeError) as e:
             print(f"[ComfyUI-Doctor] Warning: Could not load history file: {e}")
+            # If the history file is corrupted (common when the process is interrupted
+            # while writing), move it aside so new errors can be recorded normally.
+            try:
+                if os.path.exists(self._filepath):
+                    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                    backup_path = f"{self._filepath}.corrupt-{ts}"
+                    shutil.move(self._filepath, backup_path)
+                    print(f"[ComfyUI-Doctor] Warning: Corrupted history moved to: {backup_path}")
+            except Exception:
+                pass
             self._history = []
         
         self._loaded = True
@@ -131,16 +142,30 @@ class HistoryStore:
             dir_path = os.path.dirname(self._filepath)
             if dir_path and not os.path.exists(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
-            
-            with open(self._filepath, "w", encoding="utf-8") as f:
+
+            # Atomic write to avoid corrupting the JSON file on interruption.
+            tmp_path = f"{self._filepath}.tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(
                     [entry.to_dict() for entry in self._history],
                     f,
                     ensure_ascii=False,
-                    indent=2
+                    indent=None
                 )
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
+            os.replace(tmp_path, self._filepath)
         except OSError as e:
             print(f"[ComfyUI-Doctor] Warning: Could not save history file: {e}")
+            try:
+                tmp_path = f"{self._filepath}.tmp"
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
     
     def append(self, entry: HistoryEntry) -> None:
         """

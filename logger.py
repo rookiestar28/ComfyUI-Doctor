@@ -364,6 +364,12 @@ class DoctorLogProcessor(threading.Thread):
         """
         current_time = time.time()
 
+        # Always check buffer timeout, even when logs keep coming.
+        # In some environments (e.g., ComfyUI Desktop), periodic Doctor-API logs
+        # can prevent queue.Empty from firing, which previously blocked buffer flush
+        # for non-traceback errors like "Failed to validate prompt for output".
+        self._check_buffer_timeout()
+
         # ═══════════════════════════════════════════════════════════════
         # CRITICAL FIX (2026-01-06): Prevent recursive log capture
         # ═══════════════════════════════════════════════════════════════
@@ -460,17 +466,6 @@ class DoctorLogProcessor(threading.Thread):
                 self.buffer.append(message)
                 self.last_buffer_time = current_time
                 full_traceback = "".join(self.buffer)
-
-                # Validation error completion marker
-                if "Failed to validate prompt for output" in full_traceback:
-                    if "Executing prompt:" in message:
-                        result = ErrorAnalyzer.analyze(full_traceback)
-                        suggestion, metadata = result if result else (None, None)
-                        self._record_analysis(full_traceback, suggestion, metadata)
-                        self._set_traceback_state(False)
-                        self.buffer = []
-                        return
-                    return
 
                 # Normal traceback completion
                 if ErrorAnalyzer.is_complete_traceback(full_traceback):
