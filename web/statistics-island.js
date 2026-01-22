@@ -333,6 +333,305 @@ function CategoryBreakdown({ breakdown, total, uiText }) {
 }
 
 /**
+ * F14: Diagnostics Section Component
+ * Proactive health checks and intent signature display
+ */
+function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
+    const { html, useState, useCallback } = preactModules;
+
+    const [report, setReport] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [expanded, setExpanded] = useState({});  // Track expanded issues
+
+    // Fetch last report on mount
+    const fetchLastReport = useCallback(async () => {
+        try {
+            const res = await fetch('/doctor/health_report');
+            const data = await res.json();
+            if (data.success && data.report) {
+                setReport(data.report);
+            }
+        } catch (e) {
+            console.warn('[DiagnosticsSection] Failed to fetch last report:', e);
+        }
+    }, []);
+
+    // Run diagnostics
+    const runDiagnostics = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // Get workflow from ComfyUI
+            const workflow = window.app?.graph?.serialize?.() || {};
+
+            const res = await fetch('/doctor/health_check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    workflow,
+                    scope: 'manual',
+                    options: { include_intent: true, max_paths: 50 }
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setReport(data.report);
+                onDiagnosticsRun?.();
+            } else {
+                setError(data.error || 'Failed to run diagnostics');
+            }
+        } catch (e) {
+            setError(e.message || 'Failed to run diagnostics');
+        } finally {
+            setLoading(false);
+        }
+    }, [onDiagnosticsRun]);
+
+    // Load last report on component mount
+    preactModules.useEffect(() => {
+        fetchLastReport();
+    }, [fetchLastReport]);
+
+    // Locate node on canvas
+    const handleLocateNode = useCallback((nodeId) => {
+        // Doctor UI is at app.Doctor (see doctor.js line 223)
+        if (nodeId != null && window.app?.Doctor?.locateNodeOnCanvas) {
+            window.app.Doctor.locateNodeOnCanvas(nodeId);
+        }
+    }, []);
+
+    // Acknowledge issue
+    const handleAckIssue = useCallback(async (reportId, issueId, status) => {
+        try {
+            const res = await fetch('/doctor/health_ack', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ report_id: reportId, issue_id: issueId, status })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Update local state
+                setReport(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        issues: prev.issues.map(issue =>
+                            issue.issue_id === issueId ? { ...issue, status } : issue
+                        )
+                    };
+                });
+            }
+        } catch (e) {
+            console.error('[DiagnosticsSection] Ack error:', e);
+        }
+    }, []);
+
+    // Toggle issue expansion
+    const toggleExpand = useCallback((issueId) => {
+        setExpanded(prev => ({ ...prev, [issueId]: !prev[issueId] }));
+    }, []);
+
+    // Health score badge color
+    const getScoreColor = (score) => {
+        if (score >= 80) return '#4caf50';
+        if (score >= 50) return '#ff9800';
+        return '#f44336';
+    };
+
+    // Severity colors
+    const severityColors = {
+        critical: '#f44336',
+        warning: '#ff9800',
+        info: '#2196f3'
+    };
+
+    // Severity icons
+    const severityIcons = {
+        critical: '🔴',
+        warning: '🟡',
+        info: '🔵'
+    };
+
+    return html`
+        <div id="doctor-diagnostics-panel" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 20px;">
+            <!-- Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #aaa;">
+                    🩺 <span>${uiText?.diagnostics_title || 'Diagnostics'}</span>
+                </div>
+                <button
+                    id="doctor-run-diagnostics-btn"
+                    onClick=${runDiagnostics}
+                    disabled=${loading}
+                    style="padding: 6px 12px; background: ${loading ? '#333' : '#2563eb'}; border: 1px solid ${loading ? '#444' : '#3b82f6'}; border-radius: 4px; color: #fff; cursor: ${loading ? 'not-allowed' : 'pointer'}; font-size: 12px; transition: all 0.2s;"
+                >
+                    ${loading ? '⏳ ' + (uiText?.diagnostics_running || 'Running...') : '▶ ' + (uiText?.diagnostics_run_btn || 'Run Diagnostics')}
+                </button>
+            </div>
+
+            ${error ? html`
+                <div style="padding: 10px; background: rgba(244, 67, 54, 0.1); border: 1px solid rgba(244, 67, 54, 0.3); border-radius: 4px; color: #ff6b6b; font-size: 12px; margin-bottom: 12px;">
+                    ⚠️ ${error}
+                </div>
+            ` : null}
+
+            ${report ? html`
+                <!-- Health Score & Summary -->
+                <div style="display: flex; gap: 12px; margin-bottom: 15px;">
+                    <!-- Score Badge -->
+                    <div style="flex: 0 0 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; background: #1a1a1a; border-radius: 8px; border: 2px solid ${getScoreColor(report.health_score)};">
+                        <div id="diagnostics-health-score" style="font-size: 28px; font-weight: bold; color: ${getScoreColor(report.health_score)};">
+                            ${report.health_score}
+                        </div>
+                        <div style="font-size: 10px; color: #888; text-transform: uppercase;">
+                            ${uiText?.diagnostics_score || 'Health'}
+                        </div>
+                    </div>
+
+                    <!-- Counts -->
+                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px;">
+                        <div style="display: flex; gap: 12px; font-size: 12px;">
+                            <span id="diagnostics-critical-count" style="color: ${severityColors.critical};">
+                                ${severityIcons.critical} ${uiText?.diagnostics_critical || 'Critical'}: <strong>${report.counts?.critical || 0}</strong>
+                            </span>
+                            <span id="diagnostics-warning-count" style="color: ${severityColors.warning};">
+                                ${severityIcons.warning} ${uiText?.diagnostics_warning || 'Warning'}: <strong>${report.counts?.warning || 0}</strong>
+                            </span>
+                            <span id="diagnostics-info-count" style="color: ${severityColors.info};">
+                                ${severityIcons.info} ${uiText?.diagnostics_info || 'Info'}: <strong>${report.counts?.info || 0}</strong>
+                            </span>
+                        </div>
+                        <div style="font-size: 11px; color: #666;">
+                            ${uiText?.diagnostics_last_run || 'Last run'}: ${new Date(report.timestamp).toLocaleString()} (${report.duration_ms}ms)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intent Banner -->
+                ${report.intent_signature?.top_intents?.length > 0 ? html`
+                    <div id="diagnostics-intent-banner" style="padding: 10px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); border-radius: 6px; margin-bottom: 15px;">
+                        <div style="font-size: 12px; color: #93c5fd; margin-bottom: 6px;">
+                            🎯 ${uiText?.diagnostics_likely_intent || 'Likely intent'}:
+                            <strong style="color: #60a5fa;">${report.intent_signature.top_intents[0].intent_id}</strong>
+                            <span style="color: #888; margin-left: 6px;">(${Math.round(report.intent_signature.top_intents[0].confidence * 100)}%)</span>
+                        </div>
+                        ${report.intent_signature.top_intents[0].evidence?.slice(0, 3).map(ev => html`
+                            <div style="font-size: 11px; color: #666; padding-left: 20px;">
+                                • ${ev.explain || ev.signal_id}
+                            </div>
+                        `)}
+                    </div>
+                ` : null}
+
+                <!-- Issues List -->
+                ${report.issues?.length > 0 ? html`
+                    <div id="diagnostics-issues-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 4px;">
+                            ${uiText?.diagnostics_issues || 'Issues'} (${report.issues.length})
+                        </div>
+                        ${report.issues.map(issue => html`
+                            <div
+                                class="diagnostics-issue"
+                                data-issue-id=${issue.issue_id}
+                                style="padding: 10px; background: #1a1a1a; border-radius: 6px; border-left: 3px solid ${severityColors[issue.severity]};"
+                            >
+                                <!-- Issue Header -->
+                                <div
+                                    style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;"
+                                    onClick=${() => toggleExpand(issue.issue_id)}
+                                >
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 14px;">${severityIcons[issue.severity]}</span>
+                                        <span style="font-size: 12px; color: #ddd; font-weight: 500;">${issue.title}</span>
+                                        ${issue.status !== 'open' ? html`
+                                            <span style="font-size: 10px; padding: 2px 6px; background: rgba(100,100,100,0.3); border-radius: 10px; color: #888;">
+                                                ${issue.status}
+                                            </span>
+                                        ` : null}
+                                    </div>
+                                    <span style="color: #666; font-size: 12px;">${expanded[issue.issue_id] ? '▼' : '▶'}</span>
+                                </div>
+
+                                <!-- Issue Summary -->
+                                <div style="font-size: 11px; color: #999; margin-top: 4px; padding-left: 22px;">
+                                    ${issue.summary}
+                                </div>
+
+                                <!-- Expanded Details -->
+                                ${expanded[issue.issue_id] ? html`
+                                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333;">
+                                        <!-- Evidence -->
+                                        ${issue.evidence?.length > 0 ? html`
+                                            <div style="margin-bottom: 8px;">
+                                                <div style="font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 4px;">
+                                                    ${uiText?.diagnostics_evidence || 'Evidence'}
+                                                </div>
+                                                ${issue.evidence.map(ev => html`
+                                                    <div style="font-size: 11px; color: #888; padding-left: 10px;">• ${ev}</div>
+                                                `)}
+                                            </div>
+                                        ` : null}
+
+                                        <!-- Recommendations -->
+                                        ${issue.recommendation?.length > 0 ? html`
+                                            <div style="margin-bottom: 8px;">
+                                                <div style="font-size: 10px; color: #666; text-transform: uppercase; margin-bottom: 4px;">
+                                                    ${uiText?.diagnostics_recommendation || 'Recommendation'}
+                                                </div>
+                                                ${issue.recommendation.map(rec => html`
+                                                    <div style="font-size: 11px; color: #a8d08d; padding-left: 10px;">💡 ${rec}</div>
+                                                `)}
+                                            </div>
+                                        ` : null}
+
+                                        <!-- Actions -->
+                                        <div style="display: flex; gap: 6px; margin-top: 8px;">
+                                            ${issue.target?.node_id != null ? html`
+                                                <button
+                                                    onClick=${() => handleLocateNode(issue.target.node_id)}
+                                                    style="padding: 4px 8px; background: #333; border: 1px solid #444; border-radius: 4px; color: #ccc; cursor: pointer; font-size: 10px;"
+                                                >
+                                                    📍 ${uiText?.diagnostics_locate_node || 'Locate Node'}
+                                                </button>
+                                            ` : null}
+                                            ${issue.status === 'open' ? html`
+                                                <button
+                                                    onClick=${() => handleAckIssue(report.report_id, issue.issue_id, 'acknowledged')}
+                                                    style="padding: 4px 8px; background: #333; border: 1px solid #444; border-radius: 4px; color: #ccc; cursor: pointer; font-size: 10px;"
+                                                >
+                                                    ✓ ${uiText?.diagnostics_ack || 'Acknowledge'}
+                                                </button>
+                                                <button
+                                                    onClick=${() => handleAckIssue(report.report_id, issue.issue_id, 'ignored')}
+                                                    style="padding: 4px 8px; background: #333; border: 1px solid #444; border-radius: 4px; color: #888; cursor: pointer; font-size: 10px;"
+                                                >
+                                                    ⚪ ${uiText?.diagnostics_ignore || 'Ignore'}
+                                                </button>
+                                            ` : null}
+                                        </div>
+                                    </div>
+                                ` : null}
+                            </div>
+                        `)}
+                    </div>
+                ` : html`
+                    <div id="diagnostics-no-issues" style="text-align: center; padding: 20px; color: #4caf50; font-size: 12px;">
+                        ✅ ${uiText?.diagnostics_no_issues || 'No issues detected'}
+                    </div>
+                `}
+            ` : html`
+                <!-- Empty State -->
+                <div id="diagnostics-empty-state" style="text-align: center; padding: 30px; color: #666; font-size: 12px;">
+                    <div style="font-size: 32px; margin-bottom: 10px; opacity: 0.5;">🩺</div>
+                    <div>${uiText?.diagnostics_empty || 'Run diagnostics to check your workflow health'}</div>
+                </div>
+            `}
+        </div>
+    `;
+}
+
+/**
  * Trust & Health Section Component (Moved from Settings tab)
  * Displays /doctor/health and /doctor/plugins info
  */
@@ -697,6 +996,9 @@ function StatisticsIsland({ uiText }) {
 
                 <!-- Category Breakdown -->
                 <${CategoryBreakdown} breakdown=${stats.category_breakdown} total=${stats.total_errors} uiText=${uiText} />
+
+                <!-- F14: Diagnostics Section -->
+                <${DiagnosticsSection} uiText=${uiText} onDiagnosticsRun=${fetchStats} />
 
                 <!-- Trust & Health Section (Moved from Settings) -->
                 <${TrustHealthSection} uiText=${uiText} />

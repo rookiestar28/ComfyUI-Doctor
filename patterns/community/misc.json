@@ -42,6 +42,16 @@
       "notes": "Scheduler configuration error"
     },
     {
+      "id": "value_not_in_list",
+      "regex": "(?i)(?:ValueError:\\s*)?['\\\"]?([^'\\\"\\n]+?)['\\\"]?\\s+(?:is\\s+)?not\\s+in\\s+(?:the\\s+)?list",
+      "error_key": "VALUE_NOT_IN_LIST",
+      "has_groups": true,
+      "priority": 82,
+      "category": "workflow",
+      "tags": ["workflow", "model", "dropdown", "mismatch", "list"],
+      "notes": "Selected value is not in the available list (common when importing someone else's workflow with missing/renamed models)"
+    },
+    {
       "id": "clip_encoding_error",
       "regex": "CLIP.*encoding failed|text_encode.*failed|CLIPTextEncode.*error",
       "error_key": "CLIP_ENCODING_ERROR",

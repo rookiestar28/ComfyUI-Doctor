@@ -103,7 +103,7 @@ graph TD
     AU --> AZ[specs/statistics.spec.js - 19 tests]
     AU --> BA[specs/preact-loader.spec.js - 14 tests]
     AU --> BB[specs/error-boundaries.spec.js - 8 tests]
-    AU --> BC[specs/telemetry.spec.js - 8 tests (requires ComfyUI backend)]
+    AU --> BC["specs/telemetry.spec.js - 8 tests - requires ComfyUI backend"]
     AV --> AH
     AV --> AJ
     

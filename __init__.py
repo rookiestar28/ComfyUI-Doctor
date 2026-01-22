@@ -2554,7 +2554,169 @@ try:
         except Exception as e:
             logger.error(f"Plugins API error: {str(e)}")
             return web.json_response({"success": False, "error": str(e)}, status=500)
-        
+
+    # ---- F14: Proactive Diagnostics API Endpoints ----
+    from services.diagnostics import (
+        get_diagnostics_runner,
+        get_diagnostics_store,
+        HealthCheckRequest,
+        HealthAckRequest,
+        IssueStatus,
+    )
+    from services.intent import init_intent_system
+    from services.diagnostics.checks import init_checks
+
+    # Initialize checks registry (registers checks with runner)
+    try:
+        init_checks()
+    except Exception as e:
+        logger.warning(f"Failed to initialize diagnostics checks: {e}")
+
+    # Initialize intent system (registers scorer with runner)
+    try:
+        init_intent_system()
+    except Exception as e:
+        logger.warning(f"Failed to initialize intent system: {e}")
+
+    @server.PromptServer.instance.routes.post("/doctor/health_check")
+    async def api_health_check(request):
+        """
+        F14: Run diagnostics on a workflow snapshot.
+        Body: {
+            "workflow": {...},
+            "scope": "manual|schedule|pre_exec|workflow_change",
+            "options": {"include_intent": true, "max_paths": 50}
+        }
+        Returns: HealthReport
+        """
+        try:
+            data = await request.json()
+
+            # Parse request
+            check_request = HealthCheckRequest.from_dict(data)
+
+            # Run diagnostics
+            runner = get_diagnostics_runner()
+            report = await runner.run(check_request)
+
+            # Save to history
+            store = get_diagnostics_store()
+            store.save_report(report)
+
+            return web.json_response({
+                "success": True,
+                "report": report.to_dict(),
+            })
+        except Exception as e:
+            logger.error(f"Health check API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/health_report")
+    async def api_health_report(request):
+        """
+        F14: Fetch last computed health report (cached).
+        Returns: HealthReport or null
+
+        Fallback: If runner has no in-memory report, returns latest from store.
+        """
+        try:
+            runner = get_diagnostics_runner()
+            report = runner.get_last_report()
+
+            if report:
+                return web.json_response({
+                    "success": True,
+                    "report": report.to_dict(),
+                })
+
+            # Fallback: Try to get latest from store (survives restart)
+            store = get_diagnostics_store()
+            history = store.get_history(limit=1, offset=0)
+            if history:
+                report_id = history[0].get("report_id")
+                if report_id:
+                    stored_report = store.get_report(report_id)
+                    if stored_report:
+                        return web.json_response({
+                            "success": True,
+                            "report": stored_report,
+                            "source": "history",  # Indicate this came from store
+                        })
+
+            return web.json_response({
+                "success": True,
+                "report": None,
+                "message": "No report available",
+            })
+        except Exception as e:
+            logger.error(f"Health report API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.get("/doctor/health_history")
+    async def api_health_history(request):
+        """
+        F14: Fetch recent health report metadata.
+        Query params: limit (default 50), offset (default 0)
+        Returns: List of report metadata (no heavy payload)
+        """
+        try:
+            limit = int(request.query.get("limit", "50"))
+            offset = int(request.query.get("offset", "0"))
+
+            # Clamp values
+            limit = max(1, min(100, limit))
+            offset = max(0, offset)
+
+            store = get_diagnostics_store()
+            history = store.get_history(limit=limit, offset=offset)
+
+            return web.json_response({
+                "success": True,
+                "history": history,
+                "count": len(history),
+            })
+        except Exception as e:
+            logger.error(f"Health history API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.post("/doctor/health_ack")
+    async def api_health_ack(request):
+        """
+        F14: Acknowledge/ignore/resolve an issue.
+        Body: {"report_id": "...", "issue_id": "...", "status": "acknowledged|ignored|resolved"}
+        Returns: {"success": bool}
+        """
+        try:
+            data = await request.json()
+            ack_request = HealthAckRequest.from_dict(data)
+
+            if not ack_request.report_id or not ack_request.issue_id:
+                return web.json_response({
+                    "success": False,
+                    "error": "Missing report_id or issue_id",
+                }, status=400)
+
+            store = get_diagnostics_store()
+            updated = store.update_issue_status(
+                ack_request.report_id,
+                ack_request.issue_id,
+                ack_request.status,
+            )
+
+            if updated:
+                return web.json_response({
+                    "success": True,
+                    "message": f"Issue status updated to {ack_request.status.value}",
+                })
+            else:
+                return web.json_response({
+                    "success": False,
+                    "error": "Issue not found",
+                }, status=404)
+        except Exception as e:
+            logger.error(f"Health ack API error: {str(e)}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
     print("[ComfyUI-Doctor] 🌐 API Hooks registered:")
     print("  - GET  /debugger/last_analysis")
     print("  - GET  /debugger/history")
@@ -2574,6 +2736,10 @@ try:
     print("  - POST /doctor/telemetry/clear (S3)")
     print("  - GET  /doctor/telemetry/export (S3)")
     print("  - POST /doctor/telemetry/toggle (S3)")
+    print("  - POST /doctor/health_check (F14)")
+    print("  - GET  /doctor/health_report (F14)")
+    print("  - GET  /doctor/health_history (F14)")
+    print("  - POST /doctor/health_ack (F14)")
     print("\n")
     print("💬 Questions? Updates? Suggestions and Contributions are welcome!")
     print("⭐ Give us a Star on GitHub - it's always good for the Doctor's health! 💝")
