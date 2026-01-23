@@ -363,7 +363,9 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
         setError(null);
         try {
             // Get workflow from ComfyUI
-            const workflow = window.app?.graph?.serialize?.() || {};
+            // P2: Support newer ComfyUI versions with app.rootGraph
+            const graph = window.app?.rootGraph || window.app?.graph;
+            const workflow = graph?.serialize?.() || {};
 
             // P1.5 Fix: Inject doctor metadata for privacy checks
             if (!workflow.extra) workflow.extra = {};
@@ -522,7 +524,9 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
                     <div id="diagnostics-intent-banner" style="padding: 10px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); border-radius: 6px; margin-bottom: 15px;">
                         <div style="font-size: 12px; color: #93c5fd; margin-bottom: 6px;">
                             🎯 ${uiText?.diagnostics_likely_intent || 'Likely intent'}:
-                            <strong style="color: #60a5fa;">${report.intent_signature.top_intents[0].intent_id}</strong>
+                            <strong style="color: #60a5fa;">
+                                ${uiText?.[`intent_${report.intent_signature.top_intents[0].intent_id}`] || report.intent_signature.top_intents[0].intent_id}
+                            </strong>
                             <span style="color: #888; margin-left: 6px;">(${Math.round(report.intent_signature.top_intents[0].confidence * 100)}%)</span>
                         </div>
                         ${report.intent_signature.top_intents[0].evidence?.slice(0, 3).map(ev => html`

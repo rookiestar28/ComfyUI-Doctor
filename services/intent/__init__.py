@@ -24,105 +24,21 @@ from services.diagnostics.models import (
     SignalEvidence,
     SignalSource,
 )
+from services.intent.loader import load_intents  # P2: Load from JSON
 
 logger = logging.getLogger("comfyui-doctor.intent")
 
 
 # ============================================================================
-# Intent Definitions (P2 - will be loaded from JSON)
+# Intent Definitions (P2)
 # ============================================================================
 
 # Schema version for ISS
 ISS_SCHEMA_VERSION = "1.0"
 
-# Placeholder intent definitions for P0
-# These will be replaced with loaded JSON definitions in P2
-BUILTIN_INTENTS: Dict[str, Dict[str, Any]] = {
-    "txt2img": {
-        "id": "txt2img",
-        "name": "Text to Image",
-        "description": "Generate image from text prompt",
-        "required_signals": ["node_type.CLIPTextEncode", "node_type.KSampler"],
-        "positive_signals": ["node_type.EmptyLatentImage"],
-        "negative_signals": ["node_type.LoadImage", "node_type.IPAdapter"],
-        "stage": "generation",
-    },
-    "img2img": {
-        "id": "img2img",
-        "name": "Image to Image",
-        "description": "Transform existing image",
-        "required_signals": ["node_type.LoadImage", "node_type.KSampler"],
-        "positive_signals": ["node_type.VAEEncode"],
-        "negative_signals": [],
-        "stage": "generation",
-    },
-    "inpainting": {
-        "id": "inpainting",
-        "name": "Inpainting",
-        "description": "Fill in masked regions of image",
-        "required_signals": ["node_type.LoadImage", "node_type.LoadImageMask"],
-        "positive_signals": ["node_type.SetLatentNoiseMask"],
-        "negative_signals": [],
-        "stage": "generation",
-    },
-    "upscaling": {
-        "id": "upscaling",
-        "name": "Upscaling",
-        "description": "Increase image resolution",
-        "required_signals": [],
-        "positive_signals": [
-            "node_type.UpscaleModelLoader",
-            "node_type.ImageUpscaleWithModel",
-            "node_type.LatentUpscale",
-        ],
-        "negative_signals": [],
-        "stage": "postprocess",
-    },
-    "controlnet": {
-        "id": "controlnet",
-        "name": "ControlNet Guided",
-        "description": "Generation guided by ControlNet",
-        "required_signals": ["node_type.ControlNetLoader", "node_type.ControlNetApply"],
-        "positive_signals": [],
-        "negative_signals": [],
-        "stage": "generation",
-    },
-    "ipadapter": {
-        "id": "ipadapter",
-        "name": "IP-Adapter Style Transfer",
-        "description": "Style transfer using IP-Adapter",
-        "required_signals": ["node_type.IPAdapter"],
-        "positive_signals": ["node_type.IPAdapterModelLoader"],
-        "negative_signals": [],
-        "stage": "generation",
-    },
-    "lora": {
-        "id": "lora",
-        "name": "LoRA Fine-tuning",
-        "description": "Using LoRA for style/concept",
-        "required_signals": ["node_type.LoraLoader"],
-        "positive_signals": [],
-        "negative_signals": [],
-        "stage": "setup",
-    },
-    "video": {
-        "id": "video",
-        "name": "Video Generation",
-        "description": "Generate or process video",
-        "required_signals": [],
-        "positive_signals": [
-            "node_type.AnimateDiff",
-            "node_type.VHS_",
-            "node_type.LoadVideo",
-        ],
-        "negative_signals": [],
-        "stage": "generation",
-    },
-}
-
 
 # ============================================================================
-# Signal Extractor (P2 - skeleton)
+# Signal Extractor (P2)
 # ============================================================================
 
 class SignalExtractor:
@@ -132,8 +48,7 @@ class SignalExtractor:
     Signal types:
     - node_type.X: Presence of node type X
     - node_count.X: Count of node type X
-    - connection.X_Y: Connection from X to Y
-    - widget.X: Widget value pattern
+    - edge.X_Y: Connection from node type X to Y
     """
 
     def extract(self, workflow: Dict[str, Any]) -> List[SignalEvidence]:
@@ -150,31 +65,47 @@ class SignalExtractor:
 
         nodes = workflow.get("nodes", [])
         if not isinstance(nodes, list):
+            # Try newer format where nodes might be in config object (rare but possible)
             return signals
+            
+        links = workflow.get("links", [])
+        # links format in Comfy: [[id, source_id, source_enc, target_id, target_enc, type], ...]
+        
+        # Build node maps for edge detection
+        node_id_to_type = {}
+        node_types: Dict[str, List[int]] = {}  # type -> [node_ids]
 
-        # Extract node type signals
-        node_types: Dict[str, List[int]] = {}
         for node in nodes:
             if not isinstance(node, dict):
                 continue
+            
             node_type = node.get("type", "")
             node_id = node.get("id")
-            if node_type:
-                if node_type not in node_types:
-                    node_types[node_type] = []
-                if node_id is not None:
-                    node_types[node_type].append(node_id)
+            
+            if node_type and node_id is not None:
+                # Store for edge detection
+                try:
+                    # node_id might be string or int in JSON, simpler to map as is
+                    node_id_to_type[node_id] = node_type
+                    # Store as int for consistency if possible, else str
+                    nid_safe = int(node_id) if str(node_id).isdigit() else str(node_id)
+                    
+                    if node_type not in node_types:
+                        node_types[node_type] = []
+                    node_types[node_type].append(nid_safe)
+                except ValueError:
+                    pass
 
-        # Create signals for each node type
+        # 1. Node Type & Count Signals
         for node_type, node_ids in node_types.items():
             # Presence signal
             signals.append(SignalEvidence(
                 signal_id=f"node_type.{node_type}",
-                weight=1.0,
+                weight=1.0,  # Base weight, actual impact defined in intent JSON
                 value=True,
                 source=SignalSource.WORKFLOW,
-                node_ids=node_ids,
-                explain=f"Node type '{node_type}' present ({len(node_ids)} instance(s))",
+                node_ids=node_ids[:20],  # cap list size
+                explain=f"Node type '{node_type}' present",
             ))
 
             # Count signal (if multiple)
@@ -184,15 +115,47 @@ class SignalExtractor:
                     weight=0.5,
                     value=len(node_ids),
                     source=SignalSource.WORKFLOW,
-                    node_ids=node_ids,
+                    node_ids=node_ids[:20],
                     explain=f"{len(node_ids)} instances of '{node_type}'",
                 ))
+
+        # 2. Edge Signals
+        if isinstance(links, list):
+            unique_edges = set()
+            
+            for link in links:
+                # defensive check against malformed link arrays
+                if not isinstance(link, list) or len(link) < 5:
+                    continue
+                    
+                # link schema: [id, origin_id, origin_slot, target_id, target_slot, type]
+                try:
+                    origin_id = link[1]
+                    target_id = link[3]
+                    
+                    origin_type = node_id_to_type.get(origin_id) or node_id_to_type.get(str(origin_id)) or node_id_to_type.get(int(origin_id) if str(origin_id).isdigit() else None)
+                    target_type = node_id_to_type.get(target_id) or node_id_to_type.get(str(target_id)) or node_id_to_type.get(int(target_id) if str(target_id).isdigit() else None)
+                    
+                    if origin_type and target_type:
+                        edge_key = f"edge.{origin_type}_{target_type}"
+                        if edge_key not in unique_edges:
+                            unique_edges.add(edge_key)
+                            signals.append(SignalEvidence(
+                                signal_id=edge_key,
+                                weight=0.8,
+                                value=True,
+                                source=SignalSource.WORKFLOW,
+                                node_ids=[origin_id, target_id],
+                                explain=f"Connection: {origin_type} -> {target_type}",
+                            ))
+                except (IndexError, ValueError):
+                    continue
 
         return signals
 
 
 # ============================================================================
-# Intent Scorer (P2 - skeleton)
+# Intent Scorer (P2)
 # ============================================================================
 
 class IntentScorer:
@@ -203,7 +166,7 @@ class IntentScorer:
     - Required signals must all be present (confidence = 0 if missing)
     - Positive signals add to confidence
     - Negative signals subtract from confidence
-    - Final confidence clamped to [0, 1]
+    - Final confidence normalized and clamped
     """
 
     def __init__(self, intents: Optional[Dict[str, Dict[str, Any]]] = None):
@@ -211,9 +174,9 @@ class IntentScorer:
         Initialize scorer with intent definitions.
 
         Args:
-            intents: Intent definitions dict (default: BUILTIN_INTENTS)
+            intents: Intent definitions dict (default: loaded from JSON)
         """
-        self.intents = intents or BUILTIN_INTENTS
+        self.intents = intents or load_intents()
         self.extractor = SignalExtractor()
 
     async def compute(
@@ -235,8 +198,15 @@ class IntentScorer:
         """
         # Extract signals
         signals = self.extractor.extract(workflow)
-        signal_ids = {s.signal_id for s in signals}
+        
+        # Optimization: Map signal_id to signal object for O(1) lookups
+        # Also supports partial matches if needed, but strict mapping first
         signal_map = {s.signal_id: s for s in signals}
+        
+        # To support "contains" matching (like node_type.KSampler matching node_type.KSamplerAdvanced if configured),
+        # we can build a set of IDs. For P2, exact string matching or prefix matching depends on definitions.
+        # Our JSON uses exact keys like "node_type.KSampler", so let's stick to set lookup.
+        available_signal_ids = set(signal_map.keys())
 
         # Score each intent
         scored_intents: List[tuple[str, float, List[SignalEvidence]]] = []
@@ -246,62 +216,89 @@ class IntentScorer:
             positive = intent_def.get("positive_signals", [])
             negative = intent_def.get("negative_signals", [])
 
-            # Check required signals
-            required_present = all(
-                any(sig_id.startswith(req) or req in sig_id for sig_id in signal_ids)
-                for req in required
-            )
+            # 1. Check required signals
+            # Allow flexible matching: if req="node_type.KSampler", we look for exactly that signal.
+            # Could extended to wildcard later, but P2 scope is deterministic exact/prefix.
+            
+            missing_required = False
+            req_evidence: List[SignalEvidence] = []
+            
+            for req in required:
+                # Find matching signal
+                # For now, simplistic check: is req in available_signal_ids?
+                if req in available_signal_ids:
+                    req_evidence.append(signal_map[req])
+                else:
+                    missing_required = True
+                    break
+            
+            if missing_required and required:
+                continue
 
-            if not required_present and required:
-                continue  # Skip if required signals missing
-
-            # Calculate confidence
+            # 2. Calculate base confidence
+            # Heuristic: Start at 0.0
+            # Each required signal (met) adds significant confidence
+            # Each positive signal adds moderate confidence
+            # Each negative signal subtracts confidence
+            
             confidence = 0.0
             evidence: List[SignalEvidence] = []
+            evidence.extend(req_evidence)
+            
+            # Base score from meeting strict requirements
+            if required:
+                confidence += 0.4
+            else:
+                # If no requirements (e.g. video), start lower
+                confidence += 0.1
 
-            # Required signals contribute 0.3 each
-            for req in required:
-                matching = [s for s in signals if req in s.signal_id]
-                if matching:
-                    confidence += 0.3
-                    evidence.extend(matching[:1])  # Include one evidence per signal
-
-            # Positive signals contribute 0.15 each
+            # Add positives
             for pos in positive:
-                matching = [s for s in signals if pos in s.signal_id]
-                if matching:
-                    confidence += 0.15
-                    evidence.extend(matching[:1])
-
-            # Negative signals reduce by 0.2 each
+                if pos in available_signal_ids:
+                    confidence += 0.2
+                    evidence.append(signal_map[pos])
+            
+            # Subtract negatives
             for neg in negative:
-                matching = [s for s in signals if neg in s.signal_id]
-                if matching:
-                    confidence -= 0.2
-
-            # Clamp confidence
+                if neg in available_signal_ids:
+                    confidence -= 0.3
+                    # Negative evidence usually interesting to show why score is low? 
+                    # Actually, usually we show evidence for why it IS matched.
+            
+            # Normalize/Clamp
             confidence = max(0.0, min(1.0, confidence))
 
-            if confidence > 0:
+            if confidence > 0.1:  # Threshold to be considered a candidate
                 scored_intents.append((intent_id, confidence, evidence))
 
-        # Sort by confidence and take top_k
-        scored_intents.sort(key=lambda x: x[1], reverse=True)
-        top_intents = scored_intents[:top_k]
+        # Sort: Primary = Confidence (Desc), Secondary = ID (Asc) for stability
+        scored_intents.sort(key=lambda x: (-x[1], x[0]))
+        
+        top_candidates = scored_intents[:top_k]
 
         # Build IntentMatches
         intent_matches: List[IntentMatch] = []
-        for intent_id, confidence, evidence in top_intents:
+        for intent_id, confidence, evidence in top_candidates:
             intent_def = self.intents[intent_id]
+            
+            # Deduplicate evidence
+            unique_evidence = []
+            seen_sigs = set()
+            for ev in evidence:
+                if ev.signal_id not in seen_sigs:
+                    unique_evidence.append(ev)
+                    seen_sigs.add(ev.signal_id)
+
             intent_matches.append(IntentMatch(
                 intent_id=intent_id,
                 confidence=round(confidence, 2),
                 stage=intent_def.get("stage"),
-                evidence=evidence,
+                evidence=unique_evidence[:5], # Cap evidence items per intent
             ))
 
-        # Global signals (not tied to specific intent)
-        global_signals = [s for s in signals if s.weight >= 1.0][:5]
+        # Global signals: High-value signals for debugging (e.g. key nodes found)
+        # Sort by weight? For now, just node types.
+        global_signals = [s for s in signals if s.signal_id.startswith("node_type.")][:10]
 
         return IntentSignature(
             schema_version=ISS_SCHEMA_VERSION,
@@ -341,12 +338,11 @@ def init_intent_system():
     runner = get_diagnostics_runner()
     runner.set_intent_scorer(scorer)
 
-    logger.info(f"Intent system initialized with {len(BUILTIN_INTENTS)} builtin intents")
+    logger.info(f"Intent system initialized with P2 extractor")
 
 
 __all__ = [
     "ISS_SCHEMA_VERSION",
-    "BUILTIN_INTENTS",
     "SignalExtractor",
     "IntentScorer",
     "get_intent_scorer",
