@@ -7,6 +7,16 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 ## Ultimi aggiornamenti (Gen 2026) - Clicca per espandere
 
 <details>
+<summary><strong>Nuova Funzionalità: F14 Diagnostica Proattiva (Controllo Salute + Firma Intento)</strong></summary>
+
+- Nella scheda **Statistiche (Statistics)** è stata aggiunta la sezione **Diagnostica (Diagnostics)**, per la risoluzione proattiva dei problemi del flusso di lavoro (senza LLM).
+- **Controllo Salute (Health Check)**: Include controlli del flusso di lavoro (lint), risorse ambientali (env assets) e controlli sulla privacy, fornendo suggerimenti correttivi attuabili.
+- **Firma Intento (Intent Signature)**: Sistema di inferenza dell'intento deterministico, che fornisce **Top-K Intenti + Prove**, aiutando a giudicare "cosa sta cercando di fare" il flusso di lavoro.
+- Include il rafforzamento UX: Fallback sicuri (es. "Nessun intento dominante rilevato") e meccanismi di sanificazione delle prove migliorati.
+
+</details>
+
+<details>
 <summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
 
 - Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
@@ -683,6 +693,10 @@ You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Sett
 - Per gli LLM locali (Ollama/LMStudio), il menu a discesa mostra tutti i modelli disponibili localmente.
 
 > Nota: **Fiducia e Salute (Trust & Health)** e **Telemetria Anonima (Anonymous Telemetry)** sono stati spostati nella scheda **Statistiche (Statistics)**.
+
+> Nota: **F14 Diagnostica Proattiva (Proactive Diagnostics)** è accessibile dalla scheda **Statistiche (Statistics)** → sezione **Diagnostica (Diagnostics)**.
+> Utilizza **Run / Refresh** per generare un rapporto, visualizzare l'elenco dei problemi e utilizzare le azioni fornite (come localizzare il nodo).
+> Se hai bisogno di visualizzare il rapporto in un'altra lingua, modifica prima la **Suggestion Language** nelle impostazioni.
 
 ---
 

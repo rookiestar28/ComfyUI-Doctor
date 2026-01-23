@@ -7,6 +7,16 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ## Dernières mises à jour (Jan 2026) - Cliquer pour développer
 
 <details>
+<summary><strong>Nouvelle fonctionnalité : F14 Diagnostics Proactifs (Bilan de Santé + Signature d'Intention)</strong></summary>
+
+- Une section **Diagnostics (Diagnostics)** a été ajoutée à l'onglet **Statistiques (Statistics)** pour dépanner de manière proactive les problèmes de flux de travail (sans LLM).
+- **Bilan de Santé (Health Check)** : Comprend le contrôle des flux de travail (lint), des actifs d'environnement (env assets) et des contrôles de confidentialité, et fournit des suggestions de correction exploitables.
+- **Signature d'Intention (Intent Signature)** : Système d'inférence d'intention déterministe, fournissant des **Intentions Top-K + Preuves** pour aider à déterminer ce que le flux de travail "essaie de faire".
+- Comprend le renforcement de l'UX : Replis sécurisés (par ex. "Aucune intention dominante détectée") et mécanismes améliorés d'assainissement des preuves.
+
+</details>
+
+<details>
 <summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
 
 - Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
@@ -683,6 +693,10 @@ You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Sett
 - Pour les LLM locaux (Ollama/LMStudio), la liste déroulante affiche tous les modèles disponibles localement.
 
 > Remarque : **Confiance et Santé (Trust & Health)** et **Télémétrie Anonyme (Anonymous Telemetry)** ont été déplacés vers l'onglet **Statistiques (Statistics)**.
+
+> Remarque : **F14 Diagnostics Proactifs (Proactive Diagnostics)** est accessible depuis l'onglet **Statistiques (Statistics)** → section **Diagnostics (Diagnostics)**.
+> Utilisez **Run / Refresh** pour générer un rapport, afficher la liste des problèmes et utiliser les actions fournies (comme localiser le nœud).
+> Si vous avez besoin d'afficher le rapport dans une autre langue, modifiez d'abord la **Suggestion Language** dans les paramètres.
 
 ---
 

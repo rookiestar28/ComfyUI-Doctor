@@ -7,6 +7,16 @@
 ## 最新更新 (2026 年 1 月) - 点击展开
 
 <details>
+<summary><strong>新功能: F14 主动诊断 (健康检查 + 意图签名)</strong></summary>
+
+- 在 **统计 (Statistics)** 分页新增了 **诊断 (Diagnostics)** 区块，用于主动排查工作流程问题（无需 LLM）。
+- **健康检查**: 包含工作流程检查 (lint)、环境依赖 (env assets) 及隐私安全检查，并提供可行的修复建议。
+- **意图签名 (Intent Signature)**: 决定性的意图推论系统，提供 **Top-K 意图 + 证据**，协助判断工作流程“试图做什么”。
+- 包含 UX 强化：安全退路（例如“未侦测到主导意图”）及改进的证据净化机制。
+
+</details>
+
+<details>
 <summary><strong>(v1.5.8) 质量改善: 自动开启右侧错误报告面板开关</strong></summary>
 
 - 在 **Doctor → Settings** 中新增了一个**专用开关**，用于控制当检测到新错误时，**右侧错误报告面板**是否自动开启。
@@ -628,7 +638,24 @@ ComfyUI-Doctor 整合了主流 LLM 服务，提供智能化、上下文感知的
 - ✅ 电子邮件: `user@example.com` → `<EMAIL>`
 - ✅ 私有 IP: `192.168.1.1` → `<PRIVATE_IP>`
 
+- ✅ URL 凭证：`https://user:pass@host` → `https://<USER>@host`
+
+**未移除内容**：
+
+- ❌ 错误信息（需用于除错）
+- ❌ 模型名称、节点名称
+- ❌ 工作流程结构
+- ❌ 公用文件路径（如 `/usr/bin/python`）
+
+**配置隐私模式**：打开 Doctor 侧边栏 → 设置 → 🔒 隐私模式下拉菜单。变更将立即应用于所有 AI 分析请求。
+
 **GDPR 合规性**：此功能支持 GDPR 第 25 条（数据保护设计原则），建议企业部署时启用。
+
+> 注意：**信任与健康 (Trust & Health)** 与 **匿名遥测 (Anonymous Telemetry)** 已移动至 **统计 (Statistics)** 分页。
+
+> 注意：**F14 主动诊断 (Proactive Diagnostics)** 可从 **统计 (Statistics)** 分页 → **诊断 (Diagnostics)** 区块存取。
+> 使用 **Run / Refresh** 生成报告，检视问题列表并使用提供的操作（如定位节点）。
+> 若需要以其他语言显示报告，请先在设置中变更 **Suggestion Language**。
 
 ### 统计仪表板
 

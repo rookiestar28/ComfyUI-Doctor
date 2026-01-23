@@ -2,9 +2,20 @@
 
 繁體中文 | [简中](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [專案進度與開發藍圖](../ROADMAP.md)
 
+
 這是一個 ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動後的所有終端機輸出，捕捉完整的 Python 追蹤回溯 (Tracebacks)，並透過節點層級 (Node-level) 的上下文提取，提供具優先順序的修復建議。內建 57+ 種錯誤模式（22 個內建 + 35 個社群模式）、採用 JSON 熱重載模式，讓使用者自行維護管理其他 Error 類型；目前已支援 9 種語言、具備日誌持久化功能，並提供便於前端整合的 RESTful API。
 
 ## 最新更新 (2026 年 1 月) - 點擊展開
+
+<details>
+<summary><strong>新功能: F14 主動診斷 (健康檢查 + 意圖簽章)</strong></summary>
+
+- 在 **統計 (Statistics)** 分頁新增了 **診斷 (Diagnostics)** 區塊，用於主動排查工作流程問題（無需 LLM）。
+- **健康檢查**: 包含工作流程檢查 (lint)、環境依賴 (env assets) 及隱私安全檢查，並提供可行的修復建議。
+- **意圖簽章 (Intent Signature)**: 決定性的意圖推論系統，提供 **Top-K 意圖 + 證據**，協助判斷工作流程「試圖做什麼」。
+- 包含 UX 強化：安全退路（例如「未偵測到主導意圖」）及改進的證據淨化機制。
+
+</details>
 
 <details>
 <summary><strong>(v1.5.8) 品質改善: 自動開啟右側錯誤報告面板開關</strong></summary>
@@ -628,6 +639,17 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 - ✅ 電子郵件: `user@example.com` → `<EMAIL>`
 - ✅ 私有 IP: `192.168.1.1` → `<PRIVATE_IP>`
 
+- ✅ URL 憑證：`https://user:pass@host` → `https://<USER>@host`
+
+**未移除內容**：
+
+- ❌ 錯誤訊息（需用於除錯）
+- ❌ 模型名稱、節點名稱
+- ❌ 工作流程結構
+- ❌ 公用檔案路徑（如 `/usr/bin/python`）
+
+**配置隱私模式**：打開 Doctor 側邊欄 → 設定 → 🔒 隱私模式下拉選單。變更將立即套用於所有 AI 分析請求。
+
 **GDPR 合規性**：此功能支援 GDPR 第 25 條（資料保護設計原則），建議企業部署時啟用。
 
 ### 統計儀表板
@@ -643,6 +665,7 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 - **📈 分類統計**：依錯誤類別（記憶體、工作流程、模型載入、框架、一般）視覺化分布
 - **✅ 解決追蹤**：追蹤已解決、未解決和已忽略的錯誤
 - **🧭 狀態控制**：在統計分頁將最新錯誤標記為 已解決 / 未解決 / 已忽略
+- **🩺 診斷 (F14)**：主動健康檢查 + 意圖簽章，用於目前工作流程（無需 LLM）
 - **🛡️ 信任與健康 (Trust & Health)**：檢視 `/doctor/health` 指標與插件信任報告（僅掃描）
 - **📊 匿名遙測 (Anonymous Telemetry) (建設中 🚧)**：選擇性加入的本地使用事件緩衝區（切換/檢視/清除/匯出）
 
@@ -653,6 +676,14 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 3. 點擊展開以檢視錯誤分析數據
 4. 使用 **標記為** 按鈕設定最新錯誤狀態（已解決 / 未解決 / 已忽略）
 5. 捲動至統計分頁底部以找到 **信任與健康** 與 **匿名遙測**區塊
+
+**診斷 (F14)**：
+
+1. 開啟 **統計 (Statistics)** → **診斷 (Diagnostics)**
+2. 使用 **Run / Refresh** 生成報告
+3. 檢視問題列表並使用提供的操作（例如 **定位節點**、**Acknowledge / Ignore / Resolve**）
+
+> 注意：若要以其他語言顯示報告，請先在設定中變更 **Suggestion Language**。
 
 **解決狀態控制**：
 
@@ -787,6 +818,50 @@ curl http://localhost:8188/debugger/history
     {"id": "mistral:7b", "name": "mistral:7b"}
   ],
   "message": "Found 2 models"
+}
+```
+
+### POST `/doctor/health_check` (F14)
+
+對工作流程快照執行主動診斷（無需 LLM）。
+
+**請求內容 (Payload)**：
+
+```json
+{
+  "workflow": { "...": "ComfyUI workflow JSON" },
+  "scope": "manual",
+  "options": { "include_intent": true, "max_paths": 50 }
+}
+```
+
+### GET `/doctor/health_report` (F14)
+
+取得最近一次健康檢查報告（快取；若沒有則回退至最新的歷史報告）。
+
+```bash
+curl http://localhost:8188/doctor/health_report
+```
+
+### GET `/doctor/health_history` (F14)
+
+取得最近的報告中繼資料（不包含大型 payload）。
+
+```bash
+curl "http://localhost:8188/doctor/health_history?limit=50&offset=0"
+```
+
+### POST `/doctor/health_ack` (F14)
+
+將問題標記為已確認 / 已忽略 / 已解決。
+
+**請求內容 (Payload)**：
+
+```json
+{
+  "report_id": "report_...",
+  "issue_id": "issue_...",
+  "status": "acknowledged"
 }
 ```
 

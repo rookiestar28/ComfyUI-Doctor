@@ -2,9 +2,20 @@
 
 [繁中](README.zh-TW.md) | [简中](README.zh-CN.md) | [日本語](README.ja.md) | 한국어 | [Deutsch](README.de.md) | [Français](README.fr.md) | [Italiano](README.it.md) | [Español](README.es.md) | [English](../README.md) | [로드맵 & 개발 현황](../ROADMAP.md)
 
+
 ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **LLM 기반 분석**, **대화형 디버깅 채팅**, **50개 이상의 수정 패턴**을 특징으로 합니다. 시작 시부터 모든 터미널 출력을 자동으로 가로채고, 완전한 Python 트레이스백을 캡처하며, 노드 수준의 컨텍스트 추출과 함께 우선순위가 지정된 수정 제안을 제공합니다. 이제 핫 리로드가 가능한 **JSON 기반 패턴 관리**와 9개 언어(en, zh_TW, zh_CN, ja, de, fr, it, es, ko)에 대한 **완전한 i18n 지원**을 제공합니다.
 
 ## 최신 업데이트 (2026년 1월) - 클릭하여 펼치기
+
+<details>
+<summary><strong>새로운 기능: F14 능동적 진단 (F14 Proactive Diagnostics: 상태 검사 + 의도 서명)</strong></summary>
+
+- **통계 (Statistics)** 탭에 **진단 (Diagnostics)** 섹션이 추가되어 LLM 없이 워크플로 문제를 능동적으로 해결할 수 있습니다.
+- **상태 검사 (Health Check)**: 워크플로 검사(lint), 환경 자산(env assets), 개인정보 보호 검사를 포함하며 실행 가능한 수정 제안을 제공합니다.
+- **의도 서명 (Intent Signature)**: 결정론적 의도 추론 시스템으로, **Top-K 의도 + 증거**를 제공하여 워크플로가 "무엇을 하려는지" 판단을 돕습니다.
+- UX 강화: 안전한 폴백(예: "주요 의도 감지되지 않음") 및 개선된 증거 정제 메커니즘을 포함합니다.
+
+</details>
 
 <details>
 <summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
@@ -683,6 +694,10 @@ You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Sett
 - 로컬 LLM(Ollama/LMStudio)의 경우, 드롭다운에 로컬에서 사용 가능한 모든 모델이 표시됩니다.
 
 > 참고: **신뢰 및 상태 (Trust & Health)** 및 **익명 원격 측정 (Anonymous Telemetry)** 섹션은 **통계 (Statistics)** 탭으로 이동되었습니다.
+
+> 참고: **F14 능동적 진단 (Proactive Diagnostics)**은 **통계 (Statistics)** 탭 → **진단 (Diagnostics)** 섹션에서 액세스할 수 있습니다.
+> **Run / Refresh**를 사용하여 보고서를 생성하고, 문제 목록을 확인하여 제공된 작업(예: 노드 찾기)을 사용하십시오.
+> 다른 언어로 보고서를 보려면 먼저 설정에서 **Suggestion Language**를 변경하십시오.
 
 ---
 

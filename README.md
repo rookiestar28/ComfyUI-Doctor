@@ -2,6 +2,7 @@
 
 [繁中](docs/readme/README.zh-TW.md) | [简中](docs/readme/README.zh-CN.md) | [日本語](docs/readme/README.ja.md) | [한국어](docs/readme/README.ko.md) | [Deutsch](docs/readme/README.de.md) | [Français](docs/readme/README.fr.md) | [Italiano](docs/readme/README.it.md) | [Español](docs/readme/README.es.md) | English | [Roadmap & Development Status](ROADMAP.md)
 
+
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
 ## Table of Contents
@@ -606,6 +607,7 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 - **📈 Category Breakdown**: Visual breakdown by error category (Memory, Workflow, Model Loading, Framework, Generic)
 - **✅ Resolution Tracking**: Track resolved, unresolved, and ignored errors
 - **🧭 Status Controls**: Mark the latest error as Resolved / Unresolved / Ignored from the Stats tab
+- **🩺 Diagnostics (F14)**: Proactive health checks + Intent Signature for the current workflow (no LLM required)
 - **🛡️ Trust & Health**: View `/doctor/health` metrics and plugin trust report (scan-only)
 - **📊 Anonymous Telemetry (Under Construction 🚧)**: Opt-in local-only buffer for usage events (toggle/view/clear/export)
 
@@ -616,6 +618,14 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 3. Click to expand and view your error analytics
 4. Use **Mark as** buttons to set the latest error status (Resolved / Unresolved / Ignored)
 5. Scroll down to the bottom of the Statistics tab to find **Trust & Health** and **Anonymous Telemetry**
+
+**Diagnostics (F14)**:
+
+1. Open **Statistics** → **Diagnostics**
+2. Click **Run / Refresh** to generate the report
+3. Review issues and use actions (e.g. **Locate Node**, **Acknowledge / Ignore / Resolve**)
+
+> Note: If you want the report text in another language, set **Suggestion Language** in **Settings** first.
 
 **Resolution Status Controls**:
 
@@ -706,10 +716,6 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 - For local LLMs (Ollama/LMStudio), the dropdown displays all locally available models.
 
 > Note: **Trust & Health** and **Anonymous Telemetry** have moved to the **Statistics** tab.
-
-> Note: **F14 Proactive Diagnostics** is accessed from the **Statistics** tab → **Diagnostics** section.
-> Use **Run / Refresh** to generate a report, review the issues list, and use any provided actions (e.g. locate node / acknowledge).
-> If you want the report text in another language, set **Suggestion Language** in Settings first.
 
 ---
 
@@ -826,6 +832,50 @@ List available models from the configured LLM provider.
     {"id": "mistral:7b", "name": "mistral:7b"}
   ],
   "message": "Found 2 models"
+}
+```
+
+### POST `/doctor/health_check` (F14)
+
+Run proactive diagnostics on a workflow snapshot (no LLM required).
+
+**Payload**:
+
+```json
+{
+  "workflow": { "...": "ComfyUI workflow JSON" },
+  "scope": "manual",
+  "options": { "include_intent": true, "max_paths": 50 }
+}
+```
+
+### GET `/doctor/health_report` (F14)
+
+Fetch the last computed health report (cached; falls back to latest stored report).
+
+```bash
+curl http://localhost:8188/doctor/health_report
+```
+
+### GET `/doctor/health_history` (F14)
+
+Fetch recent report metadata (no heavy payload).
+
+```bash
+curl "http://localhost:8188/doctor/health_history?limit=50&offset=0"
+```
+
+### POST `/doctor/health_ack` (F14)
+
+Acknowledge/ignore/resolve an issue.
+
+**Payload**:
+
+```json
+{
+  "report_id": "report_...",
+  "issue_id": "issue_...",
+  "status": "acknowledged"
 }
 ```
 

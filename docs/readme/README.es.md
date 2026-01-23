@@ -7,6 +7,16 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 ## Últimas actualizaciones (Ene 2026) - Clic para expandir
 
 <details>
+<summary><strong>Nueva Función: F14 Diagnóstico Proactivo (Chequeo de Salud + Firma de Intención)</strong></summary>
+
+- Se ha añadido la sección **Diagnóstico (Diagnostics)** en la pestaña **Estadísticas (Statistics)**, para la solución proactiva de problemas de flujo de trabajo (sin LLM).
+- **Chequeo de Salud (Health Check)**: Incluye comprobación de flujo de trabajo (lint), activos de entorno (env assets) y comprobaciones de privacidad, proporcionando sugerencias de corrección procesables.
+- **Firma de Intención (Intent Signature)**: Sistema de inferencia de intención determinista, que proporciona **Top-K Intenciones + Evidencia**, ayudando a juzgar "qué está intentando hacer" el flujo de trabajo.
+- Incluye refuerzo de UX: Respaldos seguros (ej. "No se detectó intención dominante") y mecanismos de saneamiento de evidencia mejorados.
+
+</details>
+
+<details>
 <summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
 
 - Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
@@ -683,6 +693,10 @@ You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Sett
 - Para LLMs locales (Ollama/LMStudio), el desplegable muestra todos los modelos disponibles localmente.
 
 > Nota: **Confianza y Salud (Trust & Health)** y **Telemetría Anónima (Anonymous Telemetry)** se han movido a la pestaña **Estadísticas (Statistics)**.
+
+> Nota: **F14 Diagnóstico Proactivo (Proactive Diagnostics)** es accesible desde la pestaña **Estadísticas (Statistics)** → sección **Diagnóstico (Diagnostics)**.
+> Utilice **Run / Refresh** para generar un informe, ver la lista de problemas y utilizar las acciones proporcionadas (como localizar nodo).
+> Si necesita mostrar el informe en otro idioma, cambie primero el **Suggestion Language** en la configuración.
 
 ---
 

@@ -17,7 +17,7 @@ Documentation = "https://github.com/rookiestar28/ComfyUI-Doctor#readme"
 [tool.comfy]
 PublisherId = "rookiestar"
 DisplayName = "ComfyUI Doctor"
-Icon = "🏥"
+Icon = "assets/icon.png"
 
 # ========================================
 # Development Tools Configuration

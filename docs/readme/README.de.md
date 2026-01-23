@@ -7,6 +7,16 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ## Neueste Updates (Jan 2026) - Zum Erweitern klicken
 
 <details>
+<summary><strong>Neues Feature: F14 Proaktive Diagnose (Health Checks + Intent Signature)</strong></summary>
+
+- Im **Statistik (Statistics)** Tab wurde ein **Diagnose (Diagnostics)** Bereich hinzugefügt, um Workflow-Probleme proaktiv ohne LLM zu beheben.
+- **Health Check**: Beinhaltet Workflow-Checks (Linting), Umgebungs-Assets (env assets) und Datenschutz-Checks sowie umsetzbare Korrekturvorschläge.
+- **Intent Signature**: Deterministisches Absichts-Inferenzsystem, das **Top-K Absichten + Beweise** liefert, um zu beurteilen, was der Workflow "versucht zu tun".
+- Enthält UX-Härtung: Sichere Fallbacks (z.B. "Keine dominante Absicht erkannt") und verbesserte Beweisbereinigung.
+
+</details>
+
+<details>
 <summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
 
 - Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
@@ -683,6 +693,10 @@ You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Sett
 - Für lokale LLMs (Ollama/LMStudio) zeigt das Dropdown alle lokal verfügbaren Modelle an.
 
 > Hinweis: **Vertrauen & Gesundheit (Trust & Health)** und **Anonyme Telemetrie (Anonymous Telemetry)** wurden in den **Statistik (Statistics)** Tab verschoben.
+
+> Hinweis: **F14 Proaktive Diagnose (Proactive Diagnostics)** ist über den Tab **Statistik (Statistics)** → Bereich **Diagnose (Diagnostics)** zugänglich.
+> Verwenden Sie **Run / Refresh**, um einen Bericht zu erstellen, die Problemliste anzuzeigen und die bereitgestellten Aktionen (z. B. Knoten lokalisieren) zu nutzen.
+> Wenn Sie den Bericht in einer anderen Sprache anzeigen müssen, ändern Sie zuerst die **Suggestion Language** in den Einstellungen.
 
 ---
 
