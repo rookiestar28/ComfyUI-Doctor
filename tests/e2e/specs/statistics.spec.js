@@ -787,4 +787,35 @@ test.describe('Statistics Dashboard', () => {
     await expect(banner).toContainText(/Show less/i);
   });
 
+  test('should render no-intent message when intent signature exists but no top intents', async ({ page }) => {
+    // Mock report with empty top_intents
+    const noIntentReport = {
+      success: true,
+      report: {
+        timestamp: Date.now(),
+        health_score: 100,
+        intent_signature: {
+          top_intents: [] // Empty list
+        }
+      }
+    };
+
+    await page.route('**/doctor/health_report', route => {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(noIntentReport) });
+    });
+
+    await page.reload();
+    await waitForDoctorReady(page);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(500);
+
+    // Banner should still be visible (fallback mode)
+    const banner = page.locator('#diagnostics-intent-banner');
+    await expect(banner).toBeVisible();
+
+    // Should contain the fallback text
+    // "No dominant intent detected" is the default or mocked en value
+    await expect(banner).toContainText(/No dominant intent detected/i);
+  });
+
 });

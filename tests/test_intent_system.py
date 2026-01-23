@@ -2,7 +2,70 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from services.intent.loader import load_intents
-from services.intent import IntentScorer, SignalExtractor
+from services.intent import IntentScorer, SignalExtractor, _sanitize_evidence_string
+
+# ============================================================================
+# P3 Follow-up: Dedicated Sanitization Unit Tests
+# ============================================================================
+
+class TestSanitizationHelper:
+    """Test the _sanitize_evidence_string function directly."""
+
+    def test_basic_strings(self):
+        assert _sanitize_evidence_string("") == ""
+        assert _sanitize_evidence_string("Hello World") == "Hello World"
+        assert _sanitize_evidence_string("Node: KSampler") == "Node: KSampler"
+
+    def test_length_capping(self):
+        # 120 chars max
+        long = "A" * 200
+        sanitized = _sanitize_evidence_string(long)
+        assert len(sanitized) <= 123
+        assert sanitized.endswith("...")
+
+    def test_windows_paths(self):
+        # drive letter + colon + backslash
+        assert "[REDACTED]" in _sanitize_evidence_string(r"C:\Users\Secret\file.py")
+        assert "[REDACTED]" in _sanitize_evidence_string(r"Loading from D:\Models\Checkpoints\sd_xl.safetensors")
+        # Mixed content - use parens to delimit to verify boundary
+        res = _sanitize_evidence_string(r"Error at (C:\Windows\System32\driver.sys) failed")
+        assert "Error at ([REDACTED]) failed" in res
+
+    def test_unix_paths(self):
+        # common roots
+        assert "[REDACTED]" in _sanitize_evidence_string("/home/user/.ssh/id_rsa")
+        assert "[REDACTED]" in _sanitize_evidence_string("/var/log/syslog")
+        # Mixed
+        res = _sanitize_evidence_string("Config: /etc/comfy/secret.json loaded")
+        assert "Config: [REDACTED] loaded" in res
+
+    def test_bearer_tokens(self):
+        token = "Bearer sk-1234567890abcdef1234567890"
+        assert _sanitize_evidence_string(token) == "Bearer [REDACTED]"
+        
+        mixed = "Auth failed for Bearer sk-123... retrying"
+        res = _sanitize_evidence_string(mixed)
+        assert "Auth failed for Bearer [REDACTED] retrying" in res
+
+    def test_api_keys(self):
+        # OpenAI sk-
+        sk = "sk-7n9283749283749283749283749283749283"
+        assert "[REDACTED]" in _sanitize_evidence_string(f"Key {sk} invalid")
+        
+        # Google AIza
+        aiza = "AIzaSyD-1234567890abcdef1234567890abcde"
+        assert "[REDACTED]" in _sanitize_evidence_string(f"Google key {aiza} used")
+        
+        # HF
+        hf = "hf_1234567890abcdef1234567890abcdef"
+        assert "[REDACTED]" in _sanitize_evidence_string(f"HuggingFace {hf} token")
+        
+    def test_false_positives(self):
+        # Should NOT redact regular text
+        assert _sanitize_evidence_string("Basic text is safe") == "Basic text is safe"
+        assert _sanitize_evidence_string("Node ID: 12345") == "Node ID: 12345"
+        assert _sanitize_evidence_string("sk-short") == "sk-short"  # Too short for key regex
+        assert _sanitize_evidence_string("C: is a drive") == "C: is a drive" # No backslash sequence
 
 # Mock Workflow
 MOCK_WORKFLOW_TXT2IMG = {
@@ -83,19 +146,45 @@ class TestSignalExtractor:
 
     def test_evidence_sanitization(self):
         """Test that evidence strings are capped and sanitized."""
-        long_type = "A" * 200
-        workflow = {
-            "nodes": [{"id": 1, "type": long_type}]
-        }
         extractor = SignalExtractor()
+
+        # 1. Length capping
+        long_type = "A" * 200
+        workflow = {"nodes": [{"id": 1, "type": long_type}]}
         signals = extractor.extract(workflow)
-        
-        # Should have node_type.AAAA...
-        # Note: signal_id is NOT sanitized (for matching), but explain IS.
         sig = next(s for s in signals if s.signal_id.startswith("node_type."))
-        # Check explain string
-        assert len(sig.explain) <= 123  # 120 + "..."
+        assert len(sig.explain) <= 123
         assert sig.explain.endswith("...")
+
+        # 2. Path Redaction (Windows)
+        win_path = r"C:\Users\Secret\User\ComfyUI\custom_nodes\test.py"
+        # We simulate this showing up in 'type' or similar field that gets into explain
+        # Note: 'type' is part of signal_id usually, but let's check explain construction.
+        # But wait, node type is usually a short string. Let's force a scenario where explain uses unsanitized input.
+        # SignalExtractor uses: explain=f"Node type '{node_type}' present"
+        # So we inject the path into node_type
+        workflow_win = {"nodes": [{"id": 2, "type": win_path}]}
+        signals_win = extractor.extract(workflow_win)
+        # signal_id will contain the path (it's not sanitized for ID uniqueness), but explain MUST be.
+        sig_win = next(s for s in signals_win if s.signal_id.startswith("node_type."))
+        assert "[REDACTED]" in sig_win.explain
+        assert "Secret" not in sig_win.explain
+
+        # 3. Path Redaction (Unix)
+        unix_path = "/home/deploy/api_keys/config.json"
+        workflow_unix = {"nodes": [{"id": 3, "type": unix_path}]}
+        signals_unix = extractor.extract(workflow_unix)
+        sig_unix = next(s for s in signals_unix if s.signal_id.startswith("node_type."))
+        assert "[REDACTED]" in sig_unix.explain
+        assert "deploy" not in sig_unix.explain
+
+        # 4. Bearer Token
+        bearer = "Bearer sk-1234567890abcdef"
+        workflow_token = {"nodes": [{"id": 4, "type": bearer}]}
+        signals_token = extractor.extract(workflow_token)
+        sig_token = next(s for s in signals_token if s.signal_id.startswith("node_type."))
+        assert "Bearer [REDACTED]" in sig_token.explain
+        assert "sk-12345" not in sig_token.explain
 
 class TestIntentScorer:
     def test_score_txt2img(self):

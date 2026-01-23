@@ -582,7 +582,14 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
     })}
                         </div>
                     </div>
-                ` : null}
+                ` : ((report.intent_signature && report.intent_signature.top_intents && report.intent_signature.top_intents.length === 0) ? html`
+                    <!-- Fallback: Intent System Active but No Match -->
+                    <div id="diagnostics-intent-banner" style="padding: 10px; background: rgba(100, 100, 100, 0.1); border: 1px solid rgba(100, 100, 100, 0.2); border-radius: 6px; margin-bottom: 15px;">
+                         <div style="font-size: 12px; color: #888; font-style: italic;">
+                             🎯 ${uiText?.diagnostics_intent_none || 'No dominant intent detected'}
+                         </div>
+                    </div>
+                ` : null)}
 
                 <!-- Issues List -->
                 ${report.issues?.length > 0 ? html`

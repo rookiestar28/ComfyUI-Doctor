@@ -333,6 +333,19 @@ graph TD
     - Build structured LLM context via pipeline (`llm_builder.py`) + token budgets (R12) instead of ad-hoc string concatenation
   - **Plan**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_OPTIMIZATION_PLAN.md`
   - **Implementation Record**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_IMPLEMENTATION_RECORD.md`
+- [ ] **R17 (P1)**: Limited Config Externalization (Compatibility Guardrails) - 🟡 Medium
+  - **Goal**: Externalize a small, high-impact set of hardcoded guardrails so Doctor behaves consistently across ComfyUI Desktop / portable / git-clone installs (without turning everything into config).
+  - **Scope**:
+    - Consolidate runtime guardrails into a single config surface (prefer request-local settings; avoid global side-effects):
+      - Error aggregation window (e.g. 60s), rate-limit thresholds, and breaker/backoff parameters
+      - Persistence guardrails (max entries / max file size / rotation thresholds) for JSON stores
+      - Path/persistence policy knobs used by **R16** (resolved data dir, migration toggles)
+    - Support safe overrides via **ComfyUI settings** and/or env vars where appropriate (defaults unchanged).
+    - Document which values are user-facing vs. developer-only (avoid accidental foot-guns).
+  - **Acceptance**:
+    - Default behavior remains unchanged for existing users
+    - Desktop-only mitigations can be enabled/tuned without code edits
+    - No new global CONFIG mutation patterns introduced
 - [x] **R15**: Canonicalize `system_info` + populate pipeline `execution_logs` - 🟡 Medium ✅ *Completed (2026-01-14)*
   - **Scope**:
     - Canonicalize `get_system_environment()` output into a PromptComposer-friendly schema (OS/Python/CUDA/PyTorch + capped packages)
@@ -562,6 +575,16 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
+- [ ] **T14 (P0)**: Frontend Unit Tests (Close E2E Gaps) - 🔴 High
+  - **Goal**: Reduce UI regression risk by covering non-trivial logic with fast unit tests (E2E stays as end-to-end confidence, not the only safety net).
+  - **Scope**:
+    - Add a lightweight JS unit test runner (e.g. Vitest/Jest) focused on pure logic/helpers (formatters, guards, reducers, intent/diagnostics rendering decisions).
+    - Cover critical edge-cases that are expensive/flaky in Playwright (empty/partial payloads, i18n key fallbacks, sanitizer behaviors, error state transitions).
+    - Keep runtime fast (< ~10s) and CI-friendly (no browser required).
+  - **Acceptance**:
+    - `npm run test:unit` (or equivalent) runs in CI and locally
+    - Unit tests catch at least 2-3 classes of prior regressions before E2E
+    - No coupling to ComfyUI runtime APIs in unit tests (use small fixtures/mocks)
 - [x] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High ✅ *Completed (2026-01-09)*
   - **Goal**: Make Phase 2 hardening non-regressable (required checks before merge/release).
   - **Gate**: `pytest -q tests/test_plugins_security.py`, `tests/test_metadata_contract.py`, `tests/test_pipeline_dependency_policy.py`, `tests/test_outbound_payload_safety.py`, plus `npm test`.

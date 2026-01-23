@@ -170,16 +170,28 @@ def _sanitize_evidence_string(text: str, max_len: int = 120) -> str:
     if not text:
         return ""
     
-    # Cap length
+    # Cap length first to avoid regex on huge strings
     if len(text) > max_len:
         text = text[:max_len] + "..."
     
-    # Simple sanitization for strict mode (if ever needed here, though we mainly rely on Sanitizer logic)
-    # Basic path removal (windows/linux)
-    if "C:\\" in text or "/" in text:
-         # Conservative: Don't aggressively strip paths here effectively, just rely on structure.
-         # But we can strip extremely long words which might be tokens
-         pass
+    # Redact Windows Paths (e.g. C:\Users\...)
+    # Look for drive letter + colon + backslash + chars allowed in paths
+    import re
+    # Greedy match for path-like characters after C:\
+    text = re.sub(r'[a-zA-Z]:\\[\w\s\-\.\\]+', '[REDACTED]', text)
+    
+    # Redact Unix Paths (e.g. /home/user/...)
+    # Look for common roots
+    text = re.sub(r'/(?:home|Users|var|etc|tmp)/[\w\-\./]+', '[REDACTED]', text)
+    
+    # Redact Bearer Tokens
+    text = re.sub(r'Bearer\s+[a-zA-Z0-9\-\._]+', 'Bearer [REDACTED]', text)
+    
+    # Redact common API Key patterns (Conservative)
+    # OpenAI (sk-...), Google (AIza...), HuggingFace (hf_...)
+    text = re.sub(r'\bsk-[a-zA-Z0-9]{20,}\b', '[REDACTED]', text)
+    text = re.sub(r'\bAIza[a-zA-Z0-9\-_]{30,}\b', '[REDACTED]', text)
+    text = re.sub(r'\bhf_[a-zA-Z0-9]{20,}\b', '[REDACTED]', text)
 
     return text
 

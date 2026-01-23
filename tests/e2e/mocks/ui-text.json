@@ -62,6 +62,7 @@
     "error_boundary_error_id_label": "Error ID:",
     "global_error_banner_title": "An error occurred",
     "diagnostics_likely_intents": "Likely intents",
+    "diagnostics_intent_none": "No dominant intent detected",
     "diagnostics_show_more": "Show more",
     "diagnostics_show_less": "Show less",
     "intent_stage_setup": "Setup",
