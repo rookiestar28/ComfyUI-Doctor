@@ -7,6 +7,14 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 ## 最新のアップデート (2026年1月) - クリックして展開
 
 <details>
+<summary><strong>(v1.5.8) QoL: 右側のエラーレポートパネルの自動オープン切り替え</strong></summary>
+
+- **Doctor → Settings** に、新しいエラーが検出されたときに**右側のエラーレポートパネル**を自動的に開くかどうかを制御する**専用のトグル**を追加しました。
+- **デフォルト: ON** (新規インストールの場合)、選択は保持されます。
+
+</details>
+
+<details>
 <summary><strong>スマートトークン予算管理 (v1.5.0)</strong></summary>
 
 **スマートコンテキスト管理 (コスト最適化):**
@@ -31,8 +39,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 | `stream_chunk_timeout` | `30` | ストリームタイムアウト (秒) |
 
 </details>
-
----
 
 <details>
 <summary><strong>メジャー修正: パイプラインガバナンス & プラグインセキュリティ (v1.4.5)</strong></summary>
@@ -64,8 +70,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 
 </details>
 
----
-
 <details>
 <summary><strong>機能強化: CIゲート & プラグインツール</strong></summary>
 
@@ -90,8 +94,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 
 </details>
 
----
-
 <details>
 <summary><strong>機能強化: CSPドキュメント & テレメトリ</strong></summary>
 
@@ -114,8 +116,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 
 </details>
 
----
-
 <details>
 <summary><strong>機能強化: E2Eランナー強化 & 信頼/健全性UI</strong></summary>
 
@@ -136,8 +136,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 
 </details>
 
----
-
 <details>
 <summary><strong>以前のアップデート (v1.4.0, Jan 2026)</strong></summary>
 
@@ -146,8 +144,6 @@ ComfyUIのための継続的かつリアルタイムなランタイム診断ス�
 - UI修正: サイドバーツールチップのタイミング修正。
 
 </details>
-
----
 
 <details>
 <summary><strong>統計ダッシュボード</strong></summary>
@@ -164,7 +160,7 @@ ComfyUI-Doctorに**統計ダッシュボード**が追加されました。エ�
 - ✅ **解決追跡**: 解決済み vs 未解決のエラーを監視
 - 🌍 **完全なi18nサポート**: 全9言語に対応
 
-![統計ダッシュボード](assets/statistics_panel.png)
+![統計ダッシュボード](../../assets/statistics_panel.png)
 
 **使用方法**:
 
@@ -183,8 +179,6 @@ ComfyUI-Doctorに**統計ダッシュボード**が追加されました。エ�
 **実装詳細**: `.planning/260104-F4_STATISTICS_RECORD.md` を参照
 
 </details>
-
----
 
 <details>
 <summary><strong>パターン検証CI</strong></summary>
@@ -227,8 +221,6 @@ python scripts/run_pattern_tests.py
 
 </details>
 
----
-
 <details>
 <summary><strong>パターンシステムの刷新 (STAGE 1-3 完了)</strong></summary>
 
@@ -268,8 +260,6 @@ ComfyUI-Doctorは、**57以上のエラーパターン**と**JSONベースのパ
 - ✅ よりクリーンで保守性の高いコードベース
 
 </details>
-
----
 
 <details>
 <summary><strong>以前のアップデート (2025年12月)</strong></summary>
@@ -331,7 +321,7 @@ ComfyUI設定パネルには有効/無効の切り替えスイッチのみが表
 新しい対話型チャットインターフェースは、ComfyUIの左サイドバー内で直接会話型のデバッグ体験を提供します。エラーが発生した場合、「Analyze with AI」をクリックするだけで、お好みのLLMとのマルチターン会話を開始できます。
 
 <div align="center">
-<img src="assets/chat-ui.png" alt="AI Chat Interface">
+<img src="../../assets/chat-ui.png" alt="AI Chat Interface">
 </div>
 
 **主な機能:**
@@ -455,7 +445,7 @@ ComfyUIメニュー（左サイドバー）の **🏥 Doctor** ボタンをク�
 ### インターフェース機能
 
 <div align="center">
-<img src="assets/doctor-side-bar.png" alt="Error Report">
+<img src="../../assets/doctor-side-bar.png" alt="Error Report">
 </div>
 
 Doctorインターフェースは2つのパネルで構成されています:
@@ -477,7 +467,7 @@ ComfyUIの左メニューにある **🏥 Doctor** アイコンをクリック�
 
 右上のリアルタイムエラー通知:
 
-![Doctor Error Report](./assets/error-report.png)
+![Doctor Error Report](../../assets/error-report.png)
 
 - **ステータスインジケーター**: システムの健全性を示す色付きドット
   - 🟢 **緑**: システム正常、エラーなし
@@ -527,7 +517,7 @@ ComfyUI-Doctorは一般的なLLMサービスと統合し、インテリジェン
 
 ### 構成
 
-![設定パネル](./assets/settings.png)
+![設定パネル](../../assets/settings.png)
 
 **Doctorサイドバー** → **Settings** パネルでAI分析を設定します:
 
@@ -583,7 +573,7 @@ ComfyUI-Doctorには、エラーメッセージをクラウドAIサービスに�
 
 ### 統計ダッシュボード
 
-![統計パネル](assets/statistics_panel.png)
+![統計パネル](../../assets/statistics_panel.png)
 
 **統計ダッシュボード**は、ComfyUIのエラーパターンと安定性の傾向に関するリアルタイムの洞察を提供します。
 
@@ -638,7 +628,7 @@ ComfyUI-Doctorには、エラーメッセージをクラウドAIサービスに�
 
 ## 設定
 
-ComfyUIの設定パネル（歯車アイコン）からComfyUI-Doctorの動作をカスタマイズできます。
+**Doctorサイドバー → Settings** タブからComfyUI-Doctorの動作をカスタマイズできます。
 
 ### 1. Show error notifications (エラー通知を表示)
 
@@ -647,8 +637,8 @@ ComfyUIの設定パネル（歯車アイコン）からComfyUI-Doctorの動作�
 
 ### 2. Auto-open panel on error (エラー時にパネルを自動で開く)
 
-**機能**: 新しいエラーが検出されると自動的にDoctorサイドバーを展開します。
-**用途**: **推奨**。手動でクリックすることなく、診断結果に即座にアクセスできます。
+**機能**: 新しいエラーが検出されると自動的に**右側のエラーレポートパネル**を開きます。
+**用途**: **デフォルトON**。パネルを手動で開きたい場合は、このオプションをオフにできます。
 
 ### 3. Error Check Interval (ms)
 

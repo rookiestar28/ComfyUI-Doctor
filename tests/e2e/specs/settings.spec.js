@@ -226,4 +226,181 @@ test.describe('Settings Panel', () => {
     });
     expect(storedState).toBe('settings');
   });
+
+  // F17: Auto-open toggle tests
+  test('should display auto-open toggle checkbox', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+    await expect(autoOpenToggle).toBeVisible();
+    await expect(autoOpenToggle).toHaveAttribute('type', 'checkbox');
+  });
+
+  test('should have auto-open toggle checked by default (new installs)', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+    // Default for new installs should be checked (true)
+    await expect(autoOpenToggle).toBeChecked();
+  });
+
+  test('should display auto-open toggle label with i18n text', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    // Look for the label text near the checkbox
+    const labelText = page.locator('label:has(#doctor-auto-open-toggle)');
+    await expect(labelText).toContainText('Auto-open error report panel');
+  });
+
+  test('should toggle auto-open checkbox state', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+
+    // Initially checked (default true)
+    await expect(autoOpenToggle).toBeChecked();
+
+    // Click to uncheck
+    await autoOpenToggle.click();
+    await expect(autoOpenToggle).not.toBeChecked();
+
+    // Click to check again
+    await autoOpenToggle.click();
+    await expect(autoOpenToggle).toBeChecked();
+  });
+
+  test('should save auto-open toggle state', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+    const saveBtn = page.locator('#doctor-save-settings-btn');
+
+    // Uncheck the toggle
+    await autoOpenToggle.click();
+    await expect(autoOpenToggle).not.toBeChecked();
+
+    // Save settings
+    await saveBtn.click();
+    await expect(saveBtn).toContainText('Saved');
+
+    // Verify setting was stored
+    const storedValue = await page.evaluate(() => {
+      return window.app.ui.settings.getSettingValue('Doctor.Behavior.AutoOpenOnError');
+    });
+    expect(storedValue).toBe(false);
+  });
+
+  test('should persist auto-open toggle state after reload', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+    const saveBtn = page.locator('#doctor-save-settings-btn');
+
+    // Uncheck the toggle and save
+    await autoOpenToggle.click();
+    await saveBtn.click();
+    await expect(saveBtn).toContainText('Saved');
+
+    // Reload page
+    await page.goto('test-harness.html');
+    await waitForDoctorReady(page);
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    // Verify toggle state persisted
+    const reloadedToggle = page.locator('#doctor-auto-open-toggle');
+    await expect(reloadedToggle).not.toBeChecked();
+  });
+
+  test('should apply auto-open setting immediately to DoctorUI', async ({ page }) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+    const saveBtn = page.locator('#doctor-save-settings-btn');
+
+    // Uncheck and save
+    await autoOpenToggle.click();
+    await saveBtn.click();
+
+    // Verify DoctorUI instance was updated immediately
+    const doctorAutoOpen = await page.evaluate(() => {
+      return window.app.Doctor?.autoOpenOnError;
+    });
+    expect(doctorAutoOpen).toBe(false);
+  });
+
+  // F17: Behavior tests - verify panel auto-open on new error
+  test('should auto-open right panel when enabled and error occurs', async ({ page }) => {
+    // Ensure auto-open is ON (default)
+    const isAutoOpenOn = await page.evaluate(() => {
+      return window.app.Doctor?.autoOpenOnError === true;
+    });
+    expect(isAutoOpenOn).toBe(true);
+
+    // Close the panel first if it's open
+    await page.evaluate(() => {
+      const panel = document.getElementById('doctor-sidebar');
+      if (panel) {
+        panel.classList.remove('visible');
+        window.app.Doctor.isVisible = false;
+      }
+    });
+
+    // Verify panel is closed
+    const panelBefore = page.locator('#doctor-sidebar');
+    await expect(panelBefore).not.toHaveClass(/visible/);
+
+    // Trigger a new error
+    await page.evaluate(() => {
+      window.app.Doctor.handleNewError({
+        last_error: 'RuntimeError: CUDA out of memory',
+        timestamp: new Date().toISOString(),
+        node_context: { node_id: '42', node_name: 'KSampler', node_class: 'KSampler' }
+      });
+    });
+
+    // Panel should auto-open
+    await expect(panelBefore).toHaveClass(/visible/, { timeout: 2000 });
+  });
+
+  test('should NOT auto-open right panel when disabled and error occurs', async ({ page }) => {
+    // Disable auto-open via settings
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    const autoOpenToggle = page.locator('#doctor-auto-open-toggle');
+    const saveBtn = page.locator('#doctor-save-settings-btn');
+    await autoOpenToggle.click();
+    await saveBtn.click();
+    await expect(saveBtn).toContainText('Saved');
+
+    // Verify auto-open is OFF
+    const isAutoOpenOff = await page.evaluate(() => {
+      return window.app.Doctor?.autoOpenOnError === false;
+    });
+    expect(isAutoOpenOff).toBe(true);
+
+    // Close the panel
+    await page.evaluate(() => {
+      const panel = document.getElementById('doctor-sidebar');
+      if (panel) {
+        panel.classList.remove('visible');
+        window.app.Doctor.isVisible = false;
+      }
+    });
+
+    // Verify panel is closed
+    const panelBefore = page.locator('#doctor-sidebar');
+    await expect(panelBefore).not.toHaveClass(/visible/);
+
+    // Trigger a new error
+    await page.evaluate(() => {
+      window.app.Doctor.handleNewError({
+        last_error: 'ValueError: invalid input shape',
+        timestamp: new Date().toISOString(),
+        node_context: { node_id: '99', node_name: 'VAEDecode', node_class: 'VAEDecode' }
+      });
+    });
+
+    // Panel should remain closed
+    await page.waitForTimeout(500); // Give time for any async updates
+    await expect(panelBefore).not.toHaveClass(/visible/);
+  });
 });

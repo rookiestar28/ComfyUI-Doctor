@@ -60,7 +60,9 @@
     "error_boundary_permanent_title": "Component Failed to Load",
     "error_boundary_permanent_msg": "This component failed after 3 reload attempts.",
     "error_boundary_error_id_label": "Error ID:",
-    "global_error_banner_title": "An error occurred"
+    "global_error_banner_title": "An error occurred",
+    "auto_open_on_error_label": "Auto-open error report panel on new errors",
+    "auto_open_on_error_hint": "When enabled, the right-side error report panel will automatically open when a new error is detected"
   },
   "ja": {
     "sidebar_doctor_title": "ComfyUI Doctor",

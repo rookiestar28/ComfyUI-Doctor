@@ -281,6 +281,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "Ignore",
         "diagnostics_no_issues": "No issues detected",
         "diagnostics_empty": "Run diagnostics to check your workflow health",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "Auto-open error report panel on new errors",
+        "auto_open_on_error_hint": "When enabled, the right-side error report panel will automatically open when a new error is detected",
     },
     "zh_TW": {
         "info_title": "資訊",
@@ -460,6 +463,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "忽略",
         "diagnostics_no_issues": "未發現問題",
         "diagnostics_empty": "執行診斷以檢查工作流程健康狀態",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "發生新錯誤時自動開啟錯誤報告面板",
+        "auto_open_on_error_hint": "啟用後，當偵測到新錯誤時，右側錯誤報告面板將自動開啟",
     },
     "zh_CN": {
         "info_title": "信息",
@@ -638,6 +644,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "忽略",
         "diagnostics_no_issues": "未发现问题",
         "diagnostics_empty": "运行诊断以检查工作流程健康状态",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "发生新错误时自动打开错误报告面板",
+        "auto_open_on_error_hint": "启用后，当检测到新错误时，右侧错误报告面板将自动打开",
     },
     "ja": {
         "info_title": "情報",
@@ -816,6 +825,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "無視",
         "diagnostics_no_issues": "問題は検出されませんでした",
         "diagnostics_empty": "ワークフローの健康状態を確認するには診断を実行してください",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "新しいエラー発生時にエラーレポートパネルを自動で開く",
+        "auto_open_on_error_hint": "有効にすると、新しいエラーが検出された際に右側のエラーレポートパネルが自動的に開きます",
     },
     "de": {
         "info_title": "INFO",
@@ -994,6 +1006,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "Ignorieren",
         "diagnostics_no_issues": "Keine Probleme erkannt",
         "diagnostics_empty": "Führen Sie die Diagnose aus, um den Workflow-Zustand zu überprüfen",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "Fehlerberichtspanel bei neuen Fehlern automatisch öffnen",
+        "auto_open_on_error_hint": "Wenn aktiviert, öffnet sich das rechte Fehlerberichtspanel automatisch, wenn ein neuer Fehler erkannt wird",
     },
     "fr": {
         "info_title": "INFO",
@@ -1172,6 +1187,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "Ignorer",
         "diagnostics_no_issues": "Aucun problème détecté",
         "diagnostics_empty": "Lancez le diagnostic pour vérifier la santé de votre workflow",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "Ouvrir automatiquement le panneau d'erreurs lors de nouvelles erreurs",
+        "auto_open_on_error_hint": "Lorsque activé, le panneau de rapport d'erreurs de droite s'ouvrira automatiquement lors de la détection d'une nouvelle erreur",
     },
     "it": {
         "info_title": "INFO",
@@ -1350,6 +1368,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "Ignora",
         "diagnostics_no_issues": "Nessun problema rilevato",
         "diagnostics_empty": "Esegui la diagnostica per verificare lo stato del workflow",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "Apri automaticamente il pannello errori per nuovi errori",
+        "auto_open_on_error_hint": "Se abilitato, il pannello di report errori a destra si aprirà automaticamente quando viene rilevato un nuovo errore",
     },
     "es": {
         "info_title": "INFO",
@@ -1528,6 +1549,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "Ignorar",
         "diagnostics_no_issues": "No se detectaron problemas",
         "diagnostics_empty": "Ejecuta el diagnóstico para verificar la salud del workflow",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "Abrir automáticamente el panel de errores ante nuevos errores",
+        "auto_open_on_error_hint": "Cuando está habilitado, el panel de informe de errores del lado derecho se abrirá automáticamente cuando se detecte un nuevo error",
     },
     "ko": {
         "info_title": "정보",
@@ -1706,6 +1730,9 @@ UI_TEXT: Dict[str, Dict[str, str]] = {
         "diagnostics_ignore": "무시",
         "diagnostics_no_issues": "문제가 감지되지 않았습니다",
         "diagnostics_empty": "워크플로우 상태를 확인하려면 진단을 실행하세요",
+        # F17: Auto-open right panel toggle
+        "auto_open_on_error_label": "새 오류 발생 시 오류 보고 패널 자동 열기",
+        "auto_open_on_error_hint": "활성화하면 새 오류가 감지될 때 오른쪽 오류 보고 패널이 자동으로 열립니다",
     },
 }
 

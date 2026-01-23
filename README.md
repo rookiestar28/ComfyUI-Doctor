@@ -4,9 +4,8 @@
 
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Repository Structure (Quick Jump)
+## Table of Contents
 
-**README sections**
 - [Latest Updates](#latest-updates-jan-2026---click-to-expand)
 - [Features](#features)
 - [Installation](#installation)
@@ -19,27 +18,15 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 - [CSP Compatibility](#csp-compatibility)
 - [Contributing](#contributing)
 
-**Key directories / files**
-- [`web/`](web) — Frontend extension (sidebar UI, Preact islands)
-- [`services/`](services) — PromptComposer, diagnostics (F14), token budget, log ring buffer
-- [`pipeline/`](pipeline) — Analysis pipeline stages + plugin system
-- [`patterns/`](patterns) — JSON error patterns (builtin/community/custom) + schema
-- [`tests/`](tests) — Pytest + Playwright E2E (`tests/e2e/`)
-- [`docs/`](docs) — Documentation + reference snapshots
-- [`scripts/`](scripts) — Local tooling (CI gates, validators, migration helpers)
-- [`ROADMAP.md`](ROADMAP.md) — Architecture diagram + development status
-
-```text
-web/        Frontend extension (Doctor sidebar UI)
-services/   Backend services (prompt composer, diagnostics, token budget, log ring buffer)
-pipeline/   Analysis pipeline stages + plugins
-patterns/   JSON error patterns + schema
-tests/      Python tests + Playwright E2E tests
-docs/       Documentation + reference snapshots
-scripts/    Dev/CI tooling and helpers
-```
-
 ## Latest Updates (Jan 2026) - Click to expand
+
+<details>
+<summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
+
+- Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
+- **Default: ON** for new installs, and the choice is persisted.
+
+</details>
 
 <details>
 <summary><strong> (v1.5.0) Smart Token Budget Management</strong></summary>
@@ -653,7 +640,7 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 
 ## Settings
 
-You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear icon).
+You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings** tab.
 
 ### 1. Show error notifications
 
@@ -662,8 +649,9 @@ You can customize ComfyUI-Doctor behavior via the ComfyUI Settings panel (Gear i
 
 ### 2. Auto-open panel on error
 
-**Function**: Automatically expands the Doctor sidebar when a new error is detected.
-**Usage**: **Recommended**. Provides immediate access to diagnostic results without manual clicking.
+**Function**: Automatically opens the **right-side error report panel** when a new error is detected.
+**Default**: **ON** (recommended).
+**Usage**: Disable if you prefer to keep the panel closed and open it manually.
 
 ### 3. Error Check Interval (ms)
 

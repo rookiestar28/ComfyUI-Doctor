@@ -50,7 +50,7 @@ const PREACT_ISLANDS_ENABLED = localStorage.getItem('doctor_preact_disabled') !=
 const DEFAULTS = {
     LANGUAGE: "en",  // ⚠️ DO NOT CHANGE - Must match i18n.py backend default
     POLL_INTERVAL: 2000,
-    AUTO_OPEN_ON_ERROR: false,
+    AUTO_OPEN_ON_ERROR: true,  // F17: Default to true for new installs
     ENABLE_NOTIFICATIONS: true,
 };
 
@@ -175,7 +175,8 @@ app.registerExtension({
         if (!app.ui.settings.getSettingValue("Doctor.Behavior.PollInterval")) {
             app.ui.settings.setSettingValue("Doctor.Behavior.PollInterval", DEFAULTS.POLL_INTERVAL);
         }
-        if (!app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError")) {
+        // F17: Use strict null check - false is a valid stored value, don't override it
+        if (app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", null) === null) {
             app.ui.settings.setSettingValue("Doctor.Behavior.AutoOpenOnError", DEFAULTS.AUTO_OPEN_ON_ERROR);
         }
         if (!app.ui.settings.getSettingValue("Doctor.Behavior.EnableNotifications")) {
@@ -207,7 +208,11 @@ app.registerExtension({
         // Get current settings values
         const language = app.ui.settings.getSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
         const pollInterval = app.ui.settings.getSettingValue("Doctor.Behavior.PollInterval", DEFAULTS.POLL_INTERVAL);
-        const autoOpenOnError = app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", DEFAULTS.AUTO_OPEN_ON_ERROR);
+        // F17: Normalize to boolean - handle string "false"/"0" from ComfyUI storage and explicit false
+        const storedAutoOpen = app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", null);
+        const autoOpenOnError = storedAutoOpen === null
+            ? DEFAULTS.AUTO_OPEN_ON_ERROR
+            : Boolean(storedAutoOpen) && storedAutoOpen !== "false" && storedAutoOpen !== "0";
         const enableNotifications = app.ui.settings.getSettingValue("Doctor.Behavior.EnableNotifications", DEFAULTS.ENABLE_NOTIFICATIONS);
 
         // Create Doctor UI instance with settings

@@ -7,6 +7,14 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 ## Dernières mises à jour (Jan 2026) - Cliquer pour développer
 
 <details>
+<summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
+
+- Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
+- **Default: ON** for new installs, and the choice is persisted.
+
+</details>
+
+<details>
 <summary><strong>Gestion Intelligente du Budget de Jetons (v1.5.0)</strong></summary>
 
 **Gestion Contextuelle Intelligente (Optimisation des Coûts) :**
@@ -31,8 +39,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 | `stream_chunk_timeout` | `30` | Timeout de flux (sec) |
 
 </details>
-
----
 
 <details>
 <summary><strong>Correctif Majeur: Gouvernance du Pipeline & Sécurité des Plugins (v1.4.5)</strong></summary>
@@ -64,8 +70,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 
 </details>
 
----
-
 <details>
 <summary><strong>Amélioration: CI Gates & Outillage Plugins</strong></summary>
 
@@ -90,8 +94,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 
 </details>
 
----
-
 <details>
 <summary><strong>Amélioration: Docs CSP & Télémétrie</strong></summary>
 
@@ -114,8 +116,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 
 </details>
 
----
-
 <details>
 <summary><strong>Amélioration : Renforcement Runner E2E & UI Confiance/Santé</strong></summary>
 
@@ -136,8 +136,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 
 </details>
 
----
-
 <details>
 <summary><strong>Mises à jour précédentes (v1.4.0, Jan 2026)</strong></summary>
 
@@ -146,8 +144,6 @@ Une suite de diagnostics d'exécution continue et en temps réel pour ComfyUI co
 - Correctifs UI : Correction du timing de l'infobulle de la barre latérale.
 
 </details>
-
----
 
 <details>
 <summary><strong>Tableau de bord statistiques</strong></summary>
@@ -164,7 +160,7 @@ ComfyUI-Doctor inclut désormais un **Tableau de bord statistiques** qui fournit
 - ✅ **Suivi de résolution** : Surveillez les erreurs résolues vs non résolues
 - 🌍 **Support i18n complet** : Disponible dans les 9 langues
 
-![Tableau de bord statistiques](assets/statistics_panel.png)
+![Tableau de bord statistiques](../../assets/statistics_panel.png)
 
 **Comment utiliser** :
 
@@ -183,8 +179,6 @@ ComfyUI-Doctor inclut désormais un **Tableau de bord statistiques** qui fournit
 **Détails de mise en œuvre** : Voir `.planning/260104-F4_STATISTICS_RECORD.md`
 
 </details>
-
----
 
 <details>
 <summary><strong>CI de validation des motifs</strong></summary>
@@ -227,8 +221,6 @@ python scripts/run_pattern_tests.py
 
 </details>
 
----
-
 <details>
 <summary><strong>Refonte du système de motifs (ÉTAPE 1-3 Terminée)</strong></summary>
 
@@ -268,8 +260,6 @@ ComfyUI-Doctor a subi une mise à niveau architecturale majeure avec **plus de 5
 - ✅ Base de code plus propre et maintenable
 
 </details>
-
----
 
 <details>
 <summary><strong>Mises à jour précédentes (Déc 2025)</strong></summary>
@@ -331,7 +321,7 @@ Le panneau Paramètres de ComfyUI affiche désormais uniquement le commutateur A
 La nouvelle interface de chat interactive offre une expérience de débogage conversationnelle directement dans la barre latérale gauche de ComfyUI. Lorsqu'une erreur survient, cliquez simplement sur "Analyze with AI" pour démarrer une conversation multi-tours avec votre LLM préféré.
 
 <div align="center">
-<img src="assets/chat-ui.png" alt="Interface de Chat IA">
+<img src="../../assets/chat-ui.png" alt="Interface de Chat IA">
 </div>
 
 **Caractéristiques clés :**
@@ -455,7 +445,7 @@ Cliquez sur le bouton **🏥 Doctor** dans le menu ComfyUI (barre latérale gauc
 ### Caractéristiques de l'interface
 
 <div align="center">
-<img src="assets/doctor-side-bar.png" alt="Rapport d'erreur">
+<img src="../../assets/doctor-side-bar.png" alt="Rapport d'erreur">
 </div>
 
 L'interface Doctor se compose de deux panneaux :
@@ -477,7 +467,7 @@ Cliquez sur l'icône **🏥 Doctor** dans le menu gauche de ComfyUI pour accéde
 
 Notifications d'erreur en temps réel dans le coin supérieur droit :
 
-![Rapport d'erreur Doctor](./assets/error-report.png)
+![Rapport d'erreur Doctor](../../assets/error-report.png)
 
 - **Indicateur d'état** : Point coloré montrant la santé du système
   - 🟢 **Vert** : Système fonctionnant normalement, aucune erreur détectée
@@ -527,7 +517,7 @@ ComfyUI-Doctor s'intègre aux services LLM populaires pour fournir des suggestio
 
 ### Configuration
 
-![Panneau de configuration](./assets/settings.png)
+![Panneau de configuration](../../assets/settings.png)
 
 Configurez l'analyse IA dans le panneau **Barre latérale Doctor** → **Settings** :
 
@@ -583,7 +573,7 @@ ComfyUI-Doctor inclut une **désinfection automatique des PII (Informations Pers
 
 ### Tableau de bord statistiques
 
-![Panneau statistiques](assets/statistics_panel.png)
+![Panneau statistiques](../../assets/statistics_panel.png)
 
 Le **Tableau de bord statistiques** fournit des informations en temps réel sur vos modèles d'erreurs ComfyUI et les tendances de stabilité.
 
@@ -638,7 +628,7 @@ Le **Tableau de bord statistiques** fournit des informations en temps réel sur 
 
 ## Paramètres
 
-Vous pouvez personnaliser le comportement de ComfyUI-Doctor via le panneau Paramètres de ComfyUI (icône d'engrenage).
+You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings** tab.
 
 ### 1. Show error notifications (Afficher les notifications d'erreur)
 
@@ -647,8 +637,8 @@ Vous pouvez personnaliser le comportement de ComfyUI-Doctor via le panneau Param
 
 ### 2. Auto-open panel on error (Ouvrir automatiquement le panneau en cas d'erreur)
 
-**Fonction** : Développe automatiquement la barre latérale Doctor lorsqu'une nouvelle erreur est détectée.
-**Utilisation** : **Recommandé**. Fournit un accès immédiat aux résultats de diagnostic sans clic manuel.
+**Function**: Automatically opens the **right-side error report panel** when a new error is detected.
+**Usage**: **Default: ON**. Disable if you prefer to keep the panel closed and open it manually.
 
 ### 3. Error Check Interval (ms)
 

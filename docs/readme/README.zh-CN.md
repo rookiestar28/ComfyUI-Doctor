@@ -7,6 +7,14 @@
 ## 最新更新 (2026 年 1 月) - 点击展开
 
 <details>
+<summary><strong>(v1.5.8) 生活质量改善: 自动开启右侧错误报告面板开关</strong></summary>
+
+- 在 **Doctor → Settings** 中新增了一个**专用开关**，用于控制当检测到新错误时，**右侧错误报告面板**是否自动开启。
+- **默认值: 开启 (ON)**（针对新安装），且用户的选择会被保留。
+
+</details>
+
+<details>
 <summary><strong>Smart Token 预算管理 (v1.5.0)</strong></summary>
 
 **智能上下文管理 (成本优化):**
@@ -31,8 +39,6 @@
 | `stream_chunk_timeout` | `30` | 流超时 (秒) |
 
 </details>
-
----
 
 <details>
 <summary><strong>重大修复: 管道治理与插件安全性 (v1.4.5)</strong></summary>
@@ -64,8 +70,6 @@
 
 </details>
 
----
-
 <details>
 <summary><strong>增强功能: CI 闸道与插件工具</strong></summary>
 
@@ -90,8 +94,6 @@
 
 </details>
 
----
-
 <details>
 <summary><strong>增强功能: CSP 文档与遥测</strong></summary>
 
@@ -114,8 +116,6 @@
 
 </details>
 
----
-
 <details>
 <summary><strong>增强功能: E2E 执行器强化与信任/健康 UI</strong></summary>
 
@@ -136,8 +136,6 @@
 
 </details>
 
----
-
 <details>
 <summary><strong>先前更新 (v1.4.0, Jan 2026)</strong></summary>
 
@@ -146,8 +144,6 @@
 - UI 修复: 侧边栏工具提示时序问题。
 
 </details>
-
----
 
 <details>
 <summary><strong>统计仪表板</strong></summary>
@@ -164,7 +160,7 @@ ComfyUI-Doctor 现已包含**统计仪表板**，提供错误趋势、常见问�
 - ✅ **解决追踪**：监控已解决与未解决的错误
 - 🌍 **完整 i18n 支持**：支持所有 9 种语言
 
-![统计仪表板](assets/statistics_panel.png)
+![统计仪表板](../../assets/statistics_panel.png)
 
 **使用方法**：
 
@@ -183,8 +179,6 @@ ComfyUI-Doctor 现已包含**统计仪表板**，提供错误趋势、常见问�
 **实现细节**：请参阅 `.planning/260104-F4_STATISTICS_RECORD.md`
 
 </details>
-
----
 
 <details>
 <summary><strong>模式验证 CI</strong></summary>
@@ -227,8 +221,6 @@ python scripts/run_pattern_tests.py
 
 </details>
 
----
-
 <details>
 <summary><strong>模式系统全面升级（阶段 1-3 完成）</strong></summary>
 
@@ -269,8 +261,6 @@ ComfyUI-Doctor 完成重大架构升级，具备 **57+ 错误模式**与 **JSON 
 - ✅ 更简洁、易维护的代码库
 
 </details>
-
----
 
 <details>
 <summary><strong>先前更新（2025 年 12 月）</strong></summary>
@@ -332,7 +322,7 @@ ComfyUI 设置面板现在仅显示启用/停用切换 - 所有其他设置已�
 全新的交互式对话界面提供直接整合于 ComfyUI 左侧边栏的对话式除错体验。当错误发生时，只需点击“Analyze with AI”即可开始与您偏好的 LLM 进行多轮对话。
 
 <div align="center">
-<img src="assets/chat-ui.png" alt="AI Chat Interface">
+<img src="../../assets/chat-ui.png" alt="AI Chat Interface">
 </div>
 
 **核心特色：**
@@ -454,7 +444,7 @@ ComfyUI-Doctor 提供交互式侧边栏界面，用于实时错误监控和诊�
 ### 界面功能
 
 <div align="center">
-<img src="assets/doctor-side-bar.png" alt="Error Report">
+<img src="../../assets/doctor-side-bar.png" alt="Error Report">
 </div>
 
 Doctor 界面由两个面板组成：
@@ -476,7 +466,7 @@ Doctor 界面由两个面板组成：
 
 右上角的实时错误通知：
 
-![Doctor Error Report](./assets/error-report.png)
+![Doctor Error Report](../../assets/error-report.png)
 
 - **状态指示灯**：显示系统健康状态的彩色圆点
   - 🟢 **绿色**：系统正常运作，未侦测到错误
@@ -526,7 +516,7 @@ ComfyUI-Doctor 整合了主流 LLM 服务，提供智能化、上下文感知的
 
 ### 配置设置
 
-![设置面板](./assets/settings.png)
+![设置面板](../../assets/settings.png)
 
 在 **Doctor 侧边栏** → **Settings** 面板中配置 AI 分析：
 
@@ -563,7 +553,7 @@ ComfyUI-Doctor 整合了主流 LLM 服务，提供智能化、上下文感知的
 
 ## 设置 (Settings)
 
-您可以透过 ComfyUI 设置面板（齿轮图标）自定义 ComfyUI-Doctor 的行为。
+您也可以通过 **Doctor 侧边栏 → Settings (设置)** 分页自定义 ComfyUI-Doctor 的行为。
 
 ### 1. Show error notifications (显示错误通知)
 
@@ -572,8 +562,8 @@ ComfyUI-Doctor 整合了主流 LLM 服务，提供智能化、上下文感知的
 
 ### 2. Auto-open panel on error (错误时自动开启面板)
 
-**功能**：侦测到新错误时，自动展开 Doctor 侧边栏。
-**用途**：**最推荐开启**。省去手动查找原因的时间，即时看到诊断结果。
+**功能**：检测到新错误时，自动开启**右侧错误报告面板**。
+**用途**：**默认开启 (ON)**。如果您希望保持面板关闭并手动开启，可关闭此选项。
 
 ### 3. Error Check Interval (ms) (错误检查间隔)
 
@@ -642,7 +632,7 @@ ComfyUI-Doctor 整合了主流 LLM 服务，提供智能化、上下文感知的
 
 ### 统计仪表板
 
-![统计面板](assets/statistics_panel.png)
+![统计面板](../../assets/statistics_panel.png)
 
 **统计仪表板**提供 ComfyUI 错误模式与稳定性趋势的即时洞察。
 

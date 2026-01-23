@@ -7,6 +7,14 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 ## Neueste Updates (Jan 2026) - Zum Erweitern klicken
 
 <details>
+<summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
+
+- Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
+- **Default: ON** for new installs, and the choice is persisted.
+
+</details>
+
+<details>
 <summary><strong>Smart Token Budget Management (v1.5.0)</strong></summary>
 
 **Intelligentes Kontextmanagement (Kostenoptimierung):**
@@ -31,8 +39,6 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 | `stream_chunk_timeout` | `30` | Stream Timeout (Sek) |
 
 </details>
-
----
 
 <details>
 <summary><strong>Wichtige Korrektur: R0/R13 Pipeline-Governance & Plugin-Sicherheit (v1.4.5)</strong></summary>
@@ -64,8 +70,6 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 
 </details>
 
----
-
 <details>
 <summary><strong>Verbesserung: CI Gates & Plugin-Tools</strong></summary>
 
@@ -90,8 +94,6 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 
 </details>
 
----
-
 <details>
 <summary><strong>Verbesserung: CSP-Doku & Telemetrie</strong></summary>
 
@@ -114,8 +116,6 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 
 </details>
 
----
-
 <details>
 <summary><strong>Verbesserung: E2E-Runner-Härtung & Vertrauens/Gesundheits-UI</strong></summary>
 
@@ -136,8 +136,6 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 
 </details>
 
----
-
 <details>
 <summary><strong>Frühere Updates (v1.4.0, Jan 2026)</strong></summary>
 
@@ -146,8 +144,6 @@ Eine kontinuierliche Echtzeit-Laufzeitdiagnose-Suite für ComfyUI mit **KI-gest�
 - UI-Korrekturen: Timing des Sidebar-Tooltips korrigiert.
 
 </details>
-
----
 
 <details>
 <summary><strong>Statistik-Dashboard</strong></summary>
@@ -164,7 +160,7 @@ ComfyUI-Doctor enthält jetzt ein **Statistik-Dashboard**, das Einblicke in Fehl
 - ✅ **Lösungsverfolgung**: Überwachen Sie gelöste vs. ungelöste Fehler
 - 🌍 **Vollständige i18n-Unterstützung**: Verfügbar in allen 9 Sprachen
 
-![Statistik-Dashboard](assets/statistics_panel.png)
+![Statistik-Dashboard](../../assets/statistics_panel.png)
 
 **Verwendung**:
 
@@ -183,8 +179,6 @@ ComfyUI-Doctor enthält jetzt ein **Statistik-Dashboard**, das Einblicke in Fehl
 **Implementierungsdetails**: Siehe `.planning/260104-F4_STATISTICS_RECORD.md`
 
 </details>
-
----
 
 <details>
 <summary><strong>Pattern-Validierung CI</strong></summary>
@@ -227,8 +221,6 @@ python scripts/run_pattern_tests.py
 
 </details>
 
----
-
 <details>
 <summary><strong>Überarbeitung des Mustersystems (STAGE 1-3 abgeschlossen)</strong></summary>
 
@@ -268,8 +260,6 @@ ComfyUI-Doctor wurde einem umfassenden Architektur-Upgrade unterzogen mit **57+ 
 - ✅ Sauberere, wartbare Codebasis
 
 </details>
-
----
 
 <details>
 <summary><strong>Frühere Updates (Dez 2025)</strong></summary>
@@ -331,7 +321,7 @@ Das ComfyUI-Einstellungsfeld zeigt jetzt nur noch den Aktivieren/Deaktivieren-Sc
 Die neue interaktive Chat-Schnittstelle bietet ein gesprächsbasiertes Debugging-Erlebnis direkt in der linken Seitenleiste von ComfyUI. Wenn ein Fehler auftritt, klicken Sie einfach auf "Analyze with AI", um eine Multi-Turn-Konversation mit Ihrem bevorzugten LLM zu beginnen.
 
 <div align="center">
-<img src="assets/chat-ui.png" alt="AI Chat Interface">
+<img src="../../assets/chat-ui.png" alt="AI Chat Interface">
 </div>
 
 **Hauptmerkmale:**
@@ -455,7 +445,7 @@ Klicken Sie im ComfyUI-Menü (linke Seitenleiste) auf die Schaltfläche **🏥 D
 ### Schnittstellenfunktionen
 
 <div align="center">
-<img src="assets/doctor-side-bar.png" alt="Error Report">
+<img src="../../assets/doctor-side-bar.png" alt="Error Report">
 </div>
 
 Die Doctor-Schnittstelle besteht aus zwei Panels:
@@ -477,7 +467,7 @@ Klicken Sie auf das **🏥 Doctor**-Symbol im linken ComfyUI-Menü, um darauf zu
 
 Echtzeit-Fehlerbenachrichtigungen in der oberen rechten Ecke:
 
-![Doctor Error Report](./assets/error-report.png)
+![Doctor Error Report](../../assets/error-report.png)
 
 - **Statusanzeige**: Farbiger Punkt zeigt den Systemzustand an
   - 🟢 **Grün**: System läuft normal, keine Fehler erkannt
@@ -527,7 +517,7 @@ ComfyUI-Doctor integriert sich in beliebte LLM-Dienste, um intelligente, kontext
 
 ### Konfiguration
 
-![Einstellungsfeld](./assets/settings.png)
+![Einstellungsfeld](../../assets/settings.png)
 
 Konfigurieren Sie die KI-Analyse im Panel **Doctor-Seitenleiste** → **Settings**:
 
@@ -583,7 +573,7 @@ ComfyUI-Doctor enthält eine automatische **PII (Personally Identifiable Informa
 
 ### Statistik-Dashboard
 
-![Statistik-Panel](assets/statistics_panel.png)
+![Statistik-Panel](../../assets/statistics_panel.png)
 
 Das **Statistik-Dashboard** bietet Echtzeit-Einblicke in Ihre ComfyUI-Fehlermuster und Stabilitätstrends.
 
@@ -638,7 +628,7 @@ Das **Statistik-Dashboard** bietet Echtzeit-Einblicke in Ihre ComfyUI-Fehlermust
 
 ## Einstellungen
 
-Sie können das Verhalten von ComfyUI-Doctor über das ComfyUI-Einstellungsfeld (Zahnradsymbol) anpassen.
+You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings** tab.
 
 ### 1. Show error notifications (Fehlerbenachrichtigungen anzeigen)
 
@@ -647,8 +637,8 @@ Sie können das Verhalten von ComfyUI-Doctor über das ComfyUI-Einstellungsfeld 
 
 ### 2. Auto-open panel on error (Panel bei Fehler automatisch öffnen)
 
-**Funktion**: Erweitert automatisch die Doctor-Seitenleiste, wenn ein neuer Fehler erkannt wird.
-**Verwendung**: **Empfohlen**. Bietet sofortigen Zugriff auf Diagnoseergebnisse ohne manuelles Klicken.
+**Function**: Automatically opens the **right-side error report panel** when a new error is detected.
+**Usage**: **Default: ON**. Disable if you prefer to keep the panel closed and open it manually.
 
 ### 3. Error Check Interval (ms)
 
