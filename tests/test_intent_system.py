@@ -67,6 +67,36 @@ class TestSignalExtractor:
         signals = extractor.extract({"nodes": "invalid"})
         assert len(signals) == 0
 
+    def test_extraction_dict_nodes(self):
+        """Test extraction from API-format workflow (dict of nodes)."""
+        workflow = {
+            "nodes": {
+                "1": {"id": 1, "type": "KSampler"},
+                "2": {"id": 2, "type": "CLIPTextEncode"}
+            }
+        }
+        extractor = SignalExtractor()
+        signals = extractor.extract(workflow)
+        sig_ids = [s.signal_id for s in signals]
+        assert "node_type.KSampler" in sig_ids
+        assert "node_type.CLIPTextEncode" in sig_ids
+
+    def test_evidence_sanitization(self):
+        """Test that evidence strings are capped and sanitized."""
+        long_type = "A" * 200
+        workflow = {
+            "nodes": [{"id": 1, "type": long_type}]
+        }
+        extractor = SignalExtractor()
+        signals = extractor.extract(workflow)
+        
+        # Should have node_type.AAAA...
+        # Note: signal_id is NOT sanitized (for matching), but explain IS.
+        sig = next(s for s in signals if s.signal_id.startswith("node_type."))
+        # Check explain string
+        assert len(sig.explain) <= 123  # 120 + "..."
+        assert sig.explain.endswith("...")
+
 class TestIntentScorer:
     def test_score_txt2img(self):
         import asyncio

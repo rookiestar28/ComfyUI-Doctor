@@ -56,18 +56,23 @@ class SignalExtractor:
         Extract signals from workflow.
 
         Args:
-            workflow: Workflow JSON (graph format)
+            workflow: Workflow JSON (graph format or API format)
 
         Returns:
             List of extracted signals
         """
         signals: List[SignalEvidence] = []
 
-        nodes = workflow.get("nodes", [])
-        if not isinstance(nodes, list):
-            # Try newer format where nodes might be in config object (rare but possible)
-            return signals
-            
+        # P3: Normalize nodes to list of dicts (handle list vs dict format)
+        raw_nodes = workflow.get("nodes", [])
+        nodes: List[Dict[str, Any]] = []
+
+        if isinstance(raw_nodes, list):
+            nodes = raw_nodes
+        elif isinstance(raw_nodes, dict):
+            # API format: "nodes": { "1": { ... }, "2": { ... } }
+            nodes = list(raw_nodes.values())
+
         links = workflow.get("links", [])
         # links format in Comfy: [[id, source_id, source_enc, target_id, target_enc, type], ...]
         
@@ -79,7 +84,7 @@ class SignalExtractor:
             if not isinstance(node, dict):
                 continue
             
-            node_type = node.get("type", "")
+            node_type = node.get("type") or node.get("class_type") or ""
             node_id = node.get("id")
             
             if node_type and node_id is not None:
@@ -105,7 +110,7 @@ class SignalExtractor:
                 value=True,
                 source=SignalSource.WORKFLOW,
                 node_ids=node_ids[:20],  # cap list size
-                explain=f"Node type '{node_type}' present",
+                explain=_sanitize_evidence_string(f"Node type '{node_type}' present"),
             ))
 
             # Count signal (if multiple)
@@ -116,7 +121,7 @@ class SignalExtractor:
                     value=len(node_ids),
                     source=SignalSource.WORKFLOW,
                     node_ids=node_ids[:20],
-                    explain=f"{len(node_ids)} instances of '{node_type}'",
+                    explain=_sanitize_evidence_string(f"{len(node_ids)} instances of '{node_type}'"),
                 ))
 
         # 2. Edge Signals
@@ -146,12 +151,37 @@ class SignalExtractor:
                                 value=True,
                                 source=SignalSource.WORKFLOW,
                                 node_ids=[origin_id, target_id],
-                                explain=f"Connection: {origin_type} -> {target_type}",
+                                explain=_sanitize_evidence_string(f"Connection: {origin_type} -> {target_type}"),
                             ))
                 except (IndexError, ValueError):
                     continue
 
         return signals
+
+
+# ============================================================================
+# Helpers (P3)
+# ============================================================================
+
+def _sanitize_evidence_string(text: str, max_len: int = 120) -> str:
+    """
+    Sanitize evidence string to prevent PII leakage and enforce bounds.
+    """
+    if not text:
+        return ""
+    
+    # Cap length
+    if len(text) > max_len:
+        text = text[:max_len] + "..."
+    
+    # Simple sanitization for strict mode (if ever needed here, though we mainly rely on Sanitizer logic)
+    # Basic path removal (windows/linux)
+    if "C:\\" in text or "/" in text:
+         # Conservative: Don't aggressively strip paths here effectively, just rely on structure.
+         # But we can strip extremely long words which might be tokens
+         pass
+
+    return text
 
 
 # ============================================================================

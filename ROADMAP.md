@@ -306,6 +306,24 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
+- [ ] **R16**: ComfyUI Desktop/Portable Compatibility Hardening - 🔴 High ⚠️ *Use dev branch*
+  - **Problem**: Desktop packaging changes directory layout and stdout/stderr behavior; edge-case stream/logging failures can trigger log storms or break persistence (especially on Windows).
+  - **Scope**:
+    - Introduce a single **Doctor data-dir resolver** (prefer ComfyUI `--user-directory` / `folder_paths.get_user_directory()`; safe fallback when unavailable)
+    - Migrate all persisted files to the resolved data dir (avoid writing under extension install dir):
+      - `error_history.json`, `comfyui_debug_*.log`, API operation logs, diagnostics history, etc.
+      - One-time migration/compat read for legacy `custom_nodes/ComfyUI-Doctor/logs/` locations
+    - Persistence hardening for JSON stores:
+      - Atomic writes (tmp → rename), corruption recovery (rotate + rebuild), and safety guardrails (max size/entries)
+    - Runtime self-protection:
+      - Reusable circuit breaker + 60s rate-limit + aggregation for repeated identical errors
+      - Drop/ignore known non-actionable Desktop log spam signatures (e.g. flush failures), while still surfacing a single aggregated health issue
+    - Record install mode hints (Desktop vs portable/git clone) + resolved paths in `system_info`/health for debugging
+  - **Acceptance**:
+    - Doctor never writes inside Desktop app resources/install directories
+    - Corrupt JSON stores self-heal without infinite error loops
+    - Flush/log storms do not grow history unbounded (aggregation + breaker)
+  - **Reference**: `docs/reference/desktop/` (ComfyUI Desktop packaging + launch args)
 - [x] **R14**: Error context extraction & prompt packaging optimization - 🔴 High ✅ *Completed (2026-01-14)*
   - **Problem**: LLM context is often dominated by raw tracebacks; log context capture is unreliable; env/pip list can waste tokens.
   - **Approach**:
@@ -542,7 +560,7 @@ graph TD
 
 ### 3.5 Testing (in progress)
 
-*Sorted by priority (High → Low), then by item number:*
+*Sorted by priority (High → Low):*
 
 - [x] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High ✅ *Completed (2026-01-09)*
   - **Goal**: Make Phase 2 hardening non-regressable (required checks before merge/release).
@@ -609,9 +627,12 @@ graph TD
   - **Implementation Record**: `.planning/260103-T2_playwright_test_infrastructure.md`
   - **Follow-up Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
   - **Foundation for**: CI/CD integration, UI regression detection
-- [x] **T10**: Playwright E2E Runner Hardening (WSL `/mnt/c`) - 🟢 Low ✅ *Completed (2026-01-09)*
-  - **Goal**: Make `npm test` stable on WSL + Windows-mounted paths (transform cache / temp permissions + python shim).
-  - **Implementation Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
+- [ ] **T13**: Desktop-style Failure Injection Tests (Flush/OSError + Corrupt JSON) - 🟡 Medium
+  - **Goal**: Prevent Desktop-only regressions (log storms, broken history) without requiring a real ComfyUI Desktop runtime in CI.
+  - **Scope**:
+    - Simulate stream flush failures (e.g. `OSError: [Errno 22] Invalid argument`) and assert rate-limit + aggregation behavior
+    - Corrupt JSON recovery tests for history stores (`error_history.json`, diagnostics history)
+    - Fixture corpus derived from `docs/reference/desktop/` (sanitized, no secrets)
 - [ ] **T9**: External Environment Test Coverage Expansion (Non-ComfyUI) - 🟡 Medium
   - **Goal**: Cover pipeline integration, SSE/REST contracts, and UI contracts without a live ComfyUI runtime
   - **Phases**:
@@ -625,6 +646,9 @@ graph TD
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek, Anthropic) - 🟡 Medium
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
+- [x] **T10**: Playwright E2E Runner Hardening (WSL `/mnt/c`) - 🟢 Low ✅ *Completed (2026-01-09)*
+  - **Goal**: Make `npm test` stable on WSL + Windows-mounted paths (transform cache / temp permissions + python shim).
+  - **Implementation Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
 
 ### 3.6 Documentation (in progress)
 

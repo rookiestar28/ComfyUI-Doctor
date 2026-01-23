@@ -343,6 +343,12 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [expanded, setExpanded] = useState({});  // Track expanded issues
+    const [expandedEvidence, setExpandedEvidence] = useState({}); // P3: Track expanded intent evidence
+
+    // P3: Toggle evidence expansion
+    const toggleEvidence = useCallback((intentId) => {
+        setExpandedEvidence(prev => ({ ...prev, [intentId]: !prev[intentId] }));
+    }, []);
 
     // Fetch last report on mount
     const fetchLastReport = useCallback(async () => {
@@ -520,20 +526,61 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
                 </div>
 
                 <!-- Intent Banner -->
+                <!-- Intent Banner (P3: Top-K & Rich UI) -->
                 ${report.intent_signature?.top_intents?.length > 0 ? html`
                     <div id="diagnostics-intent-banner" style="padding: 10px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); border-radius: 6px; margin-bottom: 15px;">
-                        <div style="font-size: 12px; color: #93c5fd; margin-bottom: 6px;">
-                            🎯 ${uiText?.diagnostics_likely_intent || 'Likely intent'}:
-                            <strong style="color: #60a5fa;">
-                                ${uiText?.[`intent_${report.intent_signature.top_intents[0].intent_id}`] || report.intent_signature.top_intents[0].intent_id}
-                            </strong>
-                            <span style="color: #888; margin-left: 6px;">(${Math.round(report.intent_signature.top_intents[0].confidence * 100)}%)</span>
+                        <div style="font-size: 12px; color: #93c5fd; margin-bottom: 8px; font-weight: bold;">
+                             🎯 ${uiText?.diagnostics_likely_intents || 'Likely intents'}
                         </div>
-                        ${report.intent_signature.top_intents[0].evidence?.slice(0, 3).map(ev => html`
-                            <div style="font-size: 11px; color: #666; padding-left: 20px;">
-                                • ${ev.explain || ev.signal_id}
-                            </div>
-                        `)}
+                        
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            ${report.intent_signature.top_intents.slice(0, 3).map((intent, idx) => {
+        const isExpanded = expandedEvidence[intent.intent_id];
+        const isPrimary = idx === 0;
+
+        return html`
+                                    <div class="intent-row" style="padding-left: 10px; border-left: 3px solid ${isPrimary ? '#60a5fa' : '#444'};">
+                                         <!-- Intent Header -->
+                                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                            <strong style="color: ${isPrimary ? '#60a5fa' : '#ccc'}; font-size: ${isPrimary ? '13px' : '12px'};">
+                                                ${uiText?.[`intent_${intent.intent_id}`] || intent.intent_id}
+                                            </strong>
+                                            
+                                            <span style="font-size: 10px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 10px; color: #aaa;">
+                                                ${Math.round(intent.confidence * 100)}%
+                                            </span>
+                                            
+                                            ${intent.stage ? html`
+                                                <span style="font-size: 10px; padding: 2px 6px; background: rgba(33, 150, 243, 0.2); border-radius: 4px; color: #64b5f6;">
+                                                    ${uiText?.[`intent_stage_${intent.stage}`] || intent.stage}
+                                                </span>
+                                            ` : null}
+                                         </div>
+
+                                         <!-- Evidence -->
+                                         ${intent.evidence?.length > 0 ? html`
+                                            <div style="margin-top: 4px;">
+                                                ${intent.evidence.slice(0, isExpanded ? 8 : 2).map(ev => html`
+                                                    <div style="font-size: 11px; color: #888; padding-left: 2px; margin-bottom: 2px;">
+                                                        <span style="color: #555;">•</span> ${ev.explain || ev.signal_id}
+                                                    </div>
+                                                `)}
+                                                
+                                                ${intent.evidence.length > 2 ? html`
+                                                    <div 
+                                                        onClick=${() => toggleEvidence(intent.intent_id)}
+                                                        style="font-size: 10px; color: #60a5fa; cursor: pointer; margin-top: 3px; display: inline-block;"
+                                                        title="${isExpanded ? (uiText?.diagnostics_show_less || 'Show less') : (uiText?.diagnostics_show_more || 'Show more')}"
+                                                    >
+                                                        ${isExpanded ? '▲' : '▼'} ${isExpanded ? (uiText?.diagnostics_show_less || 'Show less') : (uiText?.diagnostics_show_more || 'Show more')}
+                                                    </div>
+                                                ` : null}
+                                            </div>
+                                         ` : null}
+                                    </div>
+                                `;
+    })}
+                        </div>
                     </div>
                 ` : null}
 
