@@ -11,6 +11,10 @@ import { getUIText, getWorkflowContext } from './doctor_selectors.js';
 import { setState } from './doctor_actions.js';
 // R5: Error Boundaries
 import { createErrorBoundaryAsync } from './ErrorBoundary.js';
+// T14: Utils
+import { formatPatternName, calculateCategoryBreakdown, getCategoryColor } from './utils/stats_logic.js';
+import { t } from './utils/i18n_fallback.js';
+import { getDominantIntents, hasNoMatchedIntent } from './utils/intent_logic.js';
 
 let preactModules = null;
 let islandMounted = false;
@@ -40,16 +44,7 @@ function isErrorBoundariesEnabled() {
 // HELPERS
 // =========================================================
 
-function formatPatternName(patternId) {
-    if (!patternId) return 'Unknown';
-    return patternId
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, l => l.toUpperCase())
-        .replace(/Oom/g, 'OOM')
-        .replace(/Cuda/g, 'CUDA')
-        .replace(/Vae/g, 'VAE')
-        .replace(/Llm/g, 'LLM');
-}
+// T14: formatPatternName moved to utils/stats_logic.js
 
 // =========================================================
 // COMPONENTS
@@ -294,15 +289,9 @@ function CategoryBreakdown({ breakdown, total, uiText }) {
 
     if (!breakdown) return null;
 
-    const colors = {
-        'memory': '#f44',
-        'model_loading': '#ff9800',
-        'workflow': '#2196f3',
-        'framework': '#9c27b0',
-        'generic': '#607d8b'
-    };
+    if (!breakdown) return null;
 
-    const categories = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+    const categories = calculateCategoryBreakdown(breakdown, total);
 
     return html`
         <div id="doctor-category-breakdown" class="category-breakdown" style="margin-top: 20px;">
@@ -310,19 +299,19 @@ function CategoryBreakdown({ breakdown, total, uiText }) {
                 📁 ${uiText?.stats_categories || 'Categories'}
             </h5>
             <div style="display: flex; flex-direction: column; gap: 8px;">
-                ${categories.map(([cat, count]) => {
-        const percent = Math.round((count / (total || 1)) * 100);
-        const color = colors[cat] || '#888';
-        const label = uiText?.[`category_${cat}`] || cat.replace(/_/g, ' ');
+                ${categories.map(catItem => {
+        // T14: catItem is { id, count, percent }
+        const color = getCategoryColor(catItem.id);
+        const label = t(uiText, `category_${catItem.id}`, catItem.id.replace(/_/g, ' '));
 
         return html`
                         <div class="category-bar" style="font-size: 11px;">
                             <div class="bar-label" style="display: flex; justify-content: space-between; margin-bottom: 2px;">
                                 <span>${label}</span>
-                                <span class="bar-label-count">${count} (${percent}%)</span>
+                                <span class="bar-label-count">${catItem.count} (${catItem.percent}%)</span>
                             </div>
                             <div class="bar-track" style="height: 6px; background: #333; border-radius: 3px; overflow: hidden;">
-                                <div class="bar-fill" style="height: 100%; width: ${percent}%; background: ${color};"></div>
+                                <div class="bar-fill" style="height: 100%; width: ${catItem.percent}%; background: ${color};"></div>
                             </div>
                         </div>
                     `;
@@ -527,14 +516,14 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
 
                 <!-- Intent Banner -->
                 <!-- Intent Banner (P3: Top-K & Rich UI) -->
-                ${report.intent_signature?.top_intents?.length > 0 ? html`
+                ${getDominantIntents(report).length > 0 ? html`
                     <div id="diagnostics-intent-banner" style="padding: 10px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); border-radius: 6px; margin-bottom: 15px;">
                         <div style="font-size: 12px; color: #93c5fd; margin-bottom: 8px; font-weight: bold;">
-                             🎯 ${uiText?.diagnostics_likely_intents || 'Likely intents'}
+                             🎯 ${t(uiText, 'diagnostics_likely_intents', 'Likely intents')}
                         </div>
                         
                         <div style="display: flex; flex-direction: column; gap: 10px;">
-                            ${report.intent_signature.top_intents.slice(0, 3).map((intent, idx) => {
+                            ${getDominantIntents(report).map((intent, idx) => {
         const isExpanded = expandedEvidence[intent.intent_id];
         const isPrimary = idx === 0;
 
@@ -543,7 +532,7 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
                                          <!-- Intent Header -->
                                          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                             <strong style="color: ${isPrimary ? '#60a5fa' : '#ccc'}; font-size: ${isPrimary ? '13px' : '12px'};">
-                                                ${uiText?.[`intent_${intent.intent_id}`] || intent.intent_id}
+                                                ${t(uiText, `intent_${intent.intent_id}`, intent.intent_id)}
                                             </strong>
                                             
                                             <span style="font-size: 10px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 10px; color: #aaa;">
@@ -552,7 +541,7 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
                                             
                                             ${intent.stage ? html`
                                                 <span style="font-size: 10px; padding: 2px 6px; background: rgba(33, 150, 243, 0.2); border-radius: 4px; color: #64b5f6;">
-                                                    ${uiText?.[`intent_stage_${intent.stage}`] || intent.stage}
+                                                    ${t(uiText, `intent_stage_${intent.stage}`, intent.stage)}
                                                 </span>
                                             ` : null}
                                          </div>
@@ -570,9 +559,9 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
                                                     <div 
                                                         onClick=${() => toggleEvidence(intent.intent_id)}
                                                         style="font-size: 10px; color: #60a5fa; cursor: pointer; margin-top: 3px; display: inline-block;"
-                                                        title="${isExpanded ? (uiText?.diagnostics_show_less || 'Show less') : (uiText?.diagnostics_show_more || 'Show more')}"
+                                                        title="${isExpanded ? t(uiText, 'diagnostics_show_less', 'Show less') : t(uiText, 'diagnostics_show_more', 'Show more')}"
                                                     >
-                                                        ${isExpanded ? '▲' : '▼'} ${isExpanded ? (uiText?.diagnostics_show_less || 'Show less') : (uiText?.diagnostics_show_more || 'Show more')}
+                                                        ${isExpanded ? '▲' : '▼'} ${isExpanded ? t(uiText, 'diagnostics_show_less', 'Show less') : t(uiText, 'diagnostics_show_more', 'Show more')}
                                                     </div>
                                                 ` : null}
                                             </div>
@@ -582,11 +571,11 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
     })}
                         </div>
                     </div>
-                ` : ((report.intent_signature && report.intent_signature.top_intents && report.intent_signature.top_intents.length === 0) ? html`
+                ` : (hasNoMatchedIntent(report) ? html`
                     <!-- Fallback: Intent System Active but No Match -->
                     <div id="diagnostics-intent-banner" style="padding: 10px; background: rgba(100, 100, 100, 0.1); border: 1px solid rgba(100, 100, 100, 0.2); border-radius: 6px; margin-bottom: 15px;">
                          <div style="font-size: 12px; color: #888; font-style: italic;">
-                             🎯 ${uiText?.diagnostics_intent_none || 'No dominant intent detected'}
+                             🎯 ${t(uiText, 'diagnostics_intent_none', 'No dominant intent detected')}
                          </div>
                     </div>
                 ` : null)}

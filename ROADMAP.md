@@ -247,7 +247,7 @@ graph TD
     - ✅ **R13-P2**: Metadata contract + dependency policy (shared with **R0-P3**)
     - ✅ **R13-P3**: Context extraction provenance metadata
     - ✅ **R13-OPT1**: Optional signature policy (HMAC) for allowlisted plugins (shared-secret integrity check, not public signing)
-    - ✅ **R13-OPT2**: Plugin trust UI + `/doctor/plugins` scan-only endpoint ✅ *Completed (2026-01-09)*
+    - ✅ **R13-OPT2**: Trust & Health UI + `/doctor/plugins` scan-only endpoint ✅ *Completed (2026-01-09; moved to Statistics on 2026-01-15)*
 
 ### 3.1 Security (in progress)
 
@@ -297,16 +297,17 @@ graph TD
   - Config: `config.py` `telemetry_enabled` setting (default: false)
   - 6 API endpoints: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
   - Security: Origin check (403 for cross-origin), 1KB payload limit, field whitelist
-  - Frontend: `doctor_telemetry.js`, Settings UI controls
+  - Frontend: `doctor_telemetry.js`, Statistics UI controls (moved from Settings on *2026-01-15*)
   - i18n: 81 strings (9 keys × 9 languages)
   - E2E tests: 8 tests in `telemetry.spec.js`
   - **Implementation**: `.planning/260109-S1_S3_IMPLEMENTATION_RECORD.md`
+  - **UI Migration Record**: `.planning/260115-SETTINGS_TO_STATS_IMPLEMENTATION_RECORD.md`
 
 ### 3.2 Robustness (in progress)
 
 *Sorted by priority (High → Low):*
 
-- [ ] **R16**: ComfyUI Desktop/Portable Compatibility Hardening - 🔴 High ⚠️ *Use dev branch*
+- [ ] **R18**: ComfyUI Desktop/Portable Compatibility Hardening - 🔴 High ⚠️ *Use dev branch*
   - **Problem**: Desktop packaging changes directory layout and stdout/stderr behavior; edge-case stream/logging failures can trigger log storms or break persistence (especially on Windows).
   - **Scope**:
     - Introduce a single **Doctor data-dir resolver** (prefer ComfyUI `--user-directory` / `folder_paths.get_user_directory()`; safe fallback when unavailable)
@@ -333,6 +334,13 @@ graph TD
     - Build structured LLM context via pipeline (`llm_builder.py`) + token budgets (R12) instead of ad-hoc string concatenation
   - **Plan**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_OPTIMIZATION_PLAN.md`
   - **Implementation Record**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_IMPLEMENTATION_RECORD.md`
+- [x] **R16**: Statistics Reset + Unbounded History - 🟡 Medium ✅ *Completed (2026-01-15)*
+  - **Goal**: Let users reset local statistics on demand and remove hard history limits while keeping UI time windows (e.g. 30d/24h) meaningful.
+  - **Scope**:
+    - Add a Reset button in Statistics UI (with confirmation) and backend reset endpoint
+    - Remove history maxlen cap (unbounded history) with guardrails and reset mechanism
+  - **Plan**: `.planning/260115-R16_STATS_RESET_AND_UNBOUNDED_HISTORY_PLAN.md`
+  - **Implementation Record**: `.planning/260115-R16_STATISTICS_RESET_IMPLEMENTATION_RECORD.md`
 - [ ] **R17 (P1)**: Limited Config Externalization (Compatibility Guardrails) - 🟡 Medium
   - **Goal**: Externalize a small, high-impact set of hardcoded guardrails so Doctor behaves consistently across ComfyUI Desktop / portable / git-clone installs (without turning everything into config).
   - **Scope**:
@@ -404,7 +412,7 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **F14**: Proactive Diagnostics (Lint / Health Check + Intent Signature) - 🔴 High ⚠️ *Use dev branch*
+- [x] **F14**: Proactive Diagnostics (Lint / Health Check + Intent Signature) - 🔴 High ✅ *Completed (2026-01-23)*
   - **Goal**: Prevent failures before execution; Health Score is a core KPI
   - **Intent Signature (ISS)**: deterministic intent inference (signals + scoring), top intents with evidence
   - **Checks**: Workflow lint, environment/deps, model assets, runtime, privacy
@@ -412,7 +420,13 @@ graph TD
   - **i18n**: Health tab + intent banner strings across 9 languages
   - **Stats**: Top intents and intent-to-error correlation
   - **APIs**: `/doctor/health_check`, `/doctor/health_report`, `/doctor/health_history`, `/doctor/health_ack`
-  - **Plan**: `.planning/260108-PROACTIVE_DIAGNOSTICS_PLAN.md`
+  - **Plan**: `.planning/260122-F14_PROACTIVE_DIAGNOSTICS_AND_INTENT_SIGNATURE_PLAN.md`
+  - **Implementation Records**:
+    - `.planning/260122-F14_P0_IMPLEMENTATION_LOG.md`
+    - `.planning/260122-F14_P1_IMPLEMENTATION_LOG.md`
+    - `.planning/260123-F14_P2_IMPLEMENTATION_LOG.md`
+    - `.planning/260123-F14_P3_IMPLEMENTATION_LOG.md`
+    - `.planning/260123-F14_P3_FOLLOWUPS_LOG.md` (tracked as F14-P4 follow-ups)
 - [x] **F15**: Resolution Marking UI (Resolved / Unresolved / Ignored) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Let users update resolution status directly from UI
   - **Scope**: Statistics tab first; optional Chat tab parity
@@ -427,7 +441,7 @@ graph TD
   - **Conflict avoidance**: Append-only JSON files under `feedback/`
   - **Auth**: Server-side token (env var) or future device flow
   - **Plan**: `.planning/260108-F16_GITHUB_FEEDBACK_PR_PLAN.md`
-- [ ] **F17**: Toggle Auto-Open for Right Error Report Panel - 🟡 Medium
+- [x] **F17**: Toggle Auto-Open for Right Error Report Panel - 🟡 Medium ✅ *Completed (2026-01-23)*
   - **Goal**: Add a user-facing switch to control whether the right-side error report panel auto-opens when new errors are detected (**default: ON**).
   - **Scope**:
     - Add toggle in Doctor Settings tab (Sidebar → Doctor → Settings)
@@ -435,6 +449,7 @@ graph TD
     - Apply immediately (no restart required)
     - Full i18n across 9 languages
   - **Plan**: `.planning/260123-F17_AUTO_OPEN_RIGHT_PANEL_TOGGLE_PLAN.md`
+  - **Implementation Record**: `.planning/260123-F17_IMPLEMENTATION_RECORD.md`
 - [x] **F7**: Enhanced Error Analysis (Multi-Language + Categorization) - 🔴 High ✅ *Completed (2026-01-01)*
   - **Phase 1**: Enhanced Error Context Collection
     - Python stack traces, execution logs (last 50 lines)

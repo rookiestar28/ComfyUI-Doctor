@@ -132,8 +132,17 @@ export class DoctorUI {
      */
     async loadUIText() {
         try {
-            const response = await fetch(`/doctor/ui_text?lang=${this.language}`);
-            const data = await response.json();
+            const endpoint = `/doctor/ui_text?lang=${encodeURIComponent(this.language || 'en')}`;
+
+            // Prefer ComfyUI's `api.fetchApi` when available (works in ComfyUI and our E2E harness),
+            // fallback to plain fetch for environments where `api` is not present.
+            const response = (typeof window !== 'undefined' && window.api && typeof window.api.fetchApi === 'function')
+                ? await window.api.fetchApi(endpoint)
+                : await fetch(endpoint);
+
+            const data = (response && typeof response.json === 'function')
+                ? await response.json()
+                : response;
             this.uiText = data.text || {};
             this.meta = data.meta || null;
             console.log(`[ComfyUI-Doctor] Loaded UI text for language: ${data.language}, Keys: ${Object.keys(this.uiText).length}`);

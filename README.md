@@ -21,6 +21,16 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Jan 2026) - Click to expand
 
 <details>
+<summary><strong>New: F14 Proactive Diagnostics (Health Check + Intent Signature)</strong></summary>
+
+- Added a **Diagnostics** section to the **Statistics** tab for proactive workflow troubleshooting (no LLM required).
+- **Health checks**: workflow lint + environment/deps + privacy/safety checks, with actionable issues.
+- **Intent Signature (ISS)**: deterministic intent inference with **top intents + evidence** to help triage what the workflow is “trying to do”.
+- Includes UX hardening: safe fallbacks (e.g. “No dominant intent detected”) and improved evidence sanitization.
+
+</details>
+
+<details>
 <summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
 
 - Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
@@ -696,6 +706,10 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 - For local LLMs (Ollama/LMStudio), the dropdown displays all locally available models.
 
 > Note: **Trust & Health** and **Anonymous Telemetry** have moved to the **Statistics** tab.
+
+> Note: **F14 Proactive Diagnostics** is accessed from the **Statistics** tab → **Diagnostics** section.
+> Use **Run / Refresh** to generate a report, review the issues list, and use any provided actions (e.g. locate node / acknowledge).
+> If you want the report text in another language, set **Suggestion Language** in Settings first.
 
 ---
 

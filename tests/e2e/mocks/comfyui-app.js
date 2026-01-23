@@ -11,6 +11,33 @@ export function createMockComfyUIApp() {
   const mockSidebarTabs = [];
   const renderedTabs = new Set();
 
+  const storagePrefix = 'mock_comfyui_setting:';
+  const storageKey = (id) => `${storagePrefix}${id}`;
+
+  function readStoredSetting(id) {
+    try {
+      const raw = localStorage.getItem(storageKey(id));
+      if (raw === null) return undefined;
+      return JSON.parse(raw);
+    } catch (e) {
+      // If JSON parsing fails, fall back to raw string or undefined.
+      try {
+        const raw = localStorage.getItem(storageKey(id));
+        return raw === null ? undefined : raw;
+      } catch {
+        return undefined;
+      }
+    }
+  }
+
+  function writeStoredSetting(id, value) {
+    try {
+      localStorage.setItem(storageKey(id), JSON.stringify(value));
+    } catch (e) {
+      // Ignore storage errors in test harness.
+    }
+  }
+
   function renderSidebarTab(config) {
     if (!config || renderedTabs.has(config.id)) {
       return;
@@ -50,13 +77,22 @@ export function createMockComfyUIApp() {
         addSetting(config) {
           console.log('[Mock] Adding setting:', config.id);
           mockSettings.set(config.id, config);
-          // Set initial value
-          if (config.defaultValue !== undefined) {
+          // Persist settings across page reloads within Playwright via localStorage.
+          // This is required for tests that validate "persist after reload" behavior.
+          const stored = readStoredSetting(config.id);
+          if (typeof stored !== 'undefined') {
+            mockSettings.get(config.id).value = stored;
+          } else if (config.defaultValue !== undefined) {
             mockSettings.get(config.id).value = config.defaultValue;
+            writeStoredSetting(config.id, config.defaultValue);
           }
           return config;
         },
         getSettingValue(id, defaultValue) {
+          const stored = readStoredSetting(id);
+          if (typeof stored !== 'undefined') {
+            return stored;
+          }
           const setting = mockSettings.get(id);
           return setting?.value ?? setting?.defaultValue ?? defaultValue;
         },
@@ -68,6 +104,7 @@ export function createMockComfyUIApp() {
             // Create setting if it doesn't exist
             mockSettings.set(id, { id, value, defaultValue: value });
           }
+          writeStoredSetting(id, value);
         },
       },
     },
