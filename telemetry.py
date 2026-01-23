@@ -21,6 +21,11 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Set, Tuple, Any
 
+try:
+    from services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
+except Exception:
+    _get_canonical_doctor_data_dir = None
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -244,16 +249,57 @@ def validate_event(data: Dict[str, Any]) -> Tuple[bool, str, Optional[TelemetryE
 # ═══════════════════════════════════════════════════════════════════════════
 
 def get_doctor_data_dir() -> str:
-    """Get the Doctor data directory (cross-platform)."""
+    """
+    Get the Doctor data directory (cross-platform).
+
+    R18: Prefer the shared canonical resolver (Desktop/portable safe).
+    Fallback (legacy): `<extension_root>/data`.
+    """
+    if _get_canonical_doctor_data_dir:
+        try:
+            return _get_canonical_doctor_data_dir()
+        except Exception:
+            pass
+
     extension_root = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(extension_root, "data")
     os.makedirs(data_dir, exist_ok=True)
     return data_dir
 
 
+def _legacy_telemetry_path() -> str:
+    extension_root = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(extension_root, "data", "telemetry.json")
+
+
+def _migrate_legacy_telemetry_file(target_path: str) -> None:
+    """
+    One-time best-effort migration from legacy `<extension_root>/data/telemetry.json`
+    to the canonical data dir path.
+    """
+    legacy_path = _legacy_telemetry_path()
+    if legacy_path == target_path:
+        return
+    if not os.path.exists(legacy_path) or os.path.exists(target_path):
+        return
+    try:
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        with open(legacy_path, "rb") as src:
+            payload = src.read()
+        with open(target_path, "wb") as dst:
+            dst.write(payload)
+        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        os.rename(legacy_path, f"{legacy_path}.migrated-{ts}")
+    except Exception:
+        # Migration failures must not break startup or telemetry.
+        pass
+
+
 def get_telemetry_path() -> str:
     """Get telemetry file path."""
-    return os.path.join(get_doctor_data_dir(), "telemetry.json")
+    target_path = os.path.join(get_doctor_data_dir(), "telemetry.json")
+    _migrate_legacy_telemetry_file(target_path)
+    return target_path
 
 
 class TelemetryStore:

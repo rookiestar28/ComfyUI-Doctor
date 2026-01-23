@@ -31,6 +31,7 @@ try:
     from .history_store import HistoryStore, HistoryEntry
     from services.log_ring_buffer import get_ring_buffer
     from services.context_extractor import detect_fatal_pattern
+    from services import doctor_paths
 except ImportError:
     # Fallback for direct execution (tests)
     from analyzer import ErrorAnalyzer
@@ -44,6 +45,10 @@ except ImportError:
         from services.context_extractor import detect_fatal_pattern
     except ImportError:
         detect_fatal_pattern = None
+    try:
+        from services import doctor_paths
+    except ImportError:
+        doctor_paths = None
 
 
 # ==============================================================================
@@ -56,6 +61,9 @@ _last_analysis: Dict[str, Any] = {
     "timestamp": None,
     "node_context": None,  # NodeContext.to_dict() result
     "analysis_metadata": None,
+    "matched_pattern_id": None,
+    "pattern_category": None,
+    "pattern_priority": None,
     "resolution_status": None,
 }
 
@@ -64,15 +72,58 @@ _last_analysis: Dict[str, Any] = {
 _analysis_history: deque = deque() if CONFIG.history_size == 0 else deque(maxlen=CONFIG.history_size)
 
 # F1: Persistent history store
+# R18: Use canonical data directory via doctor_paths
 _current_dir = os.path.dirname(os.path.abspath(__file__))
-_history_file = os.path.join(_current_dir, "logs", "error_history.json")
+
+def _resolve_history_path():
+    if doctor_paths:
+        data_dir = doctor_paths.get_doctor_data_dir()
+        return os.path.join(data_dir, "error_history.json")
+    return os.path.join(_current_dir, "logs", "error_history.json")
+
+_history_file = _resolve_history_path()
 _history_store: Optional[HistoryStore] = None
+
+def _migrate_legacy_data():
+    """R18: One-time migration of legacy history to new location."""
+    if not doctor_paths:
+        return
+
+    legacy_path = os.path.join(_current_dir, "logs", "error_history.json")
+    target_path = _history_file
+
+    # If legacy exists and target doesn't, migrate
+    if os.path.exists(legacy_path) and not os.path.exists(target_path):
+        try:
+            logging.info(f"[ComfyUI-Doctor] Migrating history from {legacy_path} to {target_path}")
+            # Ensure target directory exists
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            
+            # Read legacy
+            with open(legacy_path, 'r', encoding='utf-8') as f:
+                data = f.read()
+            
+            # Write to new
+            with open(target_path, 'w', encoding='utf-8') as f:
+                f.write(data)
+                
+            # Rename legacy to indicate migration done (don't delete, just rename for safety)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            os.rename(legacy_path, f"{legacy_path}.migrated-{timestamp}")
+            
+        except Exception as e:
+            logging.error(f"[ComfyUI-Doctor] Migration failed: {e}")
 
 def _get_history_store() -> HistoryStore:
     """Lazy initialization of history store."""
     global _history_store
     if _history_store is None:
-        _history_store = HistoryStore(_history_file, maxlen=CONFIG.history_size)
+        _migrate_legacy_data()
+        _history_store = HistoryStore(
+            _history_file, 
+            maxlen=CONFIG.history_size,
+            max_bytes=getattr(CONFIG, 'history_size_bytes', 5*1024*1024)
+        )
     return _history_store
 
 # R2: Thread safety locks for shared mutable state

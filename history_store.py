@@ -92,17 +92,19 @@ class HistoryStore:
         history = store.get_all()
     """
     
-    def __init__(self, filepath: str, maxlen: int = 50):
+    def __init__(self, filepath: str, maxlen: int = 50, max_bytes: int = 0):
         """
         Initialize the history store.
         
         Args:
             filepath: Path to the JSON file for persistence
             maxlen: Maximum number of entries to keep (oldest are removed).
-                    If maxlen <= 0, history is unbounded.
+                    If maxlen <= 0, history is unbounded by count.
+            max_bytes: Maximum size in bytes. If 0, unbounded by size.
         """
         self._filepath = filepath
         self._maxlen = maxlen  # 0 or negative means unbounded
+        self._max_bytes = max_bytes
         self._lock = threading.Lock()
         self._history: List[HistoryEntry] = []
         self._loaded = False
@@ -158,9 +160,38 @@ class HistoryStore:
 
             # Atomic write to avoid corrupting the JSON file on interruption.
             tmp_path = f"{self._filepath}.tmp"
+            
+            # Enforce size limit before writing if configured
+            data_to_save = [entry.to_dict() for entry in self._history]
+            
+            if self._max_bytes > 0:
+                # Iterative reduction if too large
+                # We do this in-memory to avoid writing huge file then checking size
+                retries = 10
+                while retries > 0:
+                    json_str = json.dumps(data_to_save, ensure_ascii=False, indent=None)
+                    encoded_len = len(json_str.encode('utf-8'))
+                    
+                    if encoded_len <= self._max_bytes:
+                        break
+                        
+                    # Needs trimming
+                    if not data_to_save:
+                        break # Can't reduce further
+                        
+                    # Calculate how much to trim. 
+                    # Smart heuristic: trim 10% or at least 1 item.
+                    current_count = len(data_to_save)
+                    trim_count = max(1, int(current_count * 0.1))
+                    data_to_save = data_to_save[trim_count:]
+                    # Update local history to match (so we don't just crop the file but keep memory large)
+                    # Note: this affects in-memory state too, which is desired.
+                    self._history = self._history[-len(data_to_save):] if data_to_save else []
+                    retries -= 1
+            
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(
-                    [entry.to_dict() for entry in self._history],
+                    data_to_save,
                     f,
                     ensure_ascii=False,
                     indent=None

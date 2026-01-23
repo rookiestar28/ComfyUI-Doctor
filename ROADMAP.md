@@ -30,6 +30,8 @@ graph TD
     C --> K[DoctorLogProcessor]
     %% R14/R15: Log context ring buffer
     C --> LRB[services/log_ring_buffer.py]
+    %% R18: Canonical data directory resolver (Desktop/Portable compatibility)
+    C --> DP[services/doctor_paths.py]
 
     %% A6 Pipeline Architecture
     D --> PIPE[pipeline/orchestrator.py]
@@ -106,7 +108,11 @@ graph TD
     AU --> BC["specs/telemetry.spec.js - 8 tests - requires ComfyUI backend"]
     AV --> AH
     AV --> AJ
-    
+
+    %% T14: Frontend unit tests (fast, no browser)
+    ATU[tests/unit/] --> VIT[vitest.config.js]
+    ATU --> WU[web/utils/]
+	    
     %% R14/R15: Prompt composition + canonical system info
     B --> PC[services/prompt_composer.py]
     AB --> PC
@@ -132,6 +138,7 @@ graph TD
 | `rate_limiter.py` | ~130 | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
 | `llm_client.py` | ~290 | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
 | `services/` | ~670 | R12: Token estimation, budget management, workflow pruning |
+| `services/doctor_paths.py` | ~120 | R18: Canonical, Desktop-safe data directory resolver for persistence |
 | `services/prompt_composer.py` | ~260 | R14: Unified structured context → prompt formatting (summary-first) |
 | `services/log_ring_buffer.py` | ~190 | R14/R15: Bounded execution log capture for context building |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
@@ -307,7 +314,7 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **R18**: ComfyUI Desktop/Portable Compatibility Hardening - 🔴 High ⚠️ *Use dev branch*
+- [x] **R18**: ComfyUI Desktop/Portable Compatibility Hardening - 🔴 High ✅ *Completed (2026-01-23)*
   - **Problem**: Desktop packaging changes directory layout and stdout/stderr behavior; edge-case stream/logging failures can trigger log storms or break persistence (especially on Windows).
   - **Scope**:
     - Introduce a single **Doctor data-dir resolver** (prefer ComfyUI `--user-directory` / `folder_paths.get_user_directory()`; safe fallback when unavailable)
@@ -325,6 +332,9 @@ graph TD
     - Corrupt JSON stores self-heal without infinite error loops
     - Flush/log storms do not grow history unbounded (aggregation + breaker)
   - **Reference**: `docs/reference/desktop/` (ComfyUI Desktop packaging + launch args)
+  - **Plan**: `.planning/260123-R18_DESKTOP_PORTABLE_COMPAT_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260123-R18_IMPLEMENTATION_RECORD.md`
+  - **Tests**: `tests/test_paths.py`, `tests/test_history_store.py`, `tests/test_r18_migration.py`
 - [x] **R14**: Error context extraction & prompt packaging optimization - 🔴 High ✅ *Completed (2026-01-14)*
   - **Problem**: LLM context is often dominated by raw tracebacks; log context capture is unreliable; env/pip list can waste tokens.
   - **Approach**:
@@ -590,7 +600,7 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **T14 (P0)**: Frontend Unit Tests (Close E2E Gaps) - 🔴 High
+- [x] **T14 (P0)**: Frontend Unit Tests (Close E2E Gaps) - 🔴 High ✅ *Implemented (2026-01-23; CI wiring pending)*
   - **Goal**: Reduce UI regression risk by covering non-trivial logic with fast unit tests (E2E stays as end-to-end confidence, not the only safety net).
   - **Scope**:
     - Add a lightweight JS unit test runner (e.g. Vitest/Jest) focused on pure logic/helpers (formatters, guards, reducers, intent/diagnostics rendering decisions).
@@ -600,6 +610,7 @@ graph TD
     - `npm run test:unit` (or equivalent) runs in CI and locally
     - Unit tests catch at least 2-3 classes of prior regressions before E2E
     - No coupling to ComfyUI runtime APIs in unit tests (use small fixtures/mocks)
+  - **Record**: `.planning/260123-T14_FRONTEND_UNIT_TESTS_LOG.md`
 - [x] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High ✅ *Completed (2026-01-09)*
   - **Goal**: Make Phase 2 hardening non-regressable (required checks before merge/release).
   - **Gate**: `pytest -q tests/test_plugins_security.py`, `tests/test_metadata_contract.py`, `tests/test_pipeline_dependency_policy.py`, `tests/test_outbound_payload_safety.py`, plus `npm test`.
