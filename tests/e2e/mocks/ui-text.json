@@ -60,7 +60,18 @@
     "error_boundary_permanent_title": "Component Failed to Load",
     "error_boundary_permanent_msg": "This component failed after 3 reload attempts.",
     "error_boundary_error_id_label": "Error ID:",
-    "global_error_banner_title": "An error occurred"
+    "global_error_banner_title": "An error occurred",
+    "diagnostics_likely_intents": "Likely intents",
+    "diagnostics_intent_none": "No dominant intent detected",
+    "diagnostics_show_more": "Show more",
+    "diagnostics_show_less": "Show less",
+    "intent_stage_setup": "Setup",
+    "intent_stage_generation": "Generation",
+    "intent_stage_postprocess": "Postprocess",
+    "intent_txt2img": "Text to Image",
+    "intent_img2img": "Image to Image",
+    "auto_open_on_error_label": "Auto-open error report panel on new errors",
+    "auto_open_on_error_hint": "When enabled, the right-side error report panel will automatically open when a new error is detected"
   },
   "ja": {
     "sidebar_doctor_title": "ComfyUI Doctor",

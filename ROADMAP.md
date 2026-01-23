@@ -30,6 +30,8 @@ graph TD
     C --> K[DoctorLogProcessor]
     %% R14/R15: Log context ring buffer
     C --> LRB[services/log_ring_buffer.py]
+    %% R18: Canonical data directory resolver (Desktop/Portable compatibility)
+    C --> DP[services/doctor_paths.py]
 
     %% A6 Pipeline Architecture
     D --> PIPE[pipeline/orchestrator.py]
@@ -106,7 +108,11 @@ graph TD
     AU --> BC["specs/telemetry.spec.js - 8 tests - requires ComfyUI backend"]
     AV --> AH
     AV --> AJ
-    
+
+    %% T14: Frontend unit tests (fast, no browser)
+    ATU[tests/unit/] --> VIT[vitest.config.js]
+    ATU --> WU[web/utils/]
+	    
     %% R14/R15: Prompt composition + canonical system info
     B --> PC[services/prompt_composer.py]
     AB --> PC
@@ -132,6 +138,7 @@ graph TD
 | `rate_limiter.py` | ~130 | R7: Token bucket RateLimiter + async ConcurrencyLimiter |
 | `llm_client.py` | ~290 | R6: Retry with exponential backoff, Idempotency-Key, timeout budget |
 | `services/` | ~670 | R12: Token estimation, budget management, workflow pruning |
+| `services/doctor_paths.py` | ~120 | R18: Canonical, Desktop-safe data directory resolver for persistence |
 | `services/prompt_composer.py` | ~260 | R14: Unified structured context → prompt formatting (summary-first) |
 | `services/log_ring_buffer.py` | ~190 | R14/R15: Bounded execution log capture for context building |
 | `pattern_loader.py` | 300+ | JSON-based pattern management with hot-reload capability |
@@ -247,7 +254,7 @@ graph TD
     - ✅ **R13-P2**: Metadata contract + dependency policy (shared with **R0-P3**)
     - ✅ **R13-P3**: Context extraction provenance metadata
     - ✅ **R13-OPT1**: Optional signature policy (HMAC) for allowlisted plugins (shared-secret integrity check, not public signing)
-    - ✅ **R13-OPT2**: Plugin trust UI + `/doctor/plugins` scan-only endpoint ✅ *Completed (2026-01-09)*
+    - ✅ **R13-OPT2**: Trust & Health UI + `/doctor/plugins` scan-only endpoint ✅ *Completed (2026-01-09; moved to Statistics on 2026-01-15)*
 
 ### 3.1 Security (in progress)
 
@@ -297,15 +304,37 @@ graph TD
   - Config: `config.py` `telemetry_enabled` setting (default: false)
   - 6 API endpoints: `/doctor/telemetry/{status,buffer,track,clear,export,toggle}`
   - Security: Origin check (403 for cross-origin), 1KB payload limit, field whitelist
-  - Frontend: `doctor_telemetry.js`, Settings UI controls
+  - Frontend: `doctor_telemetry.js`, Statistics UI controls (moved from Settings on *2026-01-15*)
   - i18n: 81 strings (9 keys × 9 languages)
   - E2E tests: 8 tests in `telemetry.spec.js`
   - **Implementation**: `.planning/260109-S1_S3_IMPLEMENTATION_RECORD.md`
+  - **UI Migration Record**: `.planning/260115-SETTINGS_TO_STATS_IMPLEMENTATION_RECORD.md`
 
 ### 3.2 Robustness (in progress)
 
 *Sorted by priority (High → Low):*
 
+- [x] **R18**: ComfyUI Desktop/Portable Compatibility Hardening - 🔴 High ✅ *Completed (2026-01-23)*
+  - **Problem**: Desktop packaging changes directory layout and stdout/stderr behavior; edge-case stream/logging failures can trigger log storms or break persistence (especially on Windows).
+  - **Scope**:
+    - Introduce a single **Doctor data-dir resolver** (prefer ComfyUI `--user-directory` / `folder_paths.get_user_directory()`; safe fallback when unavailable)
+    - Migrate all persisted files to the resolved data dir (avoid writing under extension install dir):
+      - `error_history.json`, `comfyui_debug_*.log`, API operation logs, diagnostics history, etc.
+      - One-time migration/compat read for legacy `custom_nodes/ComfyUI-Doctor/logs/` locations
+    - Persistence hardening for JSON stores:
+      - Atomic writes (tmp → rename), corruption recovery (rotate + rebuild), and safety guardrails (max size/entries)
+    - Runtime self-protection:
+      - Reusable circuit breaker + 60s rate-limit + aggregation for repeated identical errors
+      - Drop/ignore known non-actionable Desktop log spam signatures (e.g. flush failures), while still surfacing a single aggregated health issue
+    - Record install mode hints (Desktop vs portable/git clone) + resolved paths in `system_info`/health for debugging
+  - **Acceptance**:
+    - Doctor never writes inside Desktop app resources/install directories
+    - Corrupt JSON stores self-heal without infinite error loops
+    - Flush/log storms do not grow history unbounded (aggregation + breaker)
+  - **Reference**: `docs/reference/desktop/` (ComfyUI Desktop packaging + launch args)
+  - **Plan**: `.planning/260123-R18_DESKTOP_PORTABLE_COMPAT_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260123-R18_IMPLEMENTATION_RECORD.md`
+  - **Tests**: `tests/test_paths.py`, `tests/test_history_store.py`, `tests/test_r18_migration.py`
 - [x] **R14**: Error context extraction & prompt packaging optimization - 🔴 High ✅ *Completed (2026-01-14)*
   - **Problem**: LLM context is often dominated by raw tracebacks; log context capture is unreliable; env/pip list can waste tokens.
   - **Approach**:
@@ -315,6 +344,26 @@ graph TD
     - Build structured LLM context via pipeline (`llm_builder.py`) + token budgets (R12) instead of ad-hoc string concatenation
   - **Plan**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_OPTIMIZATION_PLAN.md`
   - **Implementation Record**: `.planning/260113-R14_ERROR_CONTEXT_EXTRACTION_IMPLEMENTATION_RECORD.md`
+- [x] **R16**: Statistics Reset + Unbounded History - 🟡 Medium ✅ *Completed (2026-01-15)*
+  - **Goal**: Let users reset local statistics on demand and remove hard history limits while keeping UI time windows (e.g. 30d/24h) meaningful.
+  - **Scope**:
+    - Add a Reset button in Statistics UI (with confirmation) and backend reset endpoint
+    - Remove history maxlen cap (unbounded history) with guardrails and reset mechanism
+  - **Plan**: `.planning/260115-R16_STATS_RESET_AND_UNBOUNDED_HISTORY_PLAN.md`
+  - **Implementation Record**: `.planning/260115-R16_STATISTICS_RESET_IMPLEMENTATION_RECORD.md`
+- [ ] **R17 (P1)**: Limited Config Externalization (Compatibility Guardrails) - 🟡 Medium
+  - **Goal**: Externalize a small, high-impact set of hardcoded guardrails so Doctor behaves consistently across ComfyUI Desktop / portable / git-clone installs (without turning everything into config).
+  - **Scope**:
+    - Consolidate runtime guardrails into a single config surface (prefer request-local settings; avoid global side-effects):
+      - Error aggregation window (e.g. 60s), rate-limit thresholds, and breaker/backoff parameters
+      - Persistence guardrails (max entries / max file size / rotation thresholds) for JSON stores
+      - Path/persistence policy knobs used by **R16** (resolved data dir, migration toggles)
+    - Support safe overrides via **ComfyUI settings** and/or env vars where appropriate (defaults unchanged).
+    - Document which values are user-facing vs. developer-only (avoid accidental foot-guns).
+  - **Acceptance**:
+    - Default behavior remains unchanged for existing users
+    - Desktop-only mitigations can be enabled/tuned without code edits
+    - No new global CONFIG mutation patterns introduced
 - [x] **R15**: Canonicalize `system_info` + populate pipeline `execution_logs` - 🟡 Medium ✅ *Completed (2026-01-14)*
   - **Scope**:
     - Canonicalize `get_system_environment()` output into a PromptComposer-friendly schema (OS/Python/CUDA/PyTorch + capped packages)
@@ -373,7 +422,7 @@ graph TD
 
 *Sorted by priority (High → Low):*
 
-- [ ] **F14**: Proactive Diagnostics (Lint / Health Check + Intent Signature) - 🔴 High ⚠️ *Use dev branch*
+- [x] **F14**: Proactive Diagnostics (Lint / Health Check + Intent Signature) - 🔴 High ✅ *Completed (2026-01-23)*
   - **Goal**: Prevent failures before execution; Health Score is a core KPI
   - **Intent Signature (ISS)**: deterministic intent inference (signals + scoring), top intents with evidence
   - **Checks**: Workflow lint, environment/deps, model assets, runtime, privacy
@@ -381,7 +430,13 @@ graph TD
   - **i18n**: Health tab + intent banner strings across 9 languages
   - **Stats**: Top intents and intent-to-error correlation
   - **APIs**: `/doctor/health_check`, `/doctor/health_report`, `/doctor/health_history`, `/doctor/health_ack`
-  - **Plan**: `.planning/260108-PROACTIVE_DIAGNOSTICS_PLAN.md`
+  - **Plan**: `.planning/260122-F14_PROACTIVE_DIAGNOSTICS_AND_INTENT_SIGNATURE_PLAN.md`
+  - **Implementation Records**:
+    - `.planning/260122-F14_P0_IMPLEMENTATION_LOG.md`
+    - `.planning/260122-F14_P1_IMPLEMENTATION_LOG.md`
+    - `.planning/260123-F14_P2_IMPLEMENTATION_LOG.md`
+    - `.planning/260123-F14_P3_IMPLEMENTATION_LOG.md`
+    - `.planning/260123-F14_P3_FOLLOWUPS_LOG.md` (tracked as F14-P4 follow-ups)
 - [x] **F15**: Resolution Marking UI (Resolved / Unresolved / Ignored) - 🟡 Medium ✅ *Completed (2026-01-09)*
   - **Goal**: Let users update resolution status directly from UI
   - **Scope**: Statistics tab first; optional Chat tab parity
@@ -396,6 +451,15 @@ graph TD
   - **Conflict avoidance**: Append-only JSON files under `feedback/`
   - **Auth**: Server-side token (env var) or future device flow
   - **Plan**: `.planning/260108-F16_GITHUB_FEEDBACK_PR_PLAN.md`
+- [x] **F17**: Toggle Auto-Open for Right Error Report Panel - 🟡 Medium ✅ *Completed (2026-01-23)*
+  - **Goal**: Add a user-facing switch to control whether the right-side error report panel auto-opens when new errors are detected (**default: ON**).
+  - **Scope**:
+    - Add toggle in Doctor Settings tab (Sidebar → Doctor → Settings)
+    - Persist via ComfyUI settings (`Doctor.Behavior.AutoOpenOnError`)
+    - Apply immediately (no restart required)
+    - Full i18n across 9 languages
+  - **Plan**: `.planning/260123-F17_AUTO_OPEN_RIGHT_PANEL_TOGGLE_PLAN.md`
+  - **Implementation Record**: `.planning/260123-F17_IMPLEMENTATION_RECORD.md`
 - [x] **F7**: Enhanced Error Analysis (Multi-Language + Categorization) - 🔴 High ✅ *Completed (2026-01-01)*
   - **Phase 1**: Enhanced Error Context Collection
     - Python stack traces, execution logs (last 50 lines)
@@ -534,8 +598,19 @@ graph TD
 
 ### 3.5 Testing (in progress)
 
-*Sorted by priority (High → Low), then by item number:*
+*Sorted by priority (High → Low):*
 
+- [x] **T14 (P0)**: Frontend Unit Tests (Close E2E Gaps) - 🔴 High ✅ *Implemented (2026-01-23; CI wiring pending)*
+  - **Goal**: Reduce UI regression risk by covering non-trivial logic with fast unit tests (E2E stays as end-to-end confidence, not the only safety net).
+  - **Scope**:
+    - Add a lightweight JS unit test runner (e.g. Vitest/Jest) focused on pure logic/helpers (formatters, guards, reducers, intent/diagnostics rendering decisions).
+    - Cover critical edge-cases that are expensive/flaky in Playwright (empty/partial payloads, i18n key fallbacks, sanitizer behaviors, error state transitions).
+    - Keep runtime fast (< ~10s) and CI-friendly (no browser required).
+  - **Acceptance**:
+    - `npm run test:unit` (or equivalent) runs in CI and locally
+    - Unit tests catch at least 2-3 classes of prior regressions before E2E
+    - No coupling to ComfyUI runtime APIs in unit tests (use small fixtures/mocks)
+  - **Record**: `.planning/260123-T14_FRONTEND_UNIT_TESTS_LOG.md`
 - [x] **T11**: Phase 2 Release Readiness CI Gate (Plan 6.1) - 🔴 High ✅ *Completed (2026-01-09)*
   - **Goal**: Make Phase 2 hardening non-regressable (required checks before merge/release).
   - **Gate**: `pytest -q tests/test_plugins_security.py`, `tests/test_metadata_contract.py`, `tests/test_pipeline_dependency_policy.py`, `tests/test_outbound_payload_safety.py`, plus `npm test`.
@@ -601,9 +676,12 @@ graph TD
   - **Implementation Record**: `.planning/260103-T2_playwright_test_infrastructure.md`
   - **Follow-up Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
   - **Foundation for**: CI/CD integration, UI regression detection
-- [x] **T10**: Playwright E2E Runner Hardening (WSL `/mnt/c`) - 🟢 Low ✅ *Completed (2026-01-09)*
-  - **Goal**: Make `npm test` stable on WSL + Windows-mounted paths (transform cache / temp permissions + python shim).
-  - **Implementation Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
+- [ ] **T13**: Desktop-style Failure Injection Tests (Flush/OSError + Corrupt JSON) - 🟡 Medium
+  - **Goal**: Prevent Desktop-only regressions (log storms, broken history) without requiring a real ComfyUI Desktop runtime in CI.
+  - **Scope**:
+    - Simulate stream flush failures (e.g. `OSError: [Errno 22] Invalid argument`) and assert rate-limit + aggregation behavior
+    - Corrupt JSON recovery tests for history stores (`error_history.json`, diagnostics history)
+    - Fixture corpus derived from `docs/reference/desktop/` (sanitized, no secrets)
 - [ ] **T9**: External Environment Test Coverage Expansion (Non-ComfyUI) - 🟡 Medium
   - **Goal**: Cover pipeline integration, SSE/REST contracts, and UI contracts without a live ComfyUI runtime
   - **Phases**:
@@ -617,6 +695,9 @@ graph TD
 - [ ] **T5**: Online API integration tests (OpenAI, DeepSeek, Anthropic) - 🟡 Medium
 - [ ] **T3**: End-to-end integration tests - 🟢 Low
 - [ ] **T4**: Stress tests - 🟢 Low
+- [x] **T10**: Playwright E2E Runner Hardening (WSL `/mnt/c`) - 🟢 Low ✅ *Completed (2026-01-09)*
+  - **Goal**: Make `npm test` stable on WSL + Windows-mounted paths (transform cache / temp permissions + python shim).
+  - **Implementation Record**: `.planning/260109-PHASE2_FOLLOWUP_TRUST_HEALTH_UI_AND_E2E_RECORD.md`
 
 ### 3.6 Documentation (in progress)
 

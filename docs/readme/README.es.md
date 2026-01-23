@@ -7,6 +7,14 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 ## Últimas actualizaciones (Ene 2026) - Clic para expandir
 
 <details>
+<summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
+
+- Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
+- **Default: ON** for new installs, and the choice is persisted.
+
+</details>
+
+<details>
 <summary><strong>Gestión Inteligente de Presupuesto de Tokens (v1.5.0)</strong></summary>
 
 **Gestión Contextual Inteligente (Optimización de Costos):**
@@ -31,8 +39,6 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 | `stream_chunk_timeout` | `30` | Tiempo de espera de flujo (seg) |
 
 </details>
-
----
 
 <details>
 <summary><strong>Corrección Importante: Gobernanza de Pipeline y Seguridad de Plugins (v1.4.5)</strong></summary>
@@ -64,8 +70,6 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 
 </details>
 
----
-
 <details>
 <summary><strong>Mejora: Puertas de Enlace CI y Herramientas de Plugins</strong></summary>
 
@@ -90,8 +94,6 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 
 </details>
 
----
-
 <details>
 <summary><strong>Mejora: Documentación CSP y Telemetría</strong></summary>
 
@@ -114,8 +116,6 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 
 </details>
 
----
-
 <details>
 <summary><strong>Mejora: Refuerzo de Runner E2E y UI de Confianza/Salud</strong></summary>
 
@@ -136,8 +136,6 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 
 </details>
 
----
-
 <details>
 <summary><strong>Actualizaciones Anteriores (v1.4.0, Ene 2026)</strong></summary>
 
@@ -146,8 +144,6 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 - Correcciones de UI: Se corrigió la sincronización de la información sobre herramientas de la barra lateral.
 
 </details>
-
----
 
 <details>
 <summary><strong>Panel de Estadísticas</strong></summary>
@@ -164,7 +160,7 @@ ComfyUI-Doctor ahora incluye un **Panel de Estadísticas** que proporciona infor
 - ✅ **Seguimiento de resolución**: Supervise errores resueltos vs no resueltos
 - 🌍 **Soporte completo de i18n**: Disponible en los 9 idiomas
 
-![Panel de Estadísticas](assets/statistics_panel.png)
+![Panel de Estadísticas](../../assets/statistics_panel.png)
 
 **Cómo usar**:
 
@@ -183,8 +179,6 @@ ComfyUI-Doctor ahora incluye un **Panel de Estadísticas** que proporciona infor
 **Detalles de implementación**: Ver `.planning/260104-F4_STATISTICS_RECORD.md`
 
 </details>
-
----
 
 <details>
 <summary><strong>CI de Validación de Patrones</strong></summary>
@@ -227,8 +221,6 @@ python scripts/run_pattern_tests.py
 
 </details>
 
----
-
 <details>
 <summary><strong>Revisión del Sistema de Patrones (ETAPA 1-3 Completada)</strong></summary>
 
@@ -268,8 +260,6 @@ python scripts/run_pattern_tests.py
 - ✅ Código base más limpio y mantenible
 
 </details>
-
----
 
 <details>
 <summary><strong>Actualizaciones anteriores (Dic 2025)</strong></summary>
@@ -331,7 +321,7 @@ El panel de Configuración de ComfyUI ahora solo muestra el interruptor Activar/
 La nueva interfaz de chat interactiva ofrece una experiencia de depuración conversacional directamente dentro de la barra lateral izquierda de ComfyUI. Cuando ocurre un error, simplemente haga clic en "Analyze with AI" para iniciar una conversación de múltiples turnos con su LLM preferido.
 
 <div align="center">
-<img src="assets/chat-ui.png" alt="Interfaz de Chat de IA">
+<img src="../../assets/chat-ui.png" alt="Interfaz de Chat de IA">
 </div>
 
 **Características clave:**
@@ -455,7 +445,7 @@ Haga clic en el botón **🏥 Doctor** en el menú de ComfyUI (barra lateral izq
 ### Características de la Interfaz
 
 <div align="center">
-<img src="assets/doctor-side-bar.png" alt="Informe de Error">
+<img src="../../assets/doctor-side-bar.png" alt="Informe de Error">
 </div>
 
 La interfaz de Doctor consta de dos paneles:
@@ -477,7 +467,7 @@ Haga clic en el icono **🏥 Doctor** en el menú izquierdo de ComfyUI para acce
 
 Notificaciones de error en tiempo real en la esquina superior derecha:
 
-![Informe de Error Doctor](./assets/error-report.png)
+![Informe de Error Doctor](../../assets/error-report.png)
 
 - **Indicador de Estado**: Punto de color que muestra la salud del sistema
   - 🟢 **Verde**: Sistema funcionando normalmente, no se detectaron errores
@@ -527,7 +517,7 @@ ComfyUI-Doctor se integra con servicios LLM populares para proporcionar sugerenc
 
 ### Configuración
 
-![Panel de Configuración](./assets/settings.png)
+![Panel de Configuración](../../assets/settings.png)
 
 Configure el análisis de IA en el panel **Barra Lateral Doctor** → **Settings**:
 
@@ -583,7 +573,7 @@ ComfyUI-Doctor incluye **desinfección automática de PII (Información de Ident
 
 ### Panel de Estadísticas
 
-![Panel de Estadísticas](assets/statistics_panel.png)
+![Panel de Estadísticas](../../assets/statistics_panel.png)
 
 El **Panel de Estadísticas** proporciona información en tiempo real sobre sus patrones de error de ComfyUI y tendencias de estabilidad.
 
@@ -638,7 +628,7 @@ El **Panel de Estadísticas** proporciona información en tiempo real sobre sus 
 
 ## Configuración
 
-Puede personalizar el comportamiento de ComfyUI-Doctor a través del panel de Configuración de ComfyUI (Icono de engranaje).
+You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings** tab.
 
 ### 1. Show error notifications (Mostrar notificaciones de error)
 
@@ -647,8 +637,8 @@ Puede personalizar el comportamiento de ComfyUI-Doctor a través del panel de Co
 
 ### 2. Auto-open panel on error (Abrir panel automáticamente al error)
 
-**Función**: Expande automáticamente la barra lateral de Doctor cuando se detecta un nuevo error.
-**Uso**: **Recomendado**. Proporciona acceso inmediato a resultados de diagnóstico sin clics manuales.
+**Function**: Automatically opens the **right-side error report panel** when a new error is detected.
+**Usage**: **Default: ON**. Disable if you prefer to keep the panel closed and open it manually.
 
 ### 3. Error Check Interval (ms)
 

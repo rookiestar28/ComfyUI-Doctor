@@ -7,6 +7,14 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 ## 최신 업데이트 (2026년 1월) - 클릭하여 펼치기
 
 <details>
+<summary><strong>(v1.5.8) QoL: Auto-open Right Error Report Panel Toggle</strong></summary>
+
+- Added a **dedicated toggle** in **Doctor → Settings** to control whether the **right-side error report panel** auto-opens when a new error is detected.
+- **Default: ON** for new installs, and the choice is persisted.
+
+</details>
+
+<details>
 <summary><strong>스마트 토큰 예산 관리 (v1.5.0)</strong></summary>
 
 **스마트 컨텍스트 관리 (비용 최적화):**
@@ -31,8 +39,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 | `stream_chunk_timeout` | `30` | 스트림 타임아웃 (초) |
 
 </details>
-
----
 
 <details>
 <summary><strong>주요 수정: 파이프라인 거버넌스 & 플러그인 보안 (v1.4.5)</strong></summary>
@@ -64,8 +70,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 
 </details>
 
----
-
 <details>
 <summary><strong>기능 향상: CI 게이트 & 플러그인 도구</strong></summary>
 
@@ -90,8 +94,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 
 </details>
 
----
-
 <details>
 <summary><strong>기능 향상: CSP 문서 & 텔레메트리</strong></summary>
 
@@ -114,8 +116,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 
 </details>
 
----
-
 <details>
 <summary><strong>기능 향상: E2E 러너 강화 & 신뢰/상태 UI</strong></summary>
 
@@ -136,8 +136,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 
 </details>
 
----
-
 <details>
 <summary><strong>이전 업데이트 (v1.4.0, Jan 2026)</strong></summary>
 
@@ -146,8 +144,6 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 - UI 수정: 사이드바 툴팁 타이밍 수정.
 
 </details>
-
----
 
 <details>
 <summary><strong>통계 대시보드</strong></summary>
@@ -164,7 +160,7 @@ ComfyUI-Doctor에 오류 추세, 일반적인 문제 및 해결 진행 상황에
 - ✅ **해결 추적**: 해결됨 vs 미해결 오류 모니터링
 - 🌍 **완전한 i18n 지원**: 9개 언어 모두 지원
 
-![통계 대시보드](assets/statistics_panel.png)
+![통계 대시보드](../../assets/statistics_panel.png)
 
 **사용 방법**:
 
@@ -183,8 +179,6 @@ ComfyUI-Doctor에 오류 추세, 일반적인 문제 및 해결 진행 상황에
 **구현 세부 정보**: `.planning/260104-F4_STATISTICS_RECORD.md` 참조
 
 </details>
-
----
 
 <details>
 <summary><strong>패턴 검증 CI</strong></summary>
@@ -227,8 +221,6 @@ python scripts/run_pattern_tests.py
 
 </details>
 
----
-
 <details>
 <summary><strong>패턴 시스템 개편 (1-3단계 완료)</strong></summary>
 
@@ -268,8 +260,6 @@ ComfyUI-Doctor는 **57개 이상의 오류 패턴**과 **JSON 기반 패턴 관�
 - ✅ 더 깔끔하고 유지 관리하기 쉬운 코드베이스
 
 </details>
-
----
 
 <details>
 <summary><strong>이전 업데이트 (2025년 12월)</strong></summary>
@@ -331,7 +321,7 @@ ComfyUI 설정 패널에는 이제 활성화/비활성화 토글만 표시되며
 새로운 대화형 채팅 인터페이스는 ComfyUI의 왼쪽 사이드바 내에서 직접 대화형 디버깅 경험을 제공합니다. 오류가 발생하면 "Analyze with AI"를 클릭하여 선호하는 LLM과 멀티턴 대화를 시작할 수 있습니다.
 
 <div align="center">
-<img src="assets/chat-ui.png" alt="AI Chat Interface">
+<img src="../../assets/chat-ui.png" alt="AI Chat Interface">
 </div>
 
 **주요 기능:**
@@ -455,7 +445,7 @@ ComfyUI 메뉴(왼쪽 사이드바)에서 **🏥 Doctor** 버튼을 클릭하여
 ### 인터페이스 기능
 
 <div align="center">
-<img src="assets/doctor-side-bar.png" alt="Error Report">
+<img src="../../assets/doctor-side-bar.png" alt="Error Report">
 </div>
 
 Doctor 인터페이스는 두 개의 패널로 구성됩니다.
@@ -477,7 +467,7 @@ ComfyUI 왼쪽 메뉴의 **🏥 Doctor** 아이콘을 클릭하여 액세스:
 
 오른쪽 상단의 실시간 오류 알림:
 
-![Doctor Error Report](./assets/error-report.png)
+![Doctor Error Report](../../assets/error-report.png)
 
 - **상태 표시기**: 시스템 상태를 보여주는 컬러 점
   - 🟢 **녹색**: 시스템 정상 작동, 오류 감지되지 않음
@@ -527,7 +517,7 @@ ComfyUI-Doctor는 널리 사용되는 LLM 서비스와 통합하여 지능적이
 
 ### 구성
 
-![설정 패널](./assets/settings.png)
+![설정 패널](../../assets/settings.png)
 
 **Doctor 사이드바** → **Settings** 패널에서 AI 분석 구성:
 
@@ -583,7 +573,7 @@ ComfyUI-Doctor에는 클라우드 AI 서비스로 오류 메시지를 보낼 때
 
 ### 통계 대시보드
 
-![통계 패널](assets/statistics_panel.png)
+![통계 패널](../../assets/statistics_panel.png)
 
 **통계 대시보드**는 ComfyUI 오류 패턴 및 안정성 추세에 대한 실시간 통찰력을 제공합니다.
 
@@ -638,7 +628,7 @@ ComfyUI-Doctor에는 클라우드 AI 서비스로 오류 메시지를 보낼 때
 
 ## 설정
 
-ComfyUI 설정 패널(톱니바퀴 아이콘)을 통해 ComfyUI-Doctor 동작을 사용자 지정할 수 있습니다.
+You can also customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings** tab.
 
 ### 1. Show error notifications (오류 알림 표시)
 
@@ -647,8 +637,8 @@ ComfyUI 설정 패널(톱니바퀴 아이콘)을 통해 ComfyUI-Doctor 동작을
 
 ### 2. Auto-open panel on error (오류 시 패널 자동 열기)
 
-**기능**: 새 오류가 감지되면 Doctor 사이드바를 자동으로 펼칩니다.
-**용도**: **권장됨**. 수동으로 클릭하지 않고도 진단 결과에 즉시 액세스할 수 있습니다.
+**Function**: Automatically opens the **right-side error report panel** when a new error is detected.
+**Usage**: **Default: ON**. Disable if you prefer to keep the panel closed and open it manually.
 
 ### 3. Error Check Interval (ms)
 

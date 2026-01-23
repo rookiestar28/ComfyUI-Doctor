@@ -8,9 +8,21 @@ import sys
 import os
 import datetime
 
+# R18: Prefer canonical Doctor data dir for persisted logs (Desktop-safe)
+try:
+    from services.doctor_paths import get_doctor_data_dir as _get_doctor_data_dir
+except Exception:
+    _get_doctor_data_dir = None
+
 # Get the directory of this script (ComfyUI-Doctor folder)
 DOCTOR_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_DIR = os.path.join(DOCTOR_DIR, "logs")
+if _get_doctor_data_dir:
+    try:
+        LOG_DIR = os.path.join(_get_doctor_data_dir(), "logs")
+    except Exception:
+        LOG_DIR = os.path.join(DOCTOR_DIR, "logs")
+else:
+    LOG_DIR = os.path.join(DOCTOR_DIR, "logs")
 
 # Ensure logs directory exists
 os.makedirs(LOG_DIR, exist_ok=True)

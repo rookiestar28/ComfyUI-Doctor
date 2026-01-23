@@ -8,6 +8,28 @@ import json
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List
 
+def _get_config_path_candidates() -> List[str]:
+    """
+    Return config.json path candidates in priority order.
+
+    R18: Prefer canonical Doctor data dir for persisted config (Desktop-safe),
+    but keep backward-compatible fallback to the legacy extension-root config.json.
+    """
+    candidates: List[str] = []
+    try:
+        from services.doctor_paths import get_doctor_data_dir  # local import to avoid import-time coupling
+        candidates.append(os.path.join(get_doctor_data_dir(), "config.json"))
+    except Exception:
+        pass
+
+    # Legacy location (extension root)
+    candidates.append(os.path.join(os.path.dirname(__file__), "config.json"))
+    return candidates
+
+
+def _get_primary_config_path() -> str:
+    return _get_config_path_candidates()[0]
+
 
 @dataclass
 class DiagnosticsConfig:
@@ -22,6 +44,8 @@ class DiagnosticsConfig:
     # History
     # history_size: 0 = unbounded, >0 = max entries
     history_size: int = 0
+    # history_size_bytes: Max size in bytes for history file (default 5MB)
+    history_size_bytes: int = 5 * 1024 * 1024
     
     # i18n
     default_language: str = "zh_TW"
@@ -82,26 +106,34 @@ def load_config() -> DiagnosticsConfig:
     Load configuration from config.json if it exists,
     otherwise return defaults.
     """
-    config_path = os.path.join(os.path.dirname(__file__), "config.json")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, encoding="utf-8") as f:
-                data = json.load(f)
-                return DiagnosticsConfig(**data)
-        except Exception:
-            pass  # Fall back to defaults on any error
+    for config_path in _get_config_path_candidates():
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                    return DiagnosticsConfig(**data)
+            except Exception:
+                # Fall back to next candidate on any error
+                pass
     return DiagnosticsConfig()
 
 
 def save_config(config: DiagnosticsConfig) -> bool:
     """Save current configuration to config.json."""
-    config_path = os.path.join(os.path.dirname(__file__), "config.json")
+    config_path = _get_primary_config_path()
     try:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
         return True
     except Exception:
-        return False
+        # Fallback to legacy location if canonical dir is not writable.
+        try:
+            legacy_path = os.path.join(os.path.dirname(__file__), "config.json")
+            with open(legacy_path, "w", encoding="utf-8") as f:
+                json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
+            return True
+        except Exception:
+            return False
 
 
 # Global config instance

@@ -10,6 +10,7 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report",
+    "test:unit": "vitest run tests/unit",
     "install-browsers": "playwright install chromium",
     "preflight:js": "node scripts/preflight-js.mjs"
   },
@@ -22,7 +23,8 @@
   "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.40.0",
-    "acorn": "^8.15.0"
+    "acorn": "^8.15.0",
+    "vitest": "^1.2.0"
   },
   "engines": {
     "node": ">=18.0.0"

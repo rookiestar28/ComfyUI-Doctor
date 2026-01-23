@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import shutil
+import hashlib
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -42,6 +43,11 @@ class HistoryEntry:
     pattern_priority: Optional[int] = None
     resolution_status: str = "unresolved"  # "resolved"|"unresolved"|"ignored"
     analysis_metadata: Optional[Dict[str, Any]] = None
+    # Aggregation fields (optional; backward compatible)
+    repeat_count: int = 1
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
+    error_signature: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert entry to dictionary for JSON serialization."""
@@ -50,8 +56,9 @@ class HistoryEntry:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "HistoryEntry":
         """Create entry from dictionary (backward compatible with old format)."""
+        timestamp = data.get("timestamp", "")
         return cls(
-            timestamp=data.get("timestamp", ""),
+            timestamp=timestamp,
             error=data.get("error", ""),
             suggestion=data.get("suggestion", {}),
             node_context=data.get("node_context"),
@@ -62,6 +69,10 @@ class HistoryEntry:
             pattern_priority=data.get("pattern_priority"),
             resolution_status=data.get("resolution_status", "unresolved"),
             analysis_metadata=data.get("analysis_metadata"),
+            repeat_count=int(data.get("repeat_count", 1) or 1),
+            first_seen=data.get("first_seen") or timestamp,
+            last_seen=data.get("last_seen") or timestamp,
+            error_signature=data.get("error_signature"),
         )
 
 
@@ -81,20 +92,24 @@ class HistoryStore:
         history = store.get_all()
     """
     
-    def __init__(self, filepath: str, maxlen: int = 50):
+    def __init__(self, filepath: str, maxlen: int = 50, max_bytes: int = 0):
         """
         Initialize the history store.
         
         Args:
             filepath: Path to the JSON file for persistence
             maxlen: Maximum number of entries to keep (oldest are removed).
-                    If maxlen <= 0, history is unbounded.
+                    If maxlen <= 0, history is unbounded by count.
+            max_bytes: Maximum size in bytes. If 0, unbounded by size.
         """
         self._filepath = filepath
         self._maxlen = maxlen  # 0 or negative means unbounded
+        self._max_bytes = max_bytes
         self._lock = threading.Lock()
         self._history: List[HistoryEntry] = []
         self._loaded = False
+        # Aggregation window: within this window, repeated identical errors are aggregated.
+        self._aggregate_window_seconds = 60
     
     @property
     def filepath(self) -> str:
@@ -145,9 +160,38 @@ class HistoryStore:
 
             # Atomic write to avoid corrupting the JSON file on interruption.
             tmp_path = f"{self._filepath}.tmp"
+            
+            # Enforce size limit before writing if configured
+            data_to_save = [entry.to_dict() for entry in self._history]
+            
+            if self._max_bytes > 0:
+                # Iterative reduction if too large
+                # We do this in-memory to avoid writing huge file then checking size
+                retries = 10
+                while retries > 0:
+                    json_str = json.dumps(data_to_save, ensure_ascii=False, indent=None)
+                    encoded_len = len(json_str.encode('utf-8'))
+                    
+                    if encoded_len <= self._max_bytes:
+                        break
+                        
+                    # Needs trimming
+                    if not data_to_save:
+                        break # Can't reduce further
+                        
+                    # Calculate how much to trim. 
+                    # Smart heuristic: trim 10% or at least 1 item.
+                    current_count = len(data_to_save)
+                    trim_count = max(1, int(current_count * 0.1))
+                    data_to_save = data_to_save[trim_count:]
+                    # Update local history to match (so we don't just crop the file but keep memory large)
+                    # Note: this affects in-memory state too, which is desired.
+                    self._history = self._history[-len(data_to_save):] if data_to_save else []
+                    retries -= 1
+            
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(
-                    [entry.to_dict() for entry in self._history],
+                    data_to_save,
                     f,
                     ensure_ascii=False,
                     indent=None
@@ -166,6 +210,20 @@ class HistoryStore:
                     os.remove(tmp_path)
             except Exception:
                 pass
+
+    def _parse_ts(self, ts: str) -> datetime:
+        """Parse ISO timestamp; return epoch on failure."""
+        try:
+            if not ts:
+                return datetime.min
+            # Support both naive and Z timestamps
+            return datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return datetime.min
+
+    def _compute_signature(self, error_text: str) -> str:
+        """Compute a deterministic signature for an error text."""
+        return hashlib.sha256((error_text or "").encode("utf-8", errors="ignore")).hexdigest()
     
     def append(self, entry: HistoryEntry) -> None:
         """
@@ -179,6 +237,40 @@ class HistoryStore:
         """
         with self._lock:
             self._load()
+
+            # Normalize aggregation fields
+            if not entry.first_seen:
+                entry.first_seen = entry.timestamp
+            if not entry.last_seen:
+                entry.last_seen = entry.timestamp
+            if not entry.error_signature:
+                entry.error_signature = self._compute_signature(entry.error)
+
+            # Aggregate repeated identical errors within the time window.
+            # This prevents unbounded growth when the same error repeats rapidly.
+            if self._history:
+                now_ts = self._parse_ts(entry.timestamp)
+                # Search from newest to oldest for a matching signature within the window.
+                for existing in reversed(self._history):
+                    if not existing:
+                        continue
+                    sig = existing.error_signature or self._compute_signature(existing.error)
+                    if sig != entry.error_signature:
+                        continue
+                    last_seen_ts = self._parse_ts(existing.last_seen or existing.timestamp)
+                    if (now_ts - last_seen_ts).total_seconds() <= self._aggregate_window_seconds:
+                        existing.repeat_count = int(getattr(existing, "repeat_count", 1) or 1) + 1
+                        existing.last_seen = entry.timestamp
+                        # Best-effort: keep richer metadata if the new entry has it.
+                        if not existing.node_context and entry.node_context:
+                            existing.node_context = entry.node_context
+                        if (not existing.suggestion) and entry.suggestion:
+                            existing.suggestion = entry.suggestion
+                        if not existing.analysis_metadata and entry.analysis_metadata:
+                            existing.analysis_metadata = entry.analysis_metadata
+                        self._save()
+                        return
+
             self._history.append(entry)
             
             # Trim to maxlen (only if bounded)

@@ -1,0 +1,109 @@
+{
+    "txt2img": {
+        "id": "txt2img",
+        "name": "Text to Image",
+        "description": "Generate image from text prompt",
+        "required_signals": [
+            "node_type.CLIPTextEncode",
+            "node_type.KSampler"
+        ],
+        "positive_signals": [
+            "node_type.EmptyLatentImage"
+        ],
+        "negative_signals": [
+            "node_type.LoadImage",
+            "node_type.IPAdapter"
+        ],
+        "stage": "generation"
+    },
+    "img2img": {
+        "id": "img2img",
+        "name": "Image to Image",
+        "description": "Transform existing image",
+        "required_signals": [
+            "node_type.LoadImage",
+            "node_type.KSampler"
+        ],
+        "positive_signals": [
+            "node_type.VAEEncode"
+        ],
+        "negative_signals": [],
+        "stage": "generation"
+    },
+    "inpainting": {
+        "id": "inpainting",
+        "name": "Inpainting",
+        "description": "Fill in masked regions of image",
+        "required_signals": [
+            "node_type.LoadImage",
+            "node_type.LoadImageMask"
+        ],
+        "positive_signals": [
+            "node_type.SetLatentNoiseMask"
+        ],
+        "negative_signals": [],
+        "stage": "generation"
+    },
+    "upscaling": {
+        "id": "upscaling",
+        "name": "Upscaling",
+        "description": "Increase image resolution",
+        "required_signals": [],
+        "positive_signals": [
+            "node_type.UpscaleModelLoader",
+            "node_type.ImageUpscaleWithModel",
+            "node_type.LatentUpscale"
+        ],
+        "negative_signals": [],
+        "stage": "postprocess"
+    },
+    "controlnet": {
+        "id": "controlnet",
+        "name": "ControlNet Guided",
+        "description": "Generation guided by ControlNet",
+        "required_signals": [
+            "node_type.ControlNetLoader",
+            "node_type.ControlNetApply"
+        ],
+        "positive_signals": [],
+        "negative_signals": [],
+        "stage": "generation"
+    },
+    "ipadapter": {
+        "id": "ipadapter",
+        "name": "IP-Adapter Style Transfer",
+        "description": "Style transfer using IP-Adapter",
+        "required_signals": [
+            "node_type.IPAdapter"
+        ],
+        "positive_signals": [
+            "node_type.IPAdapterModelLoader"
+        ],
+        "negative_signals": [],
+        "stage": "generation"
+    },
+    "lora": {
+        "id": "lora",
+        "name": "LoRA Fine-tuning",
+        "description": "Using LoRA for style/concept",
+        "required_signals": [
+            "node_type.LoraLoader"
+        ],
+        "positive_signals": [],
+        "negative_signals": [],
+        "stage": "setup"
+    },
+    "video": {
+        "id": "video",
+        "name": "Video Generation",
+        "description": "Generate or process video",
+        "required_signals": [],
+        "positive_signals": [
+            "node_type.AnimateDiff",
+            "node_type.VHS_",
+            "node_type.LoadVideo"
+        ],
+        "negative_signals": [],
+        "stage": "generation"
+    }
+}

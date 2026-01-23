@@ -86,6 +86,10 @@ export function render(container) {
     const currentApiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
     const currentModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
     const currentPrivacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
+    // F17: Read auto-open setting with strict null check (false is a valid stored value)
+    // Must handle string "false" from ComfyUI storage - same logic as doctor.js line 212
+    const storedAutoOpen = app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", null);
+    const currentAutoOpenOnError = storedAutoOpen === null ? true : Boolean(storedAutoOpen) && storedAutoOpen !== "false" && storedAutoOpen !== "0";
 
     const settingsPanel = document.createElement('div');
     settingsPanel.id = 'doctor-settings-panel';
@@ -165,6 +169,13 @@ export function render(container) {
                     <option value="strict" ${currentPrivacyMode === 'strict' ? 'selected' : ''} id="privacy-strict-option">${doctorUI.getUIText('privacy_mode_strict')}</option>
                 </select>
                 <div id="doctor-privacy-hint" style="font-size: 12px; color: #888; margin-top: 5px;">${doctorUI.getUIText('privacy_mode_hint')}</div>
+            </div>
+            <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; cursor: pointer;">
+                    <input type="checkbox" id="doctor-auto-open-toggle" ${currentAutoOpenOnError ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+                    <span>${doctorUI.getUIText('auto_open_on_error_label') || 'Auto-open error report panel on new errors'}</span>
+                </label>
+                <div style="font-size: 12px; color: #888; margin-top: 5px; margin-left: 24px;">${doctorUI.getUIText('auto_open_on_error_hint') || 'When enabled, the right-side error report panel will automatically open when a new error is detected'}</div>
             </div>
             <button id="doctor-save-settings-btn" style="width: 100%; padding: 10px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px;">💾 ${doctorUI.getUIText('save_settings_btn')}</button>
         </div>
@@ -300,6 +311,7 @@ export function render(container) {
     };
 
     const saveBtn = settingsPanel.querySelector('#doctor-save-settings-btn');
+    const autoOpenToggle = settingsPanel.querySelector('#doctor-auto-open-toggle');
     saveBtn.onclick = async () => {
         const langSelect = settingsPanel.querySelector('#doctor-language-select');
         const modelValue = manualToggle.checked ? modelInputManual.value : modelSelect.value;
@@ -307,6 +319,7 @@ export function render(container) {
         const baseUrlVal = baseUrlInput.value;
         const apiKeyVal = apiKeyInput.value;
         const privacyVal = privacySelect.value;
+        const autoOpenVal = autoOpenToggle.checked;
 
         try {
             app.ui.settings.setSettingValue("Doctor.General.Language", langSelect.value);
@@ -315,6 +328,9 @@ export function render(container) {
             app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", apiKeyVal);
             app.ui.settings.setSettingValue("Doctor.LLM.Model", modelValue);
             app.ui.settings.setSettingValue("Doctor.Privacy.Mode", privacyVal);
+            // F17: Save auto-open setting and apply immediately
+            app.ui.settings.setSettingValue("Doctor.Behavior.AutoOpenOnError", autoOpenVal);
+            doctorUI.autoOpenOnError = autoOpenVal;
 
             // Reload UI Text for new language (which also updates privacy text eventually)
             // doctorUI.updateUILanguage() -> will update info card etc.

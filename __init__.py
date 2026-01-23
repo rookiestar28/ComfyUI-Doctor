@@ -60,6 +60,7 @@ from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig
 from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
+from .services.doctor_paths import get_doctor_data_dir
 
 # Global R12 Service
 TOKEN_BUDGET_SERVICE = TokenBudgetService()
@@ -103,7 +104,8 @@ def is_anthropic(base_url: str) -> bool:
 
 # --- 1. Setup Log Directory (Local to Node) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-log_dir = os.path.join(current_dir, "logs")
+# R18: Prefer canonical Doctor data dir for persisted logs (Desktop-safe)
+log_dir = os.path.join(get_doctor_data_dir(), "logs")
 
 if not os.path.exists(log_dir):
     try:
@@ -2333,6 +2335,10 @@ try:
             payload = {
                 "logger": get_logger_metrics(),
                 "ssrf": get_ssrf_metrics(),
+                "storage": {
+                    "data_dir": get_doctor_data_dir(),
+                    "history_size_bytes": getattr(CONFIG, "history_size_bytes", 0),
+                },
                 "last_analysis": {
                     "timestamp": last_analysis.get("timestamp"),
                     "pipeline_status": analysis_meta.get("pipeline_status"),

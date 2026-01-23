@@ -47,6 +47,39 @@ class TestStatisticsCalculator:
         assert result["pattern_frequency"]["cuda_oom_classic"] == 3
         assert result["pattern_frequency"]["missing_module"] == 1
         assert result["total_errors"] == 4
+
+    def test_repeat_count_is_weighted_in_totals(self):
+        """repeat_count should contribute to totals and counts."""
+        now = datetime.now(timezone.utc)
+        history = [
+            {
+                "timestamp": (now - timedelta(minutes=5)).isoformat(),
+                "matched_pattern_id": "a",
+                "pattern_category": "memory",
+                "resolution_status": "unresolved",
+                "repeat_count": 3,
+                "first_seen": (now - timedelta(minutes=5)).isoformat(),
+                "last_seen": (now - timedelta(minutes=4)).isoformat(),
+            },
+            {
+                "timestamp": (now - timedelta(minutes=3)).isoformat(),
+                "matched_pattern_id": "b",
+                "pattern_category": "workflow",
+                "resolution_status": "resolved",
+                "repeat_count": 2,
+                "first_seen": (now - timedelta(minutes=3)).isoformat(),
+                "last_seen": (now - timedelta(minutes=3)).isoformat(),
+            },
+        ]
+
+        result = StatisticsCalculator.calculate(history, 30)
+        assert result["total_errors"] == 5
+        assert result["pattern_frequency"]["a"] == 3
+        assert result["pattern_frequency"]["b"] == 2
+        assert result["category_breakdown"]["memory"] == 3
+        assert result["category_breakdown"]["workflow"] == 2
+        assert result["resolution_rate"]["unresolved"] == 3
+        assert result["resolution_rate"]["resolved"] == 2
     
     def test_pattern_frequency_skips_none_pattern(self):
         """Entries without pattern_id should be skipped in frequency count"""

@@ -20,6 +20,7 @@ from .models import (
     IssueStatus,
     ReportMetadata,
 )
+from services.doctor_paths import get_doctor_data_dir
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.store")
 
@@ -72,21 +73,8 @@ class DiagnosticsStore:
 
     def _get_default_storage_dir(self) -> Path:
         """Get default storage directory."""
-        # Try ComfyUI user directory first
-        try:
-            import folder_paths
-            user_dir = folder_paths.get_user_directory()
-            return Path(user_dir) / "comfyui-doctor" / "diagnostics"
-        except ImportError:
-            pass
-
-        # Fallback to system-specific user data
-        if os.name == "nt":
-            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        else:
-            base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-
-        return base / "comfyui-doctor" / "diagnostics"
+        # R18: All persistence should hang off the canonical Doctor data dir.
+        return Path(get_doctor_data_dir()) / "diagnostics"
 
     def _load(self):
         """Load store from disk."""

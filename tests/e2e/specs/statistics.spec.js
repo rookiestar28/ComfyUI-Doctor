@@ -635,7 +635,7 @@ test.describe('Statistics Dashboard', () => {
     let statsReturnEmpty = false;
 
     // Remove default handler so this test can deterministically control responses.
-    await page.unroute('**/doctor/statistics*').catch(() => {});
+    await page.unroute('**/doctor/statistics*').catch(() => { });
 
     // Override routes to track reset API and return empty stats after reset
     await page.route('**/doctor/statistics/reset', async route => {
@@ -711,4 +711,111 @@ test.describe('Statistics Dashboard', () => {
     // API should NOT be called
     expect(resetApiCalled).toBe(false);
   });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // F14: Diagnostics UX Tests (P3)
+  // ════════════════════════════════════════════════════════════════════════
+
+  test('should display multi-intent banner with stage badges', async ({ page }) => {
+    // Mock the report response with multiple intents
+    const multiIntentReport = {
+      success: true,
+      report: {
+        timestamp: Date.now(),
+        health_score: 95,
+        duration_ms: 120,
+        issues: [],
+        intent_signature: {
+          top_intents: [
+            {
+              intent_id: 'txt2img',
+              confidence: 0.9,
+              stage: 'generation',
+              evidence: [
+                { explain: 'Ksampler found', signal_id: 'node.KSampler' },
+                { explain: 'SaveImage found', signal_id: 'node.SaveImage' },
+                { explain: 'CLIPTextEncode found', signal_id: 'node.CLIPText' }
+              ]
+            },
+            {
+              intent_id: 'img2img',
+              confidence: 0.4,
+              stage: 'generation',
+              evidence: [
+                { explain: 'LoadImage found', signal_id: 'node.LoadImage' }
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    // Override route for this specific test
+    await page.route('**/doctor/health_report', route => {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(multiIntentReport) });
+    });
+
+    // Reload to trigger mount fetch in DiagnosticsSection
+    await page.reload();
+    await waitForDoctorReady(page);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(500); // Wait for render
+
+    // Assert Banner
+    const banner = page.locator('#diagnostics-intent-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Likely intents');
+
+    // Check Primary Intent (txt2img -> "Text to Image" in mock ui-text)
+    await expect(banner).toContainText('Text to Image');
+    await expect(banner).toContainText('90%');
+    await expect(banner).toContainText('Generation'); // Stage localization
+
+    // Check Secondary Intent
+    await expect(banner).toContainText('Image to Image');
+
+    // Check Evidence Expansion
+    // Mock has 3 items for txt2img. Default view usually shows 2.
+    // "Show more" should be visible.
+    const toggle = banner.getByText('Show more').first();
+    await expect(toggle).toBeVisible();
+
+    // Click toggle
+    await toggle.click();
+
+    // Expect text to change to "Show less" (using regex for flexibility)
+    await expect(banner).toContainText(/Show less/i);
+  });
+
+  test('should render no-intent message when intent signature exists but no top intents', async ({ page }) => {
+    // Mock report with empty top_intents
+    const noIntentReport = {
+      success: true,
+      report: {
+        timestamp: Date.now(),
+        health_score: 100,
+        intent_signature: {
+          top_intents: [] // Empty list
+        }
+      }
+    };
+
+    await page.route('**/doctor/health_report', route => {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(noIntentReport) });
+    });
+
+    await page.reload();
+    await waitForDoctorReady(page);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(500);
+
+    // Banner should still be visible (fallback mode)
+    const banner = page.locator('#diagnostics-intent-banner');
+    await expect(banner).toBeVisible();
+
+    // Should contain the fallback text
+    // "No dominant intent detected" is the default or mocked en value
+    await expect(banner).toContainText(/No dominant intent detected/i);
+  });
+
 });

@@ -22,6 +22,7 @@ import queue
 import time
 import os
 import logging
+import hashlib
 from collections import deque
 from typing import Optional, Dict, Any, List
 try:
@@ -30,6 +31,7 @@ try:
     from .history_store import HistoryStore, HistoryEntry
     from services.log_ring_buffer import get_ring_buffer
     from services.context_extractor import detect_fatal_pattern
+    from services import doctor_paths
 except ImportError:
     # Fallback for direct execution (tests)
     from analyzer import ErrorAnalyzer
@@ -43,6 +45,10 @@ except ImportError:
         from services.context_extractor import detect_fatal_pattern
     except ImportError:
         detect_fatal_pattern = None
+    try:
+        from services import doctor_paths
+    except ImportError:
+        doctor_paths = None
 
 
 # ==============================================================================
@@ -55,6 +61,9 @@ _last_analysis: Dict[str, Any] = {
     "timestamp": None,
     "node_context": None,  # NodeContext.to_dict() result
     "analysis_metadata": None,
+    "matched_pattern_id": None,
+    "pattern_category": None,
+    "pattern_priority": None,
     "resolution_status": None,
 }
 
@@ -63,57 +72,66 @@ _last_analysis: Dict[str, Any] = {
 _analysis_history: deque = deque() if CONFIG.history_size == 0 else deque(maxlen=CONFIG.history_size)
 
 # F1: Persistent history store
+# R18: Use canonical data directory via doctor_paths
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 
-def _get_history_file_path() -> str:
+def _resolve_history_path() -> str:
     """
     Choose a writable, stable location for history persistence.
 
     Why:
     - ComfyUI Desktop / Manager may treat writes inside the extension folder as "conflicts"
       and may also place extensions under locations with stricter permissions.
-    - Using ComfyUI's user directory avoids dirtying the extension checkout and is more robust
-      across install modes (portable/git clone/desktop).
+    - Using the canonical Doctor data dir is robust across install modes
+      (portable/git clone/desktop) and respects ComfyUI's user directory when available.
     """
-    # Prefer ComfyUI user directory when available.
-    try:
-        import folder_paths  # type: ignore
-        user_dir = folder_paths.get_user_directory()
-        return os.path.join(user_dir, "comfyui-doctor", "logs", "error_history.json")
-    except Exception:
-        pass
-
-    # Fallback: keep legacy behavior (inside extension folder).
+    if doctor_paths:
+        try:
+            data_dir = doctor_paths.get_doctor_data_dir()
+            return os.path.join(data_dir, "error_history.json")
+        except Exception:
+            pass
     return os.path.join(_current_dir, "logs", "error_history.json")
 
-_history_file = _get_history_file_path()
+
+_history_file = _resolve_history_path()
 _history_store: Optional[HistoryStore] = None
+
+def _migrate_legacy_data():
+    """R18: One-time migration of legacy history to new location."""
+    if not doctor_paths:
+        return
+
+    legacy_path = os.path.join(_current_dir, "logs", "error_history.json")
+    target_path = _history_file
+
+    # If legacy exists and target doesn't, migrate.
+    # Best-effort: prefer moving the file out of the extension folder to avoid "conflict" warnings.
+    if os.path.exists(legacy_path) and not os.path.exists(target_path):
+        try:
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            try:
+                os.replace(legacy_path, target_path)
+            except Exception:
+                import shutil
+                shutil.copy2(legacy_path, target_path)
+                try:
+                    os.remove(legacy_path)
+                except Exception:
+                    pass
+        except Exception as e:
+            logging.error(f"[ComfyUI-Doctor] Migration failed: {e}")
 
 def _get_history_store() -> HistoryStore:
     """Lazy initialization of history store."""
     global _history_store
     if _history_store is None:
-        # Best-effort migration: if the new path is empty but the legacy file exists,
-        # move it to the new location so users keep their history and we avoid leaving
-        # writable artifacts in the extension folder (which can trigger "conflict" warnings).
-        try:
-            legacy_path = os.path.join(_current_dir, "logs", "error_history.json")
-            if _history_file != legacy_path and os.path.exists(legacy_path) and not os.path.exists(_history_file):
-                os.makedirs(os.path.dirname(_history_file), exist_ok=True)
-                try:
-                    os.replace(legacy_path, _history_file)
-                except Exception:
-                    # If atomic replace fails (cross-device), fall back to copy+remove.
-                    import shutil
-                    shutil.copy2(legacy_path, _history_file)
-                    try:
-                        os.remove(legacy_path)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-        _history_store = HistoryStore(_history_file, maxlen=CONFIG.history_size)
+        _migrate_legacy_data()
+        _history_store = HistoryStore(
+            _history_file,
+            maxlen=CONFIG.history_size,
+            max_bytes=getattr(CONFIG, 'history_size_bytes', 5*1024*1024)
+        )
     return _history_store
 
 # R2: Thread safety locks for shared mutable state
@@ -355,6 +373,39 @@ class SafeStreamWrapper:
         return getattr(self._original_stream, name)
 
 
+class FlushSafeProxy:
+    """
+    Stream proxy that never raises from write()/flush().
+
+    Purpose:
+    - Some ComfyUI Desktop builds use a LogInterceptor whose flush() can raise
+      `OSError: [Errno 22] Invalid argument` under Windows packaging.
+    - Python's logging.StreamHandler calls flush() after every emit.
+    - If flush raises, logging prints an exception traceback, causing a log storm.
+
+    This proxy keeps the original stream behavior but makes flush safe.
+    It intentionally does NOT enqueue messages for Doctor analysis.
+    """
+
+    def __init__(self, original_stream):
+        self._original_stream = original_stream
+
+    def write(self, data):
+        try:
+            return self._original_stream.write(data)
+        except (OSError, AttributeError, ValueError):
+            return 0
+
+    def flush(self):
+        try:
+            return self._original_stream.flush()
+        except (OSError, AttributeError, ValueError):
+            return None
+
+    def __getattr__(self, name):
+        return getattr(self._original_stream, name)
+
+
 class DoctorLogProcessor(threading.Thread):
     """
     Background thread for log analysis.
@@ -382,6 +433,15 @@ class DoctorLogProcessor(threading.Thread):
         self.buffer = []
         self.in_traceback = False
         self.last_buffer_time = 0
+        self._aggregate_window_seconds = 60
+
+    def _parse_ts(self, ts: str) -> datetime.datetime:
+        try:
+            if not ts:
+                return datetime.datetime.min
+            return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return datetime.datetime.min
 
     def run(self):
         """Main loop: process queued messages."""
@@ -575,6 +635,16 @@ class DoctorLogProcessor(threading.Thread):
         # overwriting legitimate error records
         if not full_traceback:
             return
+
+        # Desktop-specific: ignore ComfyUI logging flush exceptions.
+        # These can create high-frequency "error storms" even when inference isn't running,
+        # rapidly filling error_history.json with non-actionable noise.
+        if (
+            "logging\\__init__.py" in full_traceback
+            and "ComfyUI\\app\\logger.py" in full_traceback
+            and "OSError: [Errno 22] Invalid argument" in full_traceback
+        ):
+            return
         
         # Explicit exclusion for normal execution messages
         # These messages should NEVER be recorded as errors
@@ -615,11 +685,16 @@ class DoctorLogProcessor(threading.Thread):
 
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
         timestamp = datetime.datetime.now().isoformat()
+        error_signature = hashlib.sha256(full_traceback.encode("utf-8", errors="ignore")).hexdigest()
 
         new_analysis = {
             "error": full_traceback,
             "suggestion": suggestion,
             "timestamp": timestamp,
+            "first_seen": timestamp,
+            "last_seen": timestamp,
+            "repeat_count": 1,
+            "error_signature": error_signature,
             "node_context": node_context.to_dict() if node_context else None,
             "analysis_metadata": analysis_metadata,
             "matched_pattern_id": matched_pattern_id,
@@ -632,7 +707,37 @@ class DoctorLogProcessor(threading.Thread):
         with _history_lock:
             global _last_analysis
             _last_analysis = new_analysis
-            _analysis_history.append(new_analysis.copy())
+            # Aggregate repeated identical errors within 60 seconds to avoid unbounded history growth.
+            # NOTE: We still update _last_analysis every time so the UI reflects new occurrences.
+            aggregated = False
+            try:
+                now_ts = self._parse_ts(timestamp)
+                # Look back across recent history to find a matching signature in-window.
+                # Limit scan to keep cost bounded even when history is unbounded.
+                scan_limit = 50
+                hist_len = len(_analysis_history)
+                start_index = max(0, hist_len - scan_limit)
+                for i in range(hist_len - 1, start_index - 1, -1):
+                    existing = _analysis_history[i]
+                    if not isinstance(existing, dict):
+                        continue
+                    if existing.get("error_signature") != error_signature:
+                        continue
+                    last_seen_str = existing.get("last_seen") or existing.get("timestamp") or ""
+                    last_seen_ts = self._parse_ts(last_seen_str)
+                    if (now_ts - last_seen_ts).total_seconds() <= self._aggregate_window_seconds:
+                        existing["repeat_count"] = int(existing.get("repeat_count", 1) or 1) + 1
+                        existing["last_seen"] = timestamp
+                        # Keep first_seen stable
+                        if not existing.get("first_seen"):
+                            existing["first_seen"] = existing.get("timestamp") or timestamp
+                        aggregated = True
+                    break
+            except Exception:
+                pass
+
+            if not aggregated:
+                _analysis_history.append(new_analysis.copy())
 
         # F1: Persist to history store
         try:
@@ -647,6 +752,10 @@ class DoctorLogProcessor(threading.Thread):
                 pattern_priority=pattern_priority,
                 resolution_status="unresolved",
                 analysis_metadata=analysis_metadata,
+                repeat_count=1,
+                first_seen=timestamp,
+                last_seen=timestamp,
+                error_signature=error_signature,
             )
             store.append(entry)
         except Exception:
@@ -741,6 +850,21 @@ def install(log_path: str):
     # Wrap stdout/stderr
     sys.stdout = SafeStreamWrapper(_original_stdout, _message_queue)
     sys.stderr = SafeStreamWrapper(_original_stderr, _message_queue)
+
+    # ComfyUI Desktop (and some ComfyUI builds) install StreamHandler(s) before Doctor,
+    # capturing the original sys.stdout/sys.stderr object (often LogInterceptor).
+    # If that stream's flush() raises (e.g., OSError 22), Python logging will emit a traceback
+    # for EVERY log record, causing massive log spam and filling Doctor history with noise.
+    #
+    # Patch existing StreamHandler streams to wrap them in a flush-safe proxy.
+    try:
+        root_logger = logging.getLogger()
+        for handler in list(getattr(root_logger, "handlers", []) or []):
+            stream = getattr(handler, "stream", None)
+            if stream in (_original_stdout, _original_stderr) or getattr(type(stream), "__name__", "") == "LogInterceptor":
+                handler.stream = FlushSafeProxy(stream)
+    except Exception:
+        pass
 
     logging.info("[Doctor] Logger installed (SafeStreamWrapper mode)")
     logging.info(f"[Doctor] Original stdout type: {type(_original_stdout).__name__}")
