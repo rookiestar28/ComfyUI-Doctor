@@ -872,12 +872,15 @@ curl "http://localhost:8188/doctor/health_history?limit=50&offset=0"
 所有日誌存放於：
 
 ```text
-ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+<ComfyUI user directory>/ComfyUI-Doctor/logs/
 ```
 
 檔名格式為：`comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`
 
 系統會自動保留最新的 10 個日誌檔案（可透過 `config.json` 調整）。
+
+> 提示：可用 `GET /doctor/health` → `health.storage.data_dir` 檢視實際解析到的資料目錄。
+> 舊版可能仍存在 `ComfyUI/custom_nodes/ComfyUI-Doctor/logs/`（可用時會自動遷移）。
 
 ---
 

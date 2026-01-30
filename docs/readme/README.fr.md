@@ -823,7 +823,7 @@ Lister les modèles disponibles du fournisseur LLM configuré.
 Tous les journaux sont stockés dans :
 
 ```text
-ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+<ComfyUI user directory>/ComfyUI-Doctor/logs/
 ```
 
 Format du nom de fichier : `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`

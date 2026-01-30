@@ -824,7 +824,7 @@ LLM 공급자에 대한 연결을 테스트하여 API 키 유효성을 확인합
 모든 로그는 다음에 저장됩니다.
 
 ```text
-ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+<ComfyUI user directory>/ComfyUI-Doctor/logs/
 ```
 
 파일 이름 형식: `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`

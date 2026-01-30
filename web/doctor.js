@@ -203,6 +203,84 @@ app.registerExtension({
             defaultValue: "",
             attrs: { readonly: true, disabled: true }
         });
+
+        // ========================================
+        // Register Missing Settings (Fix for TypeError on Save)
+        // ========================================
+        
+        // General
+        app.ui.settings.addSetting({
+            id: "Doctor.General.Language",
+            name: "Doctor: Language",
+            type: "combo",
+            options: SUPPORTED_LANGUAGES,
+            defaultValue: DEFAULTS.LANGUAGE,
+        });
+
+        app.ui.settings.addSetting({
+            id: "Doctor.Privacy.Mode",
+            name: "Doctor: Privacy Mode",
+            type: "combo",
+            options: [
+                { text: "None (Private)", value: "none" },
+                { text: "Basic (Anonymized)", value: "basic" },
+                { text: "Strict (No Sensitive Data)", value: "strict" },
+            ],
+            defaultValue: "basic",
+        });
+
+        // Behavior
+        app.ui.settings.addSetting({
+            id: "Doctor.Behavior.PollInterval",
+            name: "Doctor: Error Poll Interval (ms)",
+            type: "number",
+            defaultValue: DEFAULTS.POLL_INTERVAL,
+            attrs: { min: 500, max: 10000, step: 100 },
+        });
+
+        app.ui.settings.addSetting({
+            id: "Doctor.Behavior.AutoOpenOnError",
+            name: "Doctor: Auto-open sidebar on error",
+            type: "boolean",
+            defaultValue: DEFAULTS.AUTO_OPEN_ON_ERROR,
+        });
+
+        app.ui.settings.addSetting({
+            id: "Doctor.Behavior.EnableNotifications",
+            name: "Doctor: Enable Browser Notifications",
+            type: "boolean",
+            defaultValue: DEFAULTS.ENABLE_NOTIFICATIONS,
+        });
+
+        // LLM Settings (Hidden or Advanced)
+        app.ui.settings.addSetting({
+            id: "Doctor.LLM.Provider",
+            name: "Doctor: AI Provider",
+            type: "text", // Using text to avoid massive dropdown duplications, primarily managed via sidebar
+            defaultValue: "openai",
+        });
+
+        app.ui.settings.addSetting({
+            id: "Doctor.LLM.BaseUrl",
+            name: "Doctor: LLM Base URL",
+            type: "text",
+            defaultValue: "https://api.openai.com/v1",
+        });
+
+        app.ui.settings.addSetting({
+            id: "Doctor.LLM.ApiKey",
+            name: "Doctor: API Key",
+            type: "text", // In ComfyUI settings this will be visible text, but sidebar uses password input
+            defaultValue: "",
+            attrs: { type: "password" }, // Try to hint password type if supported
+        });
+
+        app.ui.settings.addSetting({
+            id: "Doctor.LLM.Model",
+            name: "Doctor: Model Name",
+            type: "text",
+            defaultValue: "",
+        });
         // ========================================
 
         // Get current settings values

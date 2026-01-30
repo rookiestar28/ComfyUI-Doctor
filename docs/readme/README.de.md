@@ -823,7 +823,7 @@ Verfügbare Modelle vom konfigurierten LLM-Anbieter auflisten.
 Alle Logs werden gespeichert in:
 
 ```text
-ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+<ComfyUI user directory>/ComfyUI-Doctor/logs/
 ```
 
 Dateinamenformat: `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`

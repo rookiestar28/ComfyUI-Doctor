@@ -5,6 +5,7 @@ Provides centralized, JSON-overridable configuration.
 
 import os
 import json
+import tempfile
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List
 
@@ -24,6 +25,9 @@ def _get_config_path_candidates() -> List[str]:
 
     # Legacy location (extension root)
     candidates.append(os.path.join(os.path.dirname(__file__), "config.json"))
+
+    # OS temp fallback (last resort; avoids writing under Desktop resources)
+    candidates.append(os.path.join(tempfile.gettempdir(), "ComfyUI-Doctor", "config.json"))
     return candidates
 
 
@@ -120,20 +124,32 @@ def load_config() -> DiagnosticsConfig:
 
 def save_config(config: DiagnosticsConfig) -> bool:
     """Save current configuration to config.json."""
-    config_path = _get_primary_config_path()
-    try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
-        return True
-    except Exception:
-        # Fallback to legacy location if canonical dir is not writable.
+    payload = json.dumps(config.to_dict(), indent=2, ensure_ascii=False)
+    for config_path in _get_config_path_candidates():
         try:
-            legacy_path = os.path.join(os.path.dirname(__file__), "config.json")
-            with open(legacy_path, "w", encoding="utf-8") as f:
-                json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
+            dir_path = os.path.dirname(config_path)
+            if dir_path:
+                os.makedirs(dir_path, exist_ok=True)
+
+            tmp_path = f"{config_path}.tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(payload)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
+            os.replace(tmp_path, config_path)
             return True
         except Exception:
-            return False
+            try:
+                tmp_path = f"{config_path}.tmp"
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            continue
+    return False
 
 
 # Global config instance

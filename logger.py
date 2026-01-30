@@ -110,15 +110,16 @@ def _migrate_legacy_data():
     if os.path.exists(legacy_path) and not os.path.exists(target_path):
         try:
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            import shutil
+            # Copy into canonical location first, then rename legacy to a backup marker.
+            # This preserves a forensic trail while preventing repeated migrations.
+            shutil.copy2(legacy_path, target_path)
             try:
-                os.replace(legacy_path, target_path)
+                ts = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                os.rename(legacy_path, f"{legacy_path}.migrated-{ts}")
             except Exception:
-                import shutil
-                shutil.copy2(legacy_path, target_path)
-                try:
-                    os.remove(legacy_path)
-                except Exception:
-                    pass
+                # If rename fails (permissions/locks), leave legacy in place; migration is best-effort.
+                pass
         except Exception as e:
             logging.error(f"[ComfyUI-Doctor] Migration failed: {e}")
 

@@ -16,6 +16,7 @@ import os
 import re
 import threading
 import time
+import tempfile
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
@@ -253,7 +254,7 @@ def get_doctor_data_dir() -> str:
     Get the Doctor data directory (cross-platform).
 
     R18: Prefer the shared canonical resolver (Desktop/portable safe).
-    Fallback (legacy): `<extension_root>/data`.
+    Fallback: OS temp dir (never write under Desktop resources).
     """
     if _get_canonical_doctor_data_dir:
         try:
@@ -261,9 +262,11 @@ def get_doctor_data_dir() -> str:
         except Exception:
             pass
 
-    extension_root = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(extension_root, "data")
-    os.makedirs(data_dir, exist_ok=True)
+    data_dir = os.path.join(tempfile.gettempdir(), "ComfyUI-Doctor")
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+    except Exception:
+        pass
     return data_dir
 
 

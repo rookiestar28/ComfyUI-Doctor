@@ -886,12 +886,15 @@ Acknowledge/ignore/resolve an issue.
 All logs are stored in:
 
 ```text
-ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+<ComfyUI user directory>/ComfyUI-Doctor/logs/
 ```
 
 Filename format: `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`
 
 The system automatically retains the 10 most recent log files (configurable via `config.json`).
+
+> Tip: You can check the resolved data directory via `GET /doctor/health` → `health.storage.data_dir`.
+> Legacy installs may still have logs under `ComfyUI/custom_nodes/ComfyUI-Doctor/logs/` (migrated when possible).
 
 ---
 

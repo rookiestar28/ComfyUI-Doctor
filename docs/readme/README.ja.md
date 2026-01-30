@@ -823,7 +823,7 @@ LLMプロバイダーへの接続をテストしてAPIキーの有効性を検�
 すべてのログは以下に保存されます:
 
 ```text
-ComfyUI/custom_nodes/ComfyUI-Doctor/logs/
+<ComfyUI user directory>/ComfyUI-Doctor/logs/
 ```
 
 ファイル名形式: `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`

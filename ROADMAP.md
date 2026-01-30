@@ -678,10 +678,20 @@ graph TD
   - **Foundation for**: CI/CD integration, UI regression detection
 - [ ] **T13**: Desktop-style Failure Injection Tests (Flush/OSError + Corrupt JSON) - 🟡 Medium
   - **Goal**: Prevent Desktop-only regressions (log storms, broken history) without requiring a real ComfyUI Desktop runtime in CI.
+  - **Status (2026-01-23)**: Guardrails exist (R18), but failure-injection coverage is still missing; schedule implementation later.
   - **Scope**:
     - Simulate stream flush failures (e.g. `OSError: [Errno 22] Invalid argument`) and assert rate-limit + aggregation behavior
     - Corrupt JSON recovery tests for history stores (`error_history.json`, diagnostics history)
     - Fixture corpus derived from `docs/reference/desktop/` (sanitized, no secrets)
+  - **Missing coverage (to add)**:
+    - Prestartup path/permission failures: log dir cannot be created / log file cannot be opened must not break startup (`prestartup_script.py`)
+    - Desktop flush exception storms: ensure `FlushSafeProxy` + Desktop flush-ignore filter prevents recursive exception spam and history bloat (`logger.py`)
+    - Store corruption self-heal: verify corrupt files are rotated aside and a clean store is recreated (`history_store.py`, `services/diagnostics/store.py`)
+    - Migration invariants: legacy history is migrated and legacy file is renamed with `.migrated-<ts>` (R18 migration path)
+  - **Implementation notes (when scheduled)**:
+    - Prefer stdlib `unittest` (so tests don't depend on pytest being installed locally), but keep compatible with pytest discovery in CI.
+    - Add a small fixture set under `tests/fixtures/desktop/` derived from `docs/reference/desktop/` (sanitized; no secrets).
+    - Focus assertions on: bounded growth (aggregation window), no infinite recursion, and successful recovery after corruption.
 - [ ] **T9**: External Environment Test Coverage Expansion (Non-ComfyUI) - 🟡 Medium
   - **Goal**: Cover pipeline integration, SSE/REST contracts, and UI contracts without a live ComfyUI runtime
   - **Phases**:
