@@ -9,6 +9,7 @@ docs/reference/
 logs/*
 !logs/.gitkeep
 AGENT_CONTEXT.md
+ROADMAP.md
 
 # Planning - private files
 .planning/

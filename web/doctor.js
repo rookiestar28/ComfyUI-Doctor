@@ -205,7 +205,17 @@ app.registerExtension({
         });
 
         // ========================================
-        // Register Missing Settings (Fix for TypeError on Save)
+        // CRITICAL: Explicit Setting Registration
+        // ========================================
+        // COMPLIANCE NOTICE:
+        // These settings MUST be explicitly registered using app.ui.settings.addSetting().
+        //
+        // 1. ComfyUI Standards: The standard API requires registration before use (get/set).
+        // 2. Compatibility: Strict environments (e.g., ComfyUI-Aki community build) enforce this.
+        //    Accessing unregistered settings there causes "TypeError: Cannot read properties of undefined (reading 'id')".
+        // 3. Stability: Prevents crashes during app.ui.settings.setSettingValue() calls.
+        //
+        // DO NOT REMOVE THESE REGISTRATIONS.
         // ========================================
         
         // General
