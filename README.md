@@ -2,26 +2,27 @@
 
 [繁中](docs/readme/README.zh-TW.md) | [简中](docs/readme/README.zh-CN.md) | [日本語](docs/readme/README.ja.md) | [한국어](docs/readme/README.ko.md) | [Deutsch](docs/readme/README.de.md) | [Français](docs/readme/README.fr.md) | [Italiano](docs/readme/README.it.md) | [Español](docs/readme/README.es.md) | English |
 
+<div align="center">
+<img src="assets/icon.png" alt="ComfyUI Doctor">
+</div>
+
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Table of Contents
-
-- [Latest Updates](#latest-updates-jan-2026---click-to-expand)
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Frontend UI](#frontend-ui)
-- [Settings](#settings)
-- [API Endpoints](#api-endpoints)
-- [Supported Error Patterns](#supported-error-patterns)
-- [Phase 2 Release Gate](#phase-2-release-gate)
-- [CSP Compatibility](#csp-compatibility)
-- [Contributing](#contributing)
-
-## Latest Updates (Jan 2026) - Click to expand
+## Latest Updates (Feb 2026) - Click to expand
 
 <details>
-<summary><strong>New: F14 Proactive Diagnostics (Health Check + Intent Signature)</strong></summary>
+<summary><strong>(v1.6.3): Dual-Mode API Key Strategy (ENV-first + Advanced Server Key Store)</strong></summary>
+
+- API keys are no longer persisted in frontend settings; the API key input is session-only by default.
+- Added a default-collapsed **🔐 Advanced Key Store (Server-side)** section for explicit save/delete actions.
+- Backend key resolution order is now: request key → provider ENV → generic ENV → optional server store.
+- Existing users with legacy frontend-stored keys are auto-migrated once to runtime memory, then the persisted key is cleared.
+- UI now includes inline risk guidance (`?`) warning that server store uses plaintext `secrets.json`; ENV keys remain the recommended path.
+
+</details>
+
+<details>
+<summary><strong>Proactive Diagnostics (Health Check + Intent Signature)</strong></summary>
 
 - Added a **Diagnostics** section to the **Statistics** tab for proactive workflow troubleshooting (no LLM required).
 - **Health checks**: workflow lint + environment/deps + privacy/safety checks, with actionable issues.
@@ -321,6 +322,19 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 
 </details>
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Frontend UI](#frontend-ui)
+- [Settings](#settings)
+- [API Endpoints](#api-endpoints)
+- [Supported Error Patterns](#supported-error-patterns)
+- [Phase 2 Release Gate](#phase-2-release-gate)
+- [CSP Compatibility](#csp-compatibility)
+- [Contributing](#contributing)
+
 ## Features
 
 - **Automatic Error Monitoring**: Captures all terminal output and detects Python tracebacks in real-time
@@ -539,13 +553,13 @@ ComfyUI-Doctor integrates with popular LLM services to provide intelligent, cont
 
 ### Configuration
 
-![Settings Panel](./assets/settings.png)
+<img src="assets/settings.png" alt="side bar - settings">
 
 Configure AI analysis in the **Doctor Sidebar** → **Settings** panel:
 
 1. **AI Provider**: Select from the dropdown menu. The Base URL will auto-fill.
 2. **AI Base URL**: The API endpoint (auto-populated, but customizable)
-3. **AI API Key**: Your API key (leave empty for local LLMs like Ollama/LMStudio)
+3. **AI API Key**: Session-only key input for cloud providers (leave empty for local LLMs like Ollama/LMStudio)
 4. **AI Model Name**:
    - Select a model from the dropdown list (automatically populated from your provider's API)
    - Click the 🔄 refresh button to reload available models
@@ -559,7 +573,7 @@ Configure AI analysis in the **Doctor Sidebar** → **Settings** panel:
 3. Wait for the LLM to analyze the error (typically 3-10 seconds).
 4. Review the AI-generated debugging suggestions.
 
-**Security Note**: Your API key is transmitted securely from frontend to backend for the analysis request only. It is never logged or stored persistently.
+**Security Note**: API keys are **session-only** in the browser (cleared on reload). The backend resolves keys via this priority chain: request key → `DOCTOR_{PROVIDER}_API_KEY` → `DOCTOR_LLM_API_KEY` → optional server-side store (`secrets.json`). Keys are never logged and the server store is admin-gated. `secrets.json` is plaintext on disk (OS-permission protected), so for maximum security use environment variables.
 
 ### Privacy Mode (PII Sanitization)
 
@@ -702,7 +716,18 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 
 **Function**: Your API key for authentication with cloud LLM services.
 **Usage**: Required for cloud providers (OpenAI, DeepSeek, etc.). Leave empty for local LLMs (Ollama, LMStudio).
-**Security**: The key is only transmitted during analysis requests and is never logged or persisted.
+**Default Behavior**: Session-only in frontend (cleared on reload); not persisted in ComfyUI settings.
+**Runtime Resolution Priority**: Request key → provider-specific ENV → generic ENV → optional server-side key store.
+**Security Warning**: The server-side key store writes plaintext `secrets.json` to disk. Use ENV for production or multi-user environments.
+
+**Advanced Key Store Setup (optional)**:
+
+<img src="assets/key_store.png" alt="side bar - Advanced Key Store">
+
+1. Expand **🔐 Advanced Key Store (Server-side)** in Settings (collapsed by default).
+2. Select provider, paste API key, and provide admin token if configured.
+3. Click **💾 Save to Server** to persist, or **🗑️ Delete** to remove.
+4. Confirm provider status badge (`ENV`, `Server`, `None`) to verify effective source.
 
 ### 9. AI Model Name
 

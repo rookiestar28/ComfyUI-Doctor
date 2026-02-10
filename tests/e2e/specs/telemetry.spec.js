@@ -20,11 +20,35 @@ const BASE_URL = process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
 // Skip all tests if in CI (no ComfyUI backend available)
 // These are integration tests that require the real backend
 const isCI = !!process.env.CI;
+let backendReachable = false;
+let backendSkipReason = '';
 
-test.describe('S3: Telemetry Feature', () => {
+test.describe('@integration S3: Telemetry Feature', () => {
+    test.beforeAll(async ({ request }) => {
+        if (isCI) {
+            backendSkipReason = 'Skipping telemetry tests in CI - requires running ComfyUI backend';
+            return;
+        }
 
-    // Skip entire suite in CI - these require running ComfyUI
-    test.skip(isCI, 'Skipping telemetry tests in CI - requires running ComfyUI backend');
+        try {
+            const response = await request.get(`${BASE_URL}/doctor/telemetry/status`, { timeout: 3000 });
+            backendReachable = response.ok();
+            if (!backendReachable) {
+                backendSkipReason = `Skipping telemetry tests - backend responded with status ${response.status()} at ${BASE_URL}`;
+            }
+        } catch (error) {
+            backendReachable = false;
+            backendSkipReason = `Skipping telemetry tests - backend not reachable at ${BASE_URL}`;
+        }
+    });
+
+    test.beforeEach(() => {
+        if (isCI) {
+            test.skip(true, backendSkipReason || 'Skipping telemetry tests in CI - requires running ComfyUI backend');
+            return;
+        }
+        test.skip(!backendReachable, backendSkipReason || `Skipping telemetry tests - backend not reachable at ${BASE_URL}`);
+    });
 
 
     test('telemetry status endpoint returns correct format', async ({ request }) => {

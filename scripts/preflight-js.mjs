@@ -17,6 +17,16 @@ import * as acorn from 'acorn';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(__dirname, '..', 'web');
 
+function ensureSupportedNodeVersion() {
+    const [major] = process.versions.node.split('.').map(Number);
+    if (!Number.isFinite(major) || major < 18) {
+        console.error(
+            `❌ Node.js ${process.versions.node} detected. This project requires Node.js 18+.`
+        );
+        process.exit(1);
+    }
+}
+
 // Recursively find all .js files
 async function findJsFiles(dir) {
     const files = [];
@@ -60,6 +70,7 @@ async function validateFile(filePath) {
 
 // Main execution
 async function main() {
+    ensureSupportedNodeVersion();
     console.log('🔍 Preflight JS Syntax Check (acorn)\n');
     console.log(`Scanning: ${WEB_DIR}\n`);
 

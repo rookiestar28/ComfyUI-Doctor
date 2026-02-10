@@ -298,5 +298,70 @@ export const DoctorAPI = {
             console.error('[ComfyUI-Doctor] Failed to reset statistics:', error);
             return { success: false, message: error.message };
         }
+    },
+
+    // ---- S8: Secrets API ----
+
+    /**
+     * Get provider key configuration status (never returns actual keys).
+     * @param {string} [adminToken] - Optional admin token
+     * @returns {Promise<{success: boolean, providers: Object}>}
+     */
+    async getSecretsStatus(adminToken) {
+        try {
+            const headers = {};
+            if (adminToken) headers['X-Doctor-Admin-Token'] = adminToken;
+            const response = await fetch('/doctor/secrets/status', { headers });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to fetch secrets status:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
+     * Save a provider secret to server-side store.
+     * @param {string} provider - Provider ID (openai, anthropic, etc.)
+     * @param {string} apiKey - The API key value
+     * @param {string} [adminToken] - Optional admin token
+     * @returns {Promise<{success: boolean, message?: string}>}
+     */
+    async saveSecret(provider, apiKey, adminToken) {
+        try {
+            const body = { provider, api_key: apiKey };
+            if (adminToken) body.admin_token = adminToken;
+            const response = await fetch('/doctor/secrets', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to save secret:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
+     * Delete a provider secret from server-side store.
+     * @param {string} provider - Provider ID
+     * @param {string} [adminToken] - Optional admin token
+     * @returns {Promise<{success: boolean, message?: string}>}
+     */
+    async clearSecret(provider, adminToken) {
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (adminToken) headers['X-Doctor-Admin-Token'] = adminToken;
+            const body = adminToken ? JSON.stringify({ admin_token: adminToken }) : undefined;
+            const response = await fetch(`/doctor/secrets/${encodeURIComponent(provider)}`, {
+                method: 'DELETE',
+                headers,
+                body
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to clear secret:', error);
+            return { success: false, error: error.message };
+        }
     }
 };

@@ -2,6 +2,7 @@
  * Doctor UI Factory - Creates the visual elements for the Doctor extension
  */
 import { app } from "../../../scripts/app.js";
+import { getRuntimeApiKey } from "./llm_key_store.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { ChatPanel } from "./doctor_chat.js";
 import { doctorContext } from "./doctor_state.js";
@@ -748,7 +749,8 @@ export class DoctorUI {
             console.log('[Doctor] sendToAI called with text:', text.substring(0, 100));
 
             // Get LLM settings
-            const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
+            // S8: Use session-only runtime key (backend resolve_api_key handles ENV/store fallback)
+            const apiKey = getRuntimeApiKey();
             const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
             const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
             const language = app.ui.settings.getSettingValue("Doctor.General.Language", this.language);
@@ -770,7 +772,8 @@ export class DoctorUI {
                 privacy_mode: privacyMode
             };
 
-            console.log('[Doctor] Payload prepared:', payload);
+            // S8: Never log secrets — redact api_key from debug output
+            console.log('[Doctor] Payload prepared:', { ...payload, api_key: payload.api_key ? '***' : '(empty)' });
 
             // Add placeholder assistant message
             const placeholderMsg = this.addChatMessage('assistant', 'Thinking...');
@@ -943,7 +946,8 @@ export class DoctorUI {
         const resultContainer = document.getElementById(resultContainerId);
 
         // Get LLM settings
-        const apiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
+        // S8: Use session-only runtime key (backend resolve_api_key handles ENV/store fallback)
+        const apiKey = getRuntimeApiKey();
         const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "";
         const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
         const language = app.ui.settings.getSettingValue("Doctor.General.Language", this.language);

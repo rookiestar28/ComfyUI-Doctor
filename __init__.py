@@ -61,6 +61,9 @@ from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig
 from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
 from .services.doctor_paths import get_doctor_data_dir
+from .services.llm_keys import resolve_api_key, get_provider_status
+from .services.secret_store import get_secret_store
+from .services.admin_guard import validate_admin_request
 
 # Global R12 Service
 TOKEN_BUDGET_SERVICE = TokenBudgetService()
@@ -1041,6 +1044,7 @@ try:
             workflow = data.get("workflow")  # F3: Workflow context from frontend
             api_key = data.get("api_key")
             base_url = data.get("base_url", "https://api.openai.com/v1")
+            provider = data.get("provider", "")
             model = data.get("model", "gpt-4o")
             language = data.get("language", "en")
             privacy_mode = data.get("privacy_mode", "basic")  # S6: PII sanitization level
@@ -1053,13 +1057,15 @@ try:
                 logger.warning(f"SSRF blocked: {ssrf_error}")
                 return web.json_response({"error": f"Invalid Base URL: {ssrf_error}"}, status=400)
 
-            # Validate required parameters
-            # Check if this is a local LLM (doesn't require API key)
-            is_local = is_local_llm_url(base_url)
-            
-            # Only require API key for non-local LLMs
+            # Resolve API key via request -> ENV -> server store
+            api_key, key_source, resolved_provider, is_local = resolve_api_key(
+                base_url=base_url,
+                provider_hint=provider,
+                request_api_key=api_key,
+            )
             if not api_key and not is_local:
                 return web.json_response({"error": "Missing API Key"}, status=401)
+            logger.info(f"Analyze key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
 
             if not error_text:
                 return web.json_response({"error": "No error text provided"}, status=400)
@@ -1340,6 +1346,7 @@ try:
             error_context = data.get("error_context", {})
             api_key = data.get("api_key", "")
             base_url = data.get("base_url", "https://api.openai.com/v1")
+            provider = data.get("provider", "")
             model = data.get("model", "gpt-4o")
             language = data.get("language", "en")
             stream = data.get("stream", True)
@@ -1355,10 +1362,15 @@ try:
                 logger.warning(f"SSRF blocked: {ssrf_error}")
                 return web.json_response({"error": f"Invalid Base URL: {ssrf_error}"}, status=400)
 
-            # Validate
-            is_local = is_local_llm_url(base_url)
+            # Resolve API key via request -> ENV -> server store
+            api_key, key_source, resolved_provider, is_local = resolve_api_key(
+                base_url=base_url,
+                provider_hint=provider,
+                request_api_key=api_key,
+            )
             if not api_key and not is_local:
                 return web.json_response({"error": "Missing API Key"}, status=401)
+            logger.info(f"Chat key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             if not messages:
                 return web.json_response({"error": "No messages provided"}, status=400)
@@ -2012,6 +2024,95 @@ try:
             "openrouter": "https://openrouter.ai/api/v1"
         })
 
+    @server.PromptServer.instance.routes.get("/doctor/secrets/status")
+    async def api_secrets_status(request):
+        """
+        Get provider key status without exposing secret values.
+        Admin-gated to prevent leaking configuration sources.
+        """
+        try:
+            # S8: read-only guard — loopback convenience, remote needs token
+            allowed, code, message = validate_admin_request(request)
+            if not allowed:
+                return web.json_response({"success": False, "error": message}, status=403 if code == "remote_admin_denied" else 401)
+
+            providers = get_provider_status()
+            return web.json_response({
+                "success": True,
+                "providers": providers,
+            })
+        except Exception as e:
+            logger.error(f"Secrets status API error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.put("/doctor/secrets")
+    async def api_secrets_put(request):
+        """
+        Save a provider secret to server-side secret store.
+        Body: {"provider": "openai|...|generic", "api_key": "...", "admin_token"?: "..."}
+        """
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+
+        allowed, code, message = validate_admin_request(request, payload=data)
+        if not allowed:
+            status_code = 401 if code == "unauthorized" else 403
+            return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+
+        provider = (data.get("provider") or "").strip().lower()
+        api_key = (data.get("api_key") or "").strip()
+        if not provider:
+            return web.json_response({"success": False, "error": "Missing provider"}, status=400)
+        if not api_key:
+            return web.json_response({"success": False, "error": "Missing api_key"}, status=400)
+
+        valid_providers = {"openai", "anthropic", "deepseek", "groq", "gemini", "xai", "openrouter", "generic"}
+        if provider not in valid_providers:
+            return web.json_response({"success": False, "error": "Invalid provider"}, status=400)
+
+        try:
+            get_secret_store().set_secret(provider, api_key)
+            logger.info(f"Secret saved for provider={provider}")
+            return web.json_response({"success": True, "message": "Secret saved"})
+        except Exception as e:
+            logger.error(f"Secrets put API error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.delete("/doctor/secrets/{provider}")
+    async def api_secrets_delete(request):
+        """
+        Delete a provider secret from server-side secret store.
+        Auth: admin token in header/body policy handled by admin guard.
+        """
+        provider = (request.match_info.get("provider") or "").strip().lower()
+        if not provider:
+            return web.json_response({"success": False, "error": "Missing provider"}, status=400)
+
+        # For DELETE we read optional JSON body if present, but also support headers-only.
+        payload = {}
+        try:
+            if request.can_read_body:
+                payload = await request.json()
+        except Exception:
+            payload = {}
+
+        allowed, code, message = validate_admin_request(request, payload=payload)
+        if not allowed:
+            status_code = 401 if code == "unauthorized" else 403
+            return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+
+        try:
+            deleted = get_secret_store().clear_secret(provider)
+            if not deleted:
+                return web.json_response({"success": False, "error": "Not found"}, status=404)
+            logger.info(f"Secret deleted for provider={provider}")
+            return web.json_response({"success": True, "message": "Secret deleted"})
+        except Exception as e:
+            logger.error(f"Secrets delete API error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
     @server.PromptServer.instance.routes.post("/doctor/verify_key")
     async def api_verify_key(request):
         """
@@ -2025,6 +2126,7 @@ try:
             data = await request.json()
             base_url = data.get("base_url", DOCTOR_LLM_BASE_URL)
             api_key = data.get("api_key", "")
+            provider = data.get("provider", "")
             
             # S2: SSRF protection - validate base URL
             is_valid, ssrf_error = validate_ssrf_url(base_url)
@@ -2036,16 +2138,18 @@ try:
                     "is_local": False
                 })
 
-            # Check if this is a local LLM
-            is_local = is_local_llm_url(base_url)
-            
-            # Local LLMs may not require API key
+            api_key, key_source, resolved_provider, is_local = resolve_api_key(
+                base_url=base_url,
+                provider_hint=provider,
+                request_api_key=api_key,
+            )
             if not api_key and not is_local:
                 return web.json_response({
                     "success": False,
                     "message": "No API key provided",
                     "is_local": False
                 })
+            logger.info(f"Verify key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             # Normalize base URL
             base_url = base_url.rstrip("/")
@@ -2113,6 +2217,7 @@ try:
             data = await request.json()
             base_url = data.get("base_url", DOCTOR_LLM_BASE_URL)
             api_key = data.get("api_key", "")
+            provider = data.get("provider", "")
             
             # S2: SSRF protection - validate base URL
             is_valid, ssrf_error = validate_ssrf_url(base_url)
@@ -2124,14 +2229,18 @@ try:
                     "message": f"Invalid Base URL: {ssrf_error}"
                 })
 
-            is_local = is_local_llm_url(base_url)
-            
+            api_key, key_source, resolved_provider, is_local = resolve_api_key(
+                base_url=base_url,
+                provider_hint=provider,
+                request_api_key=api_key,
+            )
             if not api_key and not is_local:
                 return web.json_response({
                     "success": False,
                     "models": [],
                     "message": "No API key provided"
                 })
+            logger.info(f"List-models key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             base_url = base_url.rstrip("/")
             base_info = parse_base_url(base_url)
@@ -2732,6 +2841,9 @@ try:
     print("  - POST /doctor/chat (SSE streaming)")
     print("  - POST /doctor/verify_key")
     print("  - POST /doctor/list_models")
+    print("  - GET  /doctor/secrets/status (S8)")
+    print("  - PUT  /doctor/secrets (S8)")
+    print("  - DELETE /doctor/secrets/{provider} (S8)")
     print("  - GET  /doctor/statistics (F4)")
     print("  - POST /doctor/mark_resolved (F4)")
     print("  - GET  /doctor/health")

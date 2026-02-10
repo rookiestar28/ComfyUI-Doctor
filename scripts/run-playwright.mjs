@@ -47,7 +47,23 @@ function ensureWritablePlaywrightOutputDirs() {
 
 ensureWritablePlaywrightOutputDirs();
 
-const args = ['test', ...process.argv.slice(2)];
+function resolveCliArgs() {
+  const forwarded = [];
+  let includeIntegration = process.env.PW_INCLUDE_INTEGRATION === '1';
+
+  for (const arg of process.argv.slice(2)) {
+    if (arg === '--include-integration') {
+      includeIntegration = true;
+      continue;
+    }
+    forwarded.push(arg);
+  }
+
+  process.env.PW_INCLUDE_INTEGRATION = includeIntegration ? '1' : '0';
+  return forwarded;
+}
+
+const args = ['test', ...resolveCliArgs()];
 const result = spawnSync('playwright', args, {
   stdio: 'inherit',
   env: process.env,

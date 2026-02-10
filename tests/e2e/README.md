@@ -17,6 +17,9 @@ npx playwright install chromium
 # Run all tests
 npm test
 
+# Run integration-only tests (requires live ComfyUI backend)
+npm run test:integration
+
 # Run with UI mode (interactive)
 npm run test:ui
 
@@ -115,4 +118,9 @@ Tests run automatically on GitHub Actions when:
 - Opening a pull request
 - Modifying files in `web/` or `tests/e2e/`
 
-See `.github/workflows/playwright-tests.yml` for configuration.
+Notes:
+- `npm test` excludes `@integration` specs by default.
+- `npm run test:integration` runs the backend-dependent telemetry suite.
+- `phase2-release-gate.yml` uses dual-track CI: required `npm test` + optional integration track.
+
+See `.github/workflows/phase2-release-gate.yml` for configuration.

@@ -4,9 +4,20 @@ const path = require('node:path');
 
 const webServerPort = Number(process.env.PW_WEB_SERVER_PORT) || 3000;
 const baseURL = process.env.PW_BASE_URL || `http://127.0.0.1:${webServerPort}/tests/e2e/`;
-const pythonCmd = process.platform === 'win32' ? 'python' : (process.env.PW_PYTHON || 'python3');
 const testOutputDir = process.env.PW_TEST_OUTPUT_DIR || 'test-results';
 const htmlReportDir = process.env.PW_HTML_REPORT_DIR || 'playwright-report';
+const includeIntegration = process.env.PW_INCLUDE_INTEGRATION === '1';
+const isWsl = !!process.env.WSL_DISTRO_NAME || !!process.env.WSL_INTEROP;
+const isDrvFs = process.platform !== 'win32' && process.cwd().startsWith('/mnt/');
+const isConstrainedFs = isWsl && isDrvFs;
+const configuredWorkers = process.env.PW_WORKERS ? Number(process.env.PW_WORKERS) : null;
+const resolvedWorkers = process.env.CI
+  ? 1
+  : (Number.isFinite(configuredWorkers) && configuredWorkers > 0
+      ? configuredWorkers
+      : (isConstrainedFs ? 1 : undefined));
+const resolvedTestTimeout = isConstrainedFs ? 45 * 1000 : 30 * 1000;
+const resolvedExpectTimeout = isConstrainedFs ? 7000 : 5000;
 
 /**
  * Playwright Configuration for ComfyUI-Doctor
@@ -24,15 +35,18 @@ module.exports = defineConfig({
   outputDir: path.resolve(testOutputDir),
 
   // Maximum time one test can run
-  timeout: 30 * 1000,
+  timeout: resolvedTestTimeout,
 
   // Timeout for each assertion
   expect: {
-    timeout: 5000,
+    timeout: resolvedExpectTimeout,
   },
 
   // Run tests in files in parallel
-  fullyParallel: true,
+  fullyParallel: !isConstrainedFs,
+
+  // Keep integration suites out of default local/CI runs.
+  grepInvert: includeIntegration ? undefined : /@integration/,
 
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
@@ -41,7 +55,7 @@ module.exports = defineConfig({
   retries: process.env.CI ? 2 : 0,
 
   // Limit workers on CI for stability
-  workers: process.env.CI ? 1 : undefined,
+  workers: resolvedWorkers,
 
   // Reporter to use
   reporter: [
@@ -90,10 +104,14 @@ module.exports = defineConfig({
   // Run local web server before starting tests
   // Serve from project root so that /web/doctor_ui.js paths work correctly
   webServer: {
-    command: `${pythonCmd} -m http.server ${webServerPort}`,
+    command: `node scripts/e2e-server.mjs`,
     port: webServerPort,
     timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    // Root cause note: stale reused server can cause intermittent
+    // net::ERR_EMPTY_RESPONSE on test-harness navigation.
+    // Avoid reusing stale local servers from prior runs/sandboxes.
+    // Set PW_REUSE_SERVER=1 to opt in when needed.
+    reuseExistingServer: process.env.PW_REUSE_SERVER === '1',
     stdout: 'ignore',
     stderr: 'pipe',
   },

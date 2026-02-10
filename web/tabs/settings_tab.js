@@ -1,5 +1,6 @@
 import { app } from "../../../../scripts/app.js";
 import { DoctorAPI } from "../doctor_api.js";
+import { getRuntimeApiKey, setRuntimeApiKey } from "../llm_key_store.js";
 
 const SUPPORTED_LANGUAGES = [
     { value: "en", text: "English" },
@@ -83,7 +84,8 @@ export function render(container) {
     const currentLanguage = app.ui.settings.getSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
     const currentProvider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
     const currentBaseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
-    const currentApiKey = app.ui.settings.getSettingValue("Doctor.LLM.ApiKey", "");
+    // S8: API key is session-only; never read from persisted ComfyUI settings.
+    const currentApiKey = getRuntimeApiKey();
     const currentModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
     const currentPrivacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
     // F17: Read auto-open setting with strict null check (false is a valid stored value)
@@ -100,7 +102,17 @@ export function render(container) {
         overflow-y: auto;
     `;
 
+    // S8: Migration notice — show once per session when legacy key was imported
+    const migrationNotice = (app.Doctor && app.Doctor.legacyApiKeyMigrated)
+        ? `<div style="padding: 10px; margin-bottom: 15px; background: rgba(33,150,243,0.12); border: 1px solid #2196f3; border-radius: 6px; font-size: 12px; color: #90caf9; line-height: 1.5;">
+            ℹ️ <strong>API Key Migrated</strong><br>
+            Your previously saved API key has been moved to session memory and cleared from stored settings.<br>
+            For permanent storage, use <code>DOCTOR_LLM_API_KEY</code> environment variable or the <strong>Advanced Key Store</strong> below.
+           </div>`
+        : '';
+
     settingsPanel.innerHTML = `
+        ${migrationNotice}
         <h4 style="margin: 0 0 20px 0; font-size: 16px; color: #ddd; border-bottom: 1px solid #444; padding-bottom: 10px;">${doctorUI.getUIText('settings_title') || 'Settings'}</h4>
         <div style="display: flex; flex-direction: column; gap: 15px;">
             <div>
@@ -142,6 +154,7 @@ export function render(container) {
                     </span>
                 </label>
                 <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="${doctorUI.getUIText('api_key_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                <div style="font-size: 11px; color: #888; margin-top: 4px;">⚡ Session-only — cleared on reload. Use Advanced Key Store below to persist.</div>
             </div>
             <div>
                 <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">${doctorUI.getUIText('model_name_label')}</label>
@@ -178,6 +191,44 @@ export function render(container) {
                 <div style="font-size: 12px; color: #888; margin-top: 5px; margin-left: 24px;">${doctorUI.getUIText('auto_open_on_error_hint') || 'When enabled, the right-side error report panel will automatically open when a new error is detected'}</div>
             </div>
             <button id="doctor-save-settings-btn" style="width: 100%; padding: 10px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px;">💾 ${doctorUI.getUIText('save_settings_btn')}</button>
+            <details id="doctor-key-store-section" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 15px;">
+                <summary style="cursor: pointer; font-size: 13px; color: #aaa; user-select: none;">🔐 Advanced Key Store (Server-side)</summary>
+                <div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 6px; border: 1px solid #333;">
+                    <div style="font-size: 11px; color: #f0ad4e; margin-bottom: 10px; line-height: 1.4; padding: 8px; background: rgba(240,173,78,0.1); border-radius: 4px;">
+                        ⚠️ Server store saves keys as plaintext JSON on disk (protected by OS file permissions).<br>
+                        ENV vars always take higher priority. Use only in trusted localhost/single-user environments.
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div>
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Provider</label>
+                            <select id="doctor-keystore-provider" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px;">
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="groq">Groq</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="xai">xAI</option>
+                                <option value="openrouter">OpenRouter</option>
+                                <option value="generic">Generic (fallback)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">API Key</label>
+                            <input type="password" id="doctor-keystore-key" placeholder="sk-..." style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px; box-sizing: border-box;" />
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Admin Token (if configured)</label>
+                            <input type="password" id="doctor-keystore-admin" placeholder="optional" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px; box-sizing: border-box;" />
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="doctor-keystore-save-btn" style="flex: 1; padding: 8px; background: #2196f3; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">💾 Save to Server</button>
+                            <button id="doctor-keystore-delete-btn" style="flex: 1; padding: 8px; background: #e53935; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                        </div>
+                        <div id="doctor-keystore-status" style="font-size: 11px; color: #888; margin-top: 4px;"></div>
+                        <div id="doctor-keystore-providers-grid" style="margin-top: 8px;"></div>
+                    </div>
+                </div>
+            </details>
         </div>
     `;
     container.appendChild(settingsPanel);
@@ -325,7 +376,8 @@ export function render(container) {
             app.ui.settings.setSettingValue("Doctor.General.Language", langSelect.value);
             app.ui.settings.setSettingValue("Doctor.LLM.Provider", providerVal);
             app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", baseUrlVal);
-            app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", apiKeyVal);
+            // S8: API key is session-only — store in memory, NOT in ComfyUI settings.
+            setRuntimeApiKey(apiKeyVal);
             app.ui.settings.setSettingValue("Doctor.LLM.Model", modelValue);
             app.ui.settings.setSettingValue("Doctor.Privacy.Mode", privacyVal);
             // F17: Save auto-open setting and apply immediately
@@ -361,4 +413,113 @@ export function render(container) {
             }, 2000);
         }
     };
+
+    // ---- S8: Advanced Key Store Interaction ----
+    const keystoreSection = settingsPanel.querySelector('#doctor-key-store-section');
+    const keystoreProviderSelect = settingsPanel.querySelector('#doctor-keystore-provider');
+    const keystoreKeyInput = settingsPanel.querySelector('#doctor-keystore-key');
+    const keystoreAdminInput = settingsPanel.querySelector('#doctor-keystore-admin');
+    const keystoreSaveBtn = settingsPanel.querySelector('#doctor-keystore-save-btn');
+    const keystoreDeleteBtn = settingsPanel.querySelector('#doctor-keystore-delete-btn');
+    const keystoreStatus = settingsPanel.querySelector('#doctor-keystore-status');
+    const keystoreGrid = settingsPanel.querySelector('#doctor-keystore-providers-grid');
+
+    const SOURCE_BADGES = {
+        env: { label: 'ENV', color: '#4caf50', bg: 'rgba(76,175,80,0.15)' },
+        server_store: { label: 'Server', color: '#2196f3', bg: 'rgba(33,150,243,0.15)' },
+        none: { label: 'None', color: '#888', bg: 'rgba(136,136,136,0.1)' },
+    };
+
+    const renderProvidersGrid = (providers) => {
+        if (!keystoreGrid || !providers) return;
+        const entries = Object.entries(providers);
+        if (!entries.length) {
+            keystoreGrid.innerHTML = '<div style="font-size: 11px; color: #666;">No providers configured.</div>';
+            return;
+        }
+        keystoreGrid.innerHTML = `
+            <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Provider Status:</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                ${entries.map(([id, info]) => {
+            const badge = SOURCE_BADGES[info.source] || SOURCE_BADGES.none;
+            return `<div style="display: flex; align-items: center; gap: 4px; padding: 3px 6px; background: ${badge.bg}; border-radius: 3px; font-size: 11px;">
+                        <span style="color: #ccc;">${id}</span>
+                        <span style="color: ${badge.color}; font-weight: 600;">${badge.label}</span>
+                    </div>`;
+        }).join('')}
+            </div>`;
+    };
+
+    const loadKeystoreStatus = async () => {
+        try {
+            const adminToken = keystoreAdminInput?.value?.trim() || '';
+            const result = await DoctorAPI.getSecretsStatus(adminToken);
+            if (result.success) {
+                renderProvidersGrid(result.providers);
+            } else {
+                keystoreGrid.innerHTML = `<div style="font-size: 11px; color: #e53935;">Failed: ${result.error || result.message || 'unknown'}</div>`;
+            }
+        } catch (e) {
+            keystoreGrid.innerHTML = `<div style="font-size: 11px; color: #e53935;">Error: ${e.message}</div>`;
+        }
+    };
+
+    // Auto-load status when section is opened
+    if (keystoreSection) {
+        keystoreSection.addEventListener('toggle', () => {
+            if (keystoreSection.open) loadKeystoreStatus();
+        });
+    }
+
+    if (keystoreSaveBtn) {
+        keystoreSaveBtn.onclick = async () => {
+            const provider = keystoreProviderSelect?.value;
+            const key = keystoreKeyInput?.value?.trim();
+            const adminToken = keystoreAdminInput?.value?.trim() || '';
+            if (!provider || !key) {
+                keystoreStatus.innerHTML = '<span style="color: #f0ad4e;">Provider and API Key are required.</span>';
+                return;
+            }
+            keystoreSaveBtn.disabled = true;
+            keystoreSaveBtn.textContent = '⏳ Saving...';
+            try {
+                const result = await DoctorAPI.saveSecret(provider, key, adminToken);
+                if (result.success) {
+                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">✅ Saved ${provider} key to server.</span>`;
+                    keystoreKeyInput.value = '';
+                    await loadKeystoreStatus();
+                } else {
+                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || 'Save failed'}</span>`;
+                }
+            } catch (e) {
+                keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${e.message}</span>`;
+            }
+            keystoreSaveBtn.disabled = false;
+            keystoreSaveBtn.textContent = '💾 Save to Server';
+        };
+    }
+
+    if (keystoreDeleteBtn) {
+        keystoreDeleteBtn.onclick = async () => {
+            const provider = keystoreProviderSelect?.value;
+            const adminToken = keystoreAdminInput?.value?.trim() || '';
+            if (!provider) return;
+            if (!confirm(`Delete server-stored key for "${provider}"?`)) return;
+            keystoreDeleteBtn.disabled = true;
+            keystoreDeleteBtn.textContent = '⏳ Deleting...';
+            try {
+                const result = await DoctorAPI.clearSecret(provider, adminToken);
+                if (result.success) {
+                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">✅ Deleted ${provider} key.</span>`;
+                    await loadKeystoreStatus();
+                } else {
+                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || 'Delete failed'}</span>`;
+                }
+            } catch (e) {
+                keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${e.message}</span>`;
+            }
+            keystoreDeleteBtn.disabled = false;
+            keystoreDeleteBtn.textContent = '🗑️ Delete';
+        };
+    }
 }

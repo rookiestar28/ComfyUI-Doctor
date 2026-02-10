@@ -67,18 +67,8 @@ test.describe('Settings Panel', () => {
       });
     });
 
-    // Debug: capture console output
-    page.on('console', msg => console.log('PAGE LOG:', msg.type(), msg.text()));
-    page.on('pageerror', err => console.log('PAGE ERROR:', err.message));
-
     await page.goto('test-harness.html');
     await clearStorage(page);
-
-    // Debug: check for test harness error
-    const hasError = await page.evaluate(() => window.__doctorTestError);
-    if (hasError) {
-      console.log('TEST HARNESS ERROR:', hasError);
-    }
 
     await waitForDoctorReady(page);
     await waitForI18nLoaded(page);

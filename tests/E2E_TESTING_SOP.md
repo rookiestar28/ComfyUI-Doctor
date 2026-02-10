@@ -25,13 +25,14 @@ This SOP is split for two supported environments:
 |------|---------|-------|
 | Node.js | 18+ | Required by Playwright and project engines |
 | npm | 9+ | Works with Node 18 LTS |
-| Python | 3.8+ | Used by Playwright web server (`python -m http.server 3000`) |
 | Playwright browsers | latest | Installed via `npx playwright install chromium` |
+| ComfyUI backend (optional) | latest | Only needed for `@integration` telemetry tests |
 
 Notes:
 
-- `playwright.config.js` starts a local web server using `python -m http.server 3000`.
-  Ensure `python` is available on PATH (WSL2 may only have `python3`).
+- `playwright.config.js` starts `scripts/e2e-server.mjs` automatically.
+  This server hosts static files and provides default `/doctor/*` and `/debugger/*`
+  mock responses for stable harness tests.
 - If you use WSL and run from `/mnt/c/...`, set a writable temp directory to avoid
   Playwright transform cache permission errors (e.g. `.tmp/playwright` or `/tmp`).
 - If you use WSL and run from `/mnt/c/...`, Playwright may also fail to delete/write large
@@ -55,7 +56,6 @@ These steps were executed and validated in both environments:
 # From the repository root
 node -v
 npm -v
-python --version
 
 npm install
 npx playwright install chromium
@@ -63,7 +63,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `55 passed` with no failures.
+Expected result: `87 passed, 8 skipped` (telemetry integration suite skipped by default).
 
 ### 3.2 WSL2 (bash)
 
@@ -72,22 +72,15 @@ Expected result: `55 passed` with no failures.
 source ~/.nvm/nvm.sh
 nvm use 18
 node -v
-python3 --version
-
-# Provide `python` if only python3 exists (local shim)
-mkdir -p .tmp/bin
-ln -sf "$(command -v python3)" .tmp/bin/python
 
 npm install
 npx playwright install chromium
 
 # Run E2E with a safe temp directory (WSL /mnt/c permission fix)
-mkdir -p .tmp/playwright
-TMPDIR=.tmp/playwright TMP=.tmp/playwright TEMP=.tmp/playwright \
-  PATH=".tmp/bin:$PATH" npm test
+npm test
 ```
 
-Expected result: `55 passed` with no failures.
+Expected result: `87 passed, 8 skipped` (telemetry integration suite skipped by default).
 
 ---
 
@@ -100,7 +93,6 @@ Expected result: `55 passed` with no failures.
 ```powershell
 node -v
 npm -v
-python --version
 ```
 
 2. Install dependencies and browsers:
@@ -125,29 +117,19 @@ source ~/.nvm/nvm.sh
 nvm install 18
 nvm use 18
 node -v
-python3 --version
 ```
 
-2. Provide `python` if only `python3` exists:
-
-```bash
-mkdir -p .tmp/bin
-ln -sf "$(command -v python3)" .tmp/bin/python
-```
-
-3. Install dependencies and browsers:
+2. Install dependencies and browsers:
 
 ```bash
 npm install
 npx playwright install chromium
 ```
 
-4. Run tests with safe temp directory:
+3. Run tests:
 
 ```bash
-mkdir -p .tmp/playwright
-TMPDIR=.tmp/playwright TMP=.tmp/playwright TEMP=.tmp/playwright \
-  PATH=".tmp/bin:$PATH" npm test
+npm test
 ```
 
 Optional modes (both environments):
@@ -157,11 +139,32 @@ npm run test:ui
 npm run test:headed
 npm run test:debug
 npm run test:report
+npm run test:integration
 ```
+
+`npm run test:integration` runs only `@integration` specs (currently telemetry) and
+expects a live ComfyUI backend at `COMFYUI_URL` (default `http://127.0.0.1:8188`).
 
 ---
 
-## 5. Test Structure
+## 5. CI Dual-Track Policy
+
+`phase2-release-gate.yml` runs E2E in two tracks:
+
+- Required track: `npm test` (stable harness tests, excludes `@integration`)
+- Optional track: `npm run test:integration` (backend-dependent telemetry tests)
+
+How to enable optional track:
+
+- `workflow_dispatch`: set `run_integration_e2e=true` (optionally set `comfyui_url`)
+- Repository variable: set `RUN_INTEGRATION_E2E=true`
+- Optional backend URL variable: `COMFYUI_URL`
+
+The required track is merge-blocking. The optional track is informational/non-blocking.
+
+---
+
+## 6. Test Structure
 
 ```
 tests/
@@ -182,7 +185,7 @@ tests/
 
 ---
 
-## 6. Test Harness Behavior
+## 7. Test Harness Behavior
 
 `tests/e2e/test-harness.html` provides a minimal ComfyUI environment:
 
@@ -206,7 +209,7 @@ Notes:
 
 ---
 
-## 7. Mocking Rules (Important for Stability)
+## 8. Mocking Rules (Important for Stability)
 
 `web/doctor.js` imports ComfyUI core modules. Always mock them before `page.goto`:
 
@@ -234,19 +237,17 @@ Prefer waiting on `waitForI18nLoaded` before asserting translated UI.
 
 ---
 
-## 8. Expected Server Log Warnings (Normal)
+## 9. Expected Server Behavior
 
-The web server is a static `http.server`. It does not handle POST or real APIs.
-During tests you may see:
+The E2E server (`scripts/e2e-server.mjs`) serves static assets and responds to
+common `/doctor/*` and `/debugger/*` endpoints with deterministic mock JSON.
 
-- `404` for `/doctor/...` endpoints
-- `501` for POST requests
-
-These are expected and do not indicate test failure.
+If you still see repeated `404`/`501` for those endpoints, treat it as a setup
+regression and verify `npm test` is launching the configured Playwright server.
 
 ---
 
-## 9. Preact Loader Tests (A7)
+## 10. Preact Loader Tests (A7)
 
 `preact-loader.spec.js` validates:
 
@@ -268,7 +269,7 @@ Notes:
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 ### EACCES errors under /mnt/c
 
@@ -278,14 +279,17 @@ Use a Linux temp directory:
 TMPDIR=/tmp npm test
 ```
 
-### python not found
+`scripts/run-playwright.mjs` already auto-configures temp/output directories on
+WSL `/mnt/*`; this manual override is only for stubborn local environments.
 
-`playwright.config.js` uses `python`. On WSL2, create a local shim:
+### Node version mismatch
+
+`npm test` runs a preflight check that requires Node 18+.
 
 ```bash
-mkdir -p .tmp/bin
-ln -sf "$(command -v python3)" .tmp/bin/python
-PATH=".tmp/bin:$PATH" npm test
+source ~/.nvm/nvm.sh
+nvm use 18
+node -v
 ```
 
 ### Port 3000 already in use
@@ -297,13 +301,13 @@ Stop the process using port 3000 or update the port in `playwright.config.js`.
 Ensure `test-harness.html` is reachable and your test uses `waitForDoctorReady`:
 
 ```bash
-python3 -m http.server 3000
+node scripts/e2e-server.mjs
 # Open http://127.0.0.1:3000/tests/e2e/test-harness.html
 ```
 
 ---
 
-## 11. Island Fallback Testing (5C.5)
+## 12. Island Fallback Testing (5C.5)
 
 New helpers in `tests/e2e/utils/helpers.js` for testing Preact island fallback:
 
@@ -341,7 +345,7 @@ test('should render vanilla UI when Preact fails', async ({ page }) => {
 
 ---
 
-## 12. Related Docs
+## 13. Related Docs
 
 - Playwright docs: <https://playwright.dev/>
 - E2E README: `tests/e2e/README.md`

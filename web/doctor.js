@@ -13,6 +13,7 @@ import * as StatsTab from "./tabs/stats_tab.js";
 import * as SettingsTab from "./tabs/settings_tab.js";
 // R5: Error Boundaries
 import { installGlobalErrorHandlers } from "./global_error_handler.js";
+import { getRuntimeApiKey, setRuntimeApiKey, migrateLegacyApiKeyFromSettings } from "./llm_key_store.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // A7: PREACT ISLANDS FEATURE FLAG
@@ -188,12 +189,10 @@ app.registerExtension({
         if (!app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl")) {
             app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
         }
-        if (!app.ui.settings.getSettingValue("Doctor.LLM.ApiKey")) {
-            app.ui.settings.setSettingValue("Doctor.LLM.ApiKey", "");
-        }
         if (!app.ui.settings.getSettingValue("Doctor.LLM.Model")) {
             app.ui.settings.setSettingValue("Doctor.LLM.Model", "");
         }
+        const migratedLegacyApiKey = migrateLegacyApiKeyFromSettings();
 
         // Show info message directing users to sidebar
         app.ui.settings.addSetting({
@@ -217,7 +216,7 @@ app.registerExtension({
         //
         // DO NOT REMOVE THESE REGISTRATIONS.
         // ========================================
-        
+
         // General
         app.ui.settings.addSetting({
             id: "Doctor.General.Language",
@@ -277,13 +276,9 @@ app.registerExtension({
             defaultValue: "https://api.openai.com/v1",
         });
 
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.ApiKey",
-            name: "Doctor: API Key",
-            type: "text", // In ComfyUI settings this will be visible text, but sidebar uses password input
-            defaultValue: "",
-            attrs: { type: "password" }, // Try to hint password type if supported
-        });
+        // S8: Doctor.LLM.ApiKey setting registration REMOVED.
+        // Keys are session-only (getRuntimeApiKey/setRuntimeApiKey).
+        // Legacy migration in llm_key_store.js still reads+clears if an old value exists.
 
         app.ui.settings.addSetting({
             id: "Doctor.LLM.Model",
@@ -315,6 +310,9 @@ app.registerExtension({
         // Store reference on app for settings callbacks
         app.Doctor = doctorUI;
         app.Doctor.providerDefaults = PROVIDER_DEFAULTS;
+        app.Doctor.getRuntimeApiKey = getRuntimeApiKey;
+        app.Doctor.setRuntimeApiKey = setRuntimeApiKey;
+        app.Doctor.legacyApiKeyMigrated = migratedLegacyApiKey;
 
         // NOTE (UI tooltip): Wait for UI text before sidebar registration to avoid "[Missing]" labels.
         // Do not remove this await unless registerSidebarTab no longer uses getUIText().

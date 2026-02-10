@@ -5,7 +5,18 @@
 
 這是一個 ComfyUI 專用的全時即時執行階段診斷套件。能自動攔截自啟動後的所有終端機輸出，捕捉完整的 Python 追蹤回溯 (Tracebacks)，並透過節點層級 (Node-level) 的上下文提取，提供具優先順序的修復建議。內建 57+ 種錯誤模式（22 個內建 + 35 個社群模式）、採用 JSON 熱重載模式，讓使用者自行維護管理其他 Error 類型；目前已支援 9 種語言、具備日誌持久化功能，並提供便於前端整合的 RESTful API。
 
-## 最新更新 (2026 年 1 月) - 點擊展開
+## 最新更新 (2026 年 2 月) - 點擊展開
+
+<details>
+<summary><strong>新功能: S8 雙模式 API 金鑰策略（ENV 優先 + 進階 Server-side Key Store）</strong></summary>
+
+- API 金鑰不再寫入前端設定，改為**前端 session-only**（重新整理即清除）。
+- 新增預設摺疊的 **🔐 Advanced Key Store (Server-side)** 區塊，需使用者明確點擊儲存才會落盤。
+- 後端金鑰解析順序調整為：請求金鑰 → provider ENV → 通用 ENV → server store。
+- 升級相容：舊版前端持久化金鑰會做一次性遷移到執行期記憶體，並清除舊持久化值。
+- UI 內建 `?` 風險提示：server store 為明文 `secrets.json`，正式環境仍建議優先使用 ENV。
+
+</details>
 
 <details>
 <summary><strong>新功能: F14 主動診斷 (健康檢查 + 意圖簽章)</strong></summary>
@@ -533,7 +544,7 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 1. **AI Provider**：從下拉選單中選擇您偏好的 LLM 服務提供商。Base URL 會自動填入。
 2. **AI Base URL**：API 端點（自動填入，但可自訂）
-3. **AI API Key**：您的 API 金鑰（本地 LLM（如 Ollama/LMStudio）可留空）
+3. **AI API Key**：前端 session-only 的 API 金鑰輸入欄位（本地 LLM（如 Ollama/LMStudio）可留空）
 4. **AI Model Name**：
    - 從下拉選單中選擇模型（自動從您的提供商 API 取得）
    - 點擊 🔄 重新整理按鈕可重新載入可用模型
@@ -547,7 +558,7 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 3. 等待 LLM 分析錯誤（通常需要 3-10 秒）
 4. 檢視 AI 生成的除錯建議
 
-**安全性說明**：您的 API 金鑰僅在分析請求期間從前端傳輸至後端。系統不會記錄或持久儲存該金鑰。
+**安全性說明**：API 金鑰在前端為 **session-only**（重新整理後清除），後端依序解析來源：請求金鑰 → `DOCTOR_{PROVIDER}_API_KEY` → `DOCTOR_LLM_API_KEY` → server store（`secrets.json`）。系統不記錄金鑰；但 `secrets.json` 屬於磁碟明文儲存（由 OS 權限保護），正式或多人環境建議優先使用 ENV。
 
 ### LLM 來源設定範例
 
@@ -606,7 +617,17 @@ ComfyUI-Doctor 整合了主流 LLM 服務，提供智能化、上下文感知的
 
 **功能**：用於雲端 LLM 服務身份驗證的 API 金鑰。
 **用途**：雲端 LLM 提供來源（OpenAI、DeepSeek 等）必填。本地 LLM（Ollama、LMStudio）可留空。
-**安全性**：金鑰僅在分析請求時傳輸，不會被記錄或持久儲存。
+**預設行為**：前端為 session-only，不會持久化到 ComfyUI 設定。
+**後端解析優先序**：請求金鑰 → provider 專用 ENV → 通用 ENV → 可選 server-side key store。
+**安全警告（重要）**：server-side key store 會將金鑰明文寫入 `secrets.json`；正式、多人或高風險環境請改用 ENV。
+
+**進階 Key Store 設定（可選）**：
+
+1. 在 Settings 展開 **🔐 Advanced Key Store (Server-side)**（預設為摺疊）。
+2. 點擊 `?` 閱讀風險提示（前端不持久化、server store 為明文、ENV 優先）。
+3. 選擇 provider、輸入 API 金鑰；如有設定 `DOCTOR_ADMIN_TOKEN`，同時填入 admin token。
+4. 點擊 **💾 Save to Server** 儲存，或 **🗑️ Delete** 刪除。
+5. 透過 provider 狀態徽章（`ENV` / `Server` / `None`）確認目前生效來源。
 
 ### 9. AI Model Name (AI 模型名稱)
 

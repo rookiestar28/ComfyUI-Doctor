@@ -295,14 +295,45 @@ def get_analysis_history() -> List[Dict[str, Any]]:
 
 def clear_analysis_history() -> bool:
     """Clear all history (both persistent and in-memory)."""
+    success = True
     try:
         store = _get_history_store()
         store.clear()
-        with _history_lock:
-            _analysis_history.clear()
-        return True
     except Exception:
-        return False
+        success = False
+
+    with _history_lock:
+        _analysis_history.clear()
+        global _last_analysis
+        _last_analysis = {
+            "error": None,
+            "suggestion": None,
+            "timestamp": None,
+            "node_context": None,
+            "analysis_metadata": None,
+            "matched_pattern_id": None,
+            "pattern_category": None,
+            "pattern_priority": None,
+            "resolution_status": None,
+        }
+
+    # Best-effort reset of in-flight logger state so old queued lines don't repopulate
+    # _last_analysis right after clearing (important for deterministic tests).
+    try:
+        if _message_queue:
+            _message_queue.clear()
+    except Exception:
+        success = False
+
+    try:
+        if _log_processor:
+            _log_processor.buffer = []
+            _log_processor._set_traceback_state(False)
+            _log_processor.last_buffer_time = 0
+    except Exception:
+        success = False
+
+    return success
 
 
 # ==============================================================================
@@ -508,7 +539,7 @@ class DoctorLogProcessor(threading.Thread):
                 is_urgent = True
                 logging.debug(f"[Doctor] R14 fatal pattern detected: {fatal_marker}")
         
-        if is_urgent:
+        if is_urgent and not self.in_traceback:
             result = ErrorAnalyzer.analyze(message)
             suggestion, metadata = result if result else (None, None)
             if suggestion:

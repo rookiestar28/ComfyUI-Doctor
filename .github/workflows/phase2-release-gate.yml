@@ -38,6 +38,17 @@ on:
       - 'tests/e2e/**/*.js'
       - '.github/workflows/phase2-release-gate.yml'
   workflow_dispatch:
+    inputs:
+      run_integration_e2e:
+        description: 'Run optional telemetry integration E2E suite'
+        required: false
+        default: false
+        type: boolean
+      comfyui_url:
+        description: 'ComfyUI backend URL for optional integration suite'
+        required: false
+        default: 'http://127.0.0.1:8188'
+        type: string
 
 jobs:
   phase2-python-gate:
@@ -92,7 +103,7 @@ jobs:
           echo "- Outbound payload safety: PASS"
 
   phase2-e2e-gate:
-    name: Phase 2 E2E Regression Tests
+    name: Phase 2 E2E Regression Tests (Required)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -105,27 +116,16 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Set up Python 3.10 (for HTTP server)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
       - name: Install npm dependencies
         run: npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
-      - name: Verify Python is available
-        run: |
-          python3 --version
-          which python3
-
       - name: Run E2E tests
         run: npm test
         env:
           CI: true
-          PW_PYTHON: python3
         timeout-minutes: 8
 
       - name: Upload test results
@@ -147,11 +147,66 @@ jobs:
       - name: Summary
         if: success()
         run: |
-          echo "✅ Phase 2 E2E Gate Passed"
+          echo "✅ Phase 2 Required E2E Gate Passed"
           echo "- Preact loader: PASS"
           echo "- Settings UI: PASS"
           echo "- Statistics UI: PASS"
           echo "- Sidebar UI: PASS"
+          echo "- Integration-tagged E2E: excluded by design"
+
+  phase2-e2e-integration-optional:
+    name: Phase 2 E2E Integration (Optional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration_e2e == 'true') ||
+      (vars.RUN_INTEGRATION_E2E == 'true')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run optional integration E2E tests
+        run: npm run test:integration
+        env:
+          CI: true
+          COMFYUI_URL: ${{ github.event.inputs.comfyui_url || vars.COMFYUI_URL || 'http://127.0.0.1:8188' }}
+        timeout-minutes: 8
+
+      - name: Upload integration report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-integration
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Upload integration screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots-integration
+          path: test-results/
+          retention-days: 7
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ Optional integration E2E suite completed"
+          echo "- Command: npm run test:integration"
+          echo "- Backend URL: ${{ github.event.inputs.comfyui_url || vars.COMFYUI_URL || 'http://127.0.0.1:8188' }}"
+          echo "- This job does not block release gate."
 
   phase2-gate-complete:
     name: Phase 2 Gate Complete
@@ -171,8 +226,11 @@ jobs:
             echo "  ✅ Dependency policy (2 tests)"
             echo "  ✅ Outbound payload safety (4 tests)"
             echo ""
-            echo "Frontend Regression:"
-            echo "  ✅ E2E tests (61 tests)"
+            echo "Frontend Regression (Required):"
+            echo "  ✅ E2E tests (npm test)"
+            echo ""
+            echo "Optional Integration:"
+            echo "  ℹ️ E2E integration suite is separate and non-blocking"
             echo ""
             echo "This change is safe to merge."
             exit 0

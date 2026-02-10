@@ -1,5 +1,6 @@
 
 import { app } from "../../../scripts/app.js";
+import { getRuntimeApiKey } from "./llm_key_store.js";
 
 /**
  * Global State Management for Doctor Chat
@@ -124,7 +125,7 @@ class DoctorContext {
 
         const s = app.ui.settings;
         const newSettings = {
-            apiKey: s.getSettingValue("Doctor.LLM.ApiKey", ""),
+            apiKey: getRuntimeApiKey(),
             baseUrl: s.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "",
             model: s.getSettingValue("Doctor.LLM.Model", "gpt-4o"),
             language: s.getSettingValue("Doctor.General.Language", "en"),
