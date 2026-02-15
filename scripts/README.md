@@ -2,6 +2,64 @@
 
 This directory contains development and maintenance scripts for ComfyUI-Doctor.
 
+## Full Test Automation
+
+### run_full_tests_windows.ps1
+
+Runs the required end-to-end validation sequence in one command on Windows:
+
+1. `detect-secrets`
+2. all `pre-commit` hooks
+3. backend unit tests
+4. frontend E2E
+
+The script always uses the project-local `.venv` interpreter for Python tooling and tests (Windows track).
+
+**Usage**:
+```powershell
+powershell -File scripts/run_full_tests_windows.ps1
+
+# Optional: skip dependency bootstrap
+powershell -File scripts/run_full_tests_windows.ps1 -SkipBootstrap
+
+# Optional: skip E2E stage
+powershell -File scripts/run_full_tests_windows.ps1 -SkipE2E
+```
+
+### run_full_tests_linux.sh
+
+Linux/WSL equivalent of the full-test automation flow with OS-aware venv selection:
+
+- WSL: `.venv-wsl`
+- native Linux: `.venv`
+
+**Usage**:
+```bash
+bash scripts/run_full_tests_linux.sh
+
+# Optional: skip dependency bootstrap
+bash scripts/run_full_tests_linux.sh --skip-bootstrap
+
+# Optional: skip E2E stage
+bash scripts/run_full_tests_linux.sh --skip-e2e
+```
+
+### pre_push_checks.sh
+
+Repository-managed pre-push gate entrypoint. It runs the same mandatory full test flow and exits non-zero on any failure, which blocks `git push` when hook is enabled.
+
+**Usage**:
+```bash
+bash scripts/pre_push_checks.sh
+```
+
+Enable the hook once:
+```bash
+git config core.hooksPath .githooks
+```
+
+---
+
 ## Phase 2 Release Gate
 
 ### phase2_gate.py

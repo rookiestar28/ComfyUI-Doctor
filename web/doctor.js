@@ -637,8 +637,48 @@ app.registerExtension({
                             <span class="status-indicator" id="doctor-tab-status" style="width: 10px; height: 10px; border-radius: 50%; background: #4caf50; display: inline-block;"></span>
                             <span style="font-size: 16px; font-weight: bold; color: var(--fg-color, #eee);">🏥 ${app.Doctor.getUIText('sidebar_doctor_title')}</span>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="doctor-sidebar-version" style="font-size: 13px; color: #c8ccd4;">v?</span>
+                            <a id="doctor-sidebar-github-link" href="https://github.com/rookiestar28/ComfyUI-Doctor" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 4px 10px; border: 1px solid var(--border-color, #4a4f5a); border-radius: 999px; font-size: 12px; font-weight: 600; text-decoration: none; color: var(--fg-color, #f1f5f9); background: rgba(255,255,255,0.03);">View on GitHub</a>
+                        </div>
                     `;
                     container.appendChild(header);
+
+                    const applySidebarMeta = (meta) => {
+                        const versionEl = header.querySelector('#doctor-sidebar-version');
+                        const githubEl = header.querySelector('#doctor-sidebar-github-link');
+                        if (!versionEl || !githubEl) return;
+
+                        const version = (typeof meta?.version === 'string' && meta.version.trim() && meta.version.trim() !== 'unknown')
+                            ? meta.version.trim().replace(/^v/i, '')
+                            : null;
+                        const repository = (typeof meta?.repository === 'string' && meta.repository.trim())
+                            ? meta.repository.trim()
+                            : 'https://github.com/rookiestar28/ComfyUI-Doctor';
+
+                        versionEl.textContent = version ? `v${version}` : 'v?';
+                        githubEl.href = repository;
+                    };
+
+                    const loadSidebarMeta = async () => {
+                        applySidebarMeta(app.Doctor?.meta);
+                        if (app.Doctor?.meta?.version && app.Doctor.meta.version !== 'unknown') return;
+                        try {
+                            const currentLang = app.ui.settings.getSettingValue('Doctor.General.Language', DEFAULTS.LANGUAGE);
+                            const endpoint = `/doctor/ui_text?lang=${encodeURIComponent(currentLang)}`;
+                            const response = (typeof window !== 'undefined' && window.api && typeof window.api.fetchApi === 'function')
+                                ? await window.api.fetchApi(endpoint)
+                                : await fetch(endpoint);
+                            if (!response.ok) return;
+                            const data = await response.json();
+                            if (!data?.meta) return;
+                            app.Doctor.meta = data.meta;
+                            applySidebarMeta(data.meta);
+                        } catch (_) {
+                            // Keep best-effort fallback in header.
+                        }
+                    };
+                    void loadSidebarMeta();
 
                     // 2. Tab Bar
                     const tabBar = document.createElement('div');

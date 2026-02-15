@@ -980,43 +980,46 @@ try:
             ui_text = UI_TEXT.get(lang, UI_TEXT["en"])
 
             def _get_doctor_meta() -> dict:
-                # Best-effort metadata for UI display (no extra deps).
+                # Best-effort metadata for UI display.
+                # IMPORTANT: prefer pyproject.toml values for UI consistency.
                 meta = {
                     "name": "ComfyUI-Doctor",
                     "version": "unknown",
                     "repository": "https://github.com/rookiestar28/ComfyUI-Doctor",
                 }
-                try:
-                    import importlib.metadata as _metadata  # py3.8+
 
-                    # Distribution name may differ depending on install method.
-                    for dist_name in ("ComfyUI-Doctor", "comfyui-doctor"):
-                        try:
-                            meta["version"] = _metadata.version(dist_name)
-                            break
-                        except Exception:
-                            pass
+                # Primary source: local pyproject.toml
+                try:
+                    from pathlib import Path
+                    import re
+
+                    pyproject_path = Path(__file__).resolve().parent / "pyproject.toml"
+                    if pyproject_path.exists():
+                        content = pyproject_path.read_text(encoding="utf-8", errors="ignore")
+                        m = re.search(r'(?m)^version\s*=\s*"([^"]+)"\s*$', content)
+                        if m:
+                            meta["version"] = m.group(1).strip()
+                        m_repo = re.search(
+                            r'(?ms)^\[project\.urls\].*?^Repository\s*=\s*"([^"]+)"\s*$',
+                            content,
+                        )
+                        if m_repo:
+                            meta["repository"] = m_repo.group(1).strip()
                 except Exception:
                     pass
 
-                # Fallback: parse local pyproject.toml (repo install via ComfyUI-Manager).
+                # Fallback source: installed distribution metadata.
                 if meta["version"] in ("unknown", "", None):
                     try:
-                        from pathlib import Path
-                        import re
+                        import importlib.metadata as _metadata  # py3.8+
 
-                        pyproject_path = Path(__file__).resolve().parent / "pyproject.toml"
-                        if pyproject_path.exists():
-                            content = pyproject_path.read_text(encoding="utf-8", errors="ignore")
-                            m = re.search(r'(?m)^version\\s*=\\s*"([^"]+)"\\s*$', content)
-                            if m:
-                                meta["version"] = m.group(1).strip()
-                            m_repo = re.search(
-                                r'(?ms)^\\[project\\.urls\\].*?^Repository\\s*=\\s*"([^"]+)"\\s*$',
-                                content,
-                            )
-                            if m_repo:
-                                meta["repository"] = m_repo.group(1).strip()
+                        # Distribution name may differ depending on install method.
+                        for dist_name in ("ComfyUI-Doctor", "comfyui-doctor"):
+                            try:
+                                meta["version"] = _metadata.version(dist_name)
+                                break
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                 return meta
@@ -1305,6 +1308,11 @@ try:
                             content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
                         if not content:
                             return web.json_response({"error": "Empty response from LLM"}, status=502)
+                            
+                        # R19: Clean output (strip hidden reasoning)
+                        from services.providers.base import BaseProviderAdapter
+                        content = BaseProviderAdapter.clean_llm_output(content)
+                        
                         logger.info(f"Analysis successful, response length={len(content)}, attempts={result.attempts}")
                         return web.json_response({"analysis": content})
                     except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
@@ -1763,6 +1771,10 @@ try:
                             content = resp_data.get('message', {}).get('content', '')
                         else:
                             content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                        # R19: Clean output (strip hidden reasoning)
+                        from services.providers.base import BaseProviderAdapter
+                        content = BaseProviderAdapter.clean_llm_output(content)
+                        
                         logger.info(f"LLM response received (non-stream), length={len(content)}, attempts={result.attempts}")
                         return web.json_response({"content": content, "done": True, "metadata": r12_meta})
 
@@ -2608,67 +2620,38 @@ try:
             logger.error(f"Telemetry toggle API error: {str(e)}")
             return web.json_response({"success": False, "message": str(e)}, status=500)
 
-    @server.PromptServer.instance.routes.get("/doctor/plugins")
-    async def api_plugins(request):
-        """
-        Plugin trust report (scan-only).
-        Returns the trust classification for each discovered community plugin without importing code.
-        """
+    # ---- API Routes (R20) ----
+    try:
         try:
-            from pathlib import Path
-            from .pipeline.plugins import scan_plugins
-            from config import CONFIG
+            from .services.routes import (
+                api_plugins,
+                api_get_job,
+                api_resume_job,
+                api_cancel_job,
+                api_provider_status,
+            )
+        except ImportError:
+            # Fallback for non-package execution contexts
+            from services.routes import (
+                api_plugins,
+                api_get_job,
+                api_resume_job,
+                api_cancel_job,
+                api_provider_status,
+            )
 
-            plugin_dir = Path(__file__).resolve().parent / "pipeline" / "plugins" / "community"
-            report = scan_plugins(plugin_dir)
+        # Register routes
+        server.PromptServer.instance.routes.get("/doctor/plugins")(api_plugins)
+        server.PromptServer.instance.routes.get("/doctor/jobs/{job_id}")(api_get_job)
+        server.PromptServer.instance.routes.post("/doctor/jobs/{job_id}/resume")(api_resume_job)
+        server.PromptServer.instance.routes.post("/doctor/jobs/{job_id}/cancel")(api_cancel_job)
+        server.PromptServer.instance.routes.get("/doctor/providers/{provider_id}/status")(api_provider_status)
 
-            def sanitize_manifest(manifest):
-                if not isinstance(manifest, dict):
-                    return None
-                keys = [
-                    "id",
-                    "name",
-                    "version",
-                    "author",
-                    "min_doctor_version",
-                    "signature_alg",
-                ]
-                out = {k: manifest.get(k) for k in keys if k in manifest}
-                if "signature" in manifest:
-                    out["has_signature"] = bool(manifest.get("signature"))
-                return out
+    except ImportError as e:
+        logger.error(f"Failed to import API routes: {e}")
 
-            plugins = []
-            trust_counts = {}
-            for entry in report:
-                trust = entry.get("trust")
-                trust_counts[trust] = trust_counts.get(trust, 0) + 1
-                plugins.append(
-                    {
-                        "file": getattr(entry.get("file"), "name", str(entry.get("file"))),
-                        "plugin_id": entry.get("plugin_id"),
-                        "trust": trust,
-                        "reason": entry.get("reason"),
-                        "manifest": sanitize_manifest(entry.get("manifest")),
-                    }
-                )
 
-            payload = {
-                "config": {
-                    "enabled": bool(getattr(CONFIG, "enable_community_plugins", False)),
-                    "allowlist_count": len(getattr(CONFIG, "plugin_allowlist", []) or []),
-                    "blocklist_count": len(getattr(CONFIG, "plugin_blocklist", []) or []),
-                    "signature_required": bool(getattr(CONFIG, "plugin_signature_required", False)),
-                    "signature_alg": getattr(CONFIG, "plugin_signature_alg", "hmac-sha256"),
-                    "signature_key_configured": bool(getattr(CONFIG, "plugin_signature_key", "") or ""),
-                },
-                "trust_counts": trust_counts,
-                "plugins": plugins,
-            }
-            return web.json_response({"success": True, "plugins": payload})
-        except Exception as e:
-            logger.error(f"Plugins API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+
 
     # ---- F14: Proactive Diagnostics API Endpoints ----
     from services.diagnostics import (
@@ -2888,7 +2871,7 @@ def _read_pyproject_value(pattern: str, fallback: str = "") -> str:
 
 # Metadata for "About" / tooling integrations (best-effort, no hard dependency).
 # Many ComfyUI/Manager UIs will display version + repo link when available.
-__version__ = _read_pyproject_value(r'(?m)^version\\s*=\\s*["\\\']([^"\\\']+)["\\\']', fallback="unknown")
-__repository__ = _read_pyproject_value(r'(?m)^Repository\\s*=\\s*["\\\']([^"\\\']+)["\\\']', fallback="https://github.com/rookiestar28/ComfyUI-Doctor")
+__version__ = _read_pyproject_value(r'(?m)^version\s*=\s*["\\\']([^"\\\']+)["\\\']', fallback="unknown")
+__repository__ = _read_pyproject_value(r'(?m)^Repository\s*=\s*["\\\']([^"\\\']+)["\\\']', fallback="https://github.com/rookiestar28/ComfyUI-Doctor")
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY", "__version__", "__repository__"]

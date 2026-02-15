@@ -11,6 +11,16 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Feb 2026) - Click to expand
 
 <details>
+<summary><strong>External Enrichment Safety Foundation + Resumable Job APIs</strong></summary>
+
+- Added a fail-closed external enrichment foundation with provider contract/capability registry, submission policy checks, confirmation tokens, and redacted audit logging.
+- Added resumable, checkpointed long-job APIs (job status/resume/cancel + provider status) with corruption-tolerant state handling.
+- Hardened route wiring and integrated non-stream output cleanup for `/doctor/analyze` and non-stream `/doctor/chat` to reduce hidden marker leakage.
+- Added dedicated regression coverage for policy engine, adapter behavior, resumable jobs, contract normalization, and API routes.
+
+</details>
+
+<details>
 <summary><strong>(v1.6.3): Dual-Mode API Key Strategy (ENV-first + Advanced Server Key Store)</strong></summary>
 
 - API keys are no longer persisted in frontend settings; the API key input is session-only by default.
