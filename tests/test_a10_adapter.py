@@ -73,3 +73,13 @@ def test_registry_registration():
     assert ProviderRegistry.get_adapter("reg_test") is adapter
     assert ProviderRegistry.get_capability("reg_test") is cap
     assert "reg_test" in ProviderRegistry.list_providers()
+
+
+def test_base_adapter_uses_guardrail_defaults():
+    """R17: provider adapter should consume timeout/retry defaults from guardrails."""
+    with patch("config.CONFIG") as mock_config:
+        mock_config.guardrails.PROVIDER_TIMEOUT_SECONDS = 45
+        mock_config.guardrails.PROVIDER_MAX_RETRIES = 4
+        adapter = MockAdapter("guardrail_defaults")
+        assert adapter.timeout == 45
+        assert adapter.max_retries == 4

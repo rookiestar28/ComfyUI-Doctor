@@ -45,6 +45,7 @@ class SessionManager:
     DEFAULT_CORE_RATE = 30    # req/min for heavy endpoints
     DEFAULT_LIGHT_RATE = 10   # req/min for light endpoints
     DEFAULT_CONCURRENCY = 3   # simultaneous LLM requests
+    DEFAULT_RATE_WINDOW_SECONDS = 60
 
     @classmethod
     def configure_limits(
@@ -53,6 +54,7 @@ class SessionManager:
         core_rate_limit: Optional[int] = None,
         light_rate_limit: Optional[int] = None,
         max_concurrent: Optional[int] = None,
+        rate_window_seconds: Optional[int] = None,
     ) -> None:
         """
         Configure rate/concurrency limits (typically from config).
@@ -71,6 +73,10 @@ class SessionManager:
         cls.DEFAULT_CORE_RATE = _coerce_positive_int(core_rate_limit, cls.DEFAULT_CORE_RATE)
         cls.DEFAULT_LIGHT_RATE = _coerce_positive_int(light_rate_limit, cls.DEFAULT_LIGHT_RATE)
         cls.DEFAULT_CONCURRENCY = _coerce_positive_int(max_concurrent, cls.DEFAULT_CONCURRENCY)
+        cls.DEFAULT_RATE_WINDOW_SECONDS = _coerce_positive_int(
+            rate_window_seconds,
+            cls.DEFAULT_RATE_WINDOW_SECONDS,
+        )
 
         cls._core_limiter = None
         cls._light_limiter = None
@@ -92,7 +98,10 @@ class SessionManager:
             RateLimiter: Shared rate limiter instance (30 req/min default).
         """
         if cls._core_limiter is None:
-            cls._core_limiter = RateLimiter(max_per_minute=cls.DEFAULT_CORE_RATE)
+            cls._core_limiter = RateLimiter(
+                max_per_minute=cls.DEFAULT_CORE_RATE,
+                window_seconds=cls.DEFAULT_RATE_WINDOW_SECONDS,
+            )
         return cls._core_limiter
     
     @classmethod
@@ -104,7 +113,10 @@ class SessionManager:
             RateLimiter: Shared rate limiter instance (10 req/min default).
         """
         if cls._light_limiter is None:
-            cls._light_limiter = RateLimiter(max_per_minute=cls.DEFAULT_LIGHT_RATE)
+            cls._light_limiter = RateLimiter(
+                max_per_minute=cls.DEFAULT_LIGHT_RATE,
+                window_seconds=cls.DEFAULT_RATE_WINDOW_SECONDS,
+            )
         return cls._light_limiter
     
     @classmethod

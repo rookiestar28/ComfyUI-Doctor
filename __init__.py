@@ -74,6 +74,7 @@ SessionManager.configure_limits(
     core_rate_limit=getattr(CONFIG, "llm_core_rate_limit", None),
     light_rate_limit=getattr(CONFIG, "llm_light_rate_limit", None),
     max_concurrent=getattr(CONFIG, "llm_max_concurrent", None),
+    rate_window_seconds=getattr(getattr(CONFIG, "guardrails", None), "RATE_LIMIT_WINDOW_SECONDS", None),
 )
 
 

@@ -11,6 +11,16 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Feb 2026) - Click to expand
 
 <details>
+<summary><strong>Validation Expansion Remediation: Desktop Hardening + Isolation Test Pack</strong></summary>
+
+- Added targeted desktop failure-injection regression tests for corrupt state recovery, flush-failure non-crash paths, and history migration continuity.
+- Added non-ComfyUI isolation coverage for metadata contract validation and PromptComposer/harness payload compatibility.
+- Added an opt-in online API test lane scaffold (`RUN_ONLINE_API_TESTS=true`) to separate secret-scoped provider checks from default local runs.
+- Validation gate status: detect-secrets + pre-commit + backend full pytest + frontend E2E passed; online provider smoke tests remain opt-in/secret-scoped and skip safely when credentials are absent.
+
+</details>
+
+<details>
 <summary><strong>Validation Expansion Foundation: Runtime Guardrail Config (partial rollout)</strong></summary>
 
 - Added centralized runtime guardrail configuration (ENV-driven) for history limits, job retention, aggregation/rate windows, and provider timeout/retry defaults.
@@ -1101,6 +1111,18 @@ python scripts/phase2_gate.py
 
 # Fast mode (Python only, < 2 minutes)
 python scripts/phase2_gate.py --fast
+```
+
+### Validation Expansion Pack (Targeted)
+
+```powershell
+# Targeted remediation pack (R17/T13/T9 + scaffolded T5 lane)
+.\.venv\Scripts\python.exe -m pytest tests/test_r17_guardrails.py tests/test_t13_desktop_failures.py tests/test_t13_flush_storm.py tests/test_t13_migration.py tests/test_t9_pipeline_contract.py tests/test_t9_harness.py tests/integration/test_pipeline_isolation.py tests/integration/test_online_api_opt_in.py
+
+# Opt-in online lane (secret-scoped)
+$env:RUN_ONLINE_API_TESTS='true'
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_online_api_opt_in.py -q
+Remove-Item Env:RUN_ONLINE_API_TESTS
 ```
 
 **CI Status**: The gate runs automatically on push/PR to `main` and `dev` branches.

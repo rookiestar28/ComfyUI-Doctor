@@ -58,6 +58,22 @@ class TestRateLimiter(unittest.TestCase):
         
         # Should be allowed now
         self.assertTrue(limiter.allow())
+
+    def test_refill_with_custom_window(self):
+        """Should respect custom refill window from guardrail wiring."""
+        limiter = RateLimiter(max_per_minute=60, window_seconds=120)  # 0.5 token/s
+
+        for _ in range(60):
+            limiter.allow()
+
+        self.assertFalse(limiter.allow())
+
+        time.sleep(1.1)
+        # Only ~0.55 token restored; still blocked.
+        self.assertFalse(limiter.allow())
+
+        time.sleep(1.2)
+        self.assertTrue(limiter.allow())
     
     def test_get_tokens(self):
         """Should return current token count."""

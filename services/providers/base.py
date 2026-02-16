@@ -29,10 +29,27 @@ class BaseProviderAdapter(ABC):
     Enforces consistent timeout, retry, and response structure.
     """
 
-    def __init__(self, provider_id: str, timeout: float = 30.0, max_retries: int = 2):
+    def __init__(
+        self,
+        provider_id: str,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+    ):
         self.provider_id = provider_id
-        self.timeout = timeout
-        self.max_retries = max_retries
+        default_timeout = 30.0
+        default_retries = 2
+        try:
+            # CRITICAL: keep this import local to avoid module import coupling at startup.
+            from config import CONFIG  # pylint: disable=import-outside-toplevel
+            default_timeout = float(getattr(CONFIG.guardrails, "PROVIDER_TIMEOUT_SECONDS", 30))
+            default_retries = int(getattr(CONFIG.guardrails, "PROVIDER_MAX_RETRIES", 2))
+        except Exception:
+            pass
+
+        resolved_timeout = default_timeout if timeout is None else float(timeout)
+        resolved_retries = default_retries if max_retries is None else int(max_retries)
+        self.timeout = resolved_timeout if resolved_timeout > 0 else default_timeout
+        self.max_retries = resolved_retries if resolved_retries >= 0 else default_retries
 
     async def execute_with_retry(
         self,

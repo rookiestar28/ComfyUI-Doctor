@@ -92,7 +92,13 @@ class HistoryStore:
         history = store.get_all()
     """
     
-    def __init__(self, filepath: str, maxlen: int = 50, max_bytes: int = 0):
+    def __init__(
+        self,
+        filepath: str,
+        maxlen: int = 50,
+        max_bytes: int = 0,
+        aggregate_window_seconds: int = 60,
+    ):
         """
         Initialize the history store.
         
@@ -109,7 +115,11 @@ class HistoryStore:
         self._history: List[HistoryEntry] = []
         self._loaded = False
         # Aggregation window: within this window, repeated identical errors are aggregated.
-        self._aggregate_window_seconds = 60
+        try:
+            window = int(aggregate_window_seconds)
+        except Exception:
+            window = 60
+        self._aggregate_window_seconds = window if window > 0 else 60
     
     @property
     def filepath(self) -> str:

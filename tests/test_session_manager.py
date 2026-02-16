@@ -105,6 +105,28 @@ class TestSessionManagerTimeout(unittest.TestCase):
         self.assertEqual(SessionManager.DEFAULT_TIMEOUT.total, 60)
 
 
+class TestSessionManagerLimits(unittest.TestCase):
+    """Tests for SessionManager limiter wiring."""
+
+    def setUp(self):
+        SessionManager.reset()
+
+    def tearDown(self):
+        SessionManager.reset()
+
+    def test_configure_limits_applies_rate_window(self):
+        SessionManager.configure_limits(
+            core_rate_limit=30,
+            light_rate_limit=10,
+            max_concurrent=3,
+            rate_window_seconds=120,
+        )
+        core = SessionManager.get_core_limiter()
+        light = SessionManager.get_light_limiter()
+        self.assertEqual(core.window_seconds, 120)
+        self.assertEqual(light.window_seconds, 120)
+
+
 class TestSessionManagerThreadSafety(unittest.TestCase):
     """Tests for SessionManager thread safety."""
     

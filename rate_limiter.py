@@ -21,15 +21,17 @@ class RateLimiter:
     Uses time.monotonic() to avoid issues with system clock changes.
     """
     
-    def __init__(self, max_per_minute: int = 60):
+    def __init__(self, max_per_minute: int = 60, window_seconds: int = 60):
         """
         Initialize rate limiter.
         
         Args:
             max_per_minute: Maximum requests allowed per minute.
+            window_seconds: Refill window size in seconds.
         """
         self.max_tokens = max_per_minute
         self.tokens = float(max_per_minute)
+        self.window_seconds = window_seconds if window_seconds > 0 else 60
         self.last_refill = time.monotonic()
         self._lock = threading.Lock()
     
@@ -51,8 +53,8 @@ class RateLimiter:
         """Refill tokens based on elapsed time."""
         now = time.monotonic()
         elapsed = now - self.last_refill
-        # Refill at rate of max_tokens per 60 seconds
-        refill_amount = elapsed * (self.max_tokens / 60.0)
+        # Refill at rate of max_tokens per configured window.
+        refill_amount = elapsed * (self.max_tokens / float(self.window_seconds))
         self.tokens = min(self.max_tokens, self.tokens + refill_amount)
         self.last_refill = now
     

@@ -7,6 +7,8 @@ Analyzes error history data to generate statisticsFor the dashboard UI.
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from collections import Counter
+from services.node_health import NodeHealthService
+
 
 
 class StatisticsCalculator:
@@ -65,11 +67,15 @@ class StatisticsCalculator:
         resolution_rate = StatisticsCalculator._calculate_resolution_rate(filtered_history)
         trend = StatisticsCalculator._calculate_trend(history)
         
+        # T5: Node Health Scoring
+        node_health = NodeHealthService.calculate_node_failures(filtered_history)
+        
         return {
             "total_errors": total_errors,
             "pattern_frequency": pattern_frequency,
             "category_breakdown": category_breakdown,
             "top_patterns": top_patterns,
+            "node_health": node_health,
             "resolution_rate": resolution_rate,
             "trend": trend
         }

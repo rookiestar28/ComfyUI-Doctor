@@ -128,10 +128,18 @@ def _get_history_store() -> HistoryStore:
     global _history_store
     if _history_store is None:
         _migrate_legacy_data()
+        aggregate_window_seconds = 60
+        try:
+            aggregate_window_seconds = int(
+                getattr(CONFIG.guardrails, "AGGREGATION_WINDOW_SECONDS", 60)
+            )
+        except Exception:
+            aggregate_window_seconds = 60
         _history_store = HistoryStore(
             _history_file,
             maxlen=CONFIG.history_size,
-            max_bytes=getattr(CONFIG, 'history_size_bytes', 5*1024*1024)
+            max_bytes=getattr(CONFIG, 'history_size_bytes', 5*1024*1024),
+            aggregate_window_seconds=aggregate_window_seconds,
         )
     return _history_store
 
@@ -465,7 +473,14 @@ class DoctorLogProcessor(threading.Thread):
         self.buffer = []
         self.in_traceback = False
         self.last_buffer_time = 0
-        self._aggregate_window_seconds = 60
+        try:
+            self._aggregate_window_seconds = int(
+                getattr(CONFIG.guardrails, "AGGREGATION_WINDOW_SECONDS", 60)
+            )
+        except Exception:
+            self._aggregate_window_seconds = 60
+        if self._aggregate_window_seconds <= 0:
+            self._aggregate_window_seconds = 60
 
     def _parse_ts(self, ts: str) -> datetime.datetime:
         try:
