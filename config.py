@@ -8,6 +8,8 @@ import json
 import tempfile
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List
+from services.config_guardrails import GuardrailConfig
+
 
 def _get_config_path_candidates() -> List[str]:
     """
@@ -99,10 +101,18 @@ class DiagnosticsConfig:
     # R14: Error Context Extraction & Prompt Optimization
     r14_use_prompt_composer: bool = True  # Use PromptComposer for unified context formatting
     r14_use_legacy_format: bool = False   # Fallback to legacy format (traceback-first)
+
+    # R17: Runtime Guardrails (env-driven)
+    # IMPORTANT: Runtime policy is ENV-driven and must never be persisted to config.json.
+    guardrails: GuardrailConfig = field(default_factory=GuardrailConfig.load)
+
     
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
-        return asdict(self)
+        data = asdict(self)
+        # IMPORTANT: Keep guardrails runtime-only; persisted values would override ENV policy.
+        data.pop("guardrails", None)
+        return data
 
 
 def load_config() -> DiagnosticsConfig:
@@ -115,6 +125,9 @@ def load_config() -> DiagnosticsConfig:
             try:
                 with open(config_path, encoding="utf-8") as f:
                     data = json.load(f)
+                    if isinstance(data, dict):
+                        # IMPORTANT: Ignore legacy/runtime guardrails if present in older config files.
+                        data.pop("guardrails", None)
                     return DiagnosticsConfig(**data)
             except Exception:
                 # Fall back to next candidate on any error

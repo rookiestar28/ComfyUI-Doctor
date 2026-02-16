@@ -16,6 +16,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from config import CONFIG
+
 
 logger = logging.getLogger(__name__)
 
@@ -221,8 +223,11 @@ class JobManager:
         except Exception as e:
             logger.error(f"Failed to rotate corrupt checkpoint {file_path}: {e}")
 
-    def cleanup_stale_jobs(self, max_age_seconds: int = 86400) -> int:
+    def cleanup_stale_jobs(self, max_age_seconds: int = 0) -> int:
         """Remove old terminated jobs. Returns count of removed jobs."""
+        if max_age_seconds <= 0:
+            max_age_seconds = CONFIG.guardrails.MAX_JOB_RETENTION_SECONDS
+            
         now = time.time()
         to_delete = []
         

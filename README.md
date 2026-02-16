@@ -11,6 +11,16 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 ## Latest Updates (Feb 2026) - Click to expand
 
 <details>
+<summary><strong>Validation Expansion Foundation: Runtime Guardrail Config (partial rollout)</strong></summary>
+
+- Added centralized runtime guardrail configuration (ENV-driven) for history limits, job retention, aggregation/rate windows, and provider timeout/retry defaults.
+- Applied initial runtime wiring for stale job cleanup retention while keeping default behavior unchanged for existing users.
+- Hardened config persistence by treating guardrails as runtime-only policy (excluded from `config.json`) with compatibility handling for legacy payloads.
+- Added regression tests for defaults, ENV override precedence, runtime-only persistence, and config loader compatibility.
+
+</details>
+
+<details>
 <summary><strong>External Enrichment Safety Foundation + Resumable Job APIs</strong></summary>
 
 - Added a fail-closed external enrichment foundation with provider contract/capability registry, submission policy checks, confirmation tokens, and redacted audit logging.
@@ -339,6 +349,7 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - [Usage](#usage)
 - [Frontend UI](#frontend-ui)
 - [Settings](#settings)
+- [External Enrichment Safety and Resumable Jobs](#external-enrichment-safety-and-resumable-jobs)
 - [API Endpoints](#api-endpoints)
 - [Supported Error Patterns](#supported-error-patterns)
 - [Phase 2 Release Gate](#phase-2-release-gate)
@@ -356,7 +367,7 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - **Community Pattern Support**: Covers ControlNet, LoRA, VAE, AnimateDiff, IPAdapter, FaceRestore, and more
 - **Debug Inspector Node**: Deep inspection of data flowing through your workflow
 - **Error History**: Maintains a buffer of recent errors via API
-- **RESTful API**: Seven endpoints for frontend integration
+- **RESTful API**: Expanded endpoint surface for analysis, diagnostics, telemetry, and resumable job control
 - **AI-Powered Analysis**: One-click LLM error analysis with support for 8+ providers (OpenAI, DeepSeek, Groq, Gemini, Ollama, LMStudio, and more)
 - **Interactive Chat Interface**: Multi-turn AI debugging assistant integrated into ComfyUI sidebar
 - **Interactive Sidebar UI**: Visual error panel with node location and instant diagnostics
@@ -391,6 +402,32 @@ The new interactive chat interface provides a conversational debugging experienc
 > **💡 Free API Tip**: [Google AI Studio](https://aistudio.google.com/app/apikey) (Gemini) offers a generous free tier with no credit card required. Perfect for getting started with AI-powered debugging without any costs!
 
 ---
+
+
+## External Enrichment Safety and Resumable Jobs
+
+ComfyUI-Doctor includes a fail-closed foundation for optional external enrichment providers.
+
+### Safety Model
+
+- **Read/query actions are allowed by default** for safe enrichment and diagnostics.
+- **Submit/upload actions are blocked by default** and require explicit enablement per provider capability/policy.
+- **Confirmation is required** for submit/upload paths (single-use, short-lived token).
+- **Outbound sanitization remains mandatory** for provider-bound payloads.
+- **Audit records are redacted** (provider/action/timestamp/policy decision + payload digest; no raw secrets/content).
+
+### Resumable Job Foundation
+
+- Long-running enrichment work uses checkpointed job state for interruption safety.
+- Resume/cancel/status APIs support controlled recovery after restart/interruption.
+- Checkpoint storage is corruption-tolerant (rotate/rebuild behavior).
+
+### LLM Output Cleanup Scope
+
+- Hidden-marker/non-user-facing output cleanup is enforced for:
+  - `POST /doctor/analyze`
+  - Non-stream `POST /doctor/chat`
+- Streaming chunk-level cleanup remains a follow-up item by design.
 
 ## Installation
 
@@ -868,6 +905,41 @@ List available models from the configured LLM provider.
   "message": "Found 2 models"
 }
 ```
+
+
+### GET `/doctor/jobs/{job_id}`
+
+Get checkpointed job status for a long-running enrichment task.
+
+```bash
+curl http://localhost:8188/doctor/jobs/<job_id>
+```
+
+### POST `/doctor/jobs/{job_id}/resume`
+
+Resume a previously interrupted/suspended enrichment job.
+
+```bash
+curl -X POST http://localhost:8188/doctor/jobs/<job_id>/resume
+```
+
+### POST `/doctor/jobs/{job_id}/cancel`
+
+Cancel a running/pending enrichment job.
+
+```bash
+curl -X POST http://localhost:8188/doctor/jobs/<job_id>/cancel
+```
+
+### GET `/doctor/providers/{provider_id}/status`
+
+Fetch provider capability/policy status used by enrichment controls.
+
+```bash
+curl http://localhost:8188/doctor/providers/<provider_id>/status
+```
+
+> Note: Job resume semantics depend on provider adapter implementation. The API provides the resumable foundation and policy boundary.
 
 ### POST `/doctor/health_check` (F14)
 
