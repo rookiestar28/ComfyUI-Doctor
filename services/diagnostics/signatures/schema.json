@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "title": "ComfyUI-Doctor F18 Diagnostics Signature Pack",
+  "description": "Reference schema contract for data-driven diagnostics signature packs (validated by loader/tests).",
+  "required_top_level_fields": [
+    "schema_version",
+    "pack_id",
+    "pack_version",
+    "enabled",
+    "rules"
+  ],
+  "supported_scopes": [
+    "node_widget",
+    "doctor_metadata"
+  ],
+  "supported_categories": [
+    "workflow",
+    "env",
+    "deps",
+    "model",
+    "runtime",
+    "privacy",
+    "security",
+    "performance"
+  ],
+  "supported_severities": [
+    "info",
+    "warning",
+    "critical"
+  ],
+  "rule_fields": {
+    "required": [
+      "rule_id",
+      "family",
+      "scope",
+      "category",
+      "severity",
+      "confidence",
+      "title",
+      "summary",
+      "match"
+    ],
+    "optional": [
+      "enabled",
+      "provenance_tags",
+      "recommendation",
+      "max_matches"
+    ]
+  }
+}

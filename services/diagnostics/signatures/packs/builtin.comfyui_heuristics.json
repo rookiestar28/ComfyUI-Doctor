@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "pack_id": "builtin.comfyui_heuristics",
+  "pack_version": "2026.02.26",
+  "enabled": true,
+  "description": "ComfyUI-aware heuristic hints for proactive diagnostics (F18). Diagnostic enrichment only; no malware verdicts.",
+  "provenance_tags": ["f18", "builtin", "comfyui-doctor"],
+  "rules": [
+    {
+      "rule_id": "placeholder_model_path_value",
+      "enabled": true,
+      "family": "model_path_anomaly",
+      "scope": "node_widget",
+      "category": "model",
+      "severity": "warning",
+      "confidence": 0.82,
+      "provenance_tags": ["model_path", "placeholder", "workflow_widget"],
+      "title": "Placeholder or Example Model Path",
+      "summary": "A loader node appears to use a placeholder/example model path or unresolved TODO value.",
+      "recommendation": [
+        "Replace placeholder text with a real installed model path or model selection.",
+        "Verify the model file exists in the expected ComfyUI models directory."
+      ],
+      "max_matches": 2,
+      "match": {
+        "node_types_any": ["CheckpointLoader", "CheckpointLoaderSimple", "VAELoader", "LoraLoader", "ControlNetLoader"],
+        "widget_contains_any": ["path/to/", "<model>", "change_me", "todo", "replace_me"]
+      }
+    },
+    {
+      "rule_id": "missing_asset_prompt_in_widget",
+      "enabled": true,
+      "family": "missing_asset_hint",
+      "scope": "node_widget",
+      "category": "deps",
+      "severity": "warning",
+      "confidence": 0.74,
+      "provenance_tags": ["asset_hint", "workflow_widget"],
+      "title": "Possible Missing Asset / Unconfigured Loader",
+      "summary": "A loader-related widget value contains text suggesting a missing file or an unconfigured asset.",
+      "recommendation": [
+        "Check the referenced model/asset exists and is selected in the loader node.",
+        "Re-open the node UI and confirm dropdown selections are not left in an error placeholder state."
+      ],
+      "max_matches": 2,
+      "match": {
+        "node_types_any": ["CheckpointLoader", "CheckpointLoaderSimple", "VAELoader", "LoraLoader", "ControlNetLoader", "CLIPVisionLoader", "UpscaleModelLoader"],
+        "widget_regex_any": [
+          "(?i)\\b(not found|missing|download .*model|select .*model|invalid path)\\b"
+        ]
+      }
+    },
+    {
+      "rule_id": "sampler_denoise_out_of_range",
+      "enabled": true,
+      "family": "node_config_antipattern",
+      "scope": "node_widget",
+      "category": "workflow",
+      "severity": "info",
+      "confidence": 0.68,
+      "provenance_tags": ["sampler", "denoise", "numeric_heuristic"],
+      "title": "Sampler Denoise Value Looks Out of Range",
+      "summary": "A sampler node has a denoise-like numeric value outside the typical 0.0-1.0 range.",
+      "recommendation": [
+        "Verify denoise/noise strength parameters are within the expected range for your sampler node.",
+        "If this is intentional, you can ignore this diagnostic hint."
+      ],
+      "max_matches": 3,
+      "match": {
+        "node_types_any": ["KSampler", "KSamplerAdvanced", "SamplerCustom", "SamplerCustomAdvanced"],
+        "widget_numeric": [
+          { "index": 6, "gt": 1.0, "name": "denoise" },
+          { "index": 6, "lt": 0.0, "name": "denoise" }
+        ]
+      }
+    },
+    {
+      "rule_id": "local_endpoint_cloud_model_name_mismatch",
+      "enabled": true,
+      "family": "environment_mismatch_hint",
+      "scope": "doctor_metadata",
+      "category": "env",
+      "severity": "info",
+      "confidence": 0.71,
+      "provenance_tags": ["doctor_metadata", "llm_endpoint", "model_name"],
+      "title": "LLM Endpoint / Model Naming Mismatch Hint",
+      "summary": "Doctor settings metadata suggests a local LLM endpoint but a cloud-style model name, which may indicate a configuration mismatch.",
+      "recommendation": [
+        "Verify the selected model name exists on the configured local endpoint (Ollama/LMStudio).",
+        "If you intended a cloud provider, check the Base URL setting."
+      ],
+      "max_matches": 1,
+      "match": {
+        "base_url_contains_any": ["localhost:11434", "127.0.0.1:11434", "localhost:1234", "127.0.0.1:1234"],
+        "llm_model_regex_any": ["(?i)^(gpt-|claude-|gemini|deepseek|grok)"]
+      }
+    }
+  ]
+}

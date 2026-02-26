@@ -92,6 +92,8 @@ class HealthIssue:
     recommendation: List[str] = field(default_factory=list)
     target: IssueTarget = field(default_factory=IssueTarget)
     status: IssueStatus = field(default=IssueStatus.OPEN)
+    # F18: Optional machine-readable enrichment metadata (e.g., signature pack provenance/confidence).
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -104,6 +106,7 @@ class HealthIssue:
             "recommendation": self.recommendation,
             "target": self.target.to_dict(),
             "status": self.status.value,
+            **({"metadata": self.metadata} if self.metadata else {}),
         }
 
     @staticmethod

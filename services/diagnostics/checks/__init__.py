@@ -79,6 +79,7 @@ def init_checks():
     from . import model_assets
     from . import privacy_security
     from . import runtime_performance
+    from . import signature_packs
 
     # Register all discovered checks
     for name, check_fn in _checks.items():
