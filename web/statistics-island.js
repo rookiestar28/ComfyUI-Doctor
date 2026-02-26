@@ -46,6 +46,35 @@ function isErrorBoundariesEnabled() {
 
 // T14: formatPatternName moved to utils/stats_logic.js
 
+function escapeRegexLiteral(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function deriveSuggestionText(ctx) {
+    const raw = ctx?.suggestion;
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (typeof raw === 'object') {
+        return raw.message || raw.summary || raw.actions?.join?.('\n') || '';
+    }
+    return '';
+}
+
+function buildFeedbackSeed({ stats }) {
+    const ctx = getWorkflowContext() || {};
+    const summary = (ctx.error_summary || ctx.last_error || ctx.error || '').trim();
+    const seedLine = (summary.split('\n').find(Boolean) || 'RuntimeError').slice(0, 180);
+    const topPatternId = stats?.top_patterns?.[0]?.pattern_id || 'community_user_feedback';
+    return {
+        patternId: String(topPatternId).toLowerCase().replace(/[^a-z0-9_.-]/g, '_').slice(0, 120) || 'community_user_feedback',
+        regex: escapeRegexLiteral(seedLine),
+        category: stats?.top_patterns?.[0]?.category || 'generic',
+        priority: 60,
+        suggestion: deriveSuggestionText(ctx),
+        errorContext: ctx,
+    };
+}
+
 // =========================================================
 // COMPONENTS
 // =========================================================
@@ -242,6 +271,171 @@ function ResolutionActions({ uiText, onStatusUpdate }) {
                 </div>
             ` : null}
         </div>
+    `;
+}
+
+function CommunityFeedbackSection({ uiText, stats }) {
+    const { html, useEffect, useMemo, useState } = preactModules;
+    const seed = useMemo(() => buildFeedbackSeed({ stats }), [stats]);
+
+    const [patternId, setPatternId] = useState(seed.patternId);
+    const [regexText, setRegexText] = useState(seed.regex);
+    const [category, setCategory] = useState(seed.category || 'generic');
+    const [priority, setPriority] = useState(String(seed.priority || 60));
+    const [suggestion, setSuggestion] = useState(seed.suggestion || '');
+    const [includeStats, setIncludeStats] = useState(true);
+    const [adminToken, setAdminToken] = useState('');
+    const [previewOutput, setPreviewOutput] = useState('');
+    const [previewMeta, setPreviewMeta] = useState(null);
+    const [status, setStatus] = useState(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        // Soft autofill only when fields are blank to avoid overwriting user edits.
+        if (!patternId) setPatternId(seed.patternId || 'community_user_feedback');
+        if (!regexText) setRegexText(seed.regex || 'RuntimeError');
+        if (!suggestion) setSuggestion(seed.suggestion || '');
+        if (!category) setCategory(seed.category || 'generic');
+    }, [seed, patternId, regexText, suggestion, category]);
+
+    const buildPayload = () => ({
+        pattern_candidate: {
+            id: patternId,
+            regex: regexText,
+            category,
+            priority: Number(priority || 60),
+            notes: 'Submitted via Doctor F16 Quick Community Feedback',
+        },
+        suggestion_candidate: {
+            language: 'en',
+            message: suggestion,
+        },
+        error_context: seed.errorContext || getWorkflowContext() || {},
+        include_stats: includeStats,
+        stats_snapshot: includeStats
+            ? { ...(stats || {}), time_range_days: 30 }
+            : null,
+    });
+
+    const renderFieldErrors = (fieldErrors) => {
+        if (!fieldErrors || typeof fieldErrors !== 'object') return '';
+        return Object.entries(fieldErrors)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('\n');
+    };
+
+    const handleAutofill = () => {
+        const fresh = buildFeedbackSeed({ stats });
+        setPatternId(fresh.patternId || 'community_user_feedback');
+        setRegexText(fresh.regex || 'RuntimeError');
+        setCategory(fresh.category || 'generic');
+        if (fresh.suggestion) setSuggestion(fresh.suggestion);
+        setStatus(null);
+    };
+
+    const handlePreview = async () => {
+        setLoadingPreview(true);
+        setStatus(null);
+        try {
+            const result = await DoctorAPI.previewCommunityFeedback(buildPayload());
+            if (result?.success) {
+                setPreviewMeta(result);
+                setPreviewOutput(JSON.stringify(result.preview, null, 2));
+                const warn = (result.warnings || []).length;
+                setStatus({ type: 'success', text: warn ? `Preview ready (${warn} warning${warn > 1 ? 's' : ''})` : 'Preview ready' });
+            } else {
+                setPreviewMeta(null);
+                const details = renderFieldErrors(result?.field_errors);
+                setPreviewOutput(details || '');
+                setStatus({ type: 'error', text: result?.error || 'Preview failed' });
+            }
+        } catch (e) {
+            setStatus({ type: 'error', text: e?.message || 'Preview failed' });
+        } finally {
+            setLoadingPreview(false);
+        }
+    };
+
+    const handleSubmit = async () => {
+        setSubmitting(true);
+        setStatus(null);
+        try {
+            const result = await DoctorAPI.submitCommunityFeedback(buildPayload(), adminToken);
+            if (result?.success) {
+                const prUrl = result?.github?.pr_url;
+                setStatus({ type: 'success', text: 'GitHub PR created', url: prUrl });
+                if (result.preview) {
+                    setPreviewOutput(JSON.stringify(result.preview, null, 2));
+                }
+            } else {
+                const details = renderFieldErrors(result?.field_errors);
+                if (details) setPreviewOutput(details);
+                setStatus({ type: 'error', text: result?.message || result?.error || 'Submit failed' });
+            }
+        } catch (e) {
+            setStatus({ type: 'error', text: e?.message || 'Submit failed' });
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return html`
+        <details id="doctor-feedback-panel" style="margin-top: 20px; border-top: 1px solid #444; padding-top: 12px;">
+            <summary style="cursor: pointer; color: #ccc; font-size: 13px; user-select: none;">
+                📨 ${uiText?.feedback_quick_title || 'Quick Community Feedback (GitHub PR)'}
+            </summary>
+            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-size: 11px; color: #888;">
+                    ${uiText?.feedback_quick_hint || 'Create a sanitized feedback PR with pattern candidate + verified suggestion. Server-side GitHub token required for submit.'}
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 110px; gap: 8px;">
+                    <input id="doctor-feedback-pattern-id" value=${patternId} onInput=${(e) => setPatternId(e.target.value)} placeholder="pattern id" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                    <select id="doctor-feedback-category" value=${category} onChange=${(e) => setCategory(e.target.value)} style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;">
+                        <option value="generic">generic</option>
+                        <option value="workflow">workflow</option>
+                        <option value="memory">memory</option>
+                        <option value="model_loading">model_loading</option>
+                        <option value="framework">framework</option>
+                        <option value="validation">validation</option>
+                        <option value="type">type</option>
+                        <option value="execution">execution</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 80px; gap: 8px;">
+                    <textarea id="doctor-feedback-pattern-regex" value=${regexText} onInput=${(e) => setRegexText(e.target.value)} rows="2" placeholder="Regex pattern" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
+                    <input id="doctor-feedback-priority" type="number" min="1" max="100" value=${priority} onInput=${(e) => setPriority(e.target.value)} placeholder="60" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                </div>
+                <textarea id="doctor-feedback-suggestion" value=${suggestion} onInput=${(e) => setSuggestion(e.target.value)} rows="3" placeholder="Verified suggestion / fix notes" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <label style="font-size:11px;color:#aaa;display:flex;align-items:center;gap:6px;">
+                        <input id="doctor-feedback-include-stats" type="checkbox" checked=${includeStats} onChange=${(e) => setIncludeStats(!!e.target.checked)} />
+                        Include statistics snapshot (30d)
+                    </label>
+                    <button id="doctor-feedback-autofill-btn" onClick=${handleAutofill} type="button" style="padding:5px 8px;background:#333;border:1px solid #444;border-radius:4px;color:#eee;font-size:11px;cursor:pointer;">↺ Autofill from latest error</button>
+                </div>
+                <input id="doctor-feedback-admin-token" type="password" value=${adminToken} onInput=${(e) => setAdminToken(e.target.value)} placeholder="Admin token (optional if loopback/no DOCTOR_ADMIN_TOKEN)" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                <div style="display:flex; gap:8px;">
+                    <button id="doctor-feedback-preview-btn" onClick=${handlePreview} disabled=${loadingPreview || submitting} style="flex:1;padding:8px;background:#2d6cdf;border:none;border-radius:4px;color:white;font-size:12px;cursor:${loadingPreview ? 'not-allowed' : 'pointer'};">
+                        ${loadingPreview ? '⏳ Previewing...' : 'Preview Sanitized Payload'}
+                    </button>
+                    <button id="doctor-feedback-submit-btn" onClick=${handleSubmit} disabled=${submitting || loadingPreview} style="flex:1;padding:8px;background:#2e7d32;border:none;border-radius:4px;color:white;font-size:12px;cursor:${submitting ? 'not-allowed' : 'pointer'};">
+                        ${submitting ? '⏳ Creating PR...' : 'Create GitHub PR'}
+                    </button>
+                </div>
+                <div id="doctor-feedback-status" style="font-size:11px; color:${status?.type === 'error' ? '#ff6b6b' : '#8bc34a'};">
+                    ${status?.url
+            ? html`<span>${status.text}: </span><a href=${status.url} target="_blank" rel="noopener noreferrer" style="color:#7db7ff;">${status.url}</a>`
+            : (status?.text || '')}
+                </div>
+                <pre id="doctor-feedback-preview-output" style="margin:0; max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-word; background:#161616; border:1px solid #333; border-radius:4px; padding:8px; color:#bbb; font-size:11px;">${previewOutput || 'Preview output will appear here.'}</pre>
+                ${previewMeta?.warnings?.length ? html`
+                    <div style="font-size:11px; color:#f0ad4e;">
+                        ${previewMeta.warnings.join(' | ')}
+                    </div>
+                ` : null}
+            </div>
+        </details>
     `;
 }
 
@@ -1046,6 +1240,9 @@ function StatisticsIsland({ uiText }) {
 
                 <!-- F15: Resolution Actions -->
                 <${ResolutionActions} uiText=${uiText} onStatusUpdate=${fetchStats} />
+
+                <!-- F16: Quick Community Feedback -->
+                <${CommunityFeedbackSection} uiText=${uiText} stats=${stats} />
 
                 <!-- Top Patterns -->
                 <${PatternList} patterns=${stats.top_patterns} uiText=${uiText} />

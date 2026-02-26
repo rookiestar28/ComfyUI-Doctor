@@ -11,6 +11,18 @@ import { DoctorAPI } from "../doctor_api.js";
 
 let isPreactMode = false;
 
+function escapeRegexLiteral(text) {
+    return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function deriveSuggestionText(ctx) {
+    const raw = ctx?.suggestion;
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (typeof raw === 'object') return raw.message || raw.summary || '';
+    return '';
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ISLAND REGISTRATION (5C.1)
 // ═══════════════════════════════════════════════════════════════
@@ -123,6 +135,48 @@ function renderVanilla(container) {
             <div class="category-breakdown" id="doctor-category-breakdown" style="margin-top: 20px;">
                 <h5>📁 ${doctorUI.getUIText('stats_categories') || 'Categories'}</h5>
             </div>
+            <details id="doctor-feedback-panel" style="margin-top: 20px; border-top: 1px solid #444; padding-top: 12px;">
+                <summary style="cursor: pointer; color: #ccc; font-size: 13px; user-select: none;">
+                    📨 ${doctorUI.getUIText('feedback_quick_title') || 'Quick Community Feedback (GitHub PR)'}
+                </summary>
+                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-size: 11px; color: #888;">
+                        ${doctorUI.getUIText('feedback_quick_hint') || 'Create a sanitized feedback PR with pattern candidate + verified suggestion. Server-side GitHub token required for submit.'}
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 110px; gap: 8px;">
+                        <input id="doctor-feedback-pattern-id" placeholder="pattern id" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                        <select id="doctor-feedback-category" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;">
+                            <option value="generic">generic</option>
+                            <option value="workflow">workflow</option>
+                            <option value="memory">memory</option>
+                            <option value="model_loading">model_loading</option>
+                            <option value="framework">framework</option>
+                            <option value="validation">validation</option>
+                            <option value="type">type</option>
+                            <option value="execution">execution</option>
+                        </select>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 80px; gap: 8px;">
+                        <textarea id="doctor-feedback-pattern-regex" rows="2" placeholder="Regex pattern" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
+                        <input id="doctor-feedback-priority" type="number" min="1" max="100" value="60" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                    </div>
+                    <textarea id="doctor-feedback-suggestion" rows="3" placeholder="Verified suggestion / fix notes" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <label style="font-size:11px;color:#aaa;display:flex;align-items:center;gap:6px;">
+                            <input id="doctor-feedback-include-stats" type="checkbox" checked />
+                            Include statistics snapshot (30d)
+                        </label>
+                        <button id="doctor-feedback-autofill-btn" type="button" style="padding:5px 8px;background:#333;border:1px solid #444;border-radius:4px;color:#eee;font-size:11px;cursor:pointer;">↺ Autofill from latest error</button>
+                    </div>
+                    <input id="doctor-feedback-admin-token" type="password" placeholder="Admin token (optional if loopback/no DOCTOR_ADMIN_TOKEN)" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                    <div style="display:flex; gap:8px;">
+                        <button id="doctor-feedback-preview-btn" style="flex:1;padding:8px;background:#2d6cdf;border:none;border-radius:4px;color:white;font-size:12px;cursor:pointer;">Preview Sanitized Payload</button>
+                        <button id="doctor-feedback-submit-btn" style="flex:1;padding:8px;background:#2e7d32;border:none;border-radius:4px;color:white;font-size:12px;cursor:pointer;">Create GitHub PR</button>
+                    </div>
+                    <div id="doctor-feedback-status" style="font-size:11px;color:#8bc34a;"></div>
+                    <pre id="doctor-feedback-preview-output" style="margin:0;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#161616;border:1px solid #333;border-radius:4px;padding:8px;color:#bbb;font-size:11px;">Preview output will appear here.</pre>
+                </div>
+            </details>
         </div>
         <!-- Trust & Health Section -->
         <div id="doctor-trust-health-panel" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 20px;">
@@ -164,6 +218,8 @@ function renderVanilla(container) {
 
     // Wire up Stats Reset button
     setupStatsResetHandler(statsPanel, doctorUI);
+    // Wire up F16 community feedback panel
+    setupCommunityFeedbackHandlers(statsPanel, doctorUI);
 
     // Wire up Trust & Health button
     setupTrustHealthHandlers(statsPanel, doctorUI);
@@ -230,6 +286,133 @@ function setupStatsResetHandler(container, doctorUI) {
             resetBtn.disabled = false;
             resetBtn.textContent = original;
             setTimeout(() => { messageDiv.style.display = 'none'; }, 3000);
+        }
+    });
+}
+
+function setupCommunityFeedbackHandlers(container, doctorUI) {
+    const patternIdInput = container.querySelector('#doctor-feedback-pattern-id');
+    const categorySelect = container.querySelector('#doctor-feedback-category');
+    const regexInput = container.querySelector('#doctor-feedback-pattern-regex');
+    const priorityInput = container.querySelector('#doctor-feedback-priority');
+    const suggestionInput = container.querySelector('#doctor-feedback-suggestion');
+    const includeStatsInput = container.querySelector('#doctor-feedback-include-stats');
+    const adminTokenInput = container.querySelector('#doctor-feedback-admin-token');
+    const autofillBtn = container.querySelector('#doctor-feedback-autofill-btn');
+    const previewBtn = container.querySelector('#doctor-feedback-preview-btn');
+    const submitBtn = container.querySelector('#doctor-feedback-submit-btn');
+    const statusDiv = container.querySelector('#doctor-feedback-status');
+    const previewOutput = container.querySelector('#doctor-feedback-preview-output');
+
+    if (!patternIdInput || !regexInput || !suggestionInput || !previewBtn || !submitBtn) return;
+
+    const getSeed = () => {
+        const ctx = doctorUI.lastErrorData || {};
+        const summary = (ctx.error_summary || ctx.last_error || ctx.error || '').trim();
+        const seedLine = (summary.split('\n').find(Boolean) || 'RuntimeError').slice(0, 180);
+        return {
+            patternId: 'community_user_feedback',
+            category: 'generic',
+            regex: escapeRegexLiteral(seedLine || 'RuntimeError'),
+            suggestion: deriveSuggestionText(ctx),
+            errorContext: ctx,
+        };
+    };
+
+    const setStatus = (text, type = 'success') => {
+        if (!statusDiv) return;
+        statusDiv.style.color = type === 'error' ? '#ff6b6b' : '#8bc34a';
+        statusDiv.innerHTML = text || '';
+    };
+
+    const buildPayload = async () => {
+        const includeStats = !!includeStatsInput?.checked;
+        let statsSnapshot = null;
+        if (includeStats) {
+            const statsResult = await DoctorAPI.getStatistics(30);
+            if (statsResult?.success) {
+                statsSnapshot = { ...(statsResult.statistics || {}), time_range_days: 30 };
+            }
+        }
+        return {
+            pattern_candidate: {
+                id: patternIdInput.value,
+                regex: regexInput.value,
+                category: categorySelect?.value || 'generic',
+                priority: Number(priorityInput?.value || 60),
+                notes: 'Submitted via Doctor F16 Quick Community Feedback',
+            },
+            suggestion_candidate: {
+                language: 'en',
+                message: suggestionInput.value,
+            },
+            error_context: (doctorUI.lastErrorData || {}),
+            include_stats: includeStats,
+            stats_snapshot: statsSnapshot,
+        };
+    };
+
+    const fillFromLatest = () => {
+        const seed = getSeed();
+        if (!patternIdInput.value) patternIdInput.value = seed.patternId;
+        patternIdInput.value = seed.patternId;
+        categorySelect.value = seed.category;
+        regexInput.value = seed.regex;
+        if (seed.suggestion) suggestionInput.value = seed.suggestion;
+        if (previewOutput) previewOutput.textContent = 'Preview output will appear here.';
+        setStatus('');
+    };
+
+    autofillBtn?.addEventListener('click', fillFromLatest);
+    fillFromLatest();
+
+    previewBtn.addEventListener('click', async () => {
+        previewBtn.disabled = true;
+        submitBtn.disabled = true;
+        setStatus('Previewing...');
+        try {
+            const payload = await buildPayload();
+            const result = await DoctorAPI.previewCommunityFeedback(payload);
+            if (result?.success) {
+                if (previewOutput) previewOutput.textContent = JSON.stringify(result.preview, null, 2);
+                const warnings = (result.warnings || []).join(' | ');
+                setStatus(warnings ? `Preview ready (${warnings})` : 'Preview ready');
+            } else {
+                if (previewOutput) previewOutput.textContent = JSON.stringify(result?.field_errors || result || {}, null, 2);
+                setStatus(result?.error || 'Preview failed', 'error');
+            }
+        } catch (e) {
+            setStatus(e?.message || 'Preview failed', 'error');
+        } finally {
+            previewBtn.disabled = false;
+            submitBtn.disabled = false;
+        }
+    });
+
+    submitBtn.addEventListener('click', async () => {
+        previewBtn.disabled = true;
+        submitBtn.disabled = true;
+        setStatus('Creating GitHub PR...');
+        try {
+            const payload = await buildPayload();
+            const result = await DoctorAPI.submitCommunityFeedback(payload, adminTokenInput?.value || '');
+            if (result?.success) {
+                const prUrl = result?.github?.pr_url;
+                if (prUrl) {
+                    setStatus(`GitHub PR created: <a href="${prUrl}" target="_blank" rel="noopener noreferrer" style="color:#7db7ff;">${prUrl}</a>`);
+                } else {
+                    setStatus('GitHub PR created');
+                }
+                if (previewOutput && result.preview) previewOutput.textContent = JSON.stringify(result.preview, null, 2);
+            } else {
+                if (previewOutput) previewOutput.textContent = JSON.stringify(result?.field_errors || result || {}, null, 2);
+                setStatus(result?.message || result?.error || 'Submit failed', 'error');
+            }
+        } catch (e) {
+            setStatus(e?.message || 'Submit failed', 'error');
+        } finally {
+            previewBtn.disabled = false;
+            submitBtn.disabled = false;
         }
     });
 }

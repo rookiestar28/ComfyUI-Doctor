@@ -300,6 +300,47 @@ export const DoctorAPI = {
         }
     },
 
+    /**
+     * F16: Preview sanitized community feedback payload before GitHub PR submission.
+     * @param {Object} payload
+     * @returns {Promise<{success:boolean, preview?:Object, field_errors?:Object}>}
+     */
+    async previewCommunityFeedback(payload) {
+        try {
+            const response = await fetch('/doctor/feedback/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload || {})
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to preview community feedback:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
+     * F16: Submit community feedback and create GitHub PR (server-side token).
+     * @param {Object} payload
+     * @param {string} [adminToken]
+     * @returns {Promise<{success:boolean, github?:Object, field_errors?:Object}>}
+     */
+    async submitCommunityFeedback(payload, adminToken) {
+        try {
+            const body = { ...(payload || {}) };
+            if (adminToken) body.admin_token = adminToken;
+            const response = await fetch('/doctor/feedback/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('[ComfyUI-Doctor] Failed to submit community feedback:', error);
+            return { success: false, error: error.message };
+        }
+    },
+
     // ---- S8: Secrets API ----
 
     /**

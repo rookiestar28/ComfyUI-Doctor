@@ -64,6 +64,8 @@ from .services.doctor_paths import get_doctor_data_dir
 from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
 from .services.admin_guard import validate_admin_request
+from .services.audit import ActionAudit
+from .services.community_feedback import build_feedback_preview, submit_feedback, GitHubFeedbackConfig, FeedbackValidationError
 
 # Global R12 Service
 TOKEN_BUDGET_SERVICE = TokenBudgetService()
@@ -2445,6 +2447,86 @@ try:
             logger.error(f"Mark resolved API error: {str(e)}")
             return web.json_response({"success": False, "message": str(e)}, status=500)
 
+    # ---- F16: Quick Community Feedback (GitHub PR) ----
+
+    @server.PromptServer.instance.routes.post("/doctor/feedback/preview")
+    async def api_feedback_preview(request):
+        """
+        F16 preview endpoint (read-only): validate + sanitize community feedback payload.
+        Returns sanitized preview and GitHub config readiness (without exposing token).
+        """
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+
+        try:
+            preview = build_feedback_preview(data, github_config=GitHubFeedbackConfig.from_env())
+            return web.json_response({"success": True, **preview})
+        except FeedbackValidationError as e:
+            return web.json_response(
+                {
+                    "success": False,
+                    "error": str(e),
+                    "field_errors": getattr(e, "field_errors", {}) or {},
+                },
+                status=400,
+            )
+        except Exception as e:
+            logger.error(f"Feedback preview API error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    @server.PromptServer.instance.routes.post("/doctor/feedback/submit")
+    async def api_feedback_submit(request):
+        """
+        F16 submit endpoint (write-sensitive): create GitHub PR with append-only feedback JSON files.
+        Admin-gated (loopback convenience mode allowed when no admin token is configured).
+        """
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+
+        # IMPORTANT: write-sensitive endpoint must remain admin-gated.
+        allowed, code, message = validate_admin_request(request, payload=data)
+        if not allowed:
+            status_code = 401 if code == "unauthorized" else 403
+            return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+
+        try:
+            result = await submit_feedback(data, github_config=GitHubFeedbackConfig.from_env())
+
+            # Best-effort redacted audit log (server-side only; no secrets recorded)
+            try:
+                audit = ActionAudit(Path(get_doctor_data_dir()))
+                audit.log_action(
+                    provider="github",
+                    action="feedback_pr_submit",
+                    decision="allow",
+                    meta={
+                        "submission_id": result.get("submission_id"),
+                        "repo": ((result.get("github") or {}).get("repo")),
+                        "branch": ((result.get("github") or {}).get("branch")),
+                        "pr_url": ((result.get("github") or {}).get("pr_url")),
+                    },
+                )
+            except Exception as audit_err:
+                logger.warning(f"Feedback audit log failed: {audit_err}")
+
+            return web.json_response({"success": True, **result})
+        except FeedbackValidationError as e:
+            return web.json_response(
+                {
+                    "success": False,
+                    "error": str(e),
+                    "field_errors": getattr(e, "field_errors", {}) or {},
+                },
+                status=400,
+            )
+        except Exception as e:
+            logger.error(f"Feedback submit API error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
     @server.PromptServer.instance.routes.get("/doctor/health")
     async def api_health(request):
         """
@@ -2830,6 +2912,8 @@ try:
     print("  - DELETE /doctor/secrets/{provider} (S8)")
     print("  - GET  /doctor/statistics (F4)")
     print("  - POST /doctor/mark_resolved (F4)")
+    print("  - POST /doctor/feedback/preview (F16)")
+    print("  - POST /doctor/feedback/submit (F16)")
     print("  - GET  /doctor/health")
     print("  - GET  /doctor/plugins")
     print("  - GET  /doctor/telemetry/status (S3)")

@@ -156,42 +156,7 @@ export function render(container) {
                 <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="${doctorUI.getUIText('api_key_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
                 <div style="font-size: 11px; color: #888; margin-top: 4px;">⚡ Session-only — cleared on reload. Use Advanced Key Store below to persist.</div>
             </div>
-            <div>
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">${doctorUI.getUIText('model_name_label')}</label>
-                <div style="display: flex; gap: 5px; align-items: center;">
-                    <select id="doctor-model-select" style="flex: 1; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;">
-                        <option value="">${doctorUI.getUIText('loading_models')}</option>
-                    </select>
-                    <button id="doctor-refresh-models-btn" style="padding: 8px 12px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 13px;" title="Refresh model list">🔄</button>
-                </div>
-                <div style="margin-top: 5px;">
-                    <label style="font-size: 12px; color: #888; cursor: pointer;">
-                        <input type="checkbox" id="doctor-manual-model-toggle" style="margin-right: 3px;">
-                        ${doctorUI.getUIText('enter_model_manually')}
-                    </label>
-                </div>
-                <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="${doctorUI.getUIText('model_manual_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
-            </div>
-            <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
-                <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; color: #aaa; margin-bottom: 5px;">
-                    🔒 <span id="doctor-privacy-label">${doctorUI.getUIText('privacy_mode')}</span>
-                </label>
-                <select id="doctor-privacy-select" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
-                    <option value="none" ${currentPrivacyMode === 'none' ? 'selected' : ''} id="privacy-none-option">${doctorUI.getUIText('privacy_mode_none')}</option>
-                    <option value="basic" ${currentPrivacyMode === 'basic' ? 'selected' : ''} id="privacy-basic-option">${doctorUI.getUIText('privacy_mode_basic')}</option>
-                    <option value="strict" ${currentPrivacyMode === 'strict' ? 'selected' : ''} id="privacy-strict-option">${doctorUI.getUIText('privacy_mode_strict')}</option>
-                </select>
-                <div id="doctor-privacy-hint" style="font-size: 12px; color: #888; margin-top: 5px;">${doctorUI.getUIText('privacy_mode_hint')}</div>
-            </div>
-            <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; cursor: pointer;">
-                    <input type="checkbox" id="doctor-auto-open-toggle" ${currentAutoOpenOnError ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
-                    <span>${doctorUI.getUIText('auto_open_on_error_label') || 'Auto-open error report panel on new errors'}</span>
-                </label>
-                <div style="font-size: 12px; color: #888; margin-top: 5px; margin-left: 24px;">${doctorUI.getUIText('auto_open_on_error_hint') || 'When enabled, the right-side error report panel will automatically open when a new error is detected'}</div>
-            </div>
-            <button id="doctor-save-settings-btn" style="width: 100%; padding: 10px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px;">💾 ${doctorUI.getUIText('save_settings_btn')}</button>
-            <details id="doctor-key-store-section" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 15px;">
+            <details id="doctor-key-store-section" style="border-top: 1px solid #444; padding-top: 12px; margin-top: -3px;">
                 <summary style="cursor: pointer; font-size: 13px; color: #aaa; user-select: none;">🔐 Advanced Key Store (Server-side)</summary>
                 <div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 6px; border: 1px solid #333;">
                     <div style="font-size: 11px; color: #f0ad4e; margin-bottom: 10px; line-height: 1.4; padding: 8px; background: rgba(240,173,78,0.1); border-radius: 4px;">
@@ -229,6 +194,41 @@ export function render(container) {
                     </div>
                 </div>
             </details>
+            <div>
+                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">${doctorUI.getUIText('model_name_label')}</label>
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <select id="doctor-model-select" style="flex: 1; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;">
+                        <option value="">${doctorUI.getUIText('loading_models')}</option>
+                    </select>
+                    <button id="doctor-refresh-models-btn" style="padding: 8px 12px; background: #333; border: 1px solid #444; border-radius: 4px; color: #eee; cursor: pointer; font-size: 13px;" title="Refresh model list">🔄</button>
+                </div>
+                <div style="margin-top: 5px;">
+                    <label style="font-size: 12px; color: #888; cursor: pointer;">
+                        <input type="checkbox" id="doctor-manual-model-toggle" style="margin-right: 3px;">
+                        ${doctorUI.getUIText('enter_model_manually')}
+                    </label>
+                </div>
+                <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="${doctorUI.getUIText('model_manual_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
+            </div>
+            <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
+                <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; color: #aaa; margin-bottom: 5px;">
+                    🔒 <span id="doctor-privacy-label">${doctorUI.getUIText('privacy_mode')}</span>
+                </label>
+                <select id="doctor-privacy-select" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
+                    <option value="none" ${currentPrivacyMode === 'none' ? 'selected' : ''} id="privacy-none-option">${doctorUI.getUIText('privacy_mode_none')}</option>
+                    <option value="basic" ${currentPrivacyMode === 'basic' ? 'selected' : ''} id="privacy-basic-option">${doctorUI.getUIText('privacy_mode_basic')}</option>
+                    <option value="strict" ${currentPrivacyMode === 'strict' ? 'selected' : ''} id="privacy-strict-option">${doctorUI.getUIText('privacy_mode_strict')}</option>
+                </select>
+                <div id="doctor-privacy-hint" style="font-size: 12px; color: #888; margin-top: 5px;">${doctorUI.getUIText('privacy_mode_hint')}</div>
+            </div>
+            <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; cursor: pointer;">
+                    <input type="checkbox" id="doctor-auto-open-toggle" ${currentAutoOpenOnError ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+                    <span>${doctorUI.getUIText('auto_open_on_error_label') || 'Auto-open error report panel on new errors'}</span>
+                </label>
+                <div style="font-size: 12px; color: #888; margin-top: 5px; margin-left: 24px;">${doctorUI.getUIText('auto_open_on_error_hint') || 'When enabled, the right-side error report panel will automatically open when a new error is detected'}</div>
+            </div>
+            <button id="doctor-save-settings-btn" style="width: 100%; padding: 10px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px;">💾 ${doctorUI.getUIText('save_settings_btn')}</button>
         </div>
     `;
     container.appendChild(settingsPanel);

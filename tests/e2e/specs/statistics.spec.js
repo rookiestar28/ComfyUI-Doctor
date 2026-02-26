@@ -559,6 +559,140 @@ test.describe('Statistics Dashboard', () => {
     });
   });
 
+  // F16: Quick Community Feedback (GitHub PR)
+  test('should preview and submit quick community feedback from statistics tab', async ({ page }) => {
+    let previewCalled = false;
+    let submitCalled = false;
+    let previewBody = null;
+    let submitBody = null;
+
+    await page.route('**/doctor/feedback/preview', async route => {
+      previewCalled = true;
+      previewBody = JSON.parse(route.request().postData() || '{}');
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          submission_id: '20260226_123456_deadbeef00',
+          include_stats: true,
+          files: {
+            submission: 'feedback/submissions/20260226/20260226_123456_deadbeef00.json',
+            stats: 'feedback/stats/20260226/20260226_123456_deadbeef00.json'
+          },
+          warnings: [],
+          github: { ready: true, repo: 'rookiestar28/ComfyUI-Doctor' },
+          preview: {
+            schema_version: '1.0',
+            pattern_candidate: {
+              id: 'community_user_feedback',
+              regex: 'RuntimeError',
+              category: 'generic',
+              priority: 60
+            },
+            suggestion_candidate: { language: 'en', message: 'Test suggestion' },
+            context: { error_summary: 'RuntimeError: mock' }
+          }
+        })
+      });
+    });
+
+    await page.route('**/doctor/feedback/submit', async route => {
+      submitCalled = true;
+      submitBody = JSON.parse(route.request().postData() || '{}');
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          submission_id: '20260226_123456_deadbeef00',
+          files: {
+            submission: 'feedback/submissions/20260226/20260226_123456_deadbeef00.json',
+            stats: 'feedback/stats/20260226/20260226_123456_deadbeef00.json'
+          },
+          preview: {
+            schema_version: '1.0',
+            pattern_candidate: { id: 'community_user_feedback' }
+          },
+          warnings: [],
+          github: {
+            ready: true,
+            repo: 'rookiestar28/ComfyUI-Doctor',
+            branch: 'feedback/20260226/20260226_123456_deadbeef00',
+            pr_number: 123,
+            pr_url: 'https://github.com/rookiestar28/ComfyUI-Doctor/pull/123'
+          }
+        })
+      });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(250);
+
+    // Seed latest error context for autofill payload
+    await page.evaluate(() => {
+      const doctor = window.app?.Doctor;
+      doctor?.handleNewError?.({
+        last_error: 'RuntimeError: mock tensor mismatch',
+        error_summary: 'RuntimeError: mock',
+        suggestion: 'Test suggestion',
+        timestamp: '2026-02-26T12:00:00Z',
+        node_context: { node_id: '12', node_name: 'KSampler' }
+      });
+    });
+
+    const feedbackPanel = page.locator('#doctor-feedback-panel');
+    await feedbackPanel.locator('summary').click();
+    await expect(feedbackPanel).toBeVisible();
+
+    await page.fill('#doctor-feedback-suggestion', 'Test suggestion');
+
+    await page.click('#doctor-feedback-preview-btn');
+    await page.waitForTimeout(200);
+
+    expect(previewCalled).toBe(true);
+    expect(previewBody.pattern_candidate.id).toBeTruthy();
+    expect(previewBody.suggestion_candidate.message).toBe('Test suggestion');
+    await expect(page.locator('#doctor-feedback-preview-output')).toContainText('schema_version');
+
+    await page.click('#doctor-feedback-submit-btn');
+    await page.waitForTimeout(200);
+
+    expect(submitCalled).toBe(true);
+    expect(submitBody.pattern_candidate).toBeTruthy();
+    await expect(page.locator('#doctor-feedback-status')).toContainText('GitHub PR created');
+    await expect(page.locator('#doctor-feedback-status a')).toHaveAttribute('href', /pull\/123$/);
+  });
+
+  test('should show validation error for invalid quick community feedback preview', async ({ page }) => {
+    await page.route('**/doctor/feedback/preview', async route => {
+      route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          error: 'Invalid regex',
+          field_errors: { 'pattern_candidate.regex': 'missing or invalid' }
+        })
+      });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(250);
+
+    const feedbackPanel = page.locator('#doctor-feedback-panel');
+    await feedbackPanel.locator('summary').click();
+
+    await page.fill('#doctor-feedback-pattern-regex', '');
+    await page.fill('#doctor-feedback-suggestion', 'test');
+
+    await page.click('#doctor-feedback-preview-btn');
+    await page.waitForTimeout(200);
+
+    await expect(page.locator('#doctor-feedback-status')).toContainText('Invalid regex');
+    await expect(page.locator('#doctor-feedback-preview-output')).toContainText('pattern_candidate.regex');
+  });
+
   // ════════════════════════════════════════════════════════════════════════
   // Trust & Health Tests (Moved from Settings tab - 260115 Plan)
   // ════════════════════════════════════════════════════════════════════════
