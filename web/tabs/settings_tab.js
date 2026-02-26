@@ -105,9 +105,8 @@ export function render(container) {
     // S8: Migration notice — show once per session when legacy key was imported
     const migrationNotice = (app.Doctor && app.Doctor.legacyApiKeyMigrated)
         ? `<div style="padding: 10px; margin-bottom: 15px; background: rgba(33,150,243,0.12); border: 1px solid #2196f3; border-radius: 6px; font-size: 12px; color: #90caf9; line-height: 1.5;">
-            ℹ️ <strong>API Key Migrated</strong><br>
-            Your previously saved API key has been moved to session memory and cleared from stored settings.<br>
-            For permanent storage, use <code>DOCTOR_LLM_API_KEY</code> environment variable or the <strong>Advanced Key Store</strong> below.
+            <strong>${doctorUI.getUIText('api_key_migrated_title') || 'ℹ️ API Key Migrated'}</strong><br>
+            ${doctorUI.getUIText('api_key_migrated_notice') || 'Your previously saved API key has been moved to session memory and cleared from stored settings.<br>For permanent storage, use <code>DOCTOR_LLM_API_KEY</code> environment variable or the <strong>Advanced Key Store</strong> below.'}
            </div>`
         : '';
 
@@ -154,18 +153,17 @@ export function render(container) {
                     </span>
                 </label>
                 <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="${doctorUI.getUIText('api_key_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">⚡ Session-only — cleared on reload. Use Advanced Key Store below to persist.</div>
+                <div style="font-size: 11px; color: #888; margin-top: 4px;">${doctorUI.getUIText('api_key_session_only_hint') || '⚡ Session-only — cleared on reload. Use Advanced Key Store below to persist.'}</div>
             </div>
             <details id="doctor-key-store-section" style="border-top: 1px solid #444; padding-top: 12px; margin-top: -3px;">
-                <summary style="cursor: pointer; font-size: 13px; color: #aaa; user-select: none;">🔐 Advanced Key Store (Server-side)</summary>
+                <summary style="cursor: pointer; font-size: 13px; color: #aaa; user-select: none;">${doctorUI.getUIText('keystore_title') || '🔐 Advanced Key Store (Server-side)'}</summary>
                 <div style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 6px; border: 1px solid #333;">
                     <div style="font-size: 11px; color: #f0ad4e; margin-bottom: 10px; line-height: 1.4; padding: 8px; background: rgba(240,173,78,0.1); border-radius: 4px;">
-                        ⚠️ Server store saves keys as plaintext JSON on disk (protected by OS file permissions).<br>
-                        ENV vars always take higher priority. Use only in trusted localhost/single-user environments.
+                        ${doctorUI.getUIText('keystore_warning') || '⚠️ Server store saves keys as plaintext JSON on disk (protected by OS file permissions).<br>ENV vars always take higher priority. Use only in trusted localhost/single-user environments.'}
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
                         <div>
-                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Provider</label>
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">${doctorUI.getUIText('keystore_provider_label') || 'Provider'}</label>
                             <select id="doctor-keystore-provider" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px;">
                                 <option value="openai">OpenAI</option>
                                 <option value="anthropic">Anthropic</option>
@@ -174,20 +172,20 @@ export function render(container) {
                                 <option value="gemini">Google Gemini</option>
                                 <option value="xai">xAI</option>
                                 <option value="openrouter">OpenRouter</option>
-                                <option value="generic">Generic (fallback)</option>
+                                <option value="generic">${doctorUI.getUIText('keystore_provider_generic_option') || 'Generic (fallback)'}</option>
                             </select>
                         </div>
                         <div>
-                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">API Key</label>
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">${doctorUI.getUIText('keystore_api_key_label') || 'API Key'}</label>
                             <input type="password" id="doctor-keystore-key" placeholder="sk-..." style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px; box-sizing: border-box;" />
                         </div>
                         <div>
-                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">Admin Token (if configured)</label>
-                            <input type="password" id="doctor-keystore-admin" placeholder="optional" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px; box-sizing: border-box;" />
+                            <label style="display: block; font-size: 12px; color: #888; margin-bottom: 4px;">${doctorUI.getUIText('keystore_admin_token_label') || 'Admin Token (if configured)'}</label>
+                            <input type="password" id="doctor-keystore-admin" placeholder="${doctorUI.getUIText('keystore_admin_token_placeholder') || 'optional'}" style="width: 100%; padding: 6px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px; box-sizing: border-box;" />
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button id="doctor-keystore-save-btn" style="flex: 1; padding: 8px; background: #2196f3; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">💾 Save to Server</button>
-                            <button id="doctor-keystore-delete-btn" style="flex: 1; padding: 8px; background: #e53935; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                            <button id="doctor-keystore-save-btn" style="flex: 1; padding: 8px; background: #2196f3; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">${doctorUI.getUIText('keystore_save_btn') || '💾 Save to Server'}</button>
+                            <button id="doctor-keystore-delete-btn" style="flex: 1; padding: 8px; background: #e53935; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">${doctorUI.getUIText('keystore_delete_btn') || '🗑️ Delete'}</button>
                         </div>
                         <div id="doctor-keystore-status" style="font-size: 11px; color: #888; margin-top: 4px;"></div>
                         <div id="doctor-keystore-providers-grid" style="margin-top: 8px;"></div>
@@ -434,11 +432,11 @@ export function render(container) {
         if (!keystoreGrid || !providers) return;
         const entries = Object.entries(providers);
         if (!entries.length) {
-            keystoreGrid.innerHTML = '<div style="font-size: 11px; color: #666;">No providers configured.</div>';
+            keystoreGrid.innerHTML = `<div style="font-size: 11px; color: #666;">${doctorUI.getUIText('keystore_no_providers') || 'No providers configured.'}</div>`;
             return;
         }
         keystoreGrid.innerHTML = `
-            <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Provider Status:</div>
+            <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">${doctorUI.getUIText('keystore_provider_status') || 'Provider Status:'}</div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
                 ${entries.map(([id, info]) => {
             const badge = SOURCE_BADGES[info.source] || SOURCE_BADGES.none;
@@ -477,25 +475,26 @@ export function render(container) {
             const key = keystoreKeyInput?.value?.trim();
             const adminToken = keystoreAdminInput?.value?.trim() || '';
             if (!provider || !key) {
-                keystoreStatus.innerHTML = '<span style="color: #f0ad4e;">Provider and API Key are required.</span>';
+                keystoreStatus.innerHTML = `<span style="color: #f0ad4e;">${doctorUI.getUIText('keystore_status_required') || 'Provider and API Key are required.'}</span>`;
                 return;
             }
             keystoreSaveBtn.disabled = true;
-            keystoreSaveBtn.textContent = '⏳ Saving...';
+            keystoreSaveBtn.textContent = doctorUI.getUIText('keystore_saving_btn') || '⏳ Saving...';
             try {
                 const result = await DoctorAPI.saveSecret(provider, key, adminToken);
                 if (result.success) {
-                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">✅ Saved ${provider} key to server.</span>`;
+                    const successText = doctorUI.getUIText('keystore_save_success') || '✅ Saved {0} key to server.';
+                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">${successText.replace('{0}', provider)}</span>`;
                     keystoreKeyInput.value = '';
                     await loadKeystoreStatus();
                 } else {
-                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || 'Save failed'}</span>`;
+                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || doctorUI.getUIText('keystore_save_failed') || 'Save failed'}</span>`;
                 }
             } catch (e) {
                 keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${e.message}</span>`;
             }
             keystoreSaveBtn.disabled = false;
-            keystoreSaveBtn.textContent = '💾 Save to Server';
+            keystoreSaveBtn.textContent = doctorUI.getUIText('keystore_save_btn') || '💾 Save to Server';
         };
     }
 
@@ -504,22 +503,24 @@ export function render(container) {
             const provider = keystoreProviderSelect?.value;
             const adminToken = keystoreAdminInput?.value?.trim() || '';
             if (!provider) return;
-            if (!confirm(`Delete server-stored key for "${provider}"?`)) return;
+            const confirmMsg = doctorUI.getUIText('keystore_delete_confirm') || 'Delete server-stored key for "{0}"?';
+            if (!confirm(confirmMsg.replace('{0}', provider))) return;
             keystoreDeleteBtn.disabled = true;
-            keystoreDeleteBtn.textContent = '⏳ Deleting...';
+            keystoreDeleteBtn.textContent = doctorUI.getUIText('keystore_deleting_btn') || '⏳ Deleting...';
             try {
                 const result = await DoctorAPI.clearSecret(provider, adminToken);
                 if (result.success) {
-                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">✅ Deleted ${provider} key.</span>`;
+                    const successText = doctorUI.getUIText('keystore_delete_success') || '✅ Deleted {0} key.';
+                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">${successText.replace('{0}', provider)}</span>`;
                     await loadKeystoreStatus();
                 } else {
-                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || 'Delete failed'}</span>`;
+                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || doctorUI.getUIText('keystore_delete_failed') || 'Delete failed'}</span>`;
                 }
             } catch (e) {
                 keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${e.message}</span>`;
             }
             keystoreDeleteBtn.disabled = false;
-            keystoreDeleteBtn.textContent = '🗑️ Delete';
+            keystoreDeleteBtn.textContent = doctorUI.getUIText('keystore_delete_btn') || '🗑️ Delete';
         };
     }
 }

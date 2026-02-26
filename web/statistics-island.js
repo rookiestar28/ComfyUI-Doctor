@@ -343,15 +343,18 @@ function CommunityFeedbackSection({ uiText, stats }) {
                 setPreviewMeta(result);
                 setPreviewOutput(JSON.stringify(result.preview, null, 2));
                 const warn = (result.warnings || []).length;
-                setStatus({ type: 'success', text: warn ? `Preview ready (${warn} warning${warn > 1 ? 's' : ''})` : 'Preview ready' });
+                const warnMsg = uiText?.feedback_preview_ready_warnings
+                    ? uiText.feedback_preview_ready_warnings.replace('{0}', warn)
+                    : `Preview ready (${warn} warning${warn > 1 ? 's' : ''})`;
+                setStatus({ type: 'success', text: warn ? warnMsg : (uiText?.feedback_preview_ready || 'Preview ready') });
             } else {
                 setPreviewMeta(null);
                 const details = renderFieldErrors(result?.field_errors);
                 setPreviewOutput(details || '');
-                setStatus({ type: 'error', text: result?.error || 'Preview failed' });
+                setStatus({ type: 'error', text: result?.error || uiText?.feedback_preview_failed || 'Preview failed' });
             }
         } catch (e) {
-            setStatus({ type: 'error', text: e?.message || 'Preview failed' });
+            setStatus({ type: 'error', text: e?.message || uiText?.feedback_preview_failed || 'Preview failed' });
         } finally {
             setLoadingPreview(false);
         }
@@ -364,17 +367,17 @@ function CommunityFeedbackSection({ uiText, stats }) {
             const result = await DoctorAPI.submitCommunityFeedback(buildPayload(), adminToken);
             if (result?.success) {
                 const prUrl = result?.github?.pr_url;
-                setStatus({ type: 'success', text: 'GitHub PR created', url: prUrl });
+                setStatus({ type: 'success', text: uiText?.feedback_submit_success || 'GitHub PR created', url: prUrl });
                 if (result.preview) {
                     setPreviewOutput(JSON.stringify(result.preview, null, 2));
                 }
             } else {
                 const details = renderFieldErrors(result?.field_errors);
                 if (details) setPreviewOutput(details);
-                setStatus({ type: 'error', text: result?.message || result?.error || 'Submit failed' });
+                setStatus({ type: 'error', text: result?.message || result?.error || uiText?.feedback_submit_failed || 'Submit failed' });
             }
         } catch (e) {
-            setStatus({ type: 'error', text: e?.message || 'Submit failed' });
+            setStatus({ type: 'error', text: e?.message || uiText?.feedback_submit_failed || 'Submit failed' });
         } finally {
             setSubmitting(false);
         }
@@ -390,7 +393,7 @@ function CommunityFeedbackSection({ uiText, stats }) {
                     ${uiText?.feedback_quick_hint || 'Create a sanitized feedback PR with pattern candidate + verified suggestion. Server-side GitHub token required for submit.'}
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 110px; gap: 8px;">
-                    <input id="doctor-feedback-pattern-id" value=${patternId} onInput=${(e) => setPatternId(e.target.value)} placeholder="pattern id" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                    <input id="doctor-feedback-pattern-id" value=${patternId} onInput=${(e) => setPatternId(e.target.value)} placeholder=${uiText?.feedback_pattern_id_placeholder || "pattern id"} style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
                     <select id="doctor-feedback-category" value=${category} onChange=${(e) => setCategory(e.target.value)} style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;">
                         <option value="generic">generic</option>
                         <option value="workflow">workflow</option>
@@ -403,24 +406,24 @@ function CommunityFeedbackSection({ uiText, stats }) {
                     </select>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 80px; gap: 8px;">
-                    <textarea id="doctor-feedback-pattern-regex" value=${regexText} onInput=${(e) => setRegexText(e.target.value)} rows="2" placeholder="Regex pattern" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
+                    <textarea id="doctor-feedback-pattern-regex" value=${regexText} onInput=${(e) => setRegexText(e.target.value)} rows="2" placeholder=${uiText?.feedback_regex_placeholder || "Regex pattern"} style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
                     <input id="doctor-feedback-priority" type="number" min="1" max="100" value=${priority} onInput=${(e) => setPriority(e.target.value)} placeholder="60" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
                 </div>
-                <textarea id="doctor-feedback-suggestion" value=${suggestion} onInput=${(e) => setSuggestion(e.target.value)} rows="3" placeholder="Verified suggestion / fix notes" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
+                <textarea id="doctor-feedback-suggestion" value=${suggestion} onInput=${(e) => setSuggestion(e.target.value)} rows="3" placeholder=${uiText?.feedback_suggestion_placeholder || "Verified suggestion / fix notes"} style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;resize:vertical;"></textarea>
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                     <label style="font-size:11px;color:#aaa;display:flex;align-items:center;gap:6px;">
                         <input id="doctor-feedback-include-stats" type="checkbox" checked=${includeStats} onChange=${(e) => setIncludeStats(!!e.target.checked)} />
-                        Include statistics snapshot (30d)
+                        ${uiText?.feedback_include_stats_label || 'Include statistics snapshot (30d)'}
                     </label>
-                    <button id="doctor-feedback-autofill-btn" onClick=${handleAutofill} type="button" style="padding:5px 8px;background:#333;border:1px solid #444;border-radius:4px;color:#eee;font-size:11px;cursor:pointer;">↺ Autofill from latest error</button>
+                    <button id="doctor-feedback-autofill-btn" onClick=${handleAutofill} type="button" style="padding:5px 8px;background:#333;border:1px solid #444;border-radius:4px;color:#eee;font-size:11px;cursor:pointer;">${uiText?.feedback_autofill_btn || '↺ Autofill from latest error'}</button>
                 </div>
-                <input id="doctor-feedback-admin-token" type="password" value=${adminToken} onInput=${(e) => setAdminToken(e.target.value)} placeholder="Admin token (optional if loopback/no DOCTOR_ADMIN_TOKEN)" style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
+                <input id="doctor-feedback-admin-token" type="password" value=${adminToken} onInput=${(e) => setAdminToken(e.target.value)} placeholder=${uiText?.feedback_admin_token_placeholder || "Admin token (optional if loopback/no DOCTOR_ADMIN_TOKEN)"} style="padding:6px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;font-size:12px;" />
                 <div style="display:flex; gap:8px;">
                     <button id="doctor-feedback-preview-btn" onClick=${handlePreview} disabled=${loadingPreview || submitting} style="flex:1;padding:8px;background:#2d6cdf;border:none;border-radius:4px;color:white;font-size:12px;cursor:${loadingPreview ? 'not-allowed' : 'pointer'};">
-                        ${loadingPreview ? '⏳ Previewing...' : 'Preview Sanitized Payload'}
+                        ${loadingPreview ? (uiText?.feedback_previewing_btn || '⏳ Previewing...') : (uiText?.feedback_preview_btn || 'Preview Sanitized Payload')}
                     </button>
                     <button id="doctor-feedback-submit-btn" onClick=${handleSubmit} disabled=${submitting || loadingPreview} style="flex:1;padding:8px;background:#2e7d32;border:none;border-radius:4px;color:white;font-size:12px;cursor:${submitting ? 'not-allowed' : 'pointer'};">
-                        ${submitting ? '⏳ Creating PR...' : 'Create GitHub PR'}
+                        ${submitting ? (uiText?.feedback_submitting_btn || '⏳ Creating PR...') : (uiText?.feedback_submit_btn || 'Create GitHub PR')}
                     </button>
                 </div>
                 <div id="doctor-feedback-status" style="font-size:11px; color:${status?.type === 'error' ? '#ff6b6b' : '#8bc34a'};">
@@ -428,7 +431,7 @@ function CommunityFeedbackSection({ uiText, stats }) {
             ? html`<span>${status.text}: </span><a href=${status.url} target="_blank" rel="noopener noreferrer" style="color:#7db7ff;">${status.url}</a>`
             : (status?.text || '')}
                 </div>
-                <pre id="doctor-feedback-preview-output" style="margin:0; max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-word; background:#161616; border:1px solid #333; border-radius:4px; padding:8px; color:#bbb; font-size:11px;">${previewOutput || 'Preview output will appear here.'}</pre>
+                <pre id="doctor-feedback-preview-output" style="margin:0; max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-word; background:#161616; border:1px solid #333; border-radius:4px; padding:8px; color:#bbb; font-size:11px;">${previewOutput || (uiText?.feedback_preview_empty || 'Preview output will appear here.')}</pre>
                 ${previewMeta?.warnings?.length ? html`
                     <div style="font-size:11px; color:#f0ad4e;">
                         ${previewMeta.warnings.join(' | ')}
