@@ -85,7 +85,7 @@
 
 **T11 - Phase 2 发布 CI 闸道:**
 
-- GitHub Actions 工作流 (`phase2-release-gate.yml`) 强制执行 4 个 pytest 套件 + E2E 测试
+- GitHub Actions 工作流 (`phase2-release-gate.yml`) 强制执行 9 个 pytest 套件 + E2E 测试
 - 本地验证脚本 (`scripts/phase2_gate.py`) 支持 `--fast` 和 `--e2e` 模式
 
 **T12 - 外送安全性静态检查器:**
@@ -277,7 +277,7 @@ ComfyUI-Doctor 完成重大架构升级，具备 **57+ 错误模式**与 **JSON 
 
 ### F9：多语系支持扩展
 
-已将语系支持从 4 种扩展至 9 种！ComfyUI-Doctor 现在能以以下语言提供错误建议：
+已将语系支持从 9 种扩展至 9 种！ComfyUI-Doctor 现在能以以下语言提供错误建议：
 
 - **English** 英文 (en)
 - **繁體中文** (zh_TW)
@@ -512,6 +512,33 @@ ComfyUI-Doctor 整合了主流 LLM 服务，提供智能化、上下文感知的
 - **xAI Grok**（Grok-2、Grok-beta）
 - **OpenRouter**（存取 Claude、GPT-4 及 100+ 种模型）
 
+#### Data-Driven Diagnostics Signature Packs
+
+![Diagnostics](../../assets/Diagnostics.png)
+
+诊断面板同时支持 **JSON 的诊断签章套件**，以利维护启发式的检查规则且无须呼叫 LLM。
+
+- **数据驱动规则**：签章包为具版控的 JSON 档案，让规则更新的审查与维护更简化。
+- **纯本地扩充**：这些检查只会单纯新增诊断提示（无出网连线，且不会断定为恶意软件）。
+- **目前内置牌号种类**：模型路径异常、丢失资产/占位符、节点配置反模式以及环境异常提示。
+- **可回溯之结果**：签章包比对中将自动包含机器可读的置信度与出处分析于诊断资料内。
+- **受限运行时间**：会应用严格预设的扫描上限以防止对工作流进行无止尽扫描。
+
+#### Quick Community Feedback (GitHub PR)
+
+![Diagnostics](../../assets/feedback.png)
+
+统计区块内也包含 **Quick Community Feedback** 功能板，用于自订干净的回报负载并经由服务器端开启 GitHub PR。
+
+**运作方式**:
+- 自动透过最新的错误/统计内容预先生成资讯
+- 送出前可以先预览洗净后的负载资料
+- 送出单向的事件纪录档案 (JSON) 并经由服务器 GitHub 密钥流转发 PR 
+
+**前置准备**:
+- 配置服务器端的 GitHub Token (`DOCTOR_GITHUB_TOKEN`)
+- 可被允许写入操作的 Admin 授权
+
 #### 本地服务（无需 API Key）
 
 - **Ollama**（`http://127.0.0.1:11434`）- 在本地执行 Llama、Mistral、CodeLlama
@@ -718,7 +745,7 @@ curl http://localhost:8188/debugger/last_analysis
   "status": "running",
   "log_path": ".../logs/comfyui_debug_2025-12-28.log",
   "language": "zh_TW",
-  "supported_languages": ["en", "zh_TW", "zh_CN", "ja"],
+  "supported_languages": ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"],
   "last_error": "Traceback...",
   "suggestion": "💡 SUGGESTION: ...",
   "timestamp": "2025-12-28T06:49:11",
@@ -819,6 +846,189 @@ curl http://localhost:8188/debugger/history
 
 ---
 
+
+### GET /doctor/secrets/status (S8)
+**用途：** 获取高级密钥存储库 (Advanced Key Store) 的供应商设定状态。
+**认证限制：** 若环境有定义 `DOCTOR_ADMIN_TOKEN` 则必须加入该 Token。
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**用途：** 写入或更新密钥至本机服务器存储库。
+**认证限制：** 若环境有定义 `DOCTOR_ADMIN_TOKEN` 则必须加入该 Token。
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+返回值：
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**用途：** 删除存储于本机服务器的密钥。
+**认证限制：** 若环境有定义 `DOCTOR_ADMIN_TOKEN` 则必须加入该 Token。
+**示例返回：**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**用途：** 用户可在前端标记某个特定时间点的错误是否已经获得解决。状态包含：`resolved`, `unresolved`, `ignored`。
+此有助于后台统计常见问题的平均解决率。
+**Request payload:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**用途：** 从前端汇出脱敏后的崩溃报告建立预览。此为传送社区 Pull Request 前的检查阶段，确保隐私信息未被包夹。
+**Request payload:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Response:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**用途：** 将先前产生的社区反馈报告实际发布为 GitHub Pull Request，向 `ComfyUI-Doctor` 核心规则库提供新样本。需要后端设置专用的 `DOCTOR_GITHUB_TOKEN` 才能成功。
+**认证限制：** 同步受限于服务器 `DOCTOR_ADMIN_TOKEN` 设置。
+**Request payload:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**用途：** 获取节点健康度报表与基础状态 (不会执行分析，仅提供扫描数据)。
+**Response:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**用途：** 显示目前启用的分析器 (Analyzer Packs) 信任清单以及认证状态。
+**Response:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**用途：** 确认匿名遥测模块之开关与当前统计数字。
+**Response:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**用途：** 确认尚未外送之匿名遥测快取内部明细。
+**Response:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**用途：** (供前端主动回报或本机拦截错误时呼叫) 推入一笔匿名事件至缓冲区。
+
+### POST /doctor/telemetry/clear (S3)
+**用途：** 清空目前所有的本机匿名遥测快取。
+**Response:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**用途：** 汇出本机遥测缓冲区为原始 JSON 格式档供下载分析。
+
+### POST /doctor/telemetry/toggle (S3)
+**用途：** 启用或关闭匿名数据遥测收集功能。
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**用途：** 特殊端点：针对报告状态要求提供回应 (Acknowledge)
+默认状态为： `acknowledged`, `ignored`, `resolved`。
+
+
 ## 日志文件
 
 所有日志存放于：
@@ -902,3 +1112,186 @@ MIT License
 **回报问题**：发现 bug 或有任何建议？请在 GitHub 上提交 issue。
 **提交 PR**：透过修复 bug 或进行常规优化来帮助我们完善代码库。
 **功能请求**：有其他需求、或新功能的好点子？请透过 GitHub issues 告诉我们。
+
+
+### GET /doctor/secrets/status (S8)
+**用途：** 获取高级密钥存储库 (Advanced Key Store) 的供应商设定状态。
+**认证限制：** 若环境有定义 `DOCTOR_ADMIN_TOKEN` 则必须加入该 Token。
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**用途：** 写入或更新密钥至本机服务器存储库。
+**认证限制：** 若环境有定义 `DOCTOR_ADMIN_TOKEN` 则必须加入该 Token。
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+返回值：
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**用途：** 删除存储于本机服务器的密钥。
+**认证限制：** 若环境有定义 `DOCTOR_ADMIN_TOKEN` 则必须加入该 Token。
+**示例返回：**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**用途：** 用户可在前端标记某个特定时间点的错误是否已经获得解决。状态包含：`resolved`, `unresolved`, `ignored`。
+此有助于后台统计常见问题的平均解决率。
+**Request payload:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**用途：** 从前端汇出脱敏后的崩溃报告建立预览。此为传送社区 Pull Request 前的检查阶段，确保隐私信息未被包夹。
+**Request payload:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Response:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**用途：** 将先前产生的社区反馈报告实际发布为 GitHub Pull Request，向 `ComfyUI-Doctor` 核心规则库提供新样本。需要后端设置专用的 `DOCTOR_GITHUB_TOKEN` 才能成功。
+**认证限制：** 同步受限于服务器 `DOCTOR_ADMIN_TOKEN` 设置。
+**Request payload:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**用途：** 获取节点健康度报表与基础状态 (不会执行分析，仅提供扫描数据)。
+**Response:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**用途：** 显示目前启用的分析器 (Analyzer Packs) 信任清单以及认证状态。
+**Response:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**用途：** 确认匿名遥测模块之开关与当前统计数字。
+**Response:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**用途：** 确认尚未外送之匿名遥测快取内部明细。
+**Response:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**用途：** (供前端主动回报或本机拦截错误时呼叫) 推入一笔匿名事件至缓冲区。
+
+### POST /doctor/telemetry/clear (S3)
+**用途：** 清空目前所有的本机匿名遥测快取。
+**Response:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**用途：** 汇出本机遥测缓冲区为原始 JSON 格式档供下载分析。
+
+### POST /doctor/telemetry/toggle (S3)
+**用途：** 启用或关闭匿名数据遥测收集功能。
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**用途：** 特殊端点：针对报告状态要求提供回应 (Acknowledge)
+默认状态为： `acknowledged`, `ignored`, `resolved`。
+

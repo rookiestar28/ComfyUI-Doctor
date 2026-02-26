@@ -10,6 +10,15 @@ ComfyUI를 위한 지속적이고 실시간 런타임 진단 제품군으로, **
 <details>
 <summary><strong>새로운 기능: F14 능동적 진단 (F14 Proactive Diagnostics: 상태 검사 + 의도 서명)</strong></summary>
 
+<details>
+<summary><strong>새로운 기능: Data-Driven Diagnostics Signature Packs</strong></summary>
+
+- 데이터 기반 JSON 서명 팩을 사용하여 진단 도구를 유지 관리합니다.
+- 일반적인 ComfyUI 문제(비정상 모델 경로, 누락된 에셋 등)에 대한 로컬 전용 진단 기능을 추가합니다.
+- 오류 진단 결과가 기계가 읽을 수 있는 신뢰도 및 출처 식별 데이터를 포함합니다.
+
+</details>
+
 - **통계 (Statistics)** 탭에 **진단 (Diagnostics)** 섹션이 추가되어 LLM 없이 워크플로 문제를 능동적으로 해결할 수 있습니다.
 - **상태 검사 (Health Check)**: 워크플로 검사(lint), 환경 자산(env assets), 개인정보 보호 검사를 포함하며 실행 가능한 수정 제안을 제공합니다.
 - **의도 서명 (Intent Signature)**: 결정론적 의도 추론 시스템으로, **Top-K 의도 + 증거**를 제공하여 워크플로가 "무엇을 하려는지" 판단을 돕습니다.
@@ -514,6 +523,27 @@ ComfyUI-Doctor는 널리 사용되는 LLM 서비스와 통합하여 지능적이
 - **xAI Grok** (Grok-2, Grok-beta)
 - **OpenRouter** (Claude, GPT-4 및 100개 이상의 모델에 액세스)
 
+#### Data-Driven Diagnostics Signature Packs
+
+![Diagnostics](../../assets/Diagnostics.png)
+
+진단 패널은 LLM 호출이 필요 없는 휴리스틱 검사를 위해 **JSON 기반 서명 팩** 을 지원합니다.
+
+- **데이터 기반 규칙**: 서명 팩은 버전이 지정된 JSON 파일입니다.
+- **로컬 전용 확장**: 이러한 검사는 진단 힌트만 반환합니다.
+- **추적 가능한 결과**: 서명 팩 일치 항목에는 기계 판독이 가능한 신뢰도 및 출처 식별 데이터가 포함됩니다.
+
+#### Quick Community Feedback (GitHub PR)
+
+![Diagnostics](../../assets/feedback.png)
+
+통계 탭에는 개인정보가 보호된 피드백 페이로드를 준비하고 서버 측에서 GitHub PR을 열기 위한 **Quick Community Feedback** 패널이 포함되어 있습니다.
+
+**작동 방식**:
+- 최신 오류에서 내용을 자동으로 미리 채웁니다.
+- 제출하기 전에 페이로드를 미리 볼 수 있습니다.
+- 백엔드 GitHub 토큰을 통해 PR을 엽니다.
+
 #### 로컬 서비스 (API 키 필요 없음)
 
 - **Ollama** (`http://127.0.0.1:11434`) - Llama, Mistral, CodeLlama를 로컬에서 실행
@@ -718,7 +748,7 @@ curl http://localhost:8188/debugger/last_analysis
   "status": "running",
   "log_path": ".../logs/comfyui_debug_2025-12-28.log",
   "language": "zh_TW",
-  "supported_languages": ["en", "zh_TW", "zh_CN", "ja"],
+  "supported_languages": ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"],
   "last_error": "Traceback...",
   "suggestion": "SUGGESTION: ...",
   "timestamp": "2025-12-28T06:49:11",
@@ -819,6 +849,189 @@ LLM 공급자에 대한 연결을 테스트하여 API 키 유효성을 확인합
 
 ---
 
+
+### GET /doctor/secrets/status (S8)
+**용도:** Advanced Key Store 의 공급자 설정 상태를 가져옵니다.
+**인증 제한:** 환경에 `DOCTOR_ADMIN_TOKEN` 가 정의된 경우, 해당 토큰을 포함해야 합니다.
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**용도:** 로컬 서버 키 저장소에 키를 기록하거나 업데이트합니다.
+**인증 제한:** 환경에 `DOCTOR_ADMIN_TOKEN` 가 정의된 경우, 해당 토큰을 포함해야 합니다.
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+반환값:
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**용도:** 로컬 서버에 저장된 키를 삭제합니다.
+**인증 제한:** 환경에 `DOCTOR_ADMIN_TOKEN` 가 정의된 경우, 해당 토큰을 포함해야 합니다.
+**예시 반환값:**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**용도:** 사용자는 특정 시점의 오류가 프론트엔드에서 해결되었는지 여부를 표시할 수 있습니다. 상태는 `resolved`, `unresolved`, `ignored` 가 포함됩니다.
+백그라운드에서 일반적인 문제에 대한 평균 해결률을 집계하는 데 유용합니다.
+**Request payload:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**용도:** 프론트엔드에서 개인 정보를 삭제한 상태로 충돌 보고서를 내보내고 미리보기를 생성합니다. 이는 비공개 정보가 포함되지 않았는지 확인하기 위해 커뮤니티 Pull Request 를 보내기 전의 확인 단계입니다.
+**Request payload:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Response:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**용도:** 이전에 생성된 커뮤니티 피드백 보고서를 GitHub Pull Request로 게시하여 `ComfyUI-Doctor` 코어 모듈에 기여합니다. 성공하려면 백엔드 전용 `DOCTOR_GITHUB_TOKEN` 을 구성해야 합니다.
+**인증 제한:** 서버의 `DOCTOR_ADMIN_TOKEN` 설정과 동일한 제한.
+**Request payload:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**용도:** 노드 상태 보고서 및 기본 상태를 가져옵니다 (분석을 수행하지 않고, 스캔 데이터만 제공).
+**Response:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**용도:** 현재 활성화된 분석기 (Analyzer Packs) 신뢰 목록과 인증 상태를 표시합니다.
+**Response:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**용도:** 익명 원격 측정 모듈 토글 및 현재 통계를 확인합니다.
+**Response:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**용도:** 아직 발송되지 않은 익명 원격 측정 캐시 내부 세부 정보를 확인합니다.
+**Response:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**용도:** 캐시에 익명 이벤트를 푸시합니다(프런트엔드에서 보고하거나 로컬에서 오류를 가로챌 때 호출됨).
+
+### POST /doctor/telemetry/clear (S3)
+**용도:** 현재 모든 로컬 익명 원격 측정 캐시를 지웁니다.
+**Response:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**용도:** 다운로드 및 분석을 위해 로컬 원격 측정 캐시를 원본 JSON 파일로 내보냅니다.
+
+### POST /doctor/telemetry/toggle (S3)
+**용도:** 익명 데이터 원격 측정 수집 기능을 켜거나 끕니다.
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**용도:** 특별 엔드포인트: 보고서 상태를 응답(Acknowledge)하기 위한 요청
+기본 상태는 `acknowledged`, `ignored`, `resolved` 입니다.
+
+
 ## 로그 파일
 
 모든 로그는 다음에 저장됩니다.
@@ -907,3 +1120,186 @@ MIT License
 **문제 보고**: 버그를 발견했거나 제안 사항이 있습니까? GitHub에서 이슈를 열어주세요.
 **PR 제출**: 버그 수정 또는 일반적인 개선으로 코드베이스를 개선하는 데 도움을 주세요.
 **기능 요청**: 새로운 기능에 대한 아이디어가 있습니까? 저희에게 알려주세요.
+
+
+### GET /doctor/secrets/status (S8)
+**용도:** Advanced Key Store 의 공급자 설정 상태를 가져옵니다.
+**인증 제한:** 환경에 `DOCTOR_ADMIN_TOKEN` 가 정의된 경우, 해당 토큰을 포함해야 합니다.
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**용도:** 로컬 서버 키 저장소에 키를 기록하거나 업데이트합니다.
+**인증 제한:** 환경에 `DOCTOR_ADMIN_TOKEN` 가 정의된 경우, 해당 토큰을 포함해야 합니다.
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+반환값:
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**용도:** 로컬 서버에 저장된 키를 삭제합니다.
+**인증 제한:** 환경에 `DOCTOR_ADMIN_TOKEN` 가 정의된 경우, 해당 토큰을 포함해야 합니다.
+**예시 반환값:**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**용도:** 사용자는 특정 시점의 오류가 프론트엔드에서 해결되었는지 여부를 표시할 수 있습니다. 상태는 `resolved`, `unresolved`, `ignored` 가 포함됩니다.
+백그라운드에서 일반적인 문제에 대한 평균 해결률을 집계하는 데 유용합니다.
+**Request payload:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**용도:** 프론트엔드에서 개인 정보를 삭제한 상태로 충돌 보고서를 내보내고 미리보기를 생성합니다. 이는 비공개 정보가 포함되지 않았는지 확인하기 위해 커뮤니티 Pull Request 를 보내기 전의 확인 단계입니다.
+**Request payload:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Response:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**용도:** 이전에 생성된 커뮤니티 피드백 보고서를 GitHub Pull Request로 게시하여 `ComfyUI-Doctor` 코어 모듈에 기여합니다. 성공하려면 백엔드 전용 `DOCTOR_GITHUB_TOKEN` 을 구성해야 합니다.
+**인증 제한:** 서버의 `DOCTOR_ADMIN_TOKEN` 설정과 동일한 제한.
+**Request payload:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**용도:** 노드 상태 보고서 및 기본 상태를 가져옵니다 (분석을 수행하지 않고, 스캔 데이터만 제공).
+**Response:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**용도:** 현재 활성화된 분석기 (Analyzer Packs) 신뢰 목록과 인증 상태를 표시합니다.
+**Response:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**용도:** 익명 원격 측정 모듈 토글 및 현재 통계를 확인합니다.
+**Response:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**용도:** 아직 발송되지 않은 익명 원격 측정 캐시 내부 세부 정보를 확인합니다.
+**Response:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**용도:** 캐시에 익명 이벤트를 푸시합니다(프런트엔드에서 보고하거나 로컬에서 오류를 가로챌 때 호출됨).
+
+### POST /doctor/telemetry/clear (S3)
+**용도:** 현재 모든 로컬 익명 원격 측정 캐시를 지웁니다.
+**Response:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**용도:** 다운로드 및 분석을 위해 로컬 원격 측정 캐시를 원본 JSON 파일로 내보냅니다.
+
+### POST /doctor/telemetry/toggle (S3)
+**용도:** 익명 데이터 원격 측정 수집 기능을 켜거나 끕니다.
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**용도:** 특별 엔드포인트: 보고서 상태를 응답(Acknowledge)하기 위한 요청
+기본 상태는 `acknowledged`, `ignored`, `resolved` 입니다.
+

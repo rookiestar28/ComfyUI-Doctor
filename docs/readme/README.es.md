@@ -85,7 +85,7 @@ Un conjunto de diagnósticos continuos en tiempo de ejecución y en tiempo real 
 
 **T11 - Puerta de Enlace de Lanzamiento Fase 2:**
 
-- Flujo de trabajo de GitHub Actions (`phase2-release-gate.yml`): Impone 4 suites pytest + E2E
+- Flujo de trabajo de GitHub Actions (`phase2-release-gate.yml`): Impone 9 suites pytest + E2E
 - Script de validación local (`scripts/phase2_gate.py`): Admite modos `--fast` e `--e2e`
 
 **T12 - Verificador Estático de Seguridad Saliente:**
@@ -276,7 +276,7 @@ python scripts/run_pattern_tests.py
 
 ### F9: Expansión de Soporte Multilingüe
 
-¡Hemos ampliado el soporte de idiomas de 4 a 9 idiomas! ComfyUI-Doctor ahora proporciona sugerencias de error en:
+¡Hemos ampliado el soporte de idiomas de 9 a 9 idiomas! ComfyUI-Doctor ahora proporciona sugerencias de error en:
 
 - **English** Inglés (en)
 - **繁體中文** Chino Tradicional (zh_TW)
@@ -513,6 +513,26 @@ ComfyUI-Doctor se integra con servicios LLM populares para proporcionar sugerenc
 - **xAI Grok** (Grok-2, Grok-beta)
 - **OpenRouter** (Acceso a Claude, GPT-4 y más de 100 modelos)
 
+#### Data-Driven Diagnostics Signature Packs
+
+![Diagnostics](../../assets/Diagnostics.png)
+
+El panel de Diagnóstico también admite **paquetes de firmas basados en JSON**.
+
+- **Reglas basadas en datos**: Los paquetes de firmas son archivos JSON versionados.
+- **Resultados rastreables**: Las coincidencias de paquetes incluyen la confianza y la procedencia de los metadatos.
+
+#### Quick Community Feedback (GitHub PR)
+
+![Diagnostics](../../assets/feedback.png)
+
+La pestaña Estadísticas también incluye un panel **Quick Community Feedback** para preparar una carga útil limpia y abrir un PR de GitHub desde el servidor.
+
+**Funciones**:
+- Rellenado automático desde el último error
+- Vista previa antes del envío
+- Abre un PR a través de un token de GitHub del lado del servidor
+
 #### Servicios Locales (No se requiere clave API)
 
 - **Ollama** (`http://127.0.0.1:11434`) - Ejecute Llama, Mistral, CodeLlama localmente
@@ -717,7 +737,7 @@ curl http://localhost:8188/debugger/last_analysis
   "status": "running",
   "log_path": ".../logs/comfyui_debug_2025-12-28.log",
   "language": "zh_TW",
-  "supported_languages": ["en", "zh_TW", "zh_CN", "ja"],
+  "supported_languages": ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"],
   "last_error": "Traceback...",
   "suggestion": "SUGGESTION: ...",
   "timestamp": "2025-12-28T06:49:11",
@@ -906,3 +926,185 @@ Licencia MIT
 **Reportar Problemas**: ¿Encontró un error o tiene una sugerencia? Abra un problema en GitHub.
 **Enviar PRs**: Ayude a mejorar el código base con correcciones de errores o mejoras generales.
 **Solicitudes de Funciones**: ¿Tiene ideas para nuevas funciones? Por favor, háganoslo saber.
+
+
+### GET /doctor/secrets/status (S8)
+**Uso:** Obtiene el estado de los ajustes de proveedores del Almacén avanzado de claves (Advanced Key Store).
+**Limitaciones de autenticación:** Si se define un `DOCTOR_ADMIN_TOKEN` en el entorno, es necesario incluirlo.
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**Uso:** Inserte o actualice una clave en el almacén de un servidor local.
+**Limitaciones de autenticación:** Si se define un `DOCTOR_ADMIN_TOKEN` en el entorno, es necesario incluirlo.
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+Valor devuelto:
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**Uso:** Elimine las credenciales que se han guardado en el servidor actual.
+**Limitaciones de autenticación:** Si se ha añadido un `DOCTOR_ADMIN_TOKEN` de antemano el área pertinente, deberá indicarse al llamar o de otro modo no se lograría.
+**Ejemplo de respuesta devuelta:**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**Uso:** El usuario podrá designar si las fallas experimentadas con esta opción concreta han dejado o no de suponer impedimento. Estados en los que se hallan (con `resolved`, `unresolved`, `ignored`).
+Esto ayuda a realizar cálculos globales relativos a si un dilema ha persistido.
+**Carga útil de solicitud:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**Uso:** Exportar las impresiones recogidas en el dispositivo front-end para proporcionar una primera visión del progreso, lo que serviría a efectos previos para enviar este último al repositorio Pull Request correspondiente por parte del público y evitar un eventual acceso de carácter privado e indeseable.
+**Carga útil de solicitud:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Respuesta:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**Uso:** La comunicación del feedback anterior ahora va a subirse formalmente al Pull Request de GitHub del usuario público, insertando estos recursos como un elemento adicional o parte en la librería primaria `ComfyUI-Doctor`. Debe preparase allí un token particular `DOCTOR_GITHUB_TOKEN` exclusivo para permitir que lo antes indicado finalice sin obstáculo.
+**Límites de acceso autorizado:** Está estrechamente acotado bajo una asignación para los servidores como `DOCTOR_ADMIN_TOKEN`.
+**Carga útil de solicitud:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**Uso:** Pida al sistema información pertinente en lo respectivo a su funcionamiento idóneo base actual; los componentes a examinar, claro (esto no lleva ninguna comprobación, si bien facilita una recolección simple de diagnósticos previos ya recogidos).
+**Respuesta:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**Uso:** Se proporciona acceso para ver una sección indicando aquéllos analistas internos habilitados para funcionar conjuntamente bajo una base validada y cómo estarían configurados internamente.
+**Respuesta:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**Uso:** Constate en qué medida el subsistema se oculta e infórmese sobre estadísticas relevantes en curso en el acto.
+**Respuesta:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**Uso:** Revisar sin demérito lo ya memorizado aún no propagado mediante el servicio interno antes expuesto sin la presencia del individuo responsable (caché de datos no identificable).
+**Respuesta:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**Uso:** (Esto procede para incorporaciones aportadas libremente en primer nivel, u ocurridas si de presentarse cualquier anomalía), guarde sin identificarse este incidente con destino en una copia interina interna.
+
+### POST /doctor/telemetry/clear (S3)
+**Uso:** Depure definitivamente, toda traza local para registros remanentes no revelables que contuviese un almacenamiento interno local de telemetría de índole transitorio.
+**Respuesta:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**Uso:** Almacene bajo una entidad local del usuario este registro parcial en vista de posibles consultas subsiguientes, bajo archivo principal JSON base de formato común.
+
+### POST /doctor/telemetry/toggle (S3)
+**Uso:** Modifique de entre habilitado y cancelado el flujo en caso de optar recoger cifras telemétricas o no en incógnito, siendo en caso inverso omitido todo acto respectivo.
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**Uso:** Punto en la ruta excepcional para notificaciones u obligar confirmar si recibe reporte de actividad general pertinente al propio sistema o de no poseer esto interés (Acknowledge) mediante: `acknowledged`, `ignored`, `resolved` como alternativas primordiales en su respectivo rango de actividad.
+

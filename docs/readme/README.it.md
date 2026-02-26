@@ -85,7 +85,7 @@ Una suite di diagnostica runtime continua e in tempo reale per ComfyUI con **ana
 
 **T11 - Gate di Rilascio CI Fase 2:**
 
-- Workflow GitHub Actions (`phase2-release-gate.yml`): Applica 4 suite pytest + E2E
+- Workflow GitHub Actions (`phase2-release-gate.yml`): Applica 9 suite pytest + E2E
 - Script di convalida locale (`scripts/phase2_gate.py`): Supporta le modalità `--fast` e `--e2e`
 
 **T12 - Controllo Statico Sicurezza in Uscita:**
@@ -276,7 +276,7 @@ ComfyUI-Doctor ha subito un importante aggiornamento dell'architettura con **57+
 
 ### F9: Espansione supporto multilingua
 
-Abbiamo esteso il supporto linguistico da 4 a 9 lingue! ComfyUI-Doctor ora fornisce suggerimenti di errore in:
+Abbiamo esteso il supporto linguistico da 9 a 9 lingue! ComfyUI-Doctor ora fornisce suggerimenti di errore in:
 
 - **English** Inglese (en)
 - **繁體中文** Cinese Tradizionale (zh_TW)
@@ -502,6 +502,26 @@ Notifiche di errore in tempo reale nell'angolo in alto a destra:
 
 ComfyUI-Doctor si integra con popolari servizi LLM per fornire suggerimenti di debug intelligenti e consapevoli del contesto.
 
+#### Data-Driven Diagnostics Signature Packs
+
+![Diagnostics](../../assets/Diagnostics.png)
+
+Il pannello Diagnostica supporta anche i **Signature Packs basati su JSON**.
+
+- **Regole guidate dai dati**: I pacchetti di firme sono file JSON con controllo di versione.
+- **Risultati tracciabili**: Le corrispondenze dei pacchetti includono metadati leggibili dalla macchina e informazioni sulla provenienza.
+
+#### Quick Community Feedback (GitHub PR)
+
+![Diagnostics](../../assets/feedback.png)
+
+La scheda Statistiche include anche un pannello **Quick Community Feedback** per preparare un feedback ripulito dai dati sensibili e aprire una PR su GitHub.
+
+**Caratteristiche**:
+- Precompilazione automatica dall'ultimo errore
+- Anteprima prima dell'invio
+- Apre una PR tramite token GitHub lato server
+
 ### Provider AI Supportati
 
 #### Servizi Cloud
@@ -717,7 +737,7 @@ curl http://localhost:8188/debugger/last_analysis
   "status": "running",
   "log_path": ".../logs/comfyui_debug_2025-12-28.log",
   "language": "zh_TW",
-  "supported_languages": ["en", "zh_TW", "zh_CN", "ja"],
+  "supported_languages": ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"],
   "last_error": "Traceback...",
   "suggestion": "SUGGESTION: ...",
   "timestamp": "2025-12-28T06:49:11",
@@ -818,6 +838,188 @@ Elenca i modelli disponibili dal provider LLM configurato.
 
 ---
 
+
+### GET /doctor/secrets/status (S8)
+**Utilizzo:** Ottiene lo stato di impostazione del provider per Advanced Key Store.
+**Limitazione all'autenticazione:** Se nell'ambiente è definito `DOCTOR_ADMIN_TOKEN`, questo deve essere incluso.
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**Utilizzo:** Scrive o aggiorna una chiave nell'archivio lato server locale.
+**Limitazione all'autenticazione:** Se nell'ambiente è definito `DOCTOR_ADMIN_TOKEN`, questo deve essere incluso.
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+Valore di ritorno:
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**Utilizzo:** Elimina le chiavi memorizzate sul server locale.
+**Limitazione all'autenticazione:** Se nell'ambiente è definito `DOCTOR_ADMIN_TOKEN`, questo deve essere incluso.
+**Esempio di restituzione:**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**Utilizzo:** L'utente può contrassegnare sul front-end se l'errore registrato a uno specifico timestamp è stato risolto o meno. Gli stati possibili sono `resolved`, `unresolved`, `ignored`.
+Ciò consente al back-end di elaborare le percentuali di risoluzione tipiche dei vari problemi.
+**Payload della richiesta:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**Utilizzo:** Esporta il rapporto finale di arresto anomalo de-identificato e crea un'anteprima sul front-end. Agisce da fase di test per accertare che i dati sensibili non siano più stati diffusi prima di inviare una Pull Request comunitaria.
+**Payload della richiesta:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Risposta:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**Utilizzo:** Esporta il precedente rapporto sui feedback comunitari e pubblicalo come una Richiesta Pull di GitHub, inviando nuovi campioni alla base di regole di base di `ComfyUI-Doctor`. Il backend richiede la creazione di un `DOCTOR_GITHUB_TOKEN` separato per avere successo.
+**Limitazione all'autenticazione:** Condivide la restrizione del server per l'impostazione `DOCTOR_ADMIN_TOKEN`.
+**Payload della richiesta:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**Utilizzo:** Recupera i rapporti di integrità del nodo e gli stati fondamentali. (esclude le indagini; emette unicamente statistiche di scansione).
+**Risposta:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**Utilizzo:** Visualizza l'elenco dei file Analyzer Pack attualmente attivati e i loro relativi stati operativi.
+**Risposta:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**Utilizzo:** Verifica lo stato di funzionamento e i valori complessivi del modulo dati telemetrici resi anonimi.
+**Risposta:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**Utilizzo:** Verifica in modo approfondito i dati specifici non inviati e archiviati temporaneamente per la registrazione non identificata.
+**Risposta:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**Utilizzo:** Un evento anonimo viene salvato momentaneamente nella cache (chiamato indipendentemente dal Front-End al verificarsi di un errore).
+
+### POST /doctor/telemetry/clear (S3)
+**Utilizzo:** Resetta sul server l'attuale registrazione non identificata per l'uso cache.
+**Risposta:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**Utilizzo:** Archivia le informazioni locali attualmente trasmesse nella cache per convertirle in formato JSON ai fini dell'analisi e del download.
+
+### POST /doctor/telemetry/toggle (S3)
+**Utilizzo:** Abilita o sospendi le registrazioni resi anonime per i dati e la telemetria.
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**Utilizzo:** Endpoint designato: per recuperare le conferme di risposta (Acknowledge) ai fini della verifica degli stati di reportistica corrispondenti (Stati regolari: `acknowledged`, `ignored`, `resolved`).
+
+
 ## File di Log
 
 Tutti i log sono memorizzati in:
@@ -906,3 +1108,185 @@ I contributi sono benvenuti! Sentiti libero di inviare una Pull Request.
 **Segnala Problemi**: Trovato un bug o hai un suggerimento? Apri un issue su GitHub.
 **Invia PR**: Aiuta a migliorare la codebase con correzioni di bug o miglioramenti generali.
 **Richieste Funzionalità**: Hai idee per nuove funzionalità? Faccelo sapere per favore.
+
+
+### GET /doctor/secrets/status (S8)
+**Utilizzo:** Ottiene lo stato di impostazione del provider per Advanced Key Store.
+**Limitazione all'autenticazione:** Se nell'ambiente è definito `DOCTOR_ADMIN_TOKEN`, questo deve essere incluso.
+```json
+{
+    "success": true,
+    "providers": {
+        "openai": { "source": "server_store" },
+        "anthropic": { "source": "env" }
+    }
+}
+```
+
+### PUT /doctor/secrets (S8)
+**Utilizzo:** Scrive o aggiorna una chiave nell'archivio lato server locale.
+**Limitazione all'autenticazione:** Se nell'ambiente è definito `DOCTOR_ADMIN_TOKEN`, questo deve essere incluso.
+```json
+{
+    "provider": "openai",
+    "key": "sk-...",
+    "token": "admin-token-value"
+}
+```
+Valore di ritorno:
+```json
+{
+    "success": true,
+    "message": "Key for openai stored successfully."
+}
+```
+
+### DELETE /doctor/secrets/{provider} (S8)
+**Utilizzo:** Elimina le chiavi memorizzate sul server locale.
+**Limitazione all'autenticazione:** Se nell'ambiente è definito `DOCTOR_ADMIN_TOKEN`, questo deve essere incluso.
+**Esempio di restituzione:**
+```json
+{
+    "success": true,
+    "message": "Deleted stored key for openai"
+}
+```
+
+### POST /doctor/mark_resolved (F15)
+**Utilizzo:** L'utente può contrassegnare sul front-end se l'errore registrato a uno specifico timestamp è stato risolto o meno. Gli stati possibili sono `resolved`, `unresolved`, `ignored`.
+Ciò consente al back-end di elaborare le percentuali di risoluzione tipiche dei vari problemi.
+**Payload della richiesta:**
+```json
+{
+    "timestamp": "2026-02-27T00:00:00Z",
+    "status": "resolved"
+}
+```
+
+### POST /doctor/feedback/preview (F16)
+**Utilizzo:** Esporta il rapporto finale di arresto anomalo de-identificato e crea un'anteprima sul front-end. Agisce da fase di test per accertare che i dati sensibili non siano più stati diffusi prima di inviare una Pull Request comunitaria.
+**Payload della richiesta:**
+```json
+{
+    "pattern_candidate": {
+        "id": "my_new_error_pattern",
+        "regex": "CUDA out of memory",
+        "category": "memory",
+        "priority": 80,
+        "notes": "Verified locally."
+    },
+    "suggestion_candidate": {
+        "language": "en",
+        "message": "Reduce batch size to 1."
+    },
+    "error_context": { 
+        "last_error": "CUDA out of memory",
+        "timestamp": "2026-02-27T12:00:00+00:00"
+    }
+}
+```
+**Risposta:**
+```json
+{
+    "success": true,
+    "submission_id": "20260227_...",
+    "preview": { ... },
+    "warnings": []
+}
+```
+
+### POST /doctor/feedback/submit (F16)
+**Utilizzo:** Esporta il precedente rapporto sui feedback comunitari e pubblicalo come una Richiesta Pull di GitHub, inviando nuovi campioni alla base di regole di base di `ComfyUI-Doctor`. Il backend richiede la creazione di un `DOCTOR_GITHUB_TOKEN` separato per avere successo.
+**Limitazione all'autenticazione:** Condivide la restrizione del server per l'impostazione `DOCTOR_ADMIN_TOKEN`.
+**Payload della richiesta:**
+```json
+{
+    "submission_id": "20260227_...",
+    "token": "admin-token-value"
+}
+```
+```json
+{
+    "success": true,
+    "github": {
+        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
+    }
+}
+```
+
+### GET /doctor/health
+**Utilizzo:** Recupera i rapporti di integrità del nodo e gli stati fondamentali. (esclude le indagini; emette unicamente statistiche di scansione).
+**Risposta:**
+```json
+{
+    "success": true,
+    "health": {
+        "logger": { "dropped_messages": 0 },
+        "ssrf": { "blocked_total": 0 },
+        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
+    }
+}
+```
+
+### GET /doctor/plugins
+**Utilizzo:** Visualizza l'elenco dei file Analyzer Pack attualmente attivati e i loro relativi stati operativi.
+**Risposta:**
+```json
+{
+    "success": true,
+    "plugins": {
+        "config": { "enabled": true, "signature_required": false },
+        "plugins": [
+            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
+        ]
+    }
+}
+```
+
+### GET /doctor/telemetry/status (S3)
+**Utilizzo:** Verifica lo stato di funzionamento e i valori complessivi del modulo dati telemetrici resi anonimi.
+**Risposta:**
+```json
+{
+  "success": true,
+  "enabled": true,
+  "stats": {
+    "count": 5
+  }
+}
+```
+
+### GET /doctor/telemetry/buffer (S3)
+**Utilizzo:** Verifica in modo approfondito i dati specifici non inviati e archiviati temporaneamente per la registrazione non identificata.
+**Risposta:**
+```json
+{
+  "success": true,
+  "events": [...]
+}
+```
+
+### POST /doctor/telemetry/track (S3)
+**Utilizzo:** Un evento anonimo viene salvato momentaneamente nella cache (chiamato indipendentemente dal Front-End al verificarsi di un errore).
+
+### POST /doctor/telemetry/clear (S3)
+**Utilizzo:** Resetta sul server l'attuale registrazione non identificata per l'uso cache.
+**Risposta:**
+```json
+{ "success": true }
+```
+
+### GET /doctor/telemetry/export (S3)
+**Utilizzo:** Archivia le informazioni locali attualmente trasmesse nella cache per convertirle in formato JSON ai fini dell'analisi e del download.
+
+### POST /doctor/telemetry/toggle (S3)
+**Utilizzo:** Abilita o sospendi le registrazioni resi anonime per i dati e la telemetria.
+```json
+{
+  "enabled": true
+}
+```
+
+### POST /doctor/health_ack (F14)
+**Utilizzo:** Endpoint designato: per recuperare le conferme di risposta (Acknowledge) ai fini della verifica degli stati di reportistica corrispondenti (Stati regolari: `acknowledged`, `ignored`, `resolved`).
+

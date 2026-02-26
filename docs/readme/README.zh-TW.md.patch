@@ -1,0 +1,211 @@
+--- docs/readme/README.zh-TW.md2026-02-27 00:00:00.000000000 +0800
++++ docs/readme/README.zh-TW.md2026-02-27 00:00:00.000000000 +0800
+@@ -9,12 +9,16 @@
+ 
+ <details>
+ <summary><b>最新更新 - 點擊展開</b></summary>
+ 
++### Data-Driven Diagnostics Signature Packs
++- **豐富的診斷上下文 (Rich Diagnostic Context)**：可針對每個問題提供專屬的置信度 (Confidence)、模組溯源以及專門的修正方針。
++- **快速的離線判定 (Fast Offline Heuristics)**：將已知常見問題與崩潰封裝為離線的 JSON 簽章規則，無須依賴網路與 AI 即可對發生頻率高的錯誤立刻提出對策。
++- **侷限範圍的區域規則 (Bounded Local Constraints)**：可針對工作流程 (Workflow) 的各別節點及系統當前狀態做出高解析率的錯誤追蹤。
+ 
+ ### 遠端遙測與分析擴展 (Telemetry & Analytics Expansion)
+ - **自訂外部接收端 (Custom Metrics Destination)**: 開放設定選項，除了本機除錯之外還能將遙測結果推送至第三方系統（例如 Grafana/New Relic/自訂 API 接點）。
+ - **匿名的預設遙測機制 (Opt-in Anonymous Telemetry)**: 尊重使用者的選擇權，僅提供經過清理、去識別化後的非敏感性崩潰頻率彙整數據給後端統計。
+ 
+ ### 端點策略控管 (Endpoint Governance and Rate Limiting)
+ - **端點流量管制 (Rate Limiting Configuration)**: 開放使用者自訂針對 `LLM Providers` 的請求流速（每分鐘的 Requests 數量上限），有效防止 Token 意外透支造成高額帳單。
+ - **環境防護策略 (Strict Access Policy)**: 增強跨站偽造請求 (CSRF) 與本機越權掃描攻擊 (SSRF) 防護，阻擋外部指令對內部 ComfyUI 及 Node 環境造成的可能惡意操作，確保本機開發的最高安全性。
+@@ -282,10 +286,286 @@
+                 "memory_allocated": 948488704
+             },
+             "os": "Windows",
+             "python_version": "3.10.11",
+             "comfy_args": []
+         }
+     }
+ }
+ ```
+ 
++### GET /doctor/secrets/status (S8)
++**用途：** 取得進階金鑰儲存庫 (Advanced Key Store) 的供應商設定狀態。
++**認證限制：** 若環境有定義 `DOCTOR_ADMIN_TOKEN` 則必須加入該 Token。
++```json
++{
++    "success": true,
++    "providers": {
++        "openai": { "source": "server_store" },
++        "anthropic": { "source": "env" }
++    }
++}
++```
++
++### PUT /doctor/secrets (S8)
++**用途：** 寫入或更新金鑰至本機伺服器儲存庫。
++**認證限制：** 若環境有定義 `DOCTOR_ADMIN_TOKEN` 則必須加入該 Token。
++```json
++{
++    "provider": "openai",
++    "key": "sk-...",
++    "token": "admin-token-value"
++}
++```
++回傳值：
++```json
++{
++    "success": true,
++    "message": "Key for openai stored successfully."
++}
++```
++
++### DELETE /doctor/secrets/{provider} (S8)
++**用途：** 刪除儲存於本機伺服器的金鑰。
++**認證限制：** 若環境有定義 `DOCTOR_ADMIN_TOKEN` 則必須加入該 Token。
++**範例回傳：**
++```json
++{
++    "success": true,
++    "message": "Deleted stored key for openai"
++}
++```
++
++### POST /doctor/mark_resolved (F15)
++**用途：** 使用者可在前端標記某個特定時間點的錯誤是否已經獲得解決。狀態包含：`resolved`, `unresolved`, `ignored`。  
++此有助於後台統計常見問題的平均解決率。
++**Request payload:**
++```json
++{
++    "timestamp": "2026-02-27T00:00:00Z",
++    "status": "resolved"
++}
++```
++
++### POST /doctor/feedback/preview (F16)
++**用途：** 從前端匯出脫敏後的崩潰報告建立預覽。此為傳送社群 Pull Request 前的檢查階段，確保私密資訊未被包夾。
++**Request payload:**
++```json
++{
++    "pattern_candidate": {
++        "id": "my_new_error_pattern",
++        "regex": "CUDA out of memory",
++        "category": "memory",
++        "priority": 80,
++        "notes": "Verified locally."
++    },
++    "suggestion_candidate": {
++        "language": "en",
++        "message": "Reduce batch size to 1."
++    },
++    "error_context": { 
++        "last_error": "CUDA out of memory",
++        "timestamp": "2026-02-27T12:00:00+00:00"
++    }
++}
++```
++**Response:**
++```json
++{
++    "success": true,
++    "submission_id": "20260227_...",
++    "preview": { ... },
++    "warnings": []
++}
++```
++
++### POST /doctor/feedback/submit (F16)
++**用途：** 將先前產生的社群回饋報告實際發佈為 GitHub Pull Request，向 `ComfyUI-Doctor` 核心規則庫提供新樣本。需要後端設定專用的 `DOCTOR_GITHUB_TOKEN` 才能成功。
++**認證限制：** 同步受限於伺服器 `DOCTOR_ADMIN_TOKEN` 設定。
++**Request payload:**
++```json
++{
++    "submission_id": "20260227_...",
++    "token": "admin-token-value"
++}
++```
++```json
++{
++    "success": true,
++    "github": {
++        "pr_url": "https://github.com/rookiestar28/ComfyUI-Doctor/pull/123"
++    }
++}
++```
++
++### GET /doctor/health
++**用途：** 取得節點健康度報表與基礎狀態 (不會執行分析，僅提供掃描數據)。
++**Response:**
++```json
++{
++    "success": true,
++    "health": {
++        "logger": { "dropped_messages": 0 },
++        "ssrf": { "blocked_total": 0 },
++        "last_analysis": { "timestamp": "...", "pipeline_status": "ok" }
++    }
++}
++```
++
++### GET /doctor/plugins
++**用途：** 顯示目前啟用的分析器 (Analyzer Packs) 信任清單以及認證狀態。
++**Response:**
++```json
++{
++    "success": true,
++    "plugins": {
++        "config": { "enabled": true, "signature_required": false },
++        "plugins": [
++            { "file": "system_analyzer.py", "trust": "trusted", "reason": "bundled" }
++        ]
++    }
++}
++```
++
++### GET /doctor/telemetry/status (S3)
++**用途：** 確認匿名遙測模組之開關與當前統計數字。
++**Response:**
++```json
++{
++  "success": true,
++  "enabled": true,
++  "stats": {
++    "count": 5
++  }
++}
++```
++
++### GET /doctor/telemetry/buffer (S3)
++**用途：** 確認尚未外送之匿名遙測快取內部明細。
++**Response:**
++```json
++{
++  "success": true,
++  "events": [...]
++}
++```
++
++### POST /doctor/telemetry/track (S3)
++**用途：** (供前端主動回報或本機攔截錯誤時呼叫) 推入一筆匿名事件至緩衝區。
++
++### POST /doctor/telemetry/clear (S3)
++**用途：** 清空目前所有的本機匿名遙測快取。
++**Response:**
++```json
++{ "success": true }
++```
++
++### GET /doctor/telemetry/export (S3)
++**用途：** 匯出本機遙測緩衝區為原始 JSON 格式檔供下載分析。
++
++### POST /doctor/telemetry/toggle (S3)
++**用途：** 啟用或關閉匿名數據遙測收集功能。
++```json
++{
++  "enabled": true
++}
++```
++
++### POST /doctor/health_ack (F14)
++**用途：** 特殊端點：針對報告狀態要求提供回應 (Acknowledge)
++預設狀態為： `acknowledged`, `ignored`, `resolved`。
++
