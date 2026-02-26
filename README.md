@@ -8,7 +8,16 @@
 
 A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-powered analysis**, **interactive debugging chat**, and **50+ fix patterns**. Automatically intercepts all terminal output from startup, captures complete Python tracebacks, and delivers prioritized fix suggestions with node-level context extraction. Now supports **JSON-based pattern management** with hot-reload and **full i18n support** for 9 languages (en, zh_TW, zh_CN, ja, de, fr, it, es, ko).
 
-## Latest Updates (Feb 2026) - Click to expand
+<details> <summary><h2>Latest Updates - Click to expand</h2></summary>
+
+<details>
+<summary><strong>Data-Driven Diagnostics Signature Packs</strong></summary>
+
+- Added JSON-based signature packs for proactive diagnostics so heuristic rule updates can be maintained as data instead of code-only changes.
+- Added bounded, local-only diagnostic enrichment for common ComfyUI workflow issues (model path anomalies, missing assets/placeholders, node config anti-patterns, and environment mismatch hints).
+- Diagnostics issues can now include machine-readable confidence and provenance metadata for signature-pack matches.
+
+</details>
 
 <details>
 <summary><strong>Validation Expansion Remediation: Desktop Hardening + Isolation Test Pack</strong></summary>
@@ -352,6 +361,8 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 
 </details>
 
+</details>
+
 ## Table of Contents
 
 - [Features](#features)
@@ -360,6 +371,8 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - [Frontend UI](#frontend-ui)
 - [Settings](#settings)
 - [External Enrichment Safety and Resumable Jobs](#external-enrichment-safety-and-resumable-jobs)
+- [Data-Driven Diagnostics Signature Packs](#data-driven-diagnostics-signature-packs)
+- [Quick Community Feedback (GitHub PR)](#quick-community-feedback-github-pr)
 - [API Endpoints](#api-endpoints)
 - [Supported Error Patterns](#supported-error-patterns)
 - [Phase 2 Release Gate](#phase-2-release-gate)
@@ -697,6 +710,53 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 
 > Note: If you want the report text in another language, set **Suggestion Language** in **Settings** first.
 
+#### Data-Driven Diagnostics Signature Packs
+
+![Diagnostics](assets/Diagnostics.png)
+
+The Diagnostics panel also supports **JSON-based signature packs** for maintainable heuristic checks that do not require an LLM call.
+
+- **Data-driven rules**: Signature packs are versioned JSON files, making rule updates easier to review and maintain.
+- **Local-only enrichment**: These checks add diagnostic hints only (no outbound calls and no malware verdict claims).
+- **Current built-in signal families**: model path anomalies, missing assets/placeholders, node config anti-patterns, and environment mismatch hints.
+- **Traceable results**: Signature-pack matches include machine-readable confidence and provenance metadata in diagnostics output.
+- **Bounded runtime**: Deterministic scan caps are applied to avoid unbounded workflow scanning.
+
+Advanced runtime controls (optional):
+
+- `DOCTOR_DIAGNOSTICS_SIGNATURE_PACKS_ENABLED` to globally enable/disable signature-pack checks
+- `DOCTOR_DIAGNOSTICS_SIGNATURE_PACK_IDS` to allowlist specific pack IDs
+  - If unset, all enabled builtin packs are loaded
+  - Use a comma-separated list (example: `builtin.comfyui_heuristics`)
+
+Signature-pack matches are stored in diagnostics issue metadata as machine-readable provenance (for example: pack/rule IDs, confidence, and provenance tags).
+
+#### Quick Community Feedback (GitHub PR)
+
+![Diagnostics](assets/feedback.png)
+
+The Statistics tab also includes a **Quick Community Feedback** panel for preparing a sanitized feedback payload and opening a GitHub PR from the server side.
+
+**What it does**:
+
+- Prefills from the latest error / statistics context (when available)
+- Lets you preview the sanitized payload before submission
+- Submits an append-only feedback JSON file and opens a PR (server-side GitHub token flow)
+
+**Prerequisites**:
+
+- Server-side GitHub token configured (`DOCTOR_GITHUB_TOKEN`)
+- Admin authorization for submit actions (submit route is admin-guarded)
+
+**How to Use**:
+
+1. Open **Doctor** → **Statistics**
+2. Scroll to **Quick Community Feedback**
+3. Fill or confirm the pattern candidate / suggestion fields
+4. Click **Preview** and review the sanitized payload
+5. Click **Submit** to create the GitHub PR
+6. Open the returned PR URL to review/edit the final submission on GitHub
+
 **Resolution Status Controls**:
 
 - Buttons are enabled only when a latest error timestamp is available
@@ -751,7 +811,7 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 ### 4. Suggestion Language
 
 **Function**: Language for diagnostic reports and Doctor suggestions.
-**Usage**: Currently supports English, Traditional Chinese, Simplified Chinese, and Japanese (more coming soon). Changes apply to new errors.
+**Usage**: Supports 9 languages: English, Traditional Chinese, Simplified Chinese, Japanese, German, French, Italian, Spanish, and Korean. Changes apply to new errors and refreshed UI text.
 
 ### 5. Enable Doctor (requires restart)
 
@@ -817,7 +877,7 @@ curl http://localhost:8188/debugger/last_analysis
   "status": "running",
   "log_path": ".../logs/comfyui_debug_2025-12-28.log",
   "language": "zh_TW",
-  "supported_languages": ["en", "zh_TW", "zh_CN", "ja"],
+  "supported_languages": ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"],
   "last_error": "Traceback...",
   "suggestion": "SUGGESTION: ...",
   "timestamp": "2025-12-28T06:49:11",
@@ -916,6 +976,209 @@ List available models from the configured LLM provider.
 }
 ```
 
+### GET `/doctor/secrets/status` (S8)
+
+Get provider key source/status information without exposing secret values.
+
+- Admin-gated (loopback convenience may apply depending on `DOCTOR_ADMIN_TOKEN` configuration)
+- Used by the **Advanced Key Store (Server-side)** panel
+
+**Response (shape)**:
+
+```json
+{
+  "success": true,
+  "providers": {
+    "openai": {"effective_source": "env|server|none"},
+    "gemini": {"effective_source": "env|server|none"}
+  }
+}
+```
+
+### PUT `/doctor/secrets` (S8)
+
+Save a provider API key to the optional server-side key store (`secrets.json`).
+
+**Payload**:
+
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "admin_token": "optional-if-configured"
+}
+```
+
+### DELETE `/doctor/secrets/{provider}` (S8)
+
+Delete a provider API key from the optional server-side key store.
+
+- Admin-gated (token may be provided via request body and/or headers per server policy)
+
+```bash
+curl -X DELETE http://localhost:8188/doctor/secrets/openai
+```
+
+### POST `/doctor/mark_resolved` (F15)
+
+Update the latest error resolution status used by the Statistics dashboard.
+
+**Payload**:
+
+```json
+{
+  "timestamp": "2026-01-04T12:00:00",
+  "status": "resolved"
+}
+```
+
+`status` supports: `resolved`, `unresolved`, `ignored`
+
+### POST `/doctor/feedback/preview` (F16)
+
+Validate and sanitize a Quick Community Feedback payload before GitHub PR submission.
+
+**Payload (example)**:
+
+```json
+{
+  "pattern_candidate": {
+    "id": "community_user_feedback",
+    "regex": "RuntimeError",
+    "category": "generic",
+    "priority": 60
+  },
+  "suggestion_candidate": {
+    "language": "en",
+    "message": "Describe the verified fix here"
+  },
+  "error_context": {},
+  "include_stats": true,
+  "stats_snapshot": {}
+}
+```
+
+**Response (shape)**:
+
+```json
+{
+  "success": true,
+  "submission_id": "fb_...",
+  "files": {
+    "submission": "feedback/submissions/...json"
+  },
+  "preview": {},
+  "warnings": [],
+  "github": {
+    "ready": false,
+    "repo": "rookiestar28/ComfyUI-Doctor",
+    "base_branch": "main"
+  }
+}
+```
+
+### POST `/doctor/feedback/submit` (F16)
+
+Create a GitHub PR from a sanitized feedback payload (append-only files under `feedback/`).
+
+- Admin-gated write endpoint
+- Requires server-side GitHub token (`DOCTOR_GITHUB_TOKEN`)
+- Payload is the same shape as `/doctor/feedback/preview` (optionally including `admin_token`)
+
+**Response (shape)**:
+
+```json
+{
+  "success": true,
+  "submission_id": "fb_...",
+  "preview": {},
+  "warnings": [],
+  "github": {
+    "ready": true,
+    "repo": "rookiestar28/ComfyUI-Doctor",
+    "branch": "feedback/20260226/...",
+    "base_branch": "main",
+    "pr_number": 123,
+    "pr_url": "https://github.com/.../pull/123"
+  }
+}
+```
+
+### GET `/doctor/health`
+
+Fetch internal Doctor health metrics (logger queue stats, SSRF counters, storage path, and last pipeline status).
+
+```bash
+curl http://localhost:8188/doctor/health
+```
+
+### GET `/doctor/plugins`
+
+Fetch a scan-only plugin trust report (no plugin code import).
+
+```bash
+curl http://localhost:8188/doctor/plugins
+```
+
+### GET `/doctor/telemetry/status` (S3)
+
+Get telemetry enable state and local buffer stats.
+
+```bash
+curl http://localhost:8188/doctor/telemetry/status
+```
+
+### GET `/doctor/telemetry/buffer` (S3)
+
+Fetch buffered local telemetry events (used by the Statistics tab telemetry panel).
+
+```bash
+curl http://localhost:8188/doctor/telemetry/buffer
+```
+
+### POST `/doctor/telemetry/track` (S3)
+
+Record a telemetry event (same-origin, JSON-only, bounded payload).
+
+**Payload**:
+
+```json
+{
+  "category": "ui",
+  "action": "click",
+  "label": "stats_refresh",
+  "value": 1
+}
+```
+
+### POST `/doctor/telemetry/clear` (S3)
+
+Clear all buffered local telemetry events.
+
+```bash
+curl -X POST http://localhost:8188/doctor/telemetry/clear
+```
+
+### GET `/doctor/telemetry/export` (S3)
+
+Export telemetry buffer as a downloadable JSON file.
+
+```bash
+curl -OJ http://localhost:8188/doctor/telemetry/export
+```
+
+### POST `/doctor/telemetry/toggle` (S3)
+
+Enable or disable local telemetry collection.
+
+**Payload**:
+
+```json
+{
+  "enabled": true
+}
+```
+
 
 ### GET `/doctor/jobs/{job_id}`
 
@@ -994,6 +1257,8 @@ Acknowledge/ignore/resolve an issue.
   "status": "acknowledged"
 }
 ```
+
+`status` supports: `acknowledged`, `ignored`, `resolved`
 
 ---
 
