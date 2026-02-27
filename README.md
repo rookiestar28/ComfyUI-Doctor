@@ -653,7 +653,8 @@ Configure AI analysis in the **Doctor Sidebar** → **Settings** panel:
 3. Wait for the LLM to analyze the error (typically 3-10 seconds).
 4. Review the AI-generated debugging suggestions.
 
-**Security Note**: API keys are **session-only** in the browser (cleared on reload). The backend resolves keys via this priority chain: request key → `DOCTOR_{PROVIDER}_API_KEY` → `DOCTOR_LLM_API_KEY` → optional server-side store (`secrets.json`). Keys are never logged and the server store is admin-gated. `secrets.json` is plaintext on disk (OS-permission protected), so for maximum security use environment variables.
+**Security Note**: API keys are **session-only** in the browser (cleared on reload). The backend resolves keys via this priority chain: request key → `DOCTOR_{PROVIDER}_API_KEY` → `DOCTOR_LLM_API_KEY` → optional server-side store (`secrets.json`). Keys are never logged and the server store is admin-gated.  
+For server-side storage, plaintext mode remains available for compatibility, and optional encryption-at-rest is supported via `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` (you can enforce it with `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED=1`). For maximum security, environment variables remain the recommended default.
 
 ### Privacy Mode (PII Sanitization)
 
@@ -845,7 +846,7 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 **Usage**: Required for cloud providers (OpenAI, DeepSeek, etc.). Leave empty for local LLMs (Ollama, LMStudio).
 **Default Behavior**: Session-only in frontend (cleared on reload); not persisted in ComfyUI settings.
 **Runtime Resolution Priority**: Request key → provider-specific ENV → generic ENV → optional server-side key store.
-**Security Warning**: The server-side key store writes plaintext `secrets.json` to disk. Use ENV for production or multi-user environments.
+**Security Warning**: The server-side key store supports optional encryption-at-rest. Use `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` to enable encryption and `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED=1` to fail closed when key material is missing. For production or multi-user environments, ENV-based keys are still recommended.
 
 **Advanced Key Store Setup (optional)**:
 
@@ -855,6 +856,13 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 2. Select provider, paste API key, and provide admin token if configured.
 3. Click **💾 Save to Server** to persist, or **🗑️ Delete** to remove.
 4. Confirm provider status badge (`ENV`, `Server`, `None`) to verify effective source.
+
+**Optional Key Store Runtime Controls (ENV)**:
+
+- `DOCTOR_SECRET_STORE_ENCRYPTION_KEY`: Enables encryption-at-rest for `secrets.json`.
+- `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED`: When `1/true`, write operations fail if encryption key is missing.
+- `DOCTOR_SECRET_STORE_WARN_INSECURE`: Controls plaintext-mode warning logs.
+- `DOCTOR_SECRET_STORE_WINDOWS_ACL_HARDEN`: Enables/disables Windows ACL hardening attempts (`icacls`, best-effort).
 
 ### 9. AI Model Name
 
@@ -871,6 +879,12 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 ---
 
 ## API Endpoints
+
+Write-sensitive endpoints are admin-gated.  
+Denied writes follow unified semantics:
+
+- `401`: Invalid/missing admin token when token auth is required.
+- `403`: Remote admin denied by policy (for example, non-loopback request without explicit remote admin allowance).
 
 ### GET `/debugger/last_analysis`
 
@@ -1009,6 +1023,9 @@ Get provider key source/status information without exposing secret values.
 
 Save a provider API key to the optional server-side key store (`secrets.json`).
 
+- Admin-gated write endpoint
+- Store can run in compatibility plaintext mode or optional encrypted mode (controlled by secret-store ENV settings)
+
 **Payload**:
 
 ```json
@@ -1032,6 +1049,8 @@ curl -X DELETE http://localhost:8188/doctor/secrets/openai
 ### POST `/doctor/mark_resolved` (F15)
 
 Update the latest error resolution status used by the Statistics dashboard.
+
+- Admin-gated write endpoint
 
 **Payload**:
 
@@ -1116,10 +1135,32 @@ Create a GitHub PR from a sanitized feedback payload (append-only files under `f
 
 ### GET `/doctor/health`
 
-Fetch internal Doctor health metrics (logger queue stats, SSRF counters, storage path, and last pipeline status).
+Fetch internal Doctor health metrics (logger queue stats, SSRF counters, storage path, last pipeline status, and outbound proxy policy diagnostics).
 
 ```bash
 curl http://localhost:8188/doctor/health
+```
+
+**Response (shape)**:
+
+```json
+{
+  "success": true,
+  "health": {
+    "logger": {},
+    "ssrf": {},
+    "storage": {
+      "data_dir": "..."
+    },
+    "outbound_proxy": {
+      "policy": "strict_off|inherit_env",
+      "trust_env": false,
+      "source": "default|config|env|*_invalid_fallback",
+      "env_key": "DOCTOR_OUTBOUND_PROXY_POLICY"
+    },
+    "last_analysis": {}
+  }
+}
 ```
 
 ### GET `/doctor/plugins`
@@ -1165,6 +1206,8 @@ Record a telemetry event (same-origin, JSON-only, bounded payload).
 
 Clear all buffered local telemetry events.
 
+- Admin-gated write endpoint
+
 ```bash
 curl -X POST http://localhost:8188/doctor/telemetry/clear
 ```
@@ -1180,6 +1223,8 @@ curl -OJ http://localhost:8188/doctor/telemetry/export
 ### POST `/doctor/telemetry/toggle` (S3)
 
 Enable or disable local telemetry collection.
+
+- Admin-gated write endpoint
 
 **Payload**:
 
@@ -1202,6 +1247,8 @@ curl http://localhost:8188/doctor/jobs/<job_id>
 
 Resume a previously interrupted/suspended enrichment job.
 
+- Admin-gated write endpoint
+
 ```bash
 curl -X POST http://localhost:8188/doctor/jobs/<job_id>/resume
 ```
@@ -1209,6 +1256,8 @@ curl -X POST http://localhost:8188/doctor/jobs/<job_id>/resume
 ### POST `/doctor/jobs/{job_id}/cancel`
 
 Cancel a running/pending enrichment job.
+
+- Admin-gated write endpoint
 
 ```bash
 curl -X POST http://localhost:8188/doctor/jobs/<job_id>/cancel
@@ -1258,6 +1307,8 @@ curl "http://localhost:8188/doctor/health_history?limit=50&offset=0"
 
 Acknowledge/ignore/resolve an issue.
 
+- Admin-gated write endpoint
+
 **Payload**:
 
 ```json
@@ -1301,7 +1352,8 @@ Create `config.json` to customize behavior:
   "history_size": 20,
   "default_language": "zh_TW",
   "enable_api": true,
-  "privacy_mode": "basic"
+  "privacy_mode": "basic",
+  "llm_proxy_policy": "strict_off"
 }
 ```
 
@@ -1314,6 +1366,12 @@ Create `config.json` to customize behavior:
 - `default_language`: Default suggestion language
 - `enable_api`: Enable API endpoints
 - `privacy_mode`: PII sanitization level - `"none"`, `"basic"` (default), or `"strict"` (see Privacy Mode section above)
+- `llm_proxy_policy`: Outbound proxy policy for shared HTTP session - `"strict_off"` (default, ignore env proxy) or `"inherit_env"` (opt in to env proxy inheritance)
+
+**Security Runtime Overrides (ENV)**:
+
+- `DOCTOR_OUTBOUND_PROXY_POLICY`: Overrides `llm_proxy_policy` at runtime (`strict_off` or `inherit_env`).
+- `DOCTOR_SSRF_DNS_TIMEOUT_SECONDS`: Controls bounded DNS resolution timeout for outbound URL SSRF validation.
 
 ### Community Plugins (Advanced)
 
