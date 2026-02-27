@@ -78,6 +78,10 @@ SessionManager.configure_limits(
     max_concurrent=getattr(CONFIG, "llm_max_concurrent", None),
     rate_window_seconds=getattr(getattr(CONFIG, "guardrails", None), "RATE_LIMIT_WINDOW_SECONDS", None),
 )
+SessionManager.configure_proxy_policy(
+    config_policy=getattr(CONFIG, "llm_proxy_policy", None),
+    env_policy=os.getenv(SessionManager.ENV_PROXY_POLICY_KEY),
+)
 
 
 def _close_retry_response(result: RetryResult) -> None:
@@ -2569,6 +2573,7 @@ try:
                     "data_dir": get_doctor_data_dir(),
                     "history_size_bytes": getattr(CONFIG, "history_size_bytes", 0),
                 },
+                "outbound_proxy": SessionManager.get_proxy_diagnostics(),
                 "last_analysis": {
                     "timestamp": last_analysis.get("timestamp"),
                     "pipeline_status": analysis_meta.get("pipeline_status"),

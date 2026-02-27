@@ -105,6 +105,68 @@ class TestSessionManagerTimeout(unittest.TestCase):
         self.assertEqual(SessionManager.DEFAULT_TIMEOUT.total, 60)
 
 
+class TestSessionManagerProxyPolicy(unittest.TestCase):
+    """Tests for S13 outbound proxy trust boundary policy."""
+
+    def setUp(self):
+        SessionManager.reset()
+
+    def tearDown(self):
+        async def cleanup():
+            await SessionManager.close()
+        try:
+            asyncio.run(cleanup())
+        except Exception:
+            pass
+        SessionManager.reset()
+
+    def test_default_policy_is_strict_off(self):
+        diagnostics = SessionManager.get_proxy_diagnostics()
+        self.assertEqual(diagnostics["policy"], "strict_off")
+        self.assertFalse(diagnostics["trust_env"])
+
+    def test_config_policy_can_opt_in_inherit_env(self):
+        SessionManager.configure_proxy_policy(config_policy="inherit_env")
+        diagnostics = SessionManager.get_proxy_diagnostics()
+        self.assertEqual(diagnostics["policy"], "inherit_env")
+        self.assertTrue(diagnostics["trust_env"])
+        self.assertEqual(diagnostics["source"], "config")
+
+    def test_env_policy_overrides_config(self):
+        SessionManager.configure_proxy_policy(
+            config_policy="strict_off",
+            env_policy="inherit_env",
+        )
+        diagnostics = SessionManager.get_proxy_diagnostics()
+        self.assertEqual(diagnostics["policy"], "inherit_env")
+        self.assertTrue(diagnostics["trust_env"])
+        self.assertEqual(diagnostics["source"], "env")
+
+    def test_invalid_policy_falls_back_to_strict_off(self):
+        SessionManager.configure_proxy_policy(config_policy="invalid-policy")
+        diagnostics = SessionManager.get_proxy_diagnostics()
+        self.assertEqual(diagnostics["policy"], "strict_off")
+        self.assertFalse(diagnostics["trust_env"])
+        self.assertEqual(diagnostics["source"], "config_invalid_fallback")
+
+    def test_client_session_uses_effective_trust_env_flag(self):
+        async def run_test():
+            fake_session = MagicMock()
+            fake_session.closed = False
+            fake_session.close = AsyncMock()
+            with patch("session_manager.aiohttp.ClientSession", return_value=fake_session) as mock_cs:
+                SessionManager.configure_proxy_policy(config_policy="strict_off")
+                await SessionManager.get_session()
+                self.assertFalse(mock_cs.call_args.kwargs["trust_env"])
+
+                await SessionManager.close()
+                SessionManager.configure_proxy_policy(config_policy="inherit_env")
+                await SessionManager.get_session()
+                self.assertTrue(mock_cs.call_args.kwargs["trust_env"])
+
+        asyncio.run(run_test())
+
+
 class TestSessionManagerLimits(unittest.TestCase):
     """Tests for SessionManager limiter wiring."""
 

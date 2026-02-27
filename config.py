@@ -84,6 +84,11 @@ class DiagnosticsConfig:
     llm_request_timeout: float = 60.0   # per-attempt timeout (seconds)
     llm_total_timeout: float = 180.0    # total operation timeout (seconds)
 
+    # S13: Outbound proxy trust boundary policy
+    # strict_off: ignore env proxy variables (secure default)
+    # inherit_env: allow aiohttp trust_env to inherit env proxy variables
+    llm_proxy_policy: str = "strict_off"
+
     # R12: Token Budget Management
     r12_enabled_remote: bool = True
     r12_enabled_local: bool = False

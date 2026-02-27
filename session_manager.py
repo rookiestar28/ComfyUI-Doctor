@@ -10,9 +10,12 @@ R7 Enhancement: Adds rate limiting and concurrency control for LLM requests.
 import asyncio
 import aiohttp
 import atexit
+import logging
 from typing import Optional
 
 from rate_limiter import RateLimiter, ConcurrencyLimiter
+
+logger = logging.getLogger(__name__)
 
 
 class SessionManager:
@@ -46,6 +49,13 @@ class SessionManager:
     DEFAULT_LIGHT_RATE = 10   # req/min for light endpoints
     DEFAULT_CONCURRENCY = 3   # simultaneous LLM requests
     DEFAULT_RATE_WINDOW_SECONDS = 60
+
+    # S13: Outbound proxy trust boundary policy (secure by default).
+    PROXY_POLICY_STRICT_OFF = "strict_off"
+    PROXY_POLICY_INHERIT_ENV = "inherit_env"
+    ENV_PROXY_POLICY_KEY = "DOCTOR_OUTBOUND_PROXY_POLICY"
+    _proxy_policy: str = PROXY_POLICY_STRICT_OFF
+    _proxy_policy_source: str = "default"
 
     @classmethod
     def configure_limits(
@@ -88,6 +98,64 @@ class SessionManager:
         if cls._lock is None:
             cls._lock = asyncio.Lock()
         return cls._lock
+
+    @classmethod
+    def _normalize_proxy_policy(cls, policy: Optional[str]) -> str:
+        normalized = (policy or "").strip().lower()
+        if normalized in {cls.PROXY_POLICY_STRICT_OFF, cls.PROXY_POLICY_INHERIT_ENV}:
+            return normalized
+        return cls.PROXY_POLICY_STRICT_OFF
+
+    @classmethod
+    def configure_proxy_policy(
+        cls,
+        *,
+        config_policy: Optional[str] = None,
+        env_policy: Optional[str] = None,
+    ) -> None:
+        """
+        Configure proxy trust policy with env override precedence.
+
+        Precedence:
+          1) env_policy (DOCTOR_OUTBOUND_PROXY_POLICY)
+          2) config_policy
+          3) strict_off fallback
+        """
+        chosen_source = "default"
+        chosen_value: Optional[str] = None
+
+        raw_env = (env_policy or "").strip()
+        if raw_env:
+            chosen_source = "env"
+            chosen_value = raw_env
+        else:
+            raw_config = (config_policy or "").strip()
+            if raw_config:
+                chosen_source = "config"
+                chosen_value = raw_config
+
+        normalized = cls._normalize_proxy_policy(chosen_value)
+        if chosen_value and normalized != chosen_value.lower():
+            logger.warning(
+                "Invalid outbound proxy policy '%s' from %s; falling back to '%s'",
+                chosen_value,
+                chosen_source,
+                cls.PROXY_POLICY_STRICT_OFF,
+            )
+            chosen_source = f"{chosen_source}_invalid_fallback"
+
+        cls._proxy_policy = normalized
+        cls._proxy_policy_source = chosen_source
+
+    @classmethod
+    def get_proxy_diagnostics(cls) -> dict:
+        """Return effective outbound proxy trust settings for diagnostics."""
+        return {
+            "policy": cls._proxy_policy,
+            "trust_env": cls._proxy_policy == cls.PROXY_POLICY_INHERIT_ENV,
+            "source": cls._proxy_policy_source,
+            "env_key": cls.ENV_PROXY_POLICY_KEY,
+        }
     
     @classmethod
     def get_core_limiter(cls) -> RateLimiter:
@@ -146,10 +214,10 @@ class SessionManager:
         async with cls._get_lock():
             if cls._session is None or cls._session.closed:
                 cls._closed = False
+                # CRITICAL: Keep strict-off default to avoid ambient proxy env inheritance.
                 cls._session = aiohttp.ClientSession(
                     timeout=cls.DEFAULT_TIMEOUT,
-                    # Trust environment for proxy settings
-                    trust_env=True
+                    trust_env=(cls._proxy_policy == cls.PROXY_POLICY_INHERIT_ENV),
                 )
             return cls._session
     
@@ -185,6 +253,8 @@ class SessionManager:
         cls._core_limiter = None
         cls._light_limiter = None
         cls._concurrency = None
+        cls._proxy_policy = cls.PROXY_POLICY_STRICT_OFF
+        cls._proxy_policy_source = "default"
 
 
 def _sync_close_session():
