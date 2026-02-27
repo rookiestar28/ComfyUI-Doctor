@@ -96,6 +96,52 @@ class TestSecretStore:
             t.join()
         assert not errors, f"Thread safety error: {errors}"
 
+    def test_encryption_roundtrip_no_plaintext(self, tmp_path):
+        with patch.dict(os.environ, {"DOCTOR_SECRET_STORE_ENCRYPTION_KEY": "unit-test-secret-store-key"}, clear=False):  # pragma: allowlist secret
+            store = self._make_store(tmp_path)
+            store.set_secret("openai", "sk-sensitive-value")  # pragma: allowlist secret
+            raw = Path(store.filepath).read_text(encoding="utf-8")
+            assert "sk-sensitive-value" not in raw
+            payload = json.loads(raw)
+            assert payload.get("_meta", {}).get("encrypted") is True
+            assert store.get_secret("openai") == "sk-sensitive-value"
+
+    def test_encryption_required_without_key_blocks_write(self, tmp_path):
+        with patch.dict(os.environ, {"DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED": "1"}, clear=False):
+            os.environ.pop("DOCTOR_SECRET_STORE_ENCRYPTION_KEY", None)
+            store = self._make_store(tmp_path)
+            with pytest.raises(RuntimeError):
+                store.set_secret("openai", "sk-test")
+
+    def test_plaintext_load_then_migrate_to_encrypted(self, tmp_path):
+        fp = tmp_path / "secrets.json"
+        fp.write_text(json.dumps({"openai": "sk-legacy"}, ensure_ascii=False), encoding="utf-8")  # pragma: allowlist secret
+
+        with patch.dict(os.environ, {"DOCTOR_SECRET_STORE_ENCRYPTION_KEY": "unit-test-secret-store-key"}, clear=False):  # pragma: allowlist secret
+            store = SecretStore(filepath=str(fp))
+            # Backward-compatible read from legacy plaintext file.
+            assert store.get_secret("openai") == "sk-legacy"
+            # Next write should persist encrypted format.
+            store.set_secret("anthropic", "sk-new")
+            raw = fp.read_text(encoding="utf-8")
+            assert "sk-legacy" not in raw
+            assert "sk-new" not in raw
+            payload = json.loads(raw)
+            assert payload.get("_meta", {}).get("encrypted") is True
+
+    def test_windows_acl_hardening_attempted_once(self, tmp_path):
+        with patch("services.secret_store.os.name", "nt"), \
+             patch("services.secret_store.shutil.which", return_value="icacls"), \
+             patch("services.secret_store.subprocess.run") as mock_run, \
+             patch.dict(os.environ, {"USERNAME": "tester", "DOCTOR_SECRET_STORE_WINDOWS_ACL_HARDEN": "1"}, clear=False):
+            store = self._make_store(tmp_path)
+            store.set_secret("openai", "sk-test")
+            first_calls = mock_run.call_count
+            assert first_calls >= 2
+            store.set_secret("openai", "sk-test-2")
+            # ACL hardening should not rerun for every save in one store instance.
+            assert mock_run.call_count == first_calls
+
 
 # ---------------------------------------------------------------------------
 # llm_keys
