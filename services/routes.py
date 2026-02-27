@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import aiohttp.web as web
+from services.admin_guard import validate_admin_request
 
 try:
     from config import CONFIG
@@ -27,6 +28,20 @@ except ImportError:
 
 
 logger = logging.getLogger("ComfyUI-Doctor.routes")
+
+
+def _admin_denied_response(code: str, message: str):
+    status_code = 401 if code == "unauthorized" else 403
+    return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+
+
+async def _optional_json_payload(request):
+    if not getattr(request, "can_read_body", False):
+        return {}
+    try:
+        return await request.json()
+    except Exception:
+        return {}
 
 async def api_plugins(request):
     """
@@ -121,6 +136,12 @@ async def api_resume_job(request):
     Resume a suspended/failed job.
     Note: Actual resume logic depends on provider implementation.
     """
+    payload = await _optional_json_payload(request)
+    # CRITICAL: write-sensitive endpoint must remain admin-gated.
+    allowed, code, message = validate_admin_request(request, payload=payload)
+    if not allowed:
+        return _admin_denied_response(code, message)
+
     job_id = request.match_info.get("job_id", "")
     from services.job_manager import get_job_manager, JobStatus
     job = get_job_manager().get_job(job_id)
@@ -141,6 +162,12 @@ async def api_cancel_job(request):
     """
     Cancel a running/pending job.
     """
+    payload = await _optional_json_payload(request)
+    # CRITICAL: write-sensitive endpoint must remain admin-gated.
+    allowed, code, message = validate_admin_request(request, payload=payload)
+    if not allowed:
+        return _admin_denied_response(code, message)
+
     job_id = request.match_info.get("job_id", "")
     from services.job_manager import get_job_manager, JobStatus
     if get_job_manager().update_job(job_id, status=JobStatus.CANCELLED):
