@@ -340,9 +340,25 @@ class TestSSRFProtection(unittest.TestCase):
             "https://api.groq.com/openai/v1",
             "https://api.anthropic.com/v1",
         ]
-        for url in allowed_urls:
-            is_valid, error = self.validate_ssrf_url(url)
-            self.assertTrue(is_valid, f"Cloud URL {url} should be allowed: {error}")
+        # Keep test deterministic/offline-safe: no live DNS dependency.
+        with patch("security._resolve_hostname_ips", return_value=["104.18.32.45"]):
+            for url in allowed_urls:
+                is_valid, error = self.validate_ssrf_url(url)
+                self.assertTrue(is_valid, f"Cloud URL {url} should be allowed: {error}")
+
+    def test_dns_rebinding_private_ip_blocked(self):
+        """Domain resolving to private IP must be blocked (DNS rebinding defense)."""
+        with patch("security._resolve_hostname_ips", return_value=["10.12.0.8"]):
+            is_valid, error = self.validate_ssrf_url("https://api.example.com/v1")
+            self.assertFalse(is_valid)
+            self.assertIn("dns resolved to private ip", error.lower())
+
+    def test_dns_resolution_timeout_fail_closed(self):
+        """DNS resolution timeout/failure should be blocked (fail-closed)."""
+        with patch("security._resolve_hostname_ips", side_effect=RuntimeError("DNS resolution timeout (1.5s)")):
+            is_valid, error = self.validate_ssrf_url("https://api.example.com/v1")
+            self.assertFalse(is_valid)
+            self.assertIn("dns resolution error", error.lower())
     
     def test_non_http_blocked(self):
         """Test that non-HTTP protocols are blocked."""
