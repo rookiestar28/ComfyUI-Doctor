@@ -11,6 +11,16 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 <details> <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Security Hardening Refresh (Admin Gate + Network Boundary + Secret Storage)</strong></summary>
+
+- Consolidated write-sensitive API routes under a unified admin guard path so state-changing operations consistently require authorized access.
+- Strengthened outbound URL safety with DNS-resolution checks to block hostname-based private/metadata target rebinding attempts.
+- Upgraded server-side secret storage with optional at-rest encryption, safer migration behavior for existing plaintext files, and stronger Windows ACL hardening behavior.
+- Hardened outbound proxy trust defaults: shared HTTP sessions now ignore ambient proxy environment variables unless explicitly opted in, and effective policy is exposed in health diagnostics.
+
+</details>
+
+<details>
 <summary><strong>Data-Driven Diagnostics Signature Packs</strong></summary>
 
 - Added JSON-based signature packs for proactive diagnostics so heuristic rule updates can be maintained as data instead of code-only changes.
