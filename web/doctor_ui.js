@@ -266,7 +266,16 @@ export class DoctorUI {
             console.log("[ComfyUI-Doctor] 🔴 Execution error received via WebSocket");
 
             const detail = event.detail || {};
-            const { node_id, node_type, exception_message, exception_type } = detail;
+            const {
+                node_id,
+                node_type,
+                exception_message,
+                exception_type,
+                // R23: New fields from ComfyUI execution.py
+                traceback: tracebackArr,
+                current_inputs: currentInputs,
+                current_outputs: currentOutputs,
+            } = detail;
 
             // Create error hash for deduplication
             const errorHash = this.getErrorHash(node_id, exception_type, exception_message);
@@ -281,9 +290,18 @@ export class DoctorUI {
             this.lastErrorHash = errorHash;
             this.lastErrorTimestamp = now;
 
+            // R23: Build full error text, preferring traceback array when available
+            // ComfyUI now sends traceback as an array of formatted traceback lines
+            let fullErrorText = `${exception_type}: ${exception_message}`;
+            if (Array.isArray(tracebackArr) && tracebackArr.length > 0) {
+                // Join traceback lines and append the exception summary
+                const tbText = tracebackArr.join("");
+                fullErrorText = `Traceback (most recent call last):\n${tbText}${exception_type}: ${exception_message}`;
+            }
+
             // Build data object compatible with existing updateLogCard
             const data = {
-                last_error: `${exception_type}: ${exception_message}`,
+                last_error: fullErrorText,
                 suggestion: null,  // Will be fetched from backend or analyzed by AI
                 timestamp: new Date().toISOString(),
                 node_context: {
@@ -291,6 +309,12 @@ export class DoctorUI {
                     node_name: node_type || null,  // node_type is the class name
                     node_class: node_type || null,
                     custom_node_path: null,
+                },
+                // R23: Include enriched execution context for AI analysis
+                execution_context: {
+                    current_inputs: currentInputs || null,
+                    current_outputs: currentOutputs || null,
+                    has_traceback: Array.isArray(tracebackArr) && tracebackArr.length > 0,
                 },
             };
 

@@ -233,6 +233,48 @@ test.describe('Doctor Chat Interface', () => {
     await expect(errorMessage).not.toContainText('Traceback');
   });
 
+  test('should enrich error context from execution_error event (R23)', async ({ page }) => {
+    // Dispatch native execution_error event with new fields (traceback array, current_inputs)
+    await page.evaluate(() => {
+      const detail = {
+        node_id: "15",
+        node_type: "KSampler",
+        exception_message: "return type mismatch",
+        exception_type: "ValidationError",
+        traceback: [
+          "Traceback (most recent call last):\n",
+          "  File \"execution.py\", line 123, in execute\n"
+        ],
+        current_inputs: { "seed": [12345] },
+        current_outputs: null
+      };
+
+      // api is mocked in test-harness
+      window.api._triggerEvent("execution_error", { detail });
+    });
+
+    // Wait for event to be processed
+    await page.waitForTimeout(300);
+
+    // Assert on the stored lastErrorData handled by DoctorUI
+    const capturedData = await page.evaluate(() => {
+      return window.app.Doctor.lastErrorData;
+    });
+
+    expect(capturedData).toBeDefined();
+    expect(capturedData.node_context.node_id).toBe("15");
+    expect(capturedData.node_context.node_class).toBe("KSampler");
+    
+    // R23: verify traceback array was joined with exception message
+    expect(capturedData.last_error).toContain("Traceback (most recent call last):");
+    expect(capturedData.last_error).toContain("File \"execution.py\", line 123");
+    expect(capturedData.last_error).toContain("ValidationError: return type mismatch");
+    
+    // R23: verify execution context was enriched
+    expect(capturedData.execution_context.has_traceback).toBe(true);
+    expect(capturedData.execution_context.current_inputs).toEqual({ "seed": [12345] });
+  });
+
   test('should have Doctor title in header', async ({ page }) => {
     // Check for Doctor title icon in the sidebar header
     const header = page.locator('#mock-sidebar-tabs');

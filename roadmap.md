@@ -560,17 +560,16 @@ graph TD
   - **Discovered**: 2026-03-25 (error log analysis)
   - **Plan**: `.planning/260325-R22_LOGGER_ASYNCIO_GC_POLLUTION_FIX_PLAN.md`
   - **Implementation Record**: `.planning/260325-R22_LOGGER_ASYNCIO_GC_POLLUTION_FIX_IMPLEMENTATION_RECORD.md`
-- [ ] **R23**: `execution_error` Event Structure Compatibility Update - Medium
-  - **Problem**: ComfyUI `execution.py` now emits `execution_error` WS events with additional fields: `display_node`, `parent_node`, `real_node_id` (for subgraph/ephemeral node support). Doctor's `ContextEnhancerStage` and frontend `doctor_ui.js` error context extraction do not utilize these fields.
+- [x] **R23**: `execution_error` Event Structure Compatibility Update - Medium *Completed (2026-03-25)*
+  - **Problem**: ComfyUI `execution.py` now emits `execution_error` WS events with additional fields. Doctor's frontend `doctor_ui.js` error context extraction does not utilize `current_inputs` or `traceback` natively from the WebSocket.
   - **Scope**:
-    - Update `ContextEnhancerStage` to extract and include `display_node` / `parent_node` / `real_node_id` in enriched error context.
-    - Update frontend `doctor_ui.js` node location logic to use `display_node` for more accurate node highlighting.
-    - Handle subgraph-expanded workflow structures in workflow truncation/serialization.
+    - Update `subscribeToExecutionErrors()` in `doctor_ui.js` to parse new `traceback` array when creating the error text.
+    - Attach `current_inputs` and `has_traceback` as an `execution_context` object alongside `node_context`.
   - **Acceptance**:
-    - Error context includes subgraph lineage when available.
-    - Node jump-to still works for both flat and subgraph-expanded workflows.
-    - Backward compatible (gracefully ignores missing fields on older ComfyUI versions).
-  - **Discovered**: 2026-03-25 (reference project audit — ComfyUI `execution.py`)
+    - Frontend successfully consumes new websocket properties correctly mapped to Doctor's expected error signatures.
+    - E2E tests maintain functional parity without crashes.
+  - **Plan**: `.planning/260325-R23_EXECUTION_ERROR_COMPAT_PLAN.md`
+  - **Implementation Record**: `.planning/260325-R23_EXECUTION_ERROR_COMPAT_IMPLEMENTATION_RECORD.md`
 - [ ] **R24**: Desktop Virtual Environment Path Compatibility Verification - Low
   - **Problem**: Desktop `virtualEnvironment.ts` has been substantially rewritten (~40KB). Doctor's `doctor_paths.py` (R18) and `system_info.py` need verification against new Desktop path resolution logic.
   - **Scope**:
@@ -1243,7 +1242,7 @@ Transform single-shot analysis into a context-aware, multi-turn AI coding assist
     "node_context": {"node_id": "42", ...},
     "workflow": {...}
   },
-  "api_key": "sk-...",
+  "api_key": "sk-...", // pragma: allowlist secret
   "base_url": "https://api.openai.com/v1",
   "model": "gpt-4o",
   "language": "zh_TW",
