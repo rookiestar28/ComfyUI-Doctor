@@ -25,6 +25,51 @@ import logging
 import hashlib
 from collections import deque
 from typing import Optional, Dict, Any, List
+
+# ==============================================================================
+# R22: Asyncio transport GC exclusion patterns
+# ==============================================================================
+# Windows ProactorEventLoop transport GC raises ValueError during __del__.
+# These are non-actionable Python-internal warnings that should never trigger
+# Doctor error analysis. See: roadmap.md R22
+_ASYNCIO_GC_EXCLUSION_PATTERNS = (
+    "_ProactorBasePipeTransport.__del__",
+    "I/O operation on closed pipe",
+    "unclosed transport",
+)
+
+
+def _is_asyncio_gc_noise(message: str) -> bool:
+    """Check if a message is a known-benign asyncio transport GC warning.
+
+    These warnings originate from Python's asyncio internals on Windows when
+    a ProactorEventLoop transport is garbage-collected after its pipe has
+    already been closed.  They are non-actionable and would cause recursive
+    log pollution if Doctor tries to analyse them.
+    """
+    if not message:
+        return False
+    return any(pat in message for pat in _ASYNCIO_GC_EXCLUSION_PATTERNS)
+
+
+# ==============================================================================
+# R22: Dedicated internal logger (bypasses SafeStreamWrapper)
+# ==============================================================================
+# This logger writes directly to sys.__stderr__ (the *real* stderr, not the
+# wrapped one) so that Doctor's own diagnostic messages never re-enter the
+# SafeStreamWrapper capture pipeline.
+_doctor_internal_logger = logging.getLogger("doctor._internal")
+_doctor_internal_logger.propagate = False  # CRITICAL: do not propagate to root
+if not _doctor_internal_logger.handlers:
+    _internal_handler = logging.StreamHandler(sys.__stderr__)
+    _internal_handler.setFormatter(
+        logging.Formatter("%(asctime)s [Doctor-Internal] %(message)s")
+    )
+    _doctor_internal_logger.addHandler(_internal_handler)
+    _doctor_internal_logger.setLevel(logging.DEBUG)
+
+# R22: Thread-local reentrance guard for SafeStreamWrapper
+_stream_reentrance = threading.local()
 try:
     from .analyzer import ErrorAnalyzer
     from .config import CONFIG
@@ -379,19 +424,34 @@ class SafeStreamWrapper:
         Write data: immediate pass-through + enqueue for analysis.
 
         CRITICAL: This method holds NO locks to avoid deadlock.
+        R22: Thread-local reentrance guard prevents recursive capture.
         """
-        # 1. Immediately write to original stream (may be LogInterceptor)
-        try:
-            self._original_stream.write(data)
-        except (OSError, AttributeError):
-            pass  # Stream may be closed during shutdown
+        # R22: Reentrance guard — if we are already inside a write() on this
+        # thread (e.g. because _record_analysis triggered a logging call that
+        # routes back here), skip the enqueue step to break the recursion.
+        if getattr(_stream_reentrance, "active", False):
+            try:
+                self._original_stream.write(data)
+            except (OSError, AttributeError):
+                pass
+            return
 
-        # 2. Enqueue for background processing (non-blocking)
+        _stream_reentrance.active = True
         try:
-            priority = _is_priority_message(data)
-            self._queue.put_nowait(data, priority=priority)
-        except Exception:
-            pass
+            # 1. Immediately write to original stream (may be LogInterceptor)
+            try:
+                self._original_stream.write(data)
+            except (OSError, AttributeError):
+                pass  # Stream may be closed during shutdown
+
+            # 2. Enqueue for background processing (non-blocking)
+            try:
+                priority = _is_priority_message(data)
+                self._queue.put_nowait(data, priority=priority)
+            except Exception:
+                pass
+        finally:
+            _stream_reentrance.active = False
         
         # R14: Add to ring buffer for reliable log context capture
         try:
@@ -543,6 +603,12 @@ class DoctorLogProcessor(threading.Thread):
             if marker in message:
                 return  # Skip Doctor's own output to prevent recursion
 
+        # R22: Exclude asyncio transport GC warnings (Windows ProactorEventLoop)
+        # These are non-actionable Python-internal warnings that cause recursive
+        # log pollution when Doctor captures and re-analyses them.
+        if _is_asyncio_gc_noise(message):
+            return
+
         # P3: Urgent single-line warnings (immediate analysis)
         # R14: Enhanced with detect_fatal_pattern for non-traceback errors
         is_urgent = "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message
@@ -661,8 +727,13 @@ class DoctorLogProcessor(threading.Thread):
             suggestion: Suggestion text (or None if no match)
             metadata: Optional metadata dict with pattern info (from F4)
         """
-        # DEBUG: Log what's being recorded
-        logging.info(f"[Doctor] _record_analysis called with traceback preview: {full_traceback[:100] if full_traceback else 'None'}...")
+        # R22: Use dedicated internal logger that bypasses SafeStreamWrapper
+        # to prevent cross-contamination between Doctor's diagnostic output
+        # and the captured exception text.
+        _doctor_internal_logger.debug(
+            "_record_analysis called with traceback preview: %s...",
+            full_traceback[:100] if full_traceback else "None",
+        )
         
         # ═══════════════════════════════════════════════════════════════
         # CRITICAL FIX (2026-01-06): Prevent non-error messages from
@@ -691,6 +762,12 @@ class DoctorLogProcessor(threading.Thread):
             and "ComfyUI\\app\\logger.py" in full_traceback
             and "OSError: [Errno 22] Invalid argument" in full_traceback
         ):
+            return
+
+        # R22: Exclude asyncio transport GC warnings
+        # These originate from Windows ProactorEventLoop transport __del__
+        # and are non-actionable noise that would fill history with duplicates.
+        if _is_asyncio_gc_noise(full_traceback):
             return
         
         # Explicit exclusion for normal execution messages
