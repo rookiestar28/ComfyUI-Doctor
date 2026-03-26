@@ -904,6 +904,18 @@ graph TD
     - CI includes this suite as required gate for affected paths.
     - At least one regression fixture per known failure mode (truncation leak, submit bypass, duplicate resume replay).
     - Test logs include deterministic repro IDs for failed fixtures.
+- [x] **T16**: Acceptance Gap Regression Hardening (R21-R24 Follow-up) - High *Completed (2026-03-26; TEST_SOP full gate passed)*
+  - **Goal**: Close the validation gaps exposed by the recent R21-R24 regressions so stateful/logger and path-heuristic bugs fail earlier.
+  - **Plan**: `.planning/260326-T16_ACCEPTANCE_GAP_REGRESSION_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260326-T16_ACCEPTANCE_GAP_REGRESSION_HARDENING_IMPLEMENTATION_RECORD.md`
+  - **Scope**:
+    - Add logger stale-install regression coverage that simulates interrupted teardown / leftover wrappers.
+    - Add path-resolution matrix coverage for repo-local `.venv` plus real `custom_nodes` layouts outside Desktop resources.
+    - Harden pre-push guidance so validation runs from an attached branch tip and clearly separates local gate success from remote push success.
+  - **Acceptance**:
+    - New regression tests fail on the pre-fix behavior and pass on the hardened behavior.
+    - Pre-push guard fails fast on detached HEAD and logs the validated branch tip.
+    - `tests/TEST_SOP.md` documents the branch-tip rerun rule and push-scope boundary.
 - [x] **T13**: Desktop-style Failure Injection Tests (Flush/OSError + Corrupt JSON) - ???Medium *Completed (2026-02-17; TEST_SOP gate passed)*
   - **Sprint Plan**: `.planning/260216-R17T13T9T5_NEXT_SPRINT_VALIDATION_EXPANSION_PLAN.md`
   - **Implementation Record**: `.planning/260217-R17T13T9T5_REMEDIATION_RECORD.md`

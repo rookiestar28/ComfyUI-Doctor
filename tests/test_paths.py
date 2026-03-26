@@ -78,6 +78,34 @@ class TestDoctorPaths(unittest.TestCase):
                 self.assertEqual(diagnostics['install_mode'], 'desktop')
                 self.assertEqual(diagnostics['source'], 'python_executable:.venv')
 
+    def test_portable_custom_nodes_beats_repo_venv_heuristic(self):
+        """Portable custom_nodes layout should win even when the active Python lives in repo-local `.venv`."""
+        with patch('services.doctor_paths.folder_paths', None):
+            with tempfile.TemporaryDirectory() as fake_root:
+                comfy_root = os.path.join(fake_root, 'ComfyUI')
+                extension_root = os.path.join(comfy_root, 'custom_nodes', 'ComfyUI-Doctor')
+                fake_python = os.path.join(extension_root, '.venv', 'Scripts', 'python.exe')
+                os.makedirs(os.path.dirname(fake_python), exist_ok=True)
+                with open(fake_python, 'w', encoding='utf-8') as handle:
+                    handle.write('')
+
+                fake_doctor_paths_file = os.path.join(
+                    extension_root,
+                    'services',
+                    'doctor_paths.py',
+                )
+                os.makedirs(os.path.dirname(fake_doctor_paths_file), exist_ok=True)
+
+                with patch.object(doctor_paths.sys, 'executable', fake_python), \
+                     patch.object(doctor_paths, '__file__', fake_doctor_paths_file):
+                    result = doctor_paths.get_doctor_data_dir()
+                    diagnostics = doctor_paths.get_path_diagnostics()
+
+                expected = os.path.join(comfy_root, 'user', 'ComfyUI-Doctor')
+                self.assertEqual(result, expected)
+                self.assertEqual(diagnostics['install_mode'], 'portable_or_git')
+                self.assertEqual(diagnostics['source'], 'extension_layout:custom_nodes')
+
     def test_fallback_to_temp_if_nothing_works(self):
         with patch('services.doctor_paths.folder_paths', None):
             path = doctor_paths.get_doctor_data_dir()

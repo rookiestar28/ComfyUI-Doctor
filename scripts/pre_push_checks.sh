@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo_root"
 
+current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+current_head="$(git rev-parse --short HEAD 2>/dev/null || true)"
+
 log() {
   echo "[pre-push] $*"
 }
@@ -52,11 +55,22 @@ elif [[ "$(uname -s 2>/dev/null || echo unknown)" =~ ^(MINGW|MSYS|CYGWIN) ]]; th
   is_windows_shell=1
 fi
 
+[[ -n "$current_head" ]] || fail "Could not resolve current HEAD."
+
+# IMPORTANT: run the gate from an attached branch tip so the validated commit chain
+# matches what will actually be pushed. Detached HEAD hides that relationship and
+# makes later recovery/revalidation much harder.
+if [[ -z "$current_branch" ]]; then
+  fail "Detached HEAD detected at $current_head. Attach the commits to a branch and rerun the full gate from that branch tip before push."
+fi
+
 log "Running mandatory full test gate before push"
+log "Branch tip under validation: $current_branch @ $current_head"
 if [[ "$is_windows_shell" -eq 1 ]]; then
   run_windows_full_tests
 else
   run_linux_full_tests
 fi
 
-log "Full test gate passed; push is allowed."
+log "Full test gate passed for $current_branch @ $current_head"
+log "Remote push can still fail for authentication, branch protection, or non-fast-forward conditions."

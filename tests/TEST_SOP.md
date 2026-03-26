@@ -121,6 +121,34 @@ Use these checks before assuming the hook runner is broken:
 
 ## Required Pre-Push Workflow (Must Run)
 
+### Branch-Tip Revalidation Rule (Required)
+
+For high-risk or cross-cutting changes (for example logger, path resolution, timestamp normalization, event-contract compatibility), do not rely only on the first green run from an intermediate worktree state. Re-run the mandatory full gate on the final branch tip that you actually intend to push when any of these occur:
+
+- merge / rebase / conflict resolution changed the validated commit chain
+- detached HEAD work was later attached or merged onto a branch
+- a regression fix landed after the original item was already marked complete
+
+Minimum expectation:
+
+```bash
+git branch --show-current
+git rev-parse --short HEAD
+```
+
+Record the final validated branch + HEAD in the implementation record when the item is accepted.
+
+### Push-Scope Boundary (Important)
+
+The full-test scripts and `scripts/pre_push_checks.sh` validate the local acceptance gate only. They do **not** guarantee remote push success. A later `git push` can still fail for reasons outside the local test scope, including:
+
+- GitHub authentication / missing credentials
+- branch protection rules
+- non-fast-forward remote state
+- server-side policy hooks
+
+Treat local gate success as "safe to attempt push", not as proof that the remote accepted the push.
+
 ### Optional: One-Command Full Test Scripts (Fastest)
 
 Use these if you want a single command that runs **all required steps** (detect-secrets, pre-commit, unit tests, E2E). These scripts also handle the most common environment issues (Windows cache locks, Black cache, Node 18).

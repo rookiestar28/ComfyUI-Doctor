@@ -121,6 +121,43 @@ def test_install_uninstall_idempotent():
     assert sys.stderr is original_stderr
 
 
+def test_install_recovers_from_stale_wrapper_state():
+    """R22 follow-up: install() should recover if wrappers remain from interrupted teardown."""
+    import sys
+    import logger as logger_module
+
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+
+    logger_module.install("test.log")
+    stale_stdout = sys.stdout
+    stale_stderr = sys.stderr
+
+    # Simulate an interrupted teardown that lost queue state but left wrappers installed.
+    logger_module._message_queue = None
+    logger_module.clear_analysis_history()
+
+    logger_module.install("test.log")
+
+    assert sys.stdout is not stale_stdout
+    assert sys.stderr is not stale_stderr
+
+    print("Traceback (most recent call last):")
+    print('  File "test.py", line 1')
+    print("RuntimeError: CUDA out of memory")
+
+    _wait_for(
+        lambda: "CUDA out of memory" in (logger_module.get_last_analysis().get("error") or "")
+    )
+    last = logger_module.get_last_analysis()
+
+    assert "CUDA out of memory" in (last.get("error") or "")
+
+    logger_module.uninstall()
+    assert sys.stdout is original_stdout
+    assert sys.stderr is original_stderr
+
+
 # ==============================================================================
 # R22: Asyncio transport GC recursive pollution fix tests
 # ==============================================================================
