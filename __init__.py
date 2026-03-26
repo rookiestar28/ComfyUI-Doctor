@@ -60,7 +60,7 @@ from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig
 from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
-from .services.doctor_paths import get_doctor_data_dir
+from .services.doctor_paths import get_doctor_data_dir, get_path_diagnostics
 from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
 from .services.admin_guard import validate_admin_request
@@ -2614,6 +2614,7 @@ try:
                 "storage": {
                     "data_dir": get_doctor_data_dir(),
                     "history_size_bytes": getattr(CONFIG, "history_size_bytes", 0),
+                    "path_diagnostics": get_path_diagnostics(),
                 },
                 "outbound_proxy": SessionManager.get_proxy_diagnostics(),
                 "last_analysis": {

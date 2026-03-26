@@ -573,7 +573,7 @@ graph TD
   - **Discovered**: 2026-03-25 (reference project audit — ComfyUI `execution.py`)
   - **Plan**: `.planning/260325-R23_EXECUTION_ERROR_COMPAT_PLAN.md`
   - **Implementation Record**: `.planning/260325-R23_EXECUTION_ERROR_COMPAT_IMPLEMENTATION_RECORD.md`
-- [ ] **R24**: Desktop Virtual Environment Path Compatibility Verification - Low
+- [x] **R24**: Desktop Virtual Environment Path Compatibility Verification - Low *Completed (2026-03-26; TEST_SOP full gate passed)*
   - **Problem**: Desktop `virtualEnvironment.ts` has been substantially rewritten (~40KB). Doctor's `doctor_paths.py` (R18) and `system_info.py` need verification against new Desktop path resolution logic.
   - **Scope**:
     - Verify `doctor_paths.py` path resolution against new Desktop `virtualEnvironment.ts` path patterns.
@@ -583,6 +583,8 @@ graph TD
     - `doctor_paths.py` resolves correct log/state directories under new Desktop layout.
     - `system_info.py` reports correct environment type for new Desktop builds.
   - **Discovered**: 2026-03-25 (reference project audit — Desktop `virtualEnvironment.ts`)
+  - **Plan**: `.planning/260326-R24_DESKTOP_VIRTUAL_ENV_PATH_COMPATIBILITY_VERIFICATION_PLAN.md`
+  - **Implementation Record**: `.planning/260326-R24_DESKTOP_VIRTUAL_ENV_PATH_COMPATIBILITY_VERIFICATION_IMPLEMENTATION_RECORD.md`
 - [x] **R6**: Network retry logic with exponential backoff - ???Low ??*Completed (2026-01-10)*
   - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
   - Exponential backoff with jitter, Retry-After header support
