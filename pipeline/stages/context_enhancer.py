@@ -1,17 +1,14 @@
-import logging
 import re
-from typing import Optional
 from ..base import PipelineStage
 from ..context import AnalysisContext, NodeContext
 
-logger = logging.getLogger(__name__)
 
 class ContextEnhancerStage(PipelineStage):
     """
     Stage 3: Context Enhancer.
     Extracts ComfyUI node context (ID, Name, Class) from the traceback.
     """
-    
+
     # ComfyUI-specific patterns for extracting node context
     # Copied from original analyzer.py
     NODE_ID_PATTERNS = [
@@ -21,6 +18,24 @@ class ContextEnhancerStage(PipelineStage):
         ("exception_processing_node", r"Exception during processing.*?node\s*[#:]?\s*(\d+)", 0.7),
         ("prompt_executed_node", r"Prompt executed.*?node\s*[#:]?\s*(\d+)(?:\s*[:\-]\s*(.+?))?(?:\)|$)", 0.7),
     ]
+
+    COMPAT_EVENT_PATTERNS = {
+        "display_node": (
+            "compat_display_node",
+            r"(?:['\"]display_node['\"]\s*[:=]\s*['\"]?([^'\",}\s]+)|\bdisplay_node\s*=\s*([^,\s]+))",
+            0.95,
+        ),
+        "parent_node": (
+            "compat_parent_node",
+            r"(?:['\"]parent_node['\"]\s*[:=]\s*['\"]?([^'\",}\s]+)|\bparent_node\s*=\s*([^,\s]+))",
+            0.95,
+        ),
+        "real_node_id": (
+            "compat_real_node_id",
+            r"(?:['\"]real_node_id['\"]\s*[:=]\s*['\"]?([^'\",}\s]+)|\breal_node_id\s*=\s*([^,\s]+))",
+            0.95,
+        ),
+    }
 
     CUSTOM_NODE_PATTERN = ("custom_node_path", r"custom_nodes[/\\]([^/\\]+)[/\\].*?\.py", 0.6)
     NODE_CLASS_PATTERNS = [
@@ -43,70 +58,115 @@ class ContextEnhancerStage(PipelineStage):
         """
         Extracts node context from traceback and populates context.node_context.
         """
-        # Use sanitized traceback to overlap with what LLM sees, 
-        # but for regex extraction original traceback is usually safe and maybe more complete?
-        # Let's use original traceback for extraction as it might contain paths we need.
-        # But wait, PII sanitizer removes paths. 
-        # If we need paths for "custom_node_path" extraction, we should use original.
-        # PII sanitizer removes User Path but keeps structure.
-        # Safest is to use ORIGINAL traceback for extraction logic, as it's regex based and internal.
         traceback_text = context.traceback
-        
-        if not traceback_text:
+        if not traceback_text and not context.node_context:
             return
 
-        node_ctx = NodeContext()
-        provenance = {"source_pattern": None, "confidence": 0.0, "used_raw": True}
-        
-        # Try to extract node ID and name
-        for idx, (pattern_name, pattern, confidence) in enumerate(self.NODE_ID_PATTERNS):
-            match = re.search(pattern, traceback_text, re.IGNORECASE)
-            if match:
-                groups = match.groups()
-                if groups:
-                    # First pattern (* NodeName NodeID:) has reversed order
-                    if idx == 0:
-                        # First group is node name, second is node ID
-                        if len(groups) > 0 and groups[0]:
-                            node_ctx.node_name = groups[0].strip()
-                        if len(groups) > 1 and groups[1] and groups[1].isdigit():
-                            node_ctx.node_id = groups[1]
-                    else:
-                        # Other patterns: First group is usually node ID
-                        if groups[0] and groups[0].isdigit():
-                            node_ctx.node_id = groups[0]
-                        # Second group (if exists) is usually node name
-                        if len(groups) > 1 and groups[1]:
-                            node_ctx.node_name = groups[1].strip()
-                provenance["source_pattern"] = pattern_name
-                provenance["confidence"] = confidence
-                break
-        
-        # Extract custom node folder name
-        custom_node_match = re.search(self.CUSTOM_NODE_PATTERN[1], traceback_text)
-        if custom_node_match:
-            node_ctx.custom_node_path = custom_node_match.group(1)
-            if not provenance["source_pattern"]:
-                provenance["source_pattern"] = self.CUSTOM_NODE_PATTERN[0]
-                provenance["confidence"] = self.CUSTOM_NODE_PATTERN[2]
+        node_ctx = context.node_context or NodeContext()
+        provenance = {
+            "source_pattern": None,
+            "confidence": 0.0,
+            "used_raw": True,
+            "compat_fields": [],
+            "used_incoming_node_context": bool(context.node_context),
+        }
 
-        # Extract node class name
-        for pattern_name, pattern, confidence in self.NODE_CLASS_PATTERNS:
-            class_match = re.search(pattern, traceback_text)
-            if class_match:
-                node_ctx.node_class = class_match.group(1)
-                if not provenance["source_pattern"]:
-                    provenance["source_pattern"] = pattern_name
-                    provenance["confidence"] = confidence
-                break
-        
+        if traceback_text:
+            self._extract_node_identity(node_ctx, traceback_text, provenance)
+            self._extract_compat_fields(node_ctx, traceback_text, provenance)
+            self._extract_custom_node_path(node_ctx, traceback_text, provenance)
+            self._extract_node_class(node_ctx, traceback_text, provenance)
+
+        if node_ctx.display_node and not node_ctx.node_id:
+            node_ctx.node_id = node_ctx.display_node
+        if node_ctx.real_node_id and not node_ctx.display_node:
+            node_ctx.display_node = node_ctx.real_node_id
+
         if node_ctx.is_valid():
             context.node_context = node_ctx
             context.metadata["context_extraction"] = {
                 "source_pattern": provenance["source_pattern"] or "unknown",
                 "confidence": provenance["confidence"],
                 "used_raw": provenance["used_raw"],
+                "used_incoming_node_context": provenance["used_incoming_node_context"],
+                "compat_fields": provenance["compat_fields"],
                 "node_id_found": bool(node_ctx.node_id),
                 "node_name_found": bool(node_ctx.node_name),
                 "node_class_found": bool(node_ctx.node_class),
+                "display_node_found": bool(node_ctx.display_node),
+                "parent_node_found": bool(node_ctx.parent_node),
+                "real_node_id_found": bool(node_ctx.real_node_id),
+                "subgraph_lineage": node_ctx.subgraph_lineage(),
             }
+
+    def _extract_node_identity(
+        self, node_ctx: NodeContext, traceback_text: str, provenance: dict
+    ) -> None:
+        for idx, (pattern_name, pattern, confidence) in enumerate(self.NODE_ID_PATTERNS):
+            match = re.search(pattern, traceback_text, re.IGNORECASE)
+            if not match:
+                continue
+
+            groups = match.groups()
+            if not groups:
+                continue
+
+            if idx == 0:
+                if len(groups) > 0 and groups[0] and not node_ctx.node_name:
+                    node_ctx.node_name = groups[0].strip()
+                if len(groups) > 1 and groups[1] and groups[1].isdigit() and not node_ctx.node_id:
+                    node_ctx.node_id = groups[1]
+            else:
+                if groups[0] and groups[0].isdigit() and not node_ctx.node_id:
+                    node_ctx.node_id = groups[0]
+                if len(groups) > 1 and groups[1] and not node_ctx.node_name:
+                    node_ctx.node_name = groups[1].strip()
+
+            provenance["source_pattern"] = pattern_name
+            provenance["confidence"] = confidence
+            break
+
+    def _extract_compat_fields(
+        self, node_ctx: NodeContext, traceback_text: str, provenance: dict
+    ) -> None:
+        for field_name, (pattern_name, pattern, confidence) in self.COMPAT_EVENT_PATTERNS.items():
+            match = re.search(pattern, traceback_text, re.IGNORECASE)
+            if not match:
+                continue
+
+            value = next((group for group in match.groups() if group), None)
+            if not value or getattr(node_ctx, field_name, None):
+                continue
+
+            setattr(node_ctx, field_name, value.strip())
+            provenance["compat_fields"].append(field_name)
+            if not provenance["source_pattern"]:
+                provenance["source_pattern"] = pattern_name
+                provenance["confidence"] = confidence
+
+    def _extract_custom_node_path(
+        self, node_ctx: NodeContext, traceback_text: str, provenance: dict
+    ) -> None:
+        custom_node_match = re.search(self.CUSTOM_NODE_PATTERN[1], traceback_text)
+        if not custom_node_match or node_ctx.custom_node_path:
+            return
+
+        node_ctx.custom_node_path = custom_node_match.group(1)
+        if not provenance["source_pattern"]:
+            provenance["source_pattern"] = self.CUSTOM_NODE_PATTERN[0]
+            provenance["confidence"] = self.CUSTOM_NODE_PATTERN[2]
+
+    def _extract_node_class(
+        self, node_ctx: NodeContext, traceback_text: str, provenance: dict
+    ) -> None:
+        for pattern_name, pattern, confidence in self.NODE_CLASS_PATTERNS:
+            class_match = re.search(pattern, traceback_text)
+            if not class_match:
+                continue
+
+            if not node_ctx.node_class:
+                node_ctx.node_class = class_match.group(1)
+            if not provenance["source_pattern"]:
+                provenance["source_pattern"] = pattern_name
+                provenance["confidence"] = confidence
+            break

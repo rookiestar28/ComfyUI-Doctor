@@ -265,11 +265,23 @@ export class DoctorUI {
         this.api.addEventListener("execution_error", (event) => {
             console.log("[ComfyUI-Doctor] 🔴 Execution error received via WebSocket");
 
-            const detail = event.detail || {};
-            const { node_id, node_type, exception_message, exception_type } = detail;
+            const detail = event?.detail || event || {};
+            const {
+                node_id,
+                node_type,
+                exception_message,
+                exception_type,
+                display_node,
+                parent_node,
+                real_node_id,
+                current_inputs,
+                current_outputs,
+            } = detail;
+            const preferredNodeId = display_node || node_id || real_node_id;
+            const tracebackText = this.formatExecutionTraceback(detail);
 
             // Create error hash for deduplication
-            const errorHash = this.getErrorHash(node_id, exception_type, exception_message);
+            const errorHash = this.getErrorHash(preferredNodeId, exception_type, exception_message);
             const now = Date.now();
 
             // Deduplicate: skip if same error within debounce window
@@ -281,16 +293,32 @@ export class DoctorUI {
             this.lastErrorHash = errorHash;
             this.lastErrorTimestamp = now;
 
+            const subgraphLineage = [parent_node, display_node, real_node_id, node_id]
+                .filter(value => value !== null && value !== undefined && value !== '')
+                .map(value => String(value))
+                .filter((value, index, self) => self.indexOf(value) === index);
+
             // Build data object compatible with existing updateLogCard
             const data = {
-                last_error: `${exception_type}: ${exception_message}`,
+                last_error: tracebackText || `${exception_type}: ${exception_message}`,
+                traceback: tracebackText,
                 suggestion: null,  // Will be fetched from backend or analyzed by AI
                 timestamp: new Date().toISOString(),
+                execution_context: {
+                    current_inputs: current_inputs || null,
+                    current_outputs: current_outputs || null,
+                    has_traceback: Boolean(tracebackText),
+                },
                 node_context: {
                     node_id: node_id ? String(node_id) : null,
                     node_name: node_type || null,  // node_type is the class name
                     node_class: node_type || null,
                     custom_node_path: null,
+                    display_node: display_node ? String(display_node) : null,
+                    parent_node: parent_node ? String(parent_node) : null,
+                    real_node_id: real_node_id ? String(real_node_id) : null,
+                    preferred_node_id: preferredNodeId ? String(preferredNodeId) : null,
+                    subgraph_lineage: subgraphLineage,
                 },
             };
 
@@ -307,6 +335,75 @@ export class DoctorUI {
     getErrorHash(nodeId, exceptionType, exceptionMessage) {
         const msg = exceptionMessage ? exceptionMessage.slice(0, 100) : '';
         return `${nodeId || 'unknown'}-${exceptionType || 'Error'}-${msg}`;
+    }
+
+    normalizeNodeId(nodeId) {
+        if (nodeId === null || nodeId === undefined || nodeId === '') return null;
+        return String(nodeId);
+    }
+
+    getPreferredNodeId(nodeContext) {
+        if (!nodeContext) return null;
+        return (
+            this.normalizeNodeId(nodeContext.preferred_node_id)
+            || this.normalizeNodeId(nodeContext.display_node)
+            || this.normalizeNodeId(nodeContext.node_id)
+            || this.normalizeNodeId(nodeContext.real_node_id)
+        );
+    }
+
+    formatExecutionTraceback(detail) {
+        if (!detail) return null;
+        const traceback = detail.traceback;
+        const tracebackText = Array.isArray(traceback)
+            ? traceback.join('\n')
+            : (typeof traceback === 'string' ? traceback : '');
+        if (!tracebackText) return null;
+
+        const summary = [detail.exception_type, detail.exception_message]
+            .filter(Boolean)
+            .join(': ');
+        if (!summary || tracebackText.includes(summary)) {
+            return tracebackText;
+        }
+        return `${tracebackText}\n${summary}`;
+    }
+
+    getComfyGraph() {
+        if (!app) return null;
+        return app.rootGraph || app.graph || null;
+    }
+
+    getNodeFromGraph(graph, nodeId) {
+        if (!graph || nodeId === null || nodeId === undefined || nodeId === '') return null;
+        const rawId = String(nodeId);
+        const numericId = Number(rawId);
+        return graph.getNodeById?.(Number.isNaN(numericId) ? rawId : numericId)
+            || graph.getNodeById?.(rawId)
+            || graph._nodes?.find?.(candidate => String(candidate?.id) === rawId)
+            || null;
+    }
+
+    getNodeByExecutionId(nodeId) {
+        const executionId = this.normalizeNodeId(nodeId);
+        const rootGraph = this.getComfyGraph();
+        if (!executionId || !rootGraph) return null;
+
+        if (!executionId.includes(':')) {
+            return this.getNodeFromGraph(rootGraph, executionId);
+        }
+
+        const parts = executionId.split(':');
+        const localNodeId = parts.pop();
+        let currentGraph = rootGraph;
+
+        for (const part of parts) {
+            const subgraphNode = this.getNodeFromGraph(currentGraph, part);
+            currentGraph = subgraphNode?.subgraph || null;
+            if (!currentGraph) return null;
+        }
+
+        return this.getNodeFromGraph(currentGraph, localNodeId);
     }
 
     /**
@@ -338,10 +435,7 @@ export class DoctorUI {
      * Check if node context includes a usable node ID.
      */
     hasNodeId(nodeContext) {
-        if (!nodeContext) return false;
-        const nodeId = nodeContext.node_id;
-        // NOTE (A7 bugfix 2026-01-08): Treat empty/null node_id as missing to avoid wiping cached context.
-        return nodeId !== null && nodeId !== undefined && nodeId !== '';
+        return Boolean(this.getPreferredNodeId(nodeContext));
     }
 
     /**
@@ -367,6 +461,19 @@ export class DoctorUI {
         if (!primary.custom_node_path && fallback.custom_node_path) {
             merged.custom_node_path = fallback.custom_node_path;
         }
+        if (!primary.display_node && fallback.display_node) {
+            merged.display_node = fallback.display_node;
+        }
+        if (!primary.parent_node && fallback.parent_node) {
+            merged.parent_node = fallback.parent_node;
+        }
+        if (!primary.real_node_id && fallback.real_node_id) {
+            merged.real_node_id = fallback.real_node_id;
+        }
+        if ((!primary.subgraph_lineage || !primary.subgraph_lineage.length) && fallback.subgraph_lineage?.length) {
+            merged.subgraph_lineage = fallback.subgraph_lineage.slice();
+        }
+        merged.preferred_node_id = this.getPreferredNodeId(merged);
 
         return merged;
     }
@@ -609,9 +716,9 @@ export class DoctorUI {
                 : `<div style="font-size: 13px; color: #888; font-style: italic; margin-bottom: 8px;">${this.getUIText('no_suggestion_available')}</div>`
             }
                 <div style="font-size: 11px; color: #888;">🕐 ${timestamp}</div>
-                ${nodeContext.node_id ? `
+                ${this.hasNodeId(nodeContext) ? `
                     <div style="background: rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; margin-top: 8px; font-size: 12px;">
-                        <div><strong>${this.getUIText('node_label')}:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${nodeContext.node_id})</div>
+                        <div><strong>${this.getUIText('node_label')}:</strong> ${this.escapeHtml(nodeContext.node_name || 'Unknown')} (#${this.escapeHtml(this.getPreferredNodeId(nodeContext))})</div>
                     </div>
                 ` : ''}
                 <button id="doctor-analyze-btn" style="width: 100%; background: #2563eb; color: white; border: none; border-radius: 4px; padding: 8px; margin-top: 8px; cursor: pointer; font-weight: bold;">${this.getUIText('analyze_with_ai')}</button>
@@ -837,24 +944,15 @@ export class DoctorUI {
      */
     getWorkflowContext() {
         try {
-            if (!app || !app.graph) return null;
+            const graph = this.getComfyGraph();
+            if (!graph?.serialize) return null;
 
-            // Get full workflow
-            const workflow = app.graph.serialize();
+            // IMPORTANT: Use rootGraph serialization directly so subgraph-expanded
+            // workflows retain their full execution topology for backend truncation.
+            const workflow = graph.serialize();
             if (!workflow) return null;
 
-            // Simplify to essential info (nodes and links)
-            const simplified = {
-                nodes: (workflow.nodes || []).map(n => ({
-                    id: n.id,
-                    type: n.type,
-                    title: n.title || n.type,
-                    widgets_values: n.widgets_values ? n.widgets_values.slice(0, 5) : undefined, // Limit widget values
-                })).slice(0, 50), // Limit to 50 nodes
-                links: (workflow.links || []).slice(0, 100), // Limit links
-            };
-
-            return JSON.stringify(simplified);
+            return JSON.stringify(workflow);
         } catch (e) {
             console.warn('[ComfyUI-Doctor] Failed to capture workflow:', e);
             return null;
@@ -869,20 +967,20 @@ export class DoctorUI {
     locateNodeOnCanvas(nodeId) {
         console.log('[ComfyUI-Doctor] locateNodeOnCanvas called with:', nodeId);
         try {
-            const numericId = typeof nodeId === 'string' ? parseInt(nodeId, 10) : nodeId;
-            if (isNaN(numericId)) {
+            const executionId = this.normalizeNodeId(nodeId);
+            if (!executionId) {
                 console.warn('[ComfyUI-Doctor] Invalid node ID:', nodeId);
                 return;
             }
 
-            if (!app || !app.graph || !app.canvas) {
-                console.error('[ComfyUI-Doctor] ComfyUI app, graph or canvas not available');
+            if (!app || !app.canvas) {
+                console.error('[ComfyUI-Doctor] ComfyUI app or canvas not available');
                 return;
             }
 
-            const node = app.graph.getNodeById(numericId);
+            const node = this.getNodeByExecutionId(executionId);
             if (!node) {
-                console.warn('[ComfyUI-Doctor] Node not found in graph:', numericId);
+                console.warn('[ComfyUI-Doctor] Node not found in graph:', executionId);
                 return;
             }
 
@@ -930,7 +1028,7 @@ export class DoctorUI {
                 canvas.draw(true);
             }
 
-            console.log('[ComfyUI-Doctor] Successfully located node:', numericId);
+            console.log('[ComfyUI-Doctor] Successfully located node:', executionId);
         } catch (e) {
             console.error('[ComfyUI-Doctor] Failed to locate node:', e);
         }
@@ -1956,7 +2054,8 @@ export class DoctorUI {
         // ═══════════════════════════════════════════════════════════════
         // NOTE (A7 bugfix 2026-01-08): Use hasNodeId to avoid falsey node_id wiping Locate button.
         if (this.hasNodeId(currentData.node_context)) {
-            const safeNodeId = this.escapeHtml(String(currentData.node_context.node_id));
+            const preferredNodeId = this.getPreferredNodeId(currentData.node_context);
+            const safeNodeId = this.escapeHtml(String(preferredNodeId));
             const safeNodeName = this.escapeHtml(currentData.node_context.node_name || 'Unknown');
             html += `
                 <div style="background:#222;padding:6px;border-radius:4px;margin-bottom:8px;font-family:monospace;font-size:11px;">

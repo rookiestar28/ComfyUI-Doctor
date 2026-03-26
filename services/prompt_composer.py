@@ -137,12 +137,28 @@ class PromptComposer:
     def _format_node_info(self, node_info: Dict[str, Any]) -> str:
         """Format node information."""
         parts = []
-        if node_info.get("node_id"):
-            parts.append(f"- Node ID: #{node_info['node_id']}")
+        preferred_node_id = (
+            node_info.get("preferred_node_id")
+            or node_info.get("display_node")
+            or node_info.get("node_id")
+            or node_info.get("real_node_id")
+        )
+        if preferred_node_id:
+            parts.append(f"- Node ID: #{preferred_node_id}")
         if node_info.get("node_name"):
             parts.append(f"- Node Name: {node_info['node_name']}")
         if node_info.get("node_class"):
             parts.append(f"- Node Class: {node_info['node_class']}")
+        if node_info.get("display_node") and node_info.get("display_node") != preferred_node_id:
+            parts.append(f"- Display Node: #{node_info['display_node']}")
+        if node_info.get("parent_node"):
+            parts.append(f"- Parent Node: #{node_info['parent_node']}")
+        if node_info.get("real_node_id"):
+            parts.append(f"- Real Node ID: #{node_info['real_node_id']}")
+        lineage = node_info.get("subgraph_lineage") or []
+        if lineage:
+            lineage_text = " -> ".join(f"#{node_id}" for node_id in lineage)
+            parts.append(f"- Subgraph Lineage: {lineage_text}")
         if node_info.get("custom_node_path"):
             parts.append(f"- Source: {node_info['custom_node_path']}")
         return "\n".join(parts) if parts else ""

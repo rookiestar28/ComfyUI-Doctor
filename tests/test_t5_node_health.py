@@ -1,24 +1,26 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from statistics import StatisticsCalculator
 from services.node_health import NodeHealthService
 
 def test_node_health_integration():
     """Verify StatisticsCalculator includes node health metrics."""
+    now = datetime.now(timezone.utc)
     history = [
         {
             "node_info": {"node_class": "KSampler", "node_id": "10"},
             "error_type": "RuntimeError",
-            "timestamp": "2026-02-17T12:00:00Z"
+            "timestamp": (now - timedelta(minutes=10)).isoformat().replace('+00:00', 'Z')
         },
         {
             "node_info": {"node_class": "KSampler", "node_id": "11"},
             "error_type": "RuntimeError",
-            "timestamp": "2026-02-17T12:05:00Z"
+            "timestamp": (now - timedelta(minutes=5)).isoformat().replace('+00:00', 'Z')
         },
         {
             "node_info": {"node_class": "CheckpointLoaderSimple", "node_id": "5"},
             "error_type": "FileNotFoundError",
-            "timestamp": "2026-02-17T12:10:00Z"
+            "timestamp": now.isoformat().replace('+00:00', 'Z')
         }
     ]
     

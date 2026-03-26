@@ -224,6 +224,7 @@ class StatisticsCalculator:
             "pattern_frequency": {},
             "category_breakdown": {},
             "top_patterns": [],
+            "node_health": [],
             "resolution_rate": {"resolved": 0, "unresolved": 0, "ignored": 0},
             "trend": {"last_24h": 0, "last_7d": 0, "last_30d": 0}
         }

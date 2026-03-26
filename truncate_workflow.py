@@ -11,6 +11,16 @@ import json
 from typing import Optional
 
 
+def _normalize_error_node_id(error_node_id: Optional[str]) -> Optional[str]:
+    """Normalize execution IDs like '12:34:56' to their local node id."""
+    if error_node_id is None:
+        return None
+    text = str(error_node_id)
+    if not text:
+        return None
+    return text.split(':')[-1]
+
+
 def truncate_workflow_smart(
     workflow_str: str,
     error_node_id: Optional[str] = None,
@@ -102,19 +112,26 @@ def truncate_workflow_smart(
         }
     
     # Strategy 2: Node removal (keep error node and neighbors)
-    if error_node_id:
-        priority_nodes = _get_priority_nodes(workflow, error_node_id, max_hops)
+    normalized_error_node_id = _normalize_error_node_id(error_node_id)
+    if normalized_error_node_id:
+        priority_nodes = _get_priority_nodes(workflow, normalized_error_node_id, max_hops)
     else:
         # No error node specified, keep first N nodes
         priority_nodes = set(str(n.get("id", i)) for i, n in enumerate(nodes[:20]))
     
-    filtered_workflow = _filter_nodes(workflow, nodes, priority_nodes)
+    filtered_source_workflow = pruned_workflow if isinstance(workflow, dict) and "nodes" in workflow else workflow
+    filtered_source_nodes = (
+        filtered_source_workflow.get("nodes", [])
+        if isinstance(filtered_source_workflow, dict) and "nodes" in filtered_source_workflow
+        else nodes
+    )
+    filtered_workflow = _filter_nodes(filtered_source_workflow, filtered_source_nodes, priority_nodes)
     filtered_str = json.dumps(filtered_workflow, ensure_ascii=False, separators=(',', ':'))
     
     # Check if error node is preserved
-    if error_node_id:
+    if normalized_error_node_id:
         for n in (filtered_workflow.get("nodes", []) if isinstance(filtered_workflow, dict) else filtered_workflow):
-            if str(n.get("id", "")) == str(error_node_id):
+            if str(n.get("id", "")) == str(normalized_error_node_id):
                 error_node_preserved = True
                 break
     
@@ -151,34 +168,37 @@ def truncate_workflow_smart(
 
 def _prune_node_properties(workflow: dict | list, nodes: list) -> dict | list:
     """Remove verbose/non-essential properties from nodes."""
-    ESSENTIAL_KEYS = {"id", "type", "class_type", "inputs", "outputs", "title", "properties"}
     PRUNE_KEYS = {"widgets_values", "pos", "size", "order", "mode", "flags", "color", "bgcolor"}
-    
+
+    def trim_value(value):
+        if isinstance(value, str) and len(value) > 100:
+            return value[:100] + "..."
+        if isinstance(value, dict):
+            return {k: trim_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [trim_value(v) for v in value]
+        return value
+
     def prune_node(node: dict) -> dict:
         pruned = {}
         for key, value in node.items():
             if key in PRUNE_KEYS:
                 continue
-            if key == "inputs" and isinstance(value, dict):
-                # Keep input connections but truncate large text values
-                pruned_inputs = {}
-                for inp_key, inp_val in value.items():
-                    if isinstance(inp_val, str) and len(inp_val) > 100:
-                        pruned_inputs[inp_key] = inp_val[:100] + "..."
-                    else:
-                        pruned_inputs[inp_key] = inp_val
-                pruned[key] = pruned_inputs
+            if key in {"inputs", "properties"} and isinstance(value, dict):
+                pruned[key] = {k: trim_value(v) for k, v in value.items()}
             else:
-                pruned[key] = value
+                pruned[key] = trim_value(value)
         return pruned
-    
+
+    pruned_nodes = [prune_node(n) for n in nodes]
+
     if isinstance(workflow, dict):
         if "nodes" in workflow:
-            return {"nodes": [prune_node(n) for n in nodes]}
-        else:
-            return {k: prune_node(v) if isinstance(v, dict) else v for k, v in workflow.items()}
-    else:
-        return [prune_node(n) for n in nodes]
+            result = {k: v for k, v in workflow.items() if k != "nodes"}
+            result["nodes"] = pruned_nodes
+            return result
+        return {k: prune_node(v) if isinstance(v, dict) else v for k, v in workflow.items()}
+    return pruned_nodes
 
 
 def _get_priority_nodes(workflow: dict | list, error_node_id: str, max_hops: int) -> set:
@@ -223,14 +243,35 @@ def _get_priority_nodes(workflow: dict | list, error_node_id: str, max_hops: int
     return priority
 
 
+def _filter_links_for_nodes(links: list, keep_ids: set) -> list:
+    """Keep only links whose endpoints are preserved nodes."""
+    filtered = []
+    for link in links:
+        if not isinstance(link, list) or len(link) < 4:
+            filtered.append(link)
+            continue
+        origin_id = str(link[1]) if len(link) > 1 else None
+        target_id = str(link[3]) if len(link) > 3 else None
+        if origin_id in keep_ids and target_id in keep_ids:
+            filtered.append(link)
+    return filtered
+
+
+def _preserve_workflow_shell(workflow: dict, filtered_nodes: list, keep_ids: set) -> dict:
+    """Preserve UI workflow metadata when pruning nodes."""
+    result = {k: v for k, v in workflow.items() if k not in {"nodes", "links"}}
+    result["nodes"] = filtered_nodes
+    if isinstance(workflow.get("links"), list):
+        result["links"] = _filter_links_for_nodes(workflow["links"], keep_ids)
+    return result
+
+
 def _filter_nodes(workflow: dict | list, nodes: list, keep_ids: set) -> dict | list:
     """Filter workflow to only keep specified node IDs."""
     filtered = [n for n in nodes if str(n.get("id", "")) in keep_ids]
-    
+
     if isinstance(workflow, dict):
         if "nodes" in workflow:
-            return {"nodes": filtered}
-        else:
-            return {k: v for k, v in workflow.items() if str(k) in keep_ids}
-    else:
-        return filtered
+            return _preserve_workflow_shell(workflow, filtered, keep_ids)
+        return {k: v for k, v in workflow.items() if str(k) in keep_ids}
+    return filtered

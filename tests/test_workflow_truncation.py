@@ -113,6 +113,63 @@ class TestWorkflowTruncation(unittest.TestCase):
         if meta["truncation_method"] == "property_pruning":
             self.assertEqual(meta["original_nodes"], meta["kept_nodes"])
 
+    def test_execution_id_error_node_matches_local_node_id(self):
+        """Execution IDs from subgraphs should still preserve the target node."""
+        nodes = []
+        for i in range(1, 8):
+            nodes.append({
+                "id": str(i),
+                "type": f"Node{i}",
+                "inputs": {"x": [str(i - 1), 0]} if i > 1 else {},
+                "properties": {"large_data": "x" * 400},
+            })
+        workflow = json.dumps({"nodes": nodes, "links": []})
+
+        result, meta = truncate_workflow_smart(
+            workflow,
+            error_node_id="65:70:6",
+            max_chars=700,
+        )
+
+        self.assertEqual(meta["truncation_method"], "node_removal")
+        self.assertTrue(meta.get("error_node_preserved"))
+        parsed = json.loads(result)
+        self.assertTrue(any(str(node.get("id")) == "6" for node in parsed["nodes"]))
+
+    def test_ui_workflow_pruning_preserves_metadata_and_filters_links(self):
+        """UI-format workflow pruning should preserve top-level metadata and valid links."""
+        nodes = [
+            {"id": "1", "type": "Loader", "inputs": {}, "properties": {"blob": "x" * 400}},
+            {"id": "2", "type": "KSampler", "inputs": {"model": ["1", 0]}, "properties": {"blob": "y" * 400}},
+            {"id": "3", "type": "SaveImage", "inputs": {"images": ["2", 0]}, "properties": {"blob": "z" * 400}},
+            {"id": "4", "type": "Unused", "inputs": {}, "properties": {"blob": "w" * 400}},
+        ]
+        workflow = json.dumps({
+            "nodes": nodes,
+            "links": [
+                [1, "1", 0, "2", 0, "MODEL"],
+                [2, "2", 0, "3", 0, "IMAGE"],
+                [3, "4", 0, "3", 1, "IMAGE"],
+            ],
+            "groups": [{"title": "Subgraph Host"}],
+            "extra": {"groupNodes": {"Demo": {"version": 1}}},
+        })
+
+        result, meta = truncate_workflow_smart(workflow, error_node_id="2", max_chars=900)
+
+        self.assertIn(meta["truncation_method"], {"property_pruning", "node_removal"})
+        parsed = json.loads(result)
+        self.assertIn("groups", parsed)
+        self.assertIn("extra", parsed)
+        self.assertEqual(parsed["groups"][0]["title"], "Subgraph Host")
+        kept_ids = {str(node["id"]) for node in parsed["nodes"]}
+        for link in parsed["links"]:
+            self.assertIn(str(link[1]), kept_ids)
+            self.assertIn(str(link[3]), kept_ids)
+
+        if meta["truncation_method"] == "node_removal":
+            self.assertNotIn("4", kept_ids)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
