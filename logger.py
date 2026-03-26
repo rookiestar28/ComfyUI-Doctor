@@ -26,7 +26,7 @@ import hashlib
 from collections import deque
 from typing import Optional, Dict, Any, List
 
-from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
+from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
 
 # ==============================================================================
 # R22: Asyncio transport GC exclusion patterns
@@ -805,7 +805,7 @@ class DoctorLogProcessor(threading.Thread):
         pattern_priority = analysis_metadata.get("pattern_priority") or analysis_metadata.get("priority")
 
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
-        timestamp = datetime.datetime.now().isoformat()
+        timestamp = utc_isoformat()
         error_signature = hashlib.sha256(full_traceback.encode("utf-8", errors="ignore")).hexdigest()
 
         new_analysis = {
