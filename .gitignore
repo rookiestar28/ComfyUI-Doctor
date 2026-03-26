@@ -36,3 +36,7 @@ playwright-report/
 test-results/
 playwright/.cache/
 doctor_state/
+
+# Keep the repo-local runtime data root, but ignore Doctor-generated contents.
+user/*
+!user/.gitkeep
