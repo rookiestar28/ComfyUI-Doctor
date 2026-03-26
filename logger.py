@@ -954,10 +954,15 @@ def install(log_path: str):
     """
     global _message_queue, _log_processor, _original_stdout, _original_stderr
 
-    # Avoid duplicate installation
-    if _message_queue is not None:
-        logging.warning("[Doctor] Logger already installed, skipping")
-        return
+    # IMPORTANT: do a clean reinstall instead of skipping outright. Tests,
+    # hot-reload, or interrupted teardown can leave the global logger state
+    # installed across calls; a hard skip would make subsequent captures flaky.
+    if _message_queue is not None or isinstance(sys.stdout, SafeStreamWrapper) or isinstance(sys.stderr, SafeStreamWrapper):
+        try:
+            _doctor_internal_logger.debug("install() detected existing logger state; forcing clean reinstall")
+        except Exception:
+            pass
+        uninstall()
 
     # Create queue and background processor
     _message_queue = DroppingQueue(maxsize=CONFIG.log_queue_maxsize)
@@ -996,10 +1001,10 @@ def uninstall():
     """Uninstall logger and restore original streams."""
     global _log_processor, _original_stdout, _original_stderr, _message_queue
 
-    # Restore streams
-    if _original_stdout:
+    # Restore streams first so shutdown logging cannot recurse through wrappers.
+    if _original_stdout is not None:
         sys.stdout = _original_stdout
-    if _original_stderr:
+    if _original_stderr is not None:
         sys.stderr = _original_stderr
 
     # Stop background thread
@@ -1012,6 +1017,8 @@ def uninstall():
     if _message_queue:
         _message_queue.clear()
     _message_queue = None
+    _original_stdout = None
+    _original_stderr = None
 
     logging.info("[Doctor] Logger uninstalled")
 
