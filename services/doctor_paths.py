@@ -101,10 +101,14 @@ def get_path_diagnostics() -> Dict[str, Optional[str]]:
 
     desktop_base_path = _detect_desktop_base_path_from_python()
     portable_comfy_root = _detect_comfy_root_from_extension()
+    portable_is_desktop_resources = is_desktop_resources_path(portable_comfy_root or "")
 
     if folder_user_directory:
         install_mode = "standard"
         source = "folder_paths.get_user_directory"
+    elif portable_comfy_root and not portable_is_desktop_resources:
+        install_mode = "portable_or_git"
+        source = "extension_layout:custom_nodes"
     elif desktop_base_path:
         install_mode = "desktop"
         source = "python_executable:.venv"
@@ -161,18 +165,28 @@ def get_doctor_data_dir() -> str:
         except Exception as exc:
             logger.debug(f"Failed to get_user_directory: {exc}")
 
-    # 2. Desktop basePath inferred from the managed `.venv`
+    # 2/3/4. Desktop vs portable/git-clone fallback ordering
+    # IMPORTANT: when the extension path clearly resolves through a real
+    # `custom_nodes` layout outside Desktop resources, prefer that portable/git
+    # root over the current Python `.venv` heuristic. This avoids false Desktop
+    # detection during repo-local test/dev environments that also use `.venv`.
     desktop_base_path = _detect_desktop_base_path_from_python()
-    if desktop_base_path:
-        add_candidate(os.path.join(desktop_base_path, "user", "ComfyUI-Doctor"))
-
-    # 3/4. Portable or git-clone layout inferred from extension location
     try:
         comfy_root = _detect_comfy_root_from_extension()
-        if comfy_root:
+        portable_is_desktop_resources = is_desktop_resources_path(comfy_root or "")
+
+        if comfy_root and not portable_is_desktop_resources:
             add_candidate(os.path.join(comfy_root, "user", "ComfyUI-Doctor"))
             add_candidate(os.path.join(comfy_root, "user_data", "ComfyUI-Doctor"))
 
+        if desktop_base_path:
+            add_candidate(os.path.join(desktop_base_path, "user", "ComfyUI-Doctor"))
+
+        if comfy_root and portable_is_desktop_resources:
+            add_candidate(os.path.join(comfy_root, "user", "ComfyUI-Doctor"))
+            add_candidate(os.path.join(comfy_root, "user_data", "ComfyUI-Doctor"))
+
+        if comfy_root:
             legacy_internal = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
             if not is_desktop_resources_path(legacy_internal):
                 add_candidate(legacy_internal)
