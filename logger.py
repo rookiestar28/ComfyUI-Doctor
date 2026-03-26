@@ -57,18 +57,8 @@ def _is_asyncio_gc_noise(message: str) -> bool:
 # ==============================================================================
 # R22: Dedicated internal logger (bypasses SafeStreamWrapper)
 # ==============================================================================
-# This logger writes directly to sys.__stderr__ (the *real* stderr, not the
-# wrapped one) so that Doctor's own diagnostic messages never re-enter the
-# SafeStreamWrapper capture pipeline.
 _doctor_internal_logger = logging.getLogger("doctor._internal")
 _doctor_internal_logger.propagate = False  # CRITICAL: do not propagate to root
-if not _doctor_internal_logger.handlers:
-    _internal_handler = logging.StreamHandler(sys.__stderr__)
-    _internal_handler.setFormatter(
-        logging.Formatter("%(asctime)s [Doctor-Internal] %(message)s")
-    )
-    _doctor_internal_logger.addHandler(_internal_handler)
-    _doctor_internal_logger.setLevel(logging.DEBUG)
 
 # R22: Thread-local reentrance guard for SafeStreamWrapper
 _stream_reentrance = threading.local()
@@ -506,6 +496,20 @@ class FlushSafeProxy:
 
     def __getattr__(self, name):
         return getattr(self._original_stream, name)
+
+
+# IMPORTANT: keep the internal logger on a flush-safe stream. On some
+# Windows/Anaconda console states, raw sys.__stderr__ writes can raise
+# WinError 6 / invalid handle from background threads; if that escapes a
+# StreamHandler emit, Python logging prints a secondary traceback that Doctor
+# then captures as a false error.
+if not _doctor_internal_logger.handlers:
+    _internal_handler = logging.StreamHandler(FlushSafeProxy(sys.__stderr__))
+    _internal_handler.setFormatter(
+        logging.Formatter("%(asctime)s [Doctor-Internal] %(message)s")
+    )
+    _doctor_internal_logger.addHandler(_internal_handler)
+    _doctor_internal_logger.setLevel(logging.DEBUG)
 
 
 class DoctorLogProcessor(threading.Thread):

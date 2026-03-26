@@ -239,15 +239,49 @@ def test_reentrance_guard_prevents_recursive_capture():
 def test_record_analysis_uses_internal_logger():
     """R22: _record_analysis should use _doctor_internal_logger, not logging.info."""
     import logging
-    from logger import _doctor_internal_logger
+    import sys
+    from logger import _doctor_internal_logger, FlushSafeProxy
 
     # Verify the internal logger exists and is correctly configured
     assert _doctor_internal_logger.name == "doctor._internal"
     assert _doctor_internal_logger.propagate is False
     assert len(_doctor_internal_logger.handlers) >= 1
 
-    # Verify the handler writes to sys.__stderr__ (not intercepted stream)
-    import sys
+    # Verify the handler writes through a flush-safe proxy around real stderr
     handler = _doctor_internal_logger.handlers[0]
     assert isinstance(handler, logging.StreamHandler)
-    assert handler.stream is sys.__stderr__
+    assert isinstance(handler.stream, FlushSafeProxy)
+    assert handler.stream._original_stream is sys.__stderr__
+
+
+def test_internal_logger_stream_is_write_safe():
+    """R22 follow-up: internal logger must not invoke logging.handleError on invalid stderr handles."""
+    import logging
+    from unittest.mock import patch
+    from logger import _doctor_internal_logger, FlushSafeProxy
+
+    class BrokenStream:
+        def write(self, _data):
+            raise OSError(6, "invalid handle")
+
+        def flush(self):
+            raise OSError(6, "invalid handle")
+
+    handler = _doctor_internal_logger.handlers[0]
+    original_stream = handler.stream
+    handler.stream = FlushSafeProxy(BrokenStream())
+    record = _doctor_internal_logger.makeRecord(
+        _doctor_internal_logger.name,
+        logging.DEBUG,
+        __file__,
+        0,
+        "debug message",
+        (),
+        None,
+    )
+
+    try:
+        with patch.object(logging.Handler, "handleError", side_effect=AssertionError("handleError should not be called")):
+            handler.emit(record)
+    finally:
+        handler.stream = original_stream
