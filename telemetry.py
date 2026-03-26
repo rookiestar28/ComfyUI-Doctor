@@ -19,13 +19,15 @@ import time
 import tempfile
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional, List, Dict, Set, Tuple, Any
 
 try:
     from services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
 except Exception:
     _get_canonical_doctor_data_dir = None
+
+from services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -235,7 +237,7 @@ def validate_event(data: Dict[str, Any]) -> Tuple[bool, str, Optional[TelemetryE
     event = TelemetryEvent(
         schema_version=SCHEMA_VERSION,
         event_id=str(uuid.uuid4()),
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=utc_isoformat(),
         category=category,
         action=action,
         label=label,
@@ -291,7 +293,7 @@ def _migrate_legacy_telemetry_file(target_path: str) -> None:
             payload = src.read()
         with open(target_path, "wb") as dst:
             dst.write(payload)
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        ts = utc_filename_timestamp()
         os.rename(legacy_path, f"{legacy_path}.migrated-{ts}")
     except Exception:
         # Migration failures must not break startup or telemetry.
@@ -392,9 +394,12 @@ class TelemetryStore:
     
     def _purge_old_events(self) -> None:
         """Remove events older than TTL."""
-        cutoff = datetime.utcnow() - timedelta(days=EVENT_TTL_DAYS)
-        cutoff_str = cutoff.isoformat() + "Z"
-        self._buffer = [e for e in self._buffer if e.timestamp >= cutoff_str]
+        cutoff = utc_now() - timedelta(days=EVENT_TTL_DAYS)
+        self._buffer = [
+            event
+            for event in self._buffer
+            if (parse_utc_timestamp(event.timestamp) or cutoff) >= cutoff
+        ]
     
     def _enforce_limit(self) -> None:
         """Enforce max events limit (remove oldest)."""

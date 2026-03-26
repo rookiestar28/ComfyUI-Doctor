@@ -10,7 +10,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime
+from services.time_utils import utc_isoformat
 from typing import Dict, Any, List, Optional, Callable, Awaitable
 from functools import lru_cache
 
@@ -255,7 +255,7 @@ class DiagnosticsRunner:
         duration_ms = int((time.time() - start_time) * 1000)
         report = HealthReport(
             report_id=str(uuid.uuid4()),
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=utc_isoformat(),
             duration_ms=duration_ms,
             scope=request.scope,
             workflow_hash=workflow_hash,

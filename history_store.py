@@ -14,6 +14,8 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
+
 
 @dataclass
 class HistoryEntry:
@@ -150,7 +152,7 @@ class HistoryStore:
             # while writing), move it aside so new errors can be recorded normally.
             try:
                 if os.path.exists(self._filepath):
-                    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                    ts = utc_filename_timestamp()
                     backup_path = f"{self._filepath}.corrupt-{ts}"
                     shutil.move(self._filepath, backup_path)
                     print(f"[ComfyUI-Doctor] Warning: Corrupted history moved to: {backup_path}")
@@ -222,14 +224,8 @@ class HistoryStore:
                 pass
 
     def _parse_ts(self, ts: str) -> datetime:
-        """Parse ISO timestamp; return epoch on failure."""
-        try:
-            if not ts:
-                return datetime.min
-            # Support both naive and Z timestamps
-            return datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
-        except Exception:
-            return datetime.min
+        """Parse ISO timestamp; return UTC minimum on failure."""
+        return parse_utc_timestamp(ts) or UTC_MIN
 
     def _compute_signature(self, error_text: str) -> str:
         """Compute a deterministic signature for an error text."""

@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from collections import Counter
 from services.node_health import NodeHealthService
+from services.time_utils import ensure_utc, parse_utc_timestamp, utc_now
 
 
 
@@ -47,7 +48,7 @@ class StatisticsCalculator:
             return StatisticsCalculator._empty_stats()
         
         # Filter by time range
-        cutoff_time = datetime.now() - timedelta(days=time_range_days)
+        cutoff_time = utc_now() - timedelta(days=time_range_days)
         filtered_history = StatisticsCalculator._filter_by_time(history, cutoff_time)
         
         if not filtered_history:
@@ -84,22 +85,12 @@ class StatisticsCalculator:
     def _filter_by_time(history: List[Dict], cutoff_time: datetime) -> List[Dict]:
         """Filter history entries by timestamp."""
         filtered = []
+        normalized_cutoff = ensure_utc(cutoff_time)
         for entry in history:
-            try:
-                # Parse ISO timestamp
-                timestamp_str = entry.get("last_seen") or entry.get("timestamp", "")
-                if timestamp_str:
-                    # Handle multiple ISO formats
-                    entry_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                    # Make cutoff_time timezone-aware if entry_time has timezone
-                    if entry_time.tzinfo is not None and cutoff_time.tzinfo is None:
-                        cutoff_time = cutoff_time.replace(tzinfo=entry_time.tzinfo)
-                    
-                    if entry_time >= cutoff_time:
-                        filtered.append(entry)
-            except (ValueError, TypeError):
-                # Skip entries with invalid timestamps
-                continue
+            timestamp_str = entry.get("last_seen") or entry.get("timestamp", "")
+            entry_time = parse_utc_timestamp(timestamp_str)
+            if entry_time and entry_time >= normalized_cutoff:
+                filtered.append(entry)
         return filtered
     
     @staticmethod
@@ -183,8 +174,8 @@ class StatisticsCalculator:
     @staticmethod
     def _calculate_trend(history: List[Dict]) -> Dict[str, int]:
         """Calculate error trends for different time periods."""
-        now = datetime.now()
-        
+        now = utc_now()
+
         # Define time windows
         windows = {
             "last_24h": now - timedelta(hours=24),
@@ -195,24 +186,19 @@ class StatisticsCalculator:
         counts = {key: 0 for key in windows}
         
         for entry in history:
-            try:
-                timestamp_str = entry.get("last_seen") or entry.get("timestamp", "")
-                if timestamp_str:
-                    entry_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                    # Make entry_time timezone-naive for comparison
-                    if entry_time.tzinfo is not None:
-                        entry_time = entry_time.replace(tzinfo=None)
-
-                    try:
-                        w = int(entry.get("repeat_count", 1) or 1)
-                    except Exception:
-                        w = 1
-                    
-                    for window_key, window_time in windows.items():
-                        if entry_time >= window_time:
-                            counts[window_key] += w
-            except (ValueError, TypeError):
+            timestamp_str = entry.get("last_seen") or entry.get("timestamp", "")
+            entry_time = parse_utc_timestamp(timestamp_str)
+            if not entry_time:
                 continue
+
+            try:
+                w = int(entry.get("repeat_count", 1) or 1)
+            except Exception:
+                w = 1
+
+            for window_key, window_time in windows.items():
+                if entry_time >= window_time:
+                    counts[window_key] += w
         
         return counts
     

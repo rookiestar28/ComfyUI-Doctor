@@ -537,7 +537,7 @@ graph TD
     - Feature flag: `Doctor.General.ErrorBoundaries` (default enabled)
   - **Plan**: `.planning/260112-R5_FRONTEND_ERROR_BOUNDARIES_PLAN.md`
   - **Implementation Record**: `.planning/260113-R5_FRONTEND_ERROR_BOUNDARIES_RECORD.md`
-- [ ] **R21**: UTC-Aware Datetime Standardization (`datetime.utcnow()` Migration) - Low
+- [x] **R21**: UTC-Aware Datetime Standardization (`datetime.utcnow()` Migration) - Low *Completed (2026-03-26; TEST_SOP full gate passed)*
   - **Problem**: Multiple runtime modules still rely on deprecated `datetime.utcnow()` patterns, creating warning noise and future compatibility risk.
   - **Scope**:
     - Migrate to timezone-aware UTC timestamps (`datetime.now(timezone.utc)` + consistent serialization).
@@ -547,6 +547,8 @@ graph TD
     - No `datetime.utcnow()` usage remains in runtime modules.
     - Unit tests pass with timezone-aware timestamp inputs.
     - Existing persisted history remains backward-compatible.
+  - **Plan**: `.planning/260326-R21_UTC_AWARE_DATETIME_STANDARDIZATION_PLAN.md`
+  - **Implementation Record**: `.planning/260326-R21_UTC_AWARE_DATETIME_STANDARDIZATION_IMPLEMENTATION_RECORD.md`
 - [x] **R22**: Logger Asyncio Transport GC Recursive Pollution Fix - ⚡High *Completed (2026-03-25)*
   - **Problem**: Windows `ProactorEventLoop` transport GC raises `ValueError: I/O operation on closed pipe` during `_ProactorBasePipeTransport.__del__`. Doctor's `SafeStreamWrapper` captures this stderr output, triggers `_record_analysis`, whose `logging.info()` output is re-intercepted — causing recursive log pollution and infinite analysis loops for the same non-actionable error.
   - **Root Cause**: (1) No exclusion filter for known-benign asyncio GC warnings. (2) `_record_analysis` writes via `logging.info()` which passes through the intercepted stream, causing cross-contamination between Doctor's own log markers and the original exception text.
