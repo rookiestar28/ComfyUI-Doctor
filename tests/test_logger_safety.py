@@ -82,6 +82,28 @@ def test_last_analysis_includes_sanitization_metadata():
     uninstall()
 
 
+def test_last_analysis_timestamp_is_utc_z():
+    """R21 follow-up: latest analysis timestamps should use UTC `Z` serialization."""
+    from logger import install, uninstall, get_last_analysis, clear_analysis_history
+    from services.time_utils import parse_utc_timestamp
+
+    install("test.log")
+    clear_analysis_history()
+
+    print("Traceback (most recent call last):")
+    print('  File "test.py", line 1')
+    print("RuntimeError: CUDA out of memory")
+
+    _wait_for(lambda: "CUDA out of memory" in (get_last_analysis().get("error") or ""))
+    last = get_last_analysis()
+    timestamp = last.get("timestamp") or ""
+
+    assert timestamp.endswith("Z")
+    assert parse_utc_timestamp(timestamp) is not None
+
+    uninstall()
+
+
 def test_install_uninstall_idempotent():
     """Installing twice should not break, uninstall restores streams."""
     import sys

@@ -200,6 +200,78 @@ test.describe('Doctor Chat Interface', () => {
     await expect(locateBtn).toBeVisible({ timeout: 5000 });
   });
 
+
+  test('should prefer display_node for execution_error locate target (R23)', async ({ page }) => {
+    await page.evaluate(() => {
+      const targetNode = {
+        id: 42,
+        title: 'KSampler',
+        type: 'KSampler',
+        pos: [320, 180],
+        size: [140, 80],
+      };
+      window.app.rootGraph._nodes = [targetNode];
+      window.app.graph = window.app.rootGraph;
+      window.__testMocks.api._triggerEvent('execution_error', {
+        node_id: '99',
+        display_node: '42',
+        parent_node: '11',
+        real_node_id: '99',
+        node_type: 'KSampler',
+        exception_type: 'RuntimeError',
+        exception_message: 'display node mismatch',
+        traceback: ['Traceback (most recent call last):', 'RuntimeError: display node mismatch'],
+      });
+    });
+
+    const locateBtn = page.locator('#doctor-latest-log #doctor-locate-btn');
+    await expect(locateBtn).toBeVisible({ timeout: 5000 });
+    await expect(locateBtn).toHaveAttribute('data-node', '42');
+
+    const nodeContext = await page.evaluate(() => window.app.Doctor.lastErrorData.node_context);
+    expect(nodeContext.display_node).toBe('42');
+    expect(nodeContext.parent_node).toBe('11');
+    expect(nodeContext.real_node_id).toBe('99');
+    expect(nodeContext.subgraph_lineage).toEqual(['11', '42', '99']);
+  });
+
+  test('should locate subgraph execution ids via rootGraph traversal (R23)', async ({ page }) => {
+    await page.evaluate(() => {
+      const innerNode = {
+        id: 63,
+        title: 'Inner KSampler',
+        type: 'KSampler',
+        pos: [640, 480],
+        size: [160, 90],
+      };
+      const subgraph = {
+        _nodes: [innerNode],
+        getNodeById(id) {
+          return this._nodes.find((node) => String(node.id) === String(id)) || null;
+        },
+      };
+      const hostNode = {
+        id: 65,
+        title: 'Subgraph Host',
+        type: 'Subgraph',
+        pos: [0, 0],
+        size: [100, 60],
+        subgraph,
+      };
+      window.app.rootGraph._nodes = [hostNode];
+      window.app.canvas.selected_nodes = {};
+      window.app.canvas.ds.offset = [0, 0];
+      window.app.Doctor.locateNodeOnCanvas('65:63');
+    });
+
+    const selectedNodeIds = await page.evaluate(() => Object.keys(window.app.canvas.selected_nodes));
+    expect(selectedNodeIds).toContain('63');
+
+    const offsets = await page.evaluate(() => window.app.canvas.ds.offset.slice());
+    expect(offsets[0]).not.toBe(0);
+    expect(offsets[1]).not.toBe(0);
+  });
+
   test('should display error summary in chat context card', async ({ page }) => {
     await page.evaluate(() => {
       const errorData = {

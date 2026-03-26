@@ -21,6 +21,21 @@ class NodeContext:
     node_name: Optional[str] = None
     node_class: Optional[str] = None
     custom_node_path: Optional[str] = None
+    display_node: Optional[str] = None
+    parent_node: Optional[str] = None
+    real_node_id: Optional[str] = None
+
+    def preferred_node_id(self) -> Optional[str]:
+        """Return the best node id for UI navigation and workflow targeting."""
+        return self.display_node or self.node_id or self.real_node_id
+
+    def subgraph_lineage(self) -> List[str]:
+        """Return a de-duplicated lineage for subgraph-expanded executions."""
+        lineage = []
+        for node_id in (self.parent_node, self.display_node, self.real_node_id, self.node_id):
+            if node_id and node_id not in lineage:
+                lineage.append(node_id)
+        return lineage
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -29,11 +44,25 @@ class NodeContext:
             "node_name": self.node_name,
             "node_class": self.node_class,
             "custom_node_path": self.custom_node_path,
+            "display_node": self.display_node,
+            "parent_node": self.parent_node,
+            "real_node_id": self.real_node_id,
+            "preferred_node_id": self.preferred_node_id(),
+            "subgraph_lineage": self.subgraph_lineage(),
         }
     
     def is_valid(self) -> bool:
         """Check if any context was extracted."""
-        return any([self.node_id, self.node_name, self.node_class])
+        return any(
+            [
+                self.node_id,
+                self.node_name,
+                self.node_class,
+                self.display_node,
+                self.parent_node,
+                self.real_node_id,
+            ]
+        )
 
 @dataclass
 class AnalysisContext:

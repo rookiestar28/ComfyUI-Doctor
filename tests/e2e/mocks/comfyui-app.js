@@ -71,6 +71,29 @@ export function createMockComfyUIApp() {
     }, { once: true });
   }
 
+  function createMockGraph(initialNodes = []) {
+    return {
+      _nodes: initialNodes,
+      subgraphs: new Map(),
+      extra: {},
+      serialize() {
+        return {
+          nodes: this._nodes.map((node) => ({ ...node })),
+          links: [],
+          extra: this.extra,
+        };
+      },
+      clear() {
+        this._nodes = [];
+      },
+      getNodeById(id) {
+        return this._nodes.find((node) => String(node.id) === String(id)) || null;
+      },
+    };
+  }
+
+  const graph = createMockGraph();
+
   const app = {
     ui: {
       settings: {
@@ -108,14 +131,17 @@ export function createMockComfyUIApp() {
         },
       },
     },
-    graph: {
-      _nodes: [],
-      clear() {
-        this._nodes = [];
-      },
-    },
+    graph,
+    rootGraph: graph,
     canvas: {
       ds: { scale: 1, offset: [0, 0] },
+      selected_nodes: {},
+      canvas: { width: 1920, height: 1080 },
+      selectNodes(nodes) {
+        this.selected_nodes = Object.fromEntries(nodes.map((node) => [String(node.id), node]));
+      },
+      setDirty() {},
+      draw() {},
     },
     extensionManager: {
       registerSidebarTab(config) {
@@ -234,7 +260,8 @@ export function createMockComfyUIAPI() {
     _triggerEvent(event, data) {
       const listeners = eventListeners.get(event);
       if (listeners) {
-        listeners.forEach(callback => callback(data));
+        const payload = data && typeof data === 'object' && 'detail' in data ? data : { detail: data };
+        listeners.forEach(callback => callback(payload));
       }
     },
   };

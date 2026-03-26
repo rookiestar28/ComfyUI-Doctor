@@ -213,3 +213,25 @@ class TestPromptComposer:
         assert "Node ID: #42" in result
         assert "Node Name: My Sampler" in result
         assert "Node Class: KSampler" in result
+
+
+    def test_compose_node_info_includes_subgraph_lineage(self):
+        """Should include display/parent lineage for subgraph execution errors."""
+        composer = PromptComposer()
+        llm_context = {
+            "node_info": {
+                "node_id": "99",
+                "display_node": "65:70:63",
+                "parent_node": "65:70",
+                "real_node_id": "63",
+                "preferred_node_id": "65:70:63",
+                "subgraph_lineage": ["65:70", "65:70:63", "63"],
+            }
+        }
+
+        result = composer.compose(llm_context)
+
+        assert "Node ID: #65:70:63" in result
+        assert "Parent Node: #65:70" in result
+        assert "Real Node ID: #63" in result
+        assert "Subgraph Lineage: #65:70 -> #65:70:63 -> #63" in result

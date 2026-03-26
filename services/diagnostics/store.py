@@ -21,6 +21,7 @@ from .models import (
     ReportMetadata,
 )
 from services.doctor_paths import get_doctor_data_dir
+from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_isoformat, utc_now
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.store")
 
@@ -107,7 +108,7 @@ class DiagnosticsStore:
             data = {
                 "reports": self._reports,
                 "issue_status": {k: v.value for k, v in self._issue_status.items()},
-                "updated_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": utc_isoformat(),
             }
 
             # Atomic write
@@ -126,7 +127,7 @@ class DiagnosticsStore:
         if not self._reports:
             return
 
-        now = datetime.utcnow()
+        now = utc_now()
         cutoff = now - timedelta(days=self.retention_days)
 
         # Filter by age
@@ -139,7 +140,7 @@ class DiagnosticsStore:
         if len(valid_reports) > self.max_reports:
             sorted_reports = sorted(
                 valid_reports.items(),
-                key=lambda x: x[1].get("timestamp", ""),
+                key=lambda x: self._parse_timestamp(x[1].get("timestamp", "")),
                 reverse=True,
             )
             valid_reports = dict(sorted_reports[:self.max_reports])
@@ -150,11 +151,8 @@ class DiagnosticsStore:
             self._reports = valid_reports
 
     def _parse_timestamp(self, ts: str) -> datetime:
-        """Parse ISO timestamp, return epoch on failure."""
-        try:
-            return datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
-        except (ValueError, AttributeError):
-            return datetime.min
+        """Parse ISO timestamp, return UTC minimum on failure."""
+        return parse_utc_timestamp(ts) or UTC_MIN
 
     def save_report(self, report: HealthReport):
         """
@@ -215,7 +213,7 @@ class DiagnosticsStore:
             # Sort by timestamp descending
             sorted_reports = sorted(
                 self._reports.items(),
-                key=lambda x: x[1].get("timestamp", ""),
+                key=lambda x: self._parse_timestamp(x[1].get("timestamp", "")),
                 reverse=True,
             )
 

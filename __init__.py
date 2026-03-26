@@ -60,7 +60,7 @@ from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig
 from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
-from .services.doctor_paths import get_doctor_data_dir
+from .services.doctor_paths import get_doctor_data_dir, get_path_diagnostics
 from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
 from .services.admin_guard import validate_admin_request
@@ -366,15 +366,35 @@ def collect_error_context(error_data, workflow_data):
             pass  # No logs available
 
     # 3. Get failed node details
-    node_id = error_data.get("node_id")
-    if node_id and workflow_data:
-        node = workflow_data.get(str(node_id))
+    node_id = (
+        error_data.get("display_node")
+        or error_data.get("node_id")
+        or error_data.get("real_node_id")
+    )
+    normalized_node_id = str(node_id).split(":")[-1] if node_id else None
+    node_lookup = None
+    if isinstance(workflow_data, dict):
+        if "nodes" in workflow_data and isinstance(workflow_data.get("nodes"), list):
+            node_lookup = {
+                str(node.get("id")): node
+                for node in workflow_data.get("nodes", [])
+                if isinstance(node, dict) and node.get("id") is not None
+            }
+        else:
+            node_lookup = workflow_data
+
+    if normalized_node_id and node_lookup:
+        node = node_lookup.get(normalized_node_id)
         if node:
             context["failed_node"] = {
-                "id": node_id,
-                "class_type": node.get("class_type"),
+                "id": normalized_node_id,
+                "class_type": node.get("class_type") or node.get("type"),
                 "inputs": node.get("inputs", {}),
-                "title": node.get("_meta", {}).get("title", "")
+                "title": node.get("_meta", {}).get("title", "") or node.get("title", ""),
+                "display_node": error_data.get("display_node"),
+                "parent_node": error_data.get("parent_node"),
+                "real_node_id": error_data.get("real_node_id"),
+                "subgraph_lineage": error_data.get("subgraph_lineage") or [],
             }
 
             # 4. Analyze workflow structure around failed node
@@ -384,10 +404,10 @@ def collect_error_context(error_data, workflow_data):
                 if isinstance(input_value, list) and len(input_value) == 2:
                     # This is a connection: [source_node_id, output_index]
                     source_node_id = str(input_value[0])
-                    if source_node_id in workflow_data:
+                    if node_lookup and source_node_id in node_lookup:
                         upstream.append({
                             "id": source_node_id,
-                            "class_type": workflow_data[source_node_id].get("class_type"),
+                            "class_type": node_lookup[source_node_id].get("class_type") or node_lookup[source_node_id].get("type"),
                             "connection": input_key
                         })
 
@@ -1111,7 +1131,12 @@ try:
             # R8: Smart workflow truncation (preserves error-related nodes)
             if workflow:
                 from .truncate_workflow import truncate_workflow_smart
-                error_node_id = node_context.get("id") if node_context else None
+                error_node_id = (
+                    node_context.get("display_node")
+                    or node_context.get("node_id")
+                    or node_context.get("real_node_id")
+                    or node_context.get("id")
+                ) if node_context else None
                 workflow, truncation_meta = truncate_workflow_smart(workflow, error_node_id, max_chars=4000)
                 if truncation_meta.get("truncation_method") != "none":
                     logger.info(f"Workflow truncated: {truncation_meta}")
@@ -1509,6 +1534,10 @@ try:
                     "exception_message": canonical_error,
                     "exception_type": error_context.get("error_type", "Unknown"),
                     "node_id": node_context.get("node_id") if node_context else None,
+                    "display_node": node_context.get("display_node") if node_context else None,
+                    "parent_node": node_context.get("parent_node") if node_context else None,
+                    "real_node_id": node_context.get("real_node_id") if node_context else None,
+                    "subgraph_lineage": node_context.get("subgraph_lineage") if node_context else None,
                     "traceback": error_context.get("traceback")
                 }
                 enriched_context = collect_error_context(error_data, workflow_data)
@@ -1556,12 +1585,25 @@ try:
                             error_summary_obj = extract_error_summary(traceback_text)
                             error_summary_str = error_summary_obj.to_string() if error_summary_obj else enriched_context['error_message']
                             
+                            failed_node = enriched_context.get('failed_node', {})
                             llm_context = {
                                 "error_summary": error_summary_str,
                                 "node_info": {
-                                    "node_id": enriched_context.get('failed_node', {}).get('id'),
-                                    "node_name": enriched_context.get('failed_node', {}).get('title'),
-                                    "node_class": enriched_context.get('failed_node', {}).get('class_type'),
+                                    "node_id": failed_node.get('id') or node_context.get('node_id'),
+                                    "node_name": failed_node.get('title') or node_context.get('node_name'),
+                                    "node_class": failed_node.get('class_type') or node_context.get('node_class'),
+                                    "display_node": failed_node.get('display_node') or node_context.get('display_node'),
+                                    "parent_node": failed_node.get('parent_node') or node_context.get('parent_node'),
+                                    "real_node_id": failed_node.get('real_node_id') or node_context.get('real_node_id'),
+                                    "preferred_node_id": (
+                                        failed_node.get('display_node')
+                                        or failed_node.get('id')
+                                        or node_context.get('preferred_node_id')
+                                        or node_context.get('display_node')
+                                        or node_context.get('node_id')
+                                        or node_context.get('real_node_id')
+                                    ),
+                                    "subgraph_lineage": failed_node.get('subgraph_lineage') or node_context.get('subgraph_lineage') or [],
                                 },
                                 "traceback": traceback_text,
                                 "execution_logs": enriched_context.get('execution_logs', []),
@@ -2572,6 +2614,7 @@ try:
                 "storage": {
                     "data_dir": get_doctor_data_dir(),
                     "history_size_bytes": getattr(CONFIG, "history_size_bytes", 0),
+                    "path_diagnostics": get_path_diagnostics(),
                 },
                 "outbound_proxy": SessionManager.get_proxy_diagnostics(),
                 "last_analysis": {

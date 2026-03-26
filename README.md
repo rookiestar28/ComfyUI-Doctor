@@ -11,6 +11,15 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 <details> <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Compatibility + Hardening Follow-up (Desktop Paths, UTC Timestamps, Event Compatibility)</strong></summary>
+
+- Verified Doctor data-path resolution against current ComfyUI Desktop `.venv` installs and modern `user/ComfyUI-Doctor` layouts, with path diagnostics exposed in `/doctor/health`.
+- Standardized runtime timestamp handling around timezone-aware UTC serialization while keeping legacy naive history/telemetry/diagnostics records backward-compatible.
+- Completed the remaining compatibility/hardening follow-ups for logger recursion filtering, `execution_error` subgraph fields, Desktop path detection, and runtime timestamp normalization.
+
+</details>
+
+<details>
 <summary><strong>Security Hardening Refresh (Admin Gate + Network Boundary + Secret Storage)</strong></summary>
 
 - Consolidated write-sensitive API routes under a unified admin guard path so state-changing operations consistently require authorized access.
@@ -66,7 +75,7 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 - Added a default-collapsed **🔐 Advanced Key Store (Server-side)** section for explicit save/delete actions.
 - Backend key resolution order is now: request key → provider ENV → generic ENV → optional server store.
 - Existing users with legacy frontend-stored keys are auto-migrated once to runtime memory, then the persisted key is cleared.
-- UI now includes inline risk guidance (`?`) warning that server store uses plaintext `secrets.json`; ENV keys remain the recommended path.
+- UI now includes inline risk guidance (`?`) explaining that the server store is optional, supports configurable encryption-at-rest, and that ENV keys remain the recommended path.
 
 </details>
 
@@ -384,6 +393,8 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - [Data-Driven Diagnostics Signature Packs](#data-driven-diagnostics-signature-packs)
 - [Quick Community Feedback (GitHub PR)](#quick-community-feedback-github-pr)
 - [API Endpoints](#api-endpoints)
+- [Log Files](#log-files)
+- [Configuration](#configuration)
 - [Supported Error Patterns](#supported-error-patterns)
 - [Phase 2 Release Gate](#phase-2-release-gate)
 - [CSP Compatibility](#csp-compatibility)
@@ -405,6 +416,8 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - **Interactive Chat Interface**: Multi-turn AI debugging assistant integrated into ComfyUI sidebar
 - **Interactive Sidebar UI**: Visual error panel with node location and instant diagnostics
 - **Flexible Configuration**: Comprehensive settings panel for behavior customization
+- **Desktop-Aware Storage Paths**: Resolves Doctor data/log/state paths correctly for ComfyUI Desktop `.venv` installs and portable/git layouts
+- **UTC-Safe Persistence**: Runtime timestamps use UTC `Z` serialization, while legacy naive persisted records remain readable for compatibility
 
 ### 🆕 AI Chat Interface
 
@@ -904,7 +917,7 @@ curl http://localhost:8188/debugger/last_analysis
   "supported_languages": ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"],
   "last_error": "Traceback...",
   "suggestion": "SUGGESTION: ...",
-  "timestamp": "2025-12-28T06:49:11",
+  "timestamp": "2025-12-28T06:49:11Z",
   "node_context": {
     "node_id": "42",
     "node_name": "KSampler",
@@ -921,6 +934,8 @@ Retrieve error history (last 20 entries):
 ```bash
 curl http://localhost:8188/debugger/history
 ```
+
+Runtime-generated timestamps are serialized as UTC with a trailing `Z`. Legacy naive timestamps from older persisted history files are still accepted and normalized for backward compatibility.
 
 ### POST `/debugger/set_language`
 
@@ -1150,7 +1165,11 @@ curl http://localhost:8188/doctor/health
     "logger": {},
     "ssrf": {},
     "storage": {
-      "data_dir": "..."
+      "data_dir": "...",
+      "path_diagnostics": {
+        "install_mode": "standard|desktop|portable_or_git|unknown",
+        "source": "folder_paths.get_user_directory|python_executable:.venv|extension_layout:custom_nodes|fallback"
+      }
     },
     "outbound_proxy": {
       "policy": "strict_off|inherit_env",
@@ -1335,7 +1354,10 @@ Filename format: `comfyui_debug_YYYY-MM-DD_HH-MM-SS.log`
 
 The system automatically retains the 10 most recent log files (configurable via `config.json`).
 
+On current ComfyUI Desktop-managed `.venv` installs, the resolved Doctor data root typically maps to `<basePath>/user/ComfyUI-Doctor/`. Portable/git-clone installs also prefer `<ComfyUI root>/user/ComfyUI-Doctor/`, with legacy `user_data/` layouts still accepted as a fallback.
+
 > Tip: You can check the resolved data directory via `GET /doctor/health` → `health.storage.data_dir`.
+> Tip: `GET /doctor/health` → `health.storage.path_diagnostics` exposes the install-mode/source that selected the current path.
 > Legacy installs may still have logs under `ComfyUI/custom_nodes/ComfyUI-Doctor/logs/` (migrated when possible).
 
 ---

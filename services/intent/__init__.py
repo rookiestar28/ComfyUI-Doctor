@@ -15,7 +15,7 @@ ISS is explicitly NOT:
 """
 
 import logging
-from datetime import datetime
+from services.time_utils import utc_isoformat
 from typing import Dict, Any, List, Optional
 
 from services.diagnostics.models import (
@@ -344,7 +344,7 @@ class IntentScorer:
 
         return IntentSignature(
             schema_version=ISS_SCHEMA_VERSION,
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=utc_isoformat(),
             workflow_hash=workflow_hash,
             top_intents=intent_matches,
             global_signals=global_signals,

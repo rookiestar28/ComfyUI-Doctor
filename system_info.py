@@ -42,6 +42,23 @@ def _run_pip_list() -> str:
         return f"[pip list failed: {str(e)}]"
 
 
+def _detect_runtime_environment() -> Dict[str, Optional[str]]:
+    """Infer high-level ComfyUI runtime type from the current Python/layout."""
+    try:
+        from services.doctor_paths import get_path_diagnostics
+
+        diagnostics = get_path_diagnostics()
+        return {
+            "environment_type": diagnostics.get("install_mode") or "unknown",
+            "runtime_layout_source": diagnostics.get("source") or "fallback",
+        }
+    except Exception:
+        return {
+            "environment_type": "unknown",
+            "runtime_layout_source": "fallback",
+        }
+
+
 @lru_cache(maxsize=1)
 def _get_torch_info() -> Dict[str, Any]:
     """Get PyTorch and CUDA information (cached)."""
@@ -95,10 +112,13 @@ def get_system_environment(force_refresh: bool = False) -> Dict[str, Any]:
         return _cached_env_info
 
     # Collect fresh environment data
+    runtime_env = _detect_runtime_environment()
     env_info = {
         "os": f"{platform.system()} {platform.release()}",
         "os_version": platform.version(),
         "python_version": sys.version.split()[0],
+        "environment_type": runtime_env.get("environment_type", "unknown"),
+        "runtime_layout_source": runtime_env.get("runtime_layout_source", "fallback"),
         "pytorch_info": _get_torch_info(),
         "installed_packages": _run_pip_list(),
         "cache_age_seconds": 0,
@@ -127,6 +147,8 @@ def format_env_for_llm(env_info: Dict[str, Any], max_packages: int = 50) -> str:
     lines.append("=== System Environment ===")
     lines.append(f"OS: {env_info['os']}")
     lines.append(f"Python: {env_info['python_version']}")
+    if env_info.get('environment_type'):
+        lines.append(f"Environment: {env_info['environment_type']}")
 
     torch_info = env_info['pytorch_info']
     if torch_info['pytorch_version']:
@@ -373,6 +395,12 @@ def canonicalize_system_info(
     # Python version (pass through)
     if env_info.get("python_version"):
         result["python_version"] = env_info["python_version"]
+
+    # Runtime type (R24)
+    if env_info.get("environment_type"):
+        result["environment_type"] = env_info["environment_type"]
+    if env_info.get("runtime_layout_source"):
+        result["runtime_layout_source"] = env_info["runtime_layout_source"]
     
     # Flatten torch info from nested dict
     pytorch_info = env_info.get("pytorch_info", {})

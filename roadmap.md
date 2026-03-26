@@ -537,7 +537,7 @@ graph TD
     - Feature flag: `Doctor.General.ErrorBoundaries` (default enabled)
   - **Plan**: `.planning/260112-R5_FRONTEND_ERROR_BOUNDARIES_PLAN.md`
   - **Implementation Record**: `.planning/260113-R5_FRONTEND_ERROR_BOUNDARIES_RECORD.md`
-- [ ] **R21**: UTC-Aware Datetime Standardization (`datetime.utcnow()` Migration) - Low
+- [x] **R21**: UTC-Aware Datetime Standardization (`datetime.utcnow()` Migration) - Low *Completed (2026-03-26; TEST_SOP full gate passed)*
   - **Problem**: Multiple runtime modules still rely on deprecated `datetime.utcnow()` patterns, creating warning noise and future compatibility risk.
   - **Scope**:
     - Migrate to timezone-aware UTC timestamps (`datetime.now(timezone.utc)` + consistent serialization).
@@ -547,6 +547,8 @@ graph TD
     - No `datetime.utcnow()` usage remains in runtime modules.
     - Unit tests pass with timezone-aware timestamp inputs.
     - Existing persisted history remains backward-compatible.
+  - **Plan**: `.planning/260326-R21_UTC_AWARE_DATETIME_STANDARDIZATION_PLAN.md`
+  - **Implementation Record**: `.planning/260326-R21_UTC_AWARE_DATETIME_STANDARDIZATION_IMPLEMENTATION_RECORD.md`
 - [x] **R22**: Logger Asyncio Transport GC Recursive Pollution Fix - ⚡High *Completed (2026-03-25)*
   - **Problem**: Windows `ProactorEventLoop` transport GC raises `ValueError: I/O operation on closed pipe` during `_ProactorBasePipeTransport.__del__`. Doctor's `SafeStreamWrapper` captures this stderr output, triggers `_record_analysis`, whose `logging.info()` output is re-intercepted — causing recursive log pollution and infinite analysis loops for the same non-actionable error.
   - **Root Cause**: (1) No exclusion filter for known-benign asyncio GC warnings. (2) `_record_analysis` writes via `logging.info()` which passes through the intercepted stream, causing cross-contamination between Doctor's own log markers and the original exception text.
@@ -560,17 +562,20 @@ graph TD
   - **Discovered**: 2026-03-25 (error log analysis)
   - **Plan**: `.planning/260325-R22_LOGGER_ASYNCIO_GC_POLLUTION_FIX_PLAN.md`
   - **Implementation Record**: `.planning/260325-R22_LOGGER_ASYNCIO_GC_POLLUTION_FIX_IMPLEMENTATION_RECORD.md`
-- [x] **R23**: `execution_error` Event Structure Compatibility Update - Medium *Completed (2026-03-25)*
-  - **Problem**: ComfyUI `execution.py` now emits `execution_error` WS events with additional fields. Doctor's frontend `doctor_ui.js` error context extraction does not utilize `current_inputs` or `traceback` natively from the WebSocket.
+- [x] **R23**: `execution_error` Event Structure Compatibility Update - Medium *Completed (2026-03-26; TEST_SOP full gate passed)*
+  - **Problem**: ComfyUI `execution.py` now emits `execution_error` WS events with additional fields: `display_node`, `parent_node`, `real_node_id` (for subgraph/ephemeral node support). Doctor's `ContextEnhancerStage` and frontend `doctor_ui.js` error context extraction do not utilize these fields.
   - **Scope**:
-    - Update `subscribeToExecutionErrors()` in `doctor_ui.js` to parse new `traceback` array when creating the error text.
-    - Attach `current_inputs` and `has_traceback` as an `execution_context` object alongside `node_context`.
+    - Update `ContextEnhancerStage` to extract and include `display_node` / `parent_node` / `real_node_id` in enriched error context.
+    - Update frontend `doctor_ui.js` node location logic to use `display_node` for more accurate node highlighting.
+    - Handle subgraph-expanded workflow structures in workflow truncation/serialization.
   - **Acceptance**:
-    - Frontend successfully consumes new websocket properties correctly mapped to Doctor's expected error signatures.
-    - E2E tests maintain functional parity without crashes.
+    - Error context includes subgraph lineage when available.
+    - Node jump-to still works for both flat and subgraph-expanded workflows.
+    - Backward compatible (gracefully ignores missing fields on older ComfyUI versions).
+  - **Discovered**: 2026-03-25 (reference project audit — ComfyUI `execution.py`)
   - **Plan**: `.planning/260325-R23_EXECUTION_ERROR_COMPAT_PLAN.md`
   - **Implementation Record**: `.planning/260325-R23_EXECUTION_ERROR_COMPAT_IMPLEMENTATION_RECORD.md`
-- [ ] **R24**: Desktop Virtual Environment Path Compatibility Verification - Low
+- [x] **R24**: Desktop Virtual Environment Path Compatibility Verification - Low *Completed (2026-03-26; TEST_SOP full gate passed)*
   - **Problem**: Desktop `virtualEnvironment.ts` has been substantially rewritten (~40KB). Doctor's `doctor_paths.py` (R18) and `system_info.py` need verification against new Desktop path resolution logic.
   - **Scope**:
     - Verify `doctor_paths.py` path resolution against new Desktop `virtualEnvironment.ts` path patterns.
@@ -580,6 +585,8 @@ graph TD
     - `doctor_paths.py` resolves correct log/state directories under new Desktop layout.
     - `system_info.py` reports correct environment type for new Desktop builds.
   - **Discovered**: 2026-03-25 (reference project audit — Desktop `virtualEnvironment.ts`)
+  - **Plan**: `.planning/260326-R24_DESKTOP_VIRTUAL_ENV_PATH_COMPATIBILITY_VERIFICATION_PLAN.md`
+  - **Implementation Record**: `.planning/260326-R24_DESKTOP_VIRTUAL_ENV_PATH_COMPATIBILITY_VERIFICATION_IMPLEMENTATION_RECORD.md`
 - [x] **R6**: Network retry logic with exponential backoff - ???Low ??*Completed (2026-01-10)*
   - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
   - Exponential backoff with jitter, Retry-After header support
@@ -1242,7 +1249,7 @@ Transform single-shot analysis into a context-aware, multi-turn AI coding assist
     "node_context": {"node_id": "42", ...},
     "workflow": {...}
   },
-  "api_key": "sk-...", // pragma: allowlist secret
+  "api_key": "<redacted>",
   "base_url": "https://api.openai.com/v1",
   "model": "gpt-4o",
   "language": "zh_TW",

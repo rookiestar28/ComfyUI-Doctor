@@ -21,8 +21,9 @@ import secrets
 import shutil
 import subprocess
 import threading
+import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PosixPath, WindowsPath
 from typing import Dict, Optional
 
 from .doctor_paths import get_doctor_data_dir
@@ -54,7 +55,9 @@ class SecretStore:
 
     def __init__(self, filepath: Optional[str] = None) -> None:
         target_path = filepath or str(Path(get_doctor_data_dir()) / self.STORE_FILENAME)
-        self._filepath = Path(target_path)
+        # IMPORTANT: choose the path class from the actual host platform, not mocked os.name.
+        # Some tests simulate Windows ACL logic on POSIX; pathlib.WindowsPath cannot be instantiated there.
+        self._filepath = WindowsPath(target_path) if sys.platform.startswith("win") else PosixPath(target_path)
         self._lock = threading.RLock()
         self._windows_acl_attempted = False
         self._encryption_key = (os.getenv("DOCTOR_SECRET_STORE_ENCRYPTION_KEY", "") or "").strip()

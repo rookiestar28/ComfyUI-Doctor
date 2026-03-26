@@ -26,6 +26,8 @@ import hashlib
 from collections import deque
 from typing import Optional, Dict, Any, List
 
+from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
+
 # ==============================================================================
 # R22: Asyncio transport GC exclusion patterns
 # ==============================================================================
@@ -160,7 +162,7 @@ def _migrate_legacy_data():
             # This preserves a forensic trail while preventing repeated migrations.
             shutil.copy2(legacy_path, target_path)
             try:
-                ts = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                ts = utc_filename_timestamp()
                 os.rename(legacy_path, f"{legacy_path}.migrated-{ts}")
             except Exception:
                 # If rename fails (permissions/locks), leave legacy in place; migration is best-effort.
@@ -543,12 +545,7 @@ class DoctorLogProcessor(threading.Thread):
             self._aggregate_window_seconds = 60
 
     def _parse_ts(self, ts: str) -> datetime.datetime:
-        try:
-            if not ts:
-                return datetime.datetime.min
-            return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None)
-        except Exception:
-            return datetime.datetime.min
+        return parse_utc_timestamp(ts) or UTC_MIN
 
     def run(self):
         """Main loop: process queued messages."""
@@ -808,7 +805,7 @@ class DoctorLogProcessor(threading.Thread):
         pattern_priority = analysis_metadata.get("pattern_priority") or analysis_metadata.get("priority")
 
         node_context = ErrorAnalyzer.extract_node_context(full_traceback)
-        timestamp = datetime.datetime.now().isoformat()
+        timestamp = utc_isoformat()
         error_signature = hashlib.sha256(full_traceback.encode("utf-8", errors="ignore")).hexdigest()
 
         new_analysis = {
