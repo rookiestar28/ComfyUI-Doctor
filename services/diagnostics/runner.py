@@ -10,8 +10,9 @@ import json
 import logging
 import time
 import uuid
-from services.time_utils import utc_isoformat
 from typing import Dict, Any, List, Optional, Callable, Awaitable
+
+from ..time_utils import utc_isoformat
 from functools import lru_cache
 
 from .models import (

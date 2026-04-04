@@ -16,7 +16,10 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from config import CONFIG
+try:
+    from ..config import CONFIG
+except ImportError:
+    from config import CONFIG
 
 
 logger = logging.getLogger(__name__)
@@ -265,13 +268,13 @@ def get_job_manager():
         import server
         if not hasattr(server.PromptServer.instance, "_doctor_job_manager"):
             # Avoid circular import if possible, but we need doctor_paths
-            from services.doctor_paths import get_doctor_data_dir
+            from .doctor_paths import get_doctor_data_dir
             server.PromptServer.instance._doctor_job_manager = JobManager(Path(get_doctor_data_dir()))
         return server.PromptServer.instance._doctor_job_manager
     except ImportError:
         # Fallback for testing/standalone
         if not hasattr(get_job_manager, "_instance"):
-            from services.doctor_paths import get_doctor_data_dir
+            from .doctor_paths import get_doctor_data_dir
             get_job_manager._instance = JobManager(Path(get_doctor_data_dir()))
         return get_job_manager._instance
 

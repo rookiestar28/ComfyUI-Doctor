@@ -15,16 +15,16 @@ ISS is explicitly NOT:
 """
 
 import logging
-from services.time_utils import utc_isoformat
 from typing import Dict, Any, List, Optional
 
-from services.diagnostics.models import (
+from ..time_utils import utc_isoformat
+from ..diagnostics.models import (
     IntentSignature,
     IntentMatch,
     SignalEvidence,
     SignalSource,
 )
-from services.intent.loader import load_intents  # P2: Load from JSON
+from .loader import load_intents  # P2: Load from JSON
 
 logger = logging.getLogger("comfyui-doctor.intent")
 
@@ -374,7 +374,7 @@ def init_intent_system():
     1. Load intent definitions
     2. Register scorer with diagnostics runner
     """
-    from services.diagnostics import get_diagnostics_runner
+    from ..diagnostics import get_diagnostics_runner
 
     scorer = get_intent_scorer()
     runner = get_diagnostics_runner()

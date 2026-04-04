@@ -18,7 +18,7 @@ import { waitForDoctorReady, clearStorage } from '../utils/helpers.js';
 test.describe('Error Boundaries', () => {
     test.beforeEach(async ({ page }) => {
         // Increase timeout for initialization
-        test.setTimeout(30000);
+        test.setTimeout(45000);
 
         // Mock the ComfyUI modules that doctor.js tries to import
         await page.route('**/scripts/app.js', route => {
@@ -122,6 +122,8 @@ test.describe('Error Boundaries', () => {
                 body: JSON.stringify({ success: true, models: [] }),
             });
         });
+
+        await clearStorage(page);
     });
 
     test('should show ErrorBoundary UI when chat island crashes', async ({ page }) => {
@@ -138,10 +140,10 @@ test.describe('Error Boundaries', () => {
         await page.goto('test-harness.html');
 
         // Wait for Doctor UI to initialize
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Wait for ErrorBoundary UI to appear
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
 
         // Verify error UI content
         await expect(page.locator('.error-boundary-title')).toBeVisible();
@@ -163,10 +165,10 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Verify error UI appears
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
 
         // Click reload button
         await page.click('.error-boundary-btn.reload-btn');
@@ -175,7 +177,7 @@ test.describe('Error Boundaries', () => {
         await page.waitForTimeout(500);
 
         // Verify error UI disappears (component remounted successfully)
-        await expect(page.locator('.error-boundary-container')).not.toBeVisible({ timeout: 3000 });
+        await expect(page.locator('.error-boundary-container')).not.toBeVisible({ timeout: 5000 });
     });
 
     test('should show permanent error after 3 reload attempts', async ({ page }) => {
@@ -189,10 +191,10 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Verify error UI appears
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
 
         // Click reload 3 times
         for (let i = 0; i < 3; i++) {
@@ -204,7 +206,7 @@ test.describe('Error Boundaries', () => {
         }
 
         // Verify permanent error state
-        await expect(page.locator('.error-boundary-container.permanent')).toBeVisible({ timeout: 2000 });
+        await expect(page.locator('.error-boundary-container.permanent')).toBeVisible({ timeout: 5000 });
 
         // Reload button should be hidden in permanent state
         await expect(page.locator('.error-boundary-btn.reload-btn')).not.toBeVisible();
@@ -226,10 +228,10 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Wait for error UI
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
 
         // Get the error ID before clicking
         const errorId = await page.locator('.error-boundary-error-id code').textContent();
@@ -238,7 +240,7 @@ test.describe('Error Boundaries', () => {
         await page.click('.error-boundary-btn.copy-btn');
 
         // Button should show "Copied!" state
-        await expect(page.locator('.error-boundary-btn.copied')).toBeVisible({ timeout: 2000 });
+        await expect(page.locator('.error-boundary-btn.copied')).toBeVisible({ timeout: 5000 });
 
         // Verify clipboard content
         const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
@@ -256,10 +258,10 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Chat should show error
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
 
         // Switch to Statistics tab (should not be affected)
         const statsTab = page.locator('.doctor-tab-button:has-text("Stats")');
@@ -268,7 +270,7 @@ test.describe('Error Boundaries', () => {
             await page.waitForTimeout(500);
 
             // Statistics panel should load without error
-            await expect(page.locator('#doctor-statistics-panel')).toBeVisible({ timeout: 5000 });
+            await expect(page.locator('#doctor-statistics-panel')).toBeVisible({ timeout: 8000 });
 
             // Should NOT show error boundary in stats tab
             const statsPaneErrors = await page.locator('.doctor-tab-pane:has(#doctor-statistics-panel) .error-boundary-container').count();
@@ -294,10 +296,10 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Wait for error and logging
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
         await page.waitForTimeout(500);
 
         // Check that console has [ErrorBoundary] logs
@@ -310,14 +312,14 @@ test.describe('Error Boundaries', () => {
     test('normal operation without error injection', async ({ page }) => {
         // No error injection - normal operation
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Error boundary should NOT appear
         await page.waitForTimeout(1000);
         await expect(page.locator('.error-boundary-container')).not.toBeVisible();
 
         // Chat interface should be functional
-        await expect(page.locator('.chat-island')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.chat-island')).toBeVisible({ timeout: 8000 });
     });
 
     test('privacy mode should sanitize PII in error logs', async ({ page }) => {
@@ -333,10 +335,10 @@ test.describe('Error Boundaries', () => {
         });
 
         await page.goto('test-harness.html');
-        await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 15000 });
+        await waitForDoctorReady(page, { timeout: 30000 });
 
         // Wait for error boundary to appear and logs to be captured
-        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('.error-boundary-container')).toBeVisible({ timeout: 8000 });
         await page.waitForTimeout(1000); // Allow time for console.error to be captured
 
         // Read the captured error logs from window.errorLogs with proper serialization

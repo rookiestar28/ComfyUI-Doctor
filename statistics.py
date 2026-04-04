@@ -7,8 +7,12 @@ Analyzes error history data to generate statisticsFor the dashboard UI.
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from collections import Counter
-from services.node_health import NodeHealthService
-from services.time_utils import ensure_utc, parse_utc_timestamp, utc_now
+try:
+    from .services.node_health import NodeHealthService
+    from .services.time_utils import ensure_utc, parse_utc_timestamp, utc_now
+except ImportError:
+    from services.node_health import NodeHealthService
+    from services.time_utils import ensure_utc, parse_utc_timestamp, utc_now
 
 
 

@@ -184,7 +184,10 @@ class PromptComposer:
         # R15: Auto-canonicalize legacy format if needed
         if not isinstance(sys_info.get("packages"), list) or "torch_version" not in sys_info:
             try:
-                from system_info import canonicalize_system_info
+                try:
+                    from ..system_info import canonicalize_system_info
+                except ImportError:
+                    from system_info import canonicalize_system_info
                 sys_info = canonicalize_system_info(sys_info, max_packages=20)
             except ImportError:
                 pass  # Fall through to best-effort formatting

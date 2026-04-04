@@ -14,7 +14,10 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
+try:
+    from .services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
+except ImportError:
+    from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
 
 
 @dataclass

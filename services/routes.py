@@ -2,29 +2,20 @@
 API Routes for ComfyUI-Doctor.
 Refactored from __init__.py for testability.
 """
+
 import logging
 import time
-from pathlib import Path
 
 import aiohttp.web as web
-from services.admin_guard import validate_admin_request
+
+from .admin_guard import validate_admin_request
+from . import job_manager
+from .providers import registry as provider_registry
 
 try:
-    from config import CONFIG
-    from .job_manager import get_job_manager, JobStatus
-    from .providers.registry import ProviderRegistry
-    # We need to import pipeline.plugins scan_plugins.
-    # Since we are in services/routes.py, pipeline is ../pipeline
-    # But imports in ComfyUI execution context can be tricky.
-    # We will try relative import, if fails, we rely on sys.path hack or assumption.
-    # Actually, config is in root, so from config import CONFIG works if root is in path.
-    # services is a package.
+    from ..config import CONFIG
 except ImportError:
-    # Fallback for when running tests where package structure might differ
-    # or if we are not in a full package context.
-    import sys
-    # Only if we really can't find them, but usually unrelated to runtime
-    pass
+    from config import CONFIG
 
 
 logger = logging.getLogger("ComfyUI-Doctor.routes")
@@ -43,26 +34,20 @@ async def _optional_json_payload(request):
     except Exception:
         return {}
 
+
 async def api_plugins(request):
     """
     Plugin trust report (scan-only).
     Returns the trust classification for each discovered community plugin without importing code.
     """
     try:
-        # Import lazily if needed to avoid top-level import issues during startup
         from pathlib import Path
-        # Handle import of pipeline/config based on context
+
         try:
             from ..pipeline.plugins import scan_plugins
-            from ..config import CONFIG
         except ImportError:
-            # If running as script or different context
             from pipeline.plugins import scan_plugins
-            from config import CONFIG
-        
-        # We need to find the plugin dir relative to this file?
-        # This file is services/routes.py.
-        # Plugin dir is ../pipeline/plugins/community
+
         plugin_dir = Path(__file__).resolve().parent.parent / "pipeline" / "plugins" / "community"
         report = scan_plugins(plugin_dir)
 
@@ -120,11 +105,10 @@ async def api_get_job(request):
     Get job status and details.
     """
     job_id = request.match_info.get("job_id", "")
-    from services.job_manager import get_job_manager
-    job = get_job_manager().get_job(job_id)
+    job = job_manager.get_job_manager().get_job(job_id)
     if not job:
         return web.json_response({"success": False, "error": "Job not found"}, status=404)
-    
+
     return web.json_response({
         "success": True,
         "job": job.to_dict()
@@ -137,24 +121,19 @@ async def api_resume_job(request):
     Note: Actual resume logic depends on provider implementation.
     """
     payload = await _optional_json_payload(request)
-    # CRITICAL: write-sensitive endpoint must remain admin-gated.
     allowed, code, message = validate_admin_request(request, payload=payload)
     if not allowed:
         return _admin_denied_response(code, message)
 
     job_id = request.match_info.get("job_id", "")
-    from services.job_manager import get_job_manager, JobStatus
-    job = get_job_manager().get_job(job_id)
+    job = job_manager.get_job_manager().get_job(job_id)
     if not job:
         return web.json_response({"success": False, "error": "Job not found"}, status=404)
 
-    # In a real implementation, we would re-trigger the provider logic here.
-    # For R20 scope, we just verify state transition is possible.
     if job.status.value not in ("failed", "cancelled", "pending"):
-            return web.json_response({"success": False, "message": f"Cannot resume job in state {job.status}"}, status=400)
-            
-    # Mock resume for now
-    get_job_manager().update_job(job_id, status=JobStatus.PENDING, meta_update={"resumed_at": time.time()})
+        return web.json_response({"success": False, "message": f"Cannot resume job in state {job.status}"}, status=400)
+
+    job_manager.get_job_manager().update_job(job_id, status=job_manager.JobStatus.PENDING, meta_update={"resumed_at": time.time()})
     return web.json_response({"success": True, "message": "Job resumed"})
 
 
@@ -163,15 +142,13 @@ async def api_cancel_job(request):
     Cancel a running/pending job.
     """
     payload = await _optional_json_payload(request)
-    # CRITICAL: write-sensitive endpoint must remain admin-gated.
     allowed, code, message = validate_admin_request(request, payload=payload)
     if not allowed:
         return _admin_denied_response(code, message)
 
     job_id = request.match_info.get("job_id", "")
-    from services.job_manager import get_job_manager, JobStatus
-    if get_job_manager().update_job(job_id, status=JobStatus.CANCELLED):
-            return web.json_response({"success": True, "message": "Job cancelled"})
+    if job_manager.get_job_manager().update_job(job_id, status=job_manager.JobStatus.CANCELLED):
+        return web.json_response({"success": True, "message": "Job cancelled"})
     return web.json_response({"success": False, "error": "Job not found"}, status=404)
 
 
@@ -180,19 +157,16 @@ async def api_provider_status(request):
     Get specific provider status/capability.
     """
     provider_id = request.match_info.get("provider_id", "")
-    from services.providers.registry import ProviderRegistry
-    
-    cap = ProviderRegistry.get_capability(provider_id)
+    cap = provider_registry.ProviderRegistry.get_capability(provider_id)
     if not cap:
-            return web.json_response({"success": False, "error": "Provider not found"}, status=404)
-            
-    # Check active status via adapter if needed, for now return capability
+        return web.json_response({"success": False, "error": "Provider not found"}, status=404)
+
     return web.json_response({
         "success": True,
         "provider_id": provider_id,
         "capabilities": {
-                "supports_submit": cap.supports_submit,
-                "requires_auth": cap.requires_auth,
-                "concurrency_limit": cap.concurrency_limit
+            "supports_submit": cap.supports_submit,
+            "requires_auth": cap.requires_auth,
+            "concurrency_limit": cap.concurrency_limit,
         }
     })

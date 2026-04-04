@@ -26,7 +26,10 @@ import hashlib
 from collections import deque
 from typing import Optional, Dict, Any, List
 
-from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
+try:
+    from .services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
+except ImportError:
+    from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
 
 # ==============================================================================
 # R22: Asyncio transport GC exclusion patterns
@@ -63,12 +66,14 @@ _doctor_internal_logger.propagate = False  # CRITICAL: do not propagate to root
 # R22: Thread-local reentrance guard for SafeStreamWrapper
 _stream_reentrance = threading.local()
 try:
+    # CRITICAL: do not replace these with bare internal imports; ComfyUI loads
+    # Doctor as a package and the extension root is not guaranteed on sys.path.
     from .analyzer import ErrorAnalyzer
     from .config import CONFIG
     from .history_store import HistoryStore, HistoryEntry
-    from services.log_ring_buffer import get_ring_buffer
-    from services.context_extractor import detect_fatal_pattern
-    from services import doctor_paths
+    from .services.log_ring_buffer import get_ring_buffer
+    from .services.context_extractor import detect_fatal_pattern
+    from .services import doctor_paths
 except ImportError:
     # Fallback for direct execution (tests)
     from analyzer import ErrorAnalyzer

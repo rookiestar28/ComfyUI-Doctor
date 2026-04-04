@@ -20,8 +20,8 @@ from .models import (
     IssueStatus,
     ReportMetadata,
 )
-from services.doctor_paths import get_doctor_data_dir
-from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_isoformat, utc_now
+from ..doctor_paths import get_doctor_data_dir
+from ..time_utils import UTC_MIN, parse_utc_timestamp, utc_isoformat, utc_now
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.store")
 

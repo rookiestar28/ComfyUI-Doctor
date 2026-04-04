@@ -9,7 +9,7 @@ Enforces "fail-closed" defaults for all data submission actions.
 import logging
 from typing import Any, Dict, Optional
 
-from services.providers.registry import ProviderRegistry
+from .providers.registry import ProviderRegistry
 
 logger = logging.getLogger(__name__)
 

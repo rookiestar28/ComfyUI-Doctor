@@ -587,6 +587,34 @@ graph TD
   - **Discovered**: 2026-03-25 (reference project audit — Desktop `virtualEnvironment.ts`)
   - **Plan**: `.planning/260326-R24_DESKTOP_VIRTUAL_ENV_PATH_COMPATIBILITY_VERIFICATION_PLAN.md`
   - **Implementation Record**: `.planning/260326-R24_DESKTOP_VIRTUAL_ENV_PATH_COMPATIBILITY_VERIFICATION_IMPLEMENTATION_RECORD.md`
+- [x] **R25**: Package Import Compatibility Hardening - High *Completed (2026-04-04; stage-resume acceptance passed)*
+  - **Problem**: ComfyUI custom-node package loading can fail when repo modules use bare internal imports such as `from services...`, because the extension root is not guaranteed to be a top-level import root during module loading.
+  - **Scope**:
+    - Standardize package-safe imports across repo-root modules that participate in extension startup/load.
+    - Replace fragile package-internal absolute imports with package-relative or explicitly documented fallback patterns.
+    - Update delayed runtime imports so the same failure does not reappear after startup.
+  - **Acceptance**:
+    - The affected startup path no longer fails with `ModuleNotFoundError: No module named 'services'`.
+    - Package-loaded modules do not rely on bare internal top-level imports outside documented fallback blocks.
+  - **Discovered**: 2026-04-04 (community issue report — Easy Install / Windows package load failure)
+  - **Execution Order**: 1 of 3
+  - **Plan**: `.planning/260404-R25_PACKAGE_IMPORT_COMPATIBILITY_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260404-R25_PACKAGE_IMPORT_COMPATIBILITY_HARDENING_IMPLEMENTATION_RECORD.md`
+- [ ] **R26**: Prestartup Bootstrap, Encoding, and Non-UI Emoji Safety Hardening - High
+  - **Problem**: `prestartup_script.py` currently relies on fragile internal import assumptions and emits non-ASCII startup messages that can raise `UnicodeEncodeError` on Windows charmap/code-page consoles. More broadly, non-essential emoji in backend/startup/logging code paths add avoidable encoding risk outside the frontend UI layer.
+  - **Scope**:
+    - Make prestartup bootstrap explicit and script-safe without requiring the full package to be importable first.
+    - Convert Doctor-owned prestartup console output to ASCII-safe messages.
+    - Remove non-essential emoji from backend/startup/test-script/logging code paths; frontend UI presentation strings may remain unchanged.
+    - Treat console encoding/write failures as non-fatal during early startup.
+  - **Acceptance**:
+    - Doctor prestartup no longer emits startup-breaking `UnicodeEncodeError` / charmap failures for its own status output.
+    - Non-UI backend/startup emoji no longer exist unless explicitly justified as required compatibility content.
+    - Prestartup remains able to establish a writable log target in the supported fallback paths.
+  - **Discovered**: 2026-04-04 (community issue report — Windows startup log encoding failure)
+  - **Dependency**: Execute after `R25`
+  - **Execution Order**: 2 of 3
+  - **Plan**: `.planning/260404-R25R26T17_PACKAGE_IMPORT_AND_STARTUP_COMPATIBILITY_DEBUG_PLAN.md`
 - [x] **R6**: Network retry logic with exponential backoff - ???Low ??*Completed (2026-01-10)*
   - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
   - Exponential backoff with jitter, Retry-After header support
@@ -916,6 +944,20 @@ graph TD
     - New regression tests fail on the pre-fix behavior and pass on the hardened behavior.
     - Pre-push guard fails fast on detached HEAD and logs the validated branch tip.
     - `tests/TEST_SOP.md` documents the branch-tip rerun rule and push-scope boundary.
+- [ ] **T17**: Package Load, Startup Encoding, and Test Harness Hardening - High
+  - **Goal**: Make the newly discovered custom-node package-load and prestartup encoding failures non-regressable, and ensure the repo test scripts reproduce this host-load failure class early.
+  - **Scope**:
+    - Add regression tests for package loading without assuming the extension root is a top-level import root.
+    - Add startup encoding coverage for non-UTF-8/charmap console streams.
+    - Add a targeted guard/check that prevents reintroduction of fragile bare internal import forms.
+    - Strengthen repo test scripts and harnesses so they execute a host-like package-load/startup validation path instead of relying only on repo-root `sys.path` pytest behavior.
+  - **Acceptance**:
+    - The new regression fixtures fail on the pre-fix behavior and pass on the hardened behavior.
+    - The repo-local gate can reproduce the covered host-load/startup failure class without manual ComfyUI debugging steps.
+    - The acceptance gate detects reintroduction of the covered import/bootstrap patterns before release.
+  - **Dependency**: Execute after `R25` and `R26`
+  - **Execution Order**: 3 of 3
+  - **Plan**: `.planning/260404-R25R26T17_PACKAGE_IMPORT_AND_STARTUP_COMPATIBILITY_DEBUG_PLAN.md`
 - [x] **T13**: Desktop-style Failure Injection Tests (Flush/OSError + Corrupt JSON) - ???Medium *Completed (2026-02-17; TEST_SOP gate passed)*
   - **Sprint Plan**: `.planning/260216-R17T13T9T5_NEXT_SPRINT_VALIDATION_EXPANSION_PLAN.md`
   - **Implementation Record**: `.planning/260217-R17T13T9T5_REMEDIATION_RECORD.md`

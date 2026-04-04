@@ -10,17 +10,13 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, Any
 
-# A6: Import Pipeline Components
+# CRITICAL: keep relative-first fallback; ComfyUI loads Doctor as a package,
+# while pytest imports these modules as top-level files.
 try:
-    from pipeline import AnalysisPipeline, AnalysisContext, NodeContext
-    from pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
-    # Ensure i18n is available for dependencies
-    from i18n import get_suggestion, ERROR_KEYS
+    from .pipeline import AnalysisPipeline, AnalysisContext, NodeContext
+    from .pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
+    from .i18n import get_suggestion, ERROR_KEYS
 except ImportError:
-    # Fallback for relative imports (tests/dev)
-    import sys
-    import os
-    sys.path.append(os.path.dirname(__file__))
     from pipeline import AnalysisPipeline, AnalysisContext, NodeContext
     from pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
     from i18n import get_suggestion, ERROR_KEYS
@@ -242,7 +238,10 @@ class ErrorAnalyzer:
         The loader is a singleton, so reloading it via get_pattern_loader() works globaly.
         """
         try:
-            from pattern_loader import get_pattern_loader
+            try:
+                from .pattern_loader import get_pattern_loader
+            except ImportError:
+                from pattern_loader import get_pattern_loader
             loader = get_pattern_loader()
             return loader.reload_if_changed()
         except Exception as e:

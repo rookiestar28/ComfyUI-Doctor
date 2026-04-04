@@ -45,7 +45,10 @@ def _run_pip_list() -> str:
 def _detect_runtime_environment() -> Dict[str, Optional[str]]:
     """Infer high-level ComfyUI runtime type from the current Python/layout."""
     try:
-        from services.doctor_paths import get_path_diagnostics
+        try:
+            from .services.doctor_paths import get_path_diagnostics
+        except ImportError:
+            from services.doctor_paths import get_path_diagnostics
 
         diagnostics = get_path_diagnostics()
         return {

@@ -350,7 +350,7 @@ def collect_error_context(error_data, workflow_data):
     # 2. Get recent execution logs (R14: Prefer ring buffer for reliability)
     # Ring buffer captures ALL stdout/stderr lines, not just ComfyUI logger output
     try:
-        from services.log_ring_buffer import get_ring_buffer
+        from .services.log_ring_buffer import get_ring_buffer
         ring_buffer = get_ring_buffer()
         context["execution_logs"] = ring_buffer.get_recent(50)
     except Exception:
@@ -416,7 +416,7 @@ def collect_error_context(error_data, workflow_data):
             # 5. Check for missing required connections
             # This requires ComfyUI's node definition API
             try:
-                from nodes import NODE_CLASS_MAPPINGS
+                from .nodes import NODE_CLASS_MAPPINGS
                 node_class = NODE_CLASS_MAPPINGS.get(node.get("class_type"))
                 if node_class and hasattr(node_class, "INPUT_TYPES"):
                     required_inputs = node_class.INPUT_TYPES().get("required", {})
@@ -1163,7 +1163,7 @@ try:
             # R14: Use PromptComposer for unified context formatting
             if CONFIG.r14_use_prompt_composer:
                 try:
-                    from services.context_extractor import extract_error_summary
+                    from .services.context_extractor import extract_error_summary
                     
                     # Extract error summary for summary-first ordering
                     error_summary_obj = extract_error_summary(error_text)
@@ -1348,7 +1348,7 @@ try:
                             return web.json_response({"error": "Empty response from LLM"}, status=502)
                             
                         # R19: Clean output (strip hidden reasoning)
-                        from services.providers.base import BaseProviderAdapter
+                        from .services.providers.base import BaseProviderAdapter
                         content = BaseProviderAdapter.clean_llm_output(content)
                         
                         logger.info(f"Analysis successful, response length={len(content)}, attempts={result.attempts}")
@@ -1578,7 +1578,7 @@ try:
                         try:
                             r14_composer_succeeded = True  # Assume success until exception
                             # Build llm_context compatible with PromptComposer
-                            from services.context_extractor import extract_error_summary
+                            from .services.context_extractor import extract_error_summary
                             
                             # Extract error summary for summary-first ordering
                             traceback_text = str(enriched_context.get('traceback', ''))
@@ -1827,7 +1827,7 @@ try:
                         else:
                             content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
                         # R19: Clean output (strip hidden reasoning)
-                        from services.providers.base import BaseProviderAdapter
+                        from .services.providers.base import BaseProviderAdapter
                         content = BaseProviderAdapter.clean_llm_output(content)
                         
                         logger.info(f"LLM response received (non-stream), length={len(content)}, attempts={result.attempts}")
@@ -2628,7 +2628,7 @@ try:
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
     # ---- S3: Telemetry API Endpoints ----
-    from telemetry import get_telemetry_store
+    from .telemetry import get_telemetry_store
     
     # Initialize telemetry with config setting
     _telemetry_store = get_telemetry_store()
@@ -2800,23 +2800,13 @@ try:
 
     # ---- API Routes (R20) ----
     try:
-        try:
-            from .services.routes import (
-                api_plugins,
-                api_get_job,
-                api_resume_job,
-                api_cancel_job,
-                api_provider_status,
-            )
-        except ImportError:
-            # Fallback for non-package execution contexts
-            from services.routes import (
-                api_plugins,
-                api_get_job,
-                api_resume_job,
-                api_cancel_job,
-                api_provider_status,
-            )
+        from .services.routes import (
+            api_plugins,
+            api_get_job,
+            api_resume_job,
+            api_cancel_job,
+            api_provider_status,
+        )
 
         # Register routes
         server.PromptServer.instance.routes.get("/doctor/plugins")(api_plugins)
@@ -2832,15 +2822,15 @@ try:
 
 
     # ---- F14: Proactive Diagnostics API Endpoints ----
-    from services.diagnostics import (
+    from .services.diagnostics import (
         get_diagnostics_runner,
         get_diagnostics_store,
         HealthCheckRequest,
         HealthAckRequest,
         IssueStatus,
     )
-    from services.intent import init_intent_system
-    from services.diagnostics.checks import init_checks
+    from .services.intent import init_intent_system
+    from .services.diagnostics.checks import init_checks
 
     # Initialize checks registry (registers checks with runner)
     try:

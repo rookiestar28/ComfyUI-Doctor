@@ -8,9 +8,7 @@ REFERENCE/
 docs/reference/
 logs/*
 !logs/.gitkeep
-AGENT_CONTEXT.md
-AGENTS.md
-ROADMAP.md
+AGEN*.md
 .planning/
 .claude/
 .env

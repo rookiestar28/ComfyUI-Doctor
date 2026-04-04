@@ -23,11 +23,17 @@ from datetime import timedelta
 from typing import Optional, List, Dict, Set, Tuple, Any
 
 try:
-    from services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
+    try:
+        from .services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
+    except ImportError:
+        from services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
 except Exception:
     _get_canonical_doctor_data_dir = None
 
-from services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
+try:
+    from .services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
+except ImportError:
+    from services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -128,7 +134,10 @@ class TelemetryEvent:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # R7: Import shared RateLimiter from rate_limiter.py (avoid code duplication)
-from rate_limiter import RateLimiter
+try:
+    from .rate_limiter import RateLimiter
+except ImportError:
+    from rate_limiter import RateLimiter
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -148,7 +157,10 @@ def get_pattern_allowlist() -> Set[str]:
         return _pattern_cache
     
     try:
-        from pattern_loader import PatternLoader
+        try:
+            from .pattern_loader import PatternLoader
+        except ImportError:
+            from pattern_loader import PatternLoader
         loader = PatternLoader()
         patterns = loader.get_all_patterns()
         _pattern_cache = {p.get("id", "") for p in patterns if p.get("id")}

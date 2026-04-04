@@ -8,7 +8,7 @@ Serves as the source of truth for what each provider supports.
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from services.providers.base import BaseProviderAdapter
+from .base import BaseProviderAdapter
 
 
 @dataclass

@@ -9,8 +9,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
-from sanitizer import PIISanitizer, SanitizationLevel
-from security import is_local_llm_url
+try:
+    from .sanitizer import PIISanitizer, SanitizationLevel
+    from .security import is_local_llm_url
+except ImportError:
+    from sanitizer import PIISanitizer, SanitizationLevel
+    from security import is_local_llm_url
 
 
 def get_outbound_sanitizer(base_url: str, privacy_mode: str) -> Tuple[PIISanitizer, bool]:

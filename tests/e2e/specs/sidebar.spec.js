@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { waitForDoctorReady, clearStorage, disablePreact, assertChatFallbackUI } from '../utils/helpers.js';
+import { waitForDoctorReady, clearStorage, disablePreact, assertChatFallbackUI, assertStatsFallbackUI } from '../utils/helpers.js';
 
 test.describe('Doctor Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
@@ -403,7 +403,7 @@ test.describe('Doctor Chat Interface', () => {
 
     // Reload to apply flag
     await page.reload();
-    await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 10000 });
+    await waitForDoctorReady(page, { timeout: 30000 });
 
     // Use shared helper to assert fallback UI
     await assertChatFallbackUI(page);
@@ -476,22 +476,19 @@ test.describe('Doctor Chat Interface', () => {
       });
     });
 
-    // Set Preact disabled flag
-    await page.evaluate(() => {
-      localStorage.setItem('doctor_preact_disabled', 'true');
-    });
+    // Use shared helper to disable Preact before reload
+    await disablePreact(page);
 
     // Reload to apply flag
     await page.reload();
-    await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 10000 });
+    await waitForDoctorReady(page, { timeout: 30000 });
 
     // Switch to Stats tab
     await page.click('.doctor-tab-button[data-tab-id="stats"]');
     await page.waitForTimeout(500);
 
-    // Verify Stats panel is visible (vanilla fallback)
-    const statsPanel = page.locator('#doctor-statistics-panel, #doctor-stats-content');
-    await expect(statsPanel.first()).toBeVisible();
+    // Use shared helper to assert fallback UI
+    await assertStatsFallbackUI(page);
 
     // Clean up
     await page.evaluate(() => {

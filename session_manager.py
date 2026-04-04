@@ -13,7 +13,10 @@ import atexit
 import logging
 from typing import Optional
 
-from rate_limiter import RateLimiter, ConcurrencyLimiter
+try:
+    from .rate_limiter import RateLimiter, ConcurrencyLimiter
+except ImportError:
+    from rate_limiter import RateLimiter, ConcurrencyLimiter
 
 logger = logging.getLogger(__name__)
 

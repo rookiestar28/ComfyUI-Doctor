@@ -6,9 +6,10 @@
  * Wait for Doctor UI to be fully initialized
  * @param {import('@playwright/test').Page} page
  */
-export async function waitForDoctorReady(page) {
+export async function waitForDoctorReady(page, options = {}) {
+  const timeout = Number.isFinite(options.timeout) ? options.timeout : 20000;
   // Wait for the custom ready event
-  await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout });
 
   // Ensure at least one tab's content has actually mounted (preact or vanilla).
   await page.waitForFunction(() => {
@@ -22,9 +23,11 @@ export async function waitForDoctorReady(page) {
       document.querySelector('#doctor-error-context') ||
       document.querySelector('#doctor-sanitization-status') ||
       document.querySelector('#doctor-messages') ||
-      document.querySelector('.chat-messages')
+      document.querySelector('.chat-messages') ||
+      // Error boundary fallback UI
+      document.querySelector('.error-boundary-container')
     );
-  }, null, { timeout: 20000 });
+  }, null, { timeout });
 }
 
 /**

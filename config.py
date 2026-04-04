@@ -8,7 +8,12 @@ import json
 import tempfile
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List
-from services.config_guardrails import GuardrailConfig
+# CRITICAL: keep relative-first fallback; custom-node package load does not
+# guarantee the extension root is a top-level import root.
+try:
+    from .services.config_guardrails import GuardrailConfig
+except ImportError:
+    from services.config_guardrails import GuardrailConfig
 
 
 def _get_config_path_candidates() -> List[str]:
@@ -20,7 +25,10 @@ def _get_config_path_candidates() -> List[str]:
     """
     candidates: List[str] = []
     try:
-        from services.doctor_paths import get_doctor_data_dir  # local import to avoid import-time coupling
+        try:
+            from .services.doctor_paths import get_doctor_data_dir  # local import to avoid import-time coupling
+        except ImportError:
+            from services.doctor_paths import get_doctor_data_dir
         candidates.append(os.path.join(get_doctor_data_dir(), "config.json"))
     except Exception:
         pass

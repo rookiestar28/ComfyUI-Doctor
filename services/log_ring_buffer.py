@@ -66,7 +66,10 @@ class LogRingBuffer:
         """Lazy load S6 sanitizer to avoid circular imports."""
         try:
             # Use the convenience function that returns str, not SanitizationResult
-            from sanitizer import sanitize_for_llm
+            try:
+                from ..sanitizer import sanitize_for_llm
+            except ImportError:
+                from sanitizer import sanitize_for_llm
             self._sanitizer = sanitize_for_llm
         except ImportError:
             # Sanitizer not available, will return raw lines
