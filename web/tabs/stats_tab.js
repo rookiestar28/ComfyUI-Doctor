@@ -68,6 +68,15 @@ export async function render(container) {
         // Note: fallbackRender was already called by registry
         doctorUI.statsIslandActive = false;
     }
+
+    return () => {
+        doctorUI.statsIslandActive = false;
+        doctorUI.sidebarStatsPanel = null;
+        if (isPreactMode) {
+            unmountStatisticsIsland();
+            isPreactMode = false;
+        }
+    };
 }
 
 export function onActivate() {

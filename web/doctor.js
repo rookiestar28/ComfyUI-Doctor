@@ -14,6 +14,16 @@ import * as SettingsTab from "./tabs/settings_tab.js";
 // R5: Error Boundaries
 import { installGlobalErrorHandlers } from "./global_error_handler.js";
 import { getRuntimeApiKey, setRuntimeApiKey, migrateLegacyApiKeyFromSettings } from "./llm_key_store.js";
+import {
+    DOCTOR_DEFAULTS,
+    DOCTOR_EXTENSION_SETTINGS,
+    destroyDoctorSidebarMount,
+    ensureDoctorSettingsRegistered,
+    getDoctorRuntimeSettings,
+    getDoctorSetting,
+    isDoctorEnabled,
+    isDoctorErrorBoundariesEnabled,
+} from "./comfyui_frontend_compat.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // A7: PREACT ISLANDS FEATURE FLAG
@@ -25,35 +35,6 @@ import { getRuntimeApiKey, setRuntimeApiKey, migrateLegacyApiKeyFromSettings } f
 // Last Modified: 2026-01-05 (A7 Phase 2)
 // ═══════════════════════════════════════════════════════════════════════════
 const PREACT_ISLANDS_ENABLED = localStorage.getItem('doctor_preact_disabled') !== 'true' && isPreactEnabled();
-
-// ═══════════════════════════════════════════════════════════════════════════
-// CRITICAL: Frontend Default Configuration
-// ═══════════════════════════════════════════════════════════════════════════
-// ⚠️ WARNING: LANGUAGE must always be "en" (English)
-//
-// This default is used when:
-//   1. User first installs ComfyUI-Doctor (no settings saved yet)
-//   2. ComfyUI settings are reset/corrupted
-//   3. DoctorUI constructor receives no language option
-//
-// MUST MATCH backend default in i18n.py (_current_language = "en")
-//
-// If these don't match:
-//   ❌ Backend suggestions will be in different language than UI
-//   ❌ Confusing experience for international users
-//
-// To change default for your installation:
-//   → Modify ComfyUI Settings → Doctor → Language
-//   → DO NOT change this hardcoded value
-//
-// Last Modified: 2026-01-03 (Fixed from "zh_TW" to "en")
-// ═══════════════════════════════════════════════════════════════════════════
-const DEFAULTS = {
-    LANGUAGE: "en",  // ⚠️ DO NOT CHANGE - Must match i18n.py backend default
-    POLL_INTERVAL: 2000,
-    AUTO_OPEN_ON_ERROR: true,  // F17: Default to true for new installs
-    ENABLE_NOTIFICATIONS: true,
-};
 
 // Provider default URLs (will be fetched from backend on init)
 let PROVIDER_DEFAULTS = {
@@ -73,22 +54,6 @@ let PROVIDER_DEFAULTS = {
 // R5: ERROR BOUNDARIES FEATURE FLAG
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Check if Error Boundaries feature is enabled.
- * Used to gate global error handler installation and CSS injection.
- */
-function isErrorBoundariesEnabled() {
-    try {
-        const setting = app?.ui?.settings?.getSettingValue?.(
-            'Doctor.General.ErrorBoundaries',
-            true // Default: enabled
-        );
-        return setting !== false;
-    } catch (err) {
-        return true; // Default to enabled if settings unavailable
-    }
-}
-
 // Fetch provider defaults from backend (supports env vars)
 async function loadProviderDefaults() {
     try {
@@ -103,19 +68,6 @@ async function loadProviderDefaults() {
     }
 }
 
-// Supported languages
-const SUPPORTED_LANGUAGES = [
-    { value: "en", text: "English" },
-    { value: "zh_TW", text: "繁體中文" },
-    { value: "zh_CN", text: "简体中文" },
-    { value: "ja", text: "日本語" },
-    { value: "de", text: "Deutsch" },
-    { value: "fr", text: "Français" },
-    { value: "it", text: "Italiano" },
-    { value: "es", text: "Español" },
-    { value: "ko", text: "한국어" },
-];
-
 // ComfyUI Settings → About panel badges (ComfyUI_frontend AboutPanel.vue)
 const DOCTOR_REPO_URL = "https://github.com/rookiestar28/ComfyUI-Doctor";
 const DOCTOR_ABOUT_BADGES = [
@@ -129,174 +81,28 @@ const DOCTOR_ABOUT_BADGES = [
 app.registerExtension({
     name: "ComfyUI-Doctor",
     aboutPageBadges: DOCTOR_ABOUT_BADGES,
+    settings: DOCTOR_EXTENSION_SETTINGS,
 
     async setup() {
         console.log("[ComfyUI-Doctor] 🟢 Frontend Extension Initialized");
 
         // Load provider defaults from backend (supports env vars)
         await loadProviderDefaults();
+        ensureDoctorSettingsRegistered(app);
 
-        // ========================================
-        // Register Settings with ComfyUI Settings Panel (Simplified for F8)
-        // ========================================
-
-        // Enable/Disable Extension
-        app.ui.settings.addSetting({
-            id: "Doctor.General.Enable",
-            name: "Enable Doctor (requires restart)",  // Hardcoded: doctorUI not created yet (fixed 2026-01-03)
-            type: "boolean",
-            defaultValue: true,
-            onChange: (newVal, oldVal) => {
-                console.log(`[ComfyUI-Doctor] Enable changed: ${oldVal} -> ${newVal}`);
-            },
-        });
-
-        // R5: Error Boundaries Feature Flag
-        app.ui.settings.addSetting({
-            id: "Doctor.General.ErrorBoundaries",
-            name: "Enable Error Boundaries (requires restart)",
-            type: "boolean",
-            defaultValue: true,
-            onChange: (newVal, oldVal) => {
-                console.log(`[ComfyUI-Doctor] ErrorBoundaries changed: ${oldVal} -> ${newVal}`);
-            },
-        });
-
-        // Check if extension is enabled
-        const isEnabled = app.ui.settings.getSettingValue("Doctor.General.Enable", true);
-        if (!isEnabled) {
+        if (!isDoctorEnabled()) {
             console.log("[ComfyUI-Doctor] Extension disabled via settings");
             return;
         }
 
-        // Initialize default values for backward compatibility
-        if (!app.ui.settings.getSettingValue("Doctor.General.Language")) {
-            app.ui.settings.setSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
-        }
-        if (!app.ui.settings.getSettingValue("Doctor.Behavior.PollInterval")) {
-            app.ui.settings.setSettingValue("Doctor.Behavior.PollInterval", DEFAULTS.POLL_INTERVAL);
-        }
-        // F17: Use strict null check - false is a valid stored value, don't override it
-        if (app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", null) === null) {
-            app.ui.settings.setSettingValue("Doctor.Behavior.AutoOpenOnError", DEFAULTS.AUTO_OPEN_ON_ERROR);
-        }
-        if (!app.ui.settings.getSettingValue("Doctor.Behavior.EnableNotifications")) {
-            app.ui.settings.setSettingValue("Doctor.Behavior.EnableNotifications", DEFAULTS.ENABLE_NOTIFICATIONS);
-        }
-        if (!app.ui.settings.getSettingValue("Doctor.LLM.Provider")) {
-            app.ui.settings.setSettingValue("Doctor.LLM.Provider", "openai");
-        }
-        if (!app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl")) {
-            app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
-        }
-        if (!app.ui.settings.getSettingValue("Doctor.LLM.Model")) {
-            app.ui.settings.setSettingValue("Doctor.LLM.Model", "");
-        }
         const migratedLegacyApiKey = migrateLegacyApiKeyFromSettings();
 
-        // Show info message directing users to sidebar
-        app.ui.settings.addSetting({
-            id: "Doctor.Info",
-            name: "ℹ️ Configure Doctor settings in the sidebar (left panel)",  // Hardcoded: doctorUI not created yet (fixed 2026-01-03)
-            type: "text",
-            defaultValue: "",
-            attrs: { readonly: true, disabled: true }
-        });
-
-        // ========================================
-        // CRITICAL: Explicit Setting Registration
-        // ========================================
-        // COMPLIANCE NOTICE:
-        // These settings MUST be explicitly registered using app.ui.settings.addSetting().
-        //
-        // 1. ComfyUI Standards: The standard API requires registration before use (get/set).
-        // 2. Compatibility: Strict environments (e.g., ComfyUI-Aki community build) enforce this.
-        //    Accessing unregistered settings there causes "TypeError: Cannot read properties of undefined (reading 'id')".
-        // 3. Stability: Prevents crashes during app.ui.settings.setSettingValue() calls.
-        //
-        // DO NOT REMOVE THESE REGISTRATIONS.
-        // ========================================
-
-        // General
-        app.ui.settings.addSetting({
-            id: "Doctor.General.Language",
-            name: "Doctor: Language",
-            type: "combo",
-            options: SUPPORTED_LANGUAGES,
-            defaultValue: DEFAULTS.LANGUAGE,
-        });
-
-        app.ui.settings.addSetting({
-            id: "Doctor.Privacy.Mode",
-            name: "Doctor: Privacy Mode",
-            type: "combo",
-            options: [
-                { text: "None (Private)", value: "none" },
-                { text: "Basic (Anonymized)", value: "basic" },
-                { text: "Strict (No Sensitive Data)", value: "strict" },
-            ],
-            defaultValue: "basic",
-        });
-
-        // Behavior
-        app.ui.settings.addSetting({
-            id: "Doctor.Behavior.PollInterval",
-            name: "Doctor: Error Poll Interval (ms)",
-            type: "number",
-            defaultValue: DEFAULTS.POLL_INTERVAL,
-            attrs: { min: 500, max: 10000, step: 100 },
-        });
-
-        app.ui.settings.addSetting({
-            id: "Doctor.Behavior.AutoOpenOnError",
-            name: "Doctor: Auto-open sidebar on error",
-            type: "boolean",
-            defaultValue: DEFAULTS.AUTO_OPEN_ON_ERROR,
-        });
-
-        app.ui.settings.addSetting({
-            id: "Doctor.Behavior.EnableNotifications",
-            name: "Doctor: Enable Browser Notifications",
-            type: "boolean",
-            defaultValue: DEFAULTS.ENABLE_NOTIFICATIONS,
-        });
-
-        // LLM Settings (Hidden or Advanced)
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.Provider",
-            name: "Doctor: AI Provider",
-            type: "text", // Using text to avoid massive dropdown duplications, primarily managed via sidebar
-            defaultValue: "openai",
-        });
-
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.BaseUrl",
-            name: "Doctor: LLM Base URL",
-            type: "text",
-            defaultValue: "https://api.openai.com/v1",
-        });
-
-        // S8: Doctor.LLM.ApiKey setting registration REMOVED.
-        // Keys are session-only (getRuntimeApiKey/setRuntimeApiKey).
-        // Legacy migration in llm_key_store.js still reads+clears if an old value exists.
-
-        app.ui.settings.addSetting({
-            id: "Doctor.LLM.Model",
-            name: "Doctor: Model Name",
-            type: "text",
-            defaultValue: "",
-        });
-        // ========================================
-
-        // Get current settings values
-        const language = app.ui.settings.getSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
-        const pollInterval = app.ui.settings.getSettingValue("Doctor.Behavior.PollInterval", DEFAULTS.POLL_INTERVAL);
-        // F17: Normalize to boolean - handle string "false"/"0" from ComfyUI storage and explicit false
-        const storedAutoOpen = app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", null);
-        const autoOpenOnError = storedAutoOpen === null
-            ? DEFAULTS.AUTO_OPEN_ON_ERROR
-            : Boolean(storedAutoOpen) && storedAutoOpen !== "false" && storedAutoOpen !== "0";
-        const enableNotifications = app.ui.settings.getSettingValue("Doctor.Behavior.EnableNotifications", DEFAULTS.ENABLE_NOTIFICATIONS);
+        const {
+            language,
+            pollInterval,
+            autoOpenOnError,
+            enableNotifications,
+        } = getDoctorRuntimeSettings();
 
         // Create Doctor UI instance with settings
         const doctorUI = new DoctorUI({
@@ -345,6 +151,8 @@ app.registerExtension({
                 tooltip: doctorUI.getUIText('sidebar_doctor_tooltip'),
                 type: "custom",
                 render: (container) => {
+                    destroyDoctorSidebarMount(doctorUI);
+                    tabRegistry.clear();
                     // Add styles for the sidebar content if not already added
                     if (!document.getElementById('doctor-sidebar-styles')) {
                         const style = document.createElement('style');
@@ -664,7 +472,7 @@ app.registerExtension({
                         applySidebarMeta(app.Doctor?.meta);
                         if (app.Doctor?.meta?.version && app.Doctor.meta.version !== 'unknown') return;
                         try {
-                            const currentLang = app.ui.settings.getSettingValue('Doctor.General.Language', DEFAULTS.LANGUAGE);
+                            const currentLang = getDoctorSetting('Doctor.General.Language', DOCTOR_DEFAULTS.LANGUAGE);
                             const endpoint = `/doctor/ui_text?lang=${encodeURIComponent(currentLang)}`;
                             const response = (typeof window !== 'undefined' && window.api && typeof window.api.fetchApi === 'function')
                                 ? await window.api.fetchApi(endpoint)
@@ -736,6 +544,12 @@ app.registerExtension({
                         // Store references
                         doctorUI.sidebarTabContainer = content;
                         doctorUI.tabManager = manager;
+                        doctorUI.sidebarCleanup = () => {
+                            manager.destroy();
+                            tabRegistry.clear();
+                            doctorUI.sidebarTabContainer = null;
+                            doctorUI.tabManager = null;
+                        };
 
                         // Update status dot if error exists
                         if (doctorUI.lastErrorData) {
@@ -766,12 +580,12 @@ app.registerExtension({
             console.error("[ComfyUI-Doctor] Failed to sync initial language:", e);
         }
 
-        console.log("[ComfyUI-Doctor] Settings registered successfully");
+        console.log("[ComfyUI-Doctor] Settings initialized successfully");
 
         // ═══════════════════════════════════════════════════════════════════
         // R5: ERROR BOUNDARIES INITIALIZATION
         // ═══════════════════════════════════════════════════════════════════
-        if (isErrorBoundariesEnabled()) {
+        if (isDoctorErrorBoundariesEnabled()) {
             // 1. Inject Error Boundary CSS
             if (!document.getElementById('doctor-error-boundary-styles')) {
                 const link = document.createElement('link');

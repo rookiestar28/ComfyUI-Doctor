@@ -123,7 +123,7 @@ export class ChatPanel {
         // Since LiteGraph doesn't have a standardized event dispatcher for this that is easily accessible without monkeypatching,
         // we will implement a lightweight poller or hook.
 
-        // Hooking app.graph.onNodeAdded etc is possible but selection is Canvas level.
+        // Hooking graph-level lifecycle events is possible but selection is Canvas level.
         // Let's monkeypatch app.canvas.selectNode/deselectNode if they exist, specific to ComfyUI's graph.
 
         // Safer approach: Periodic check when panel is open ?? No, resource intensive.

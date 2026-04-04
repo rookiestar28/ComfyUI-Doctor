@@ -5,6 +5,8 @@
  * Provides one-click fix application with visual feedback and undo support.
  */
 
+import { getComfyNodeById, markComfyGraphDirty } from "./comfyui_frontend_compat.js";
+
 export class FixHandler {
     constructor(app) {
         this.app = app;  // ComfyUI app instance
@@ -100,7 +102,7 @@ export class FixHandler {
 
             // Find node
             const nodeId = parseInt(fix.node_id);
-            const node = this.app.graph.getNodeById(nodeId);
+            const node = getComfyNodeById(nodeId, this.app);
 
             if (!node) {
                 throw new Error(i18n?.fix_error_node_not_found || `Node ${nodeId} not found`);
@@ -153,7 +155,7 @@ export class FixHandler {
             }
 
             // Redraw canvas
-            this.app.graph.setDirtyCanvas(false, true);
+            markComfyGraphDirty(this.app, false, true);
 
             // Success state
             button.className = 'doctor-fix-btn applied';
@@ -178,7 +180,7 @@ export class FixHandler {
      * @param {number} nodeId - Node ID to highlight
      */
     flashNodeHighlight(nodeId) {
-        const node = this.app.graph.getNodeById(nodeId);
+        const node = getComfyNodeById(nodeId, this.app);
         if (!node) return;
 
         const originalColor = node.color;
@@ -187,13 +189,13 @@ export class FixHandler {
         // Set highlight colors (blue theme)
         node.color = "#2563eb";
         node.bgcolor = "#dbeafe";
-        this.app.graph.setDirtyCanvas(true, true);
+        markComfyGraphDirty(this.app, true, true);
 
         // Restore after animation
         setTimeout(() => {
             node.color = originalColor;
             node.bgcolor = originalBgColor;
-            this.app.graph.setDirtyCanvas(true, true);
+            markComfyGraphDirty(this.app, true, true);
         }, 800);
     }
 
@@ -210,7 +212,7 @@ export class FixHandler {
         }
 
         const last = this.appliedFixes.pop();
-        const node = this.app.graph.getNodeById(last.node_id);
+        const node = getComfyNodeById(last.node_id, this.app);
         const widget = node?.widgets?.find(w => w.name === last.widget);
 
         if (!widget) {
@@ -223,7 +225,7 @@ export class FixHandler {
             widget.callback(last.oldValue);
         }
 
-        this.app.graph.setDirtyCanvas(false, true);
+        markComfyGraphDirty(this.app, false, true);
         console.log(`[FixHandler] Undone: Node ${last.node_id}, ${last.widget} = ${last.oldValue}`);
 
         return true;

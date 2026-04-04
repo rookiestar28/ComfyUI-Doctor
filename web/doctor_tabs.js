@@ -70,6 +70,15 @@ export class TabManager {
         this.contentContainer = contentContainer;
         this.tabBarContainer = tabBarContainer;
         this.activeTabId = null;
+        this.tabCleanups = new Map();
+    }
+
+    storeTabCleanup(tabId, cleanup) {
+        if (typeof cleanup === 'function') {
+            this.tabCleanups.set(tabId, cleanup);
+        } else if (cleanup && typeof cleanup.destroy === 'function') {
+            this.tabCleanups.set(tabId, () => cleanup.destroy());
+        }
     }
 
     /**
@@ -121,7 +130,17 @@ export class TabManager {
             // First Render
             try {
                 console.log(`[ComfyUI-Doctor] Rendering tab: ${tabId}`);
-                tab.render(targetEl);
+                const cleanup = tab.render(targetEl);
+                if (cleanup && typeof cleanup.then === 'function') {
+                    cleanup
+                        .then((resolvedCleanup) => this.storeTabCleanup(tabId, resolvedCleanup))
+                        .catch((error) => {
+                            console.error(`[ComfyUI-Doctor] Async tab render failed: ${tabId}`, error);
+                            targetEl.innerHTML = `<div class="error-state" style="padding: 20px; color: #ff5555;">Failed to render tab: ${error.message}</div>`;
+                        });
+                } else {
+                    this.storeTabCleanup(tabId, cleanup);
+                }
             } catch (e) {
                 console.error(`[ComfyUI-Doctor] Error rendering tab ${tabId}:`, e);
                 targetEl.innerHTML = `<div class="error-state" style="padding: 20px; color: #ff5555;">Failed to render tab: ${e.message}</div>`;
@@ -207,5 +226,31 @@ export class TabManager {
             this.activateTab(initial);
         }
         return initial;
+    }
+
+    destroy() {
+        if (this.activeTabId) {
+            const currentTab = this.registry.getTab(this.activeTabId);
+            if (currentTab?.onDeactivate) {
+                try { currentTab.onDeactivate(); } catch (e) { console.error(e); }
+            }
+        }
+
+        for (const [tabId, cleanup] of this.tabCleanups.entries()) {
+            try {
+                cleanup();
+            } catch (e) {
+                console.error(`[ComfyUI-Doctor] Tab cleanup failed: ${tabId}`, e);
+            }
+        }
+        this.tabCleanups.clear();
+
+        if (this.contentContainer) {
+            this.contentContainer.innerHTML = '';
+        }
+        if (this.tabBarContainer) {
+            this.tabBarContainer.innerHTML = '';
+        }
+        this.activeTabId = null;
     }
 }

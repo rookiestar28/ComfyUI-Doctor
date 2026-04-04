@@ -1,6 +1,7 @@
 
 import { app } from "../../../scripts/app.js";
 import { getRuntimeApiKey } from "./llm_key_store.js";
+import { getDoctorRuntimeSettings } from "./comfyui_frontend_compat.js";
 
 /**
  * Global State Management for Doctor Chat
@@ -123,13 +124,13 @@ class DoctorContext {
     refreshSettings() {
         if (!app?.ui?.settings) return;
 
-        const s = app.ui.settings;
+        const { baseUrl, model, language, provider } = getDoctorRuntimeSettings(app);
         const newSettings = {
             apiKey: getRuntimeApiKey(),
-            baseUrl: s.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "",
-            model: s.getSettingValue("Doctor.LLM.Model", "gpt-4o"),
-            language: s.getSettingValue("Doctor.General.Language", "en"),
-            provider: s.getSettingValue("Doctor.LLM.Provider", "openai")
+            baseUrl: baseUrl || "",
+            model,
+            language,
+            provider
         };
 
         this.setState({ settings: newSettings });

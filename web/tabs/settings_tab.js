@@ -1,22 +1,10 @@
 import { app } from "../../../../scripts/app.js";
 import { DoctorAPI } from "../doctor_api.js";
 import { getRuntimeApiKey, setRuntimeApiKey } from "../llm_key_store.js";
-
-const SUPPORTED_LANGUAGES = [
-    { value: "en", text: "English" },
-    { value: "zh_TW", text: "繁體中文" },
-    { value: "zh_CN", text: "简体中文" },
-    { value: "ja", text: "日本語" },
-    { value: "de", text: "Deutsch" },
-    { value: "fr", text: "Français" },
-    { value: "it", text: "Italiano" },
-    { value: "es", text: "Español" },
-    { value: "ko", text: "한국어" },
-];
+import { SUPPORTED_LANGUAGES, getDoctorRuntimeSettings, getDoctorSetting, setDoctorSetting } from "../comfyui_frontend_compat.js";
 
 export function render(container) {
     const doctorUI = app.Doctor;
-    const DEFAULTS = { LANGUAGE: "en" }; // Minimal fallback
 
     // One-time CSS injection for small UI helpers (tooltips etc.)
     if (!document.getElementById('doctor-settings-tip-styles')) {
@@ -81,17 +69,16 @@ export function render(container) {
     }
 
     // Get current settings values
-    const currentLanguage = app.ui.settings.getSettingValue("Doctor.General.Language", DEFAULTS.LANGUAGE);
-    const currentProvider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
-    const currentBaseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
+    const {
+        language: currentLanguage,
+        provider: currentProvider,
+        baseUrl: currentBaseUrl,
+        model: currentModel,
+        privacyMode: currentPrivacyMode,
+        autoOpenOnError: currentAutoOpenOnError,
+    } = getDoctorRuntimeSettings(app);
     // S8: API key is session-only; never read from persisted ComfyUI settings.
     const currentApiKey = getRuntimeApiKey();
-    const currentModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
-    const currentPrivacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
-    // F17: Read auto-open setting with strict null check (false is a valid stored value)
-    // Must handle string "false" from ComfyUI storage - same logic as doctor.js line 212
-    const storedAutoOpen = app.ui.settings.getSettingValue("Doctor.Behavior.AutoOpenOnError", null);
-    const currentAutoOpenOnError = storedAutoOpen === null ? true : Boolean(storedAutoOpen) && storedAutoOpen !== "false" && storedAutoOpen !== "0";
 
     const settingsPanel = document.createElement('div');
     settingsPanel.id = 'doctor-settings-panel';
@@ -273,7 +260,7 @@ export function render(container) {
                 // Also handle "currentModel not in list"
 
                 // Get fresh currentModel from settings in case it changed via manual input previously
-                const storedModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
+                const storedModel = getDoctorSetting("Doctor.LLM.Model", "", app);
 
                 if (storedModel) {
                     const modelExists = result.models.find(m => m.id === storedModel);
@@ -303,7 +290,7 @@ export function render(container) {
     refreshModelsBtn.onclick = () => loadModels();
 
     manualToggle.onchange = () => {
-        const storedModel = app.ui.settings.getSettingValue("Doctor.LLM.Model", "");
+        const storedModel = getDoctorSetting("Doctor.LLM.Model", "", app);
         if (manualToggle.checked) {
             modelSelect.style.display = 'none';
             refreshModelsBtn.style.display = 'none';
@@ -371,15 +358,15 @@ export function render(container) {
         const autoOpenVal = autoOpenToggle.checked;
 
         try {
-            app.ui.settings.setSettingValue("Doctor.General.Language", langSelect.value);
-            app.ui.settings.setSettingValue("Doctor.LLM.Provider", providerVal);
-            app.ui.settings.setSettingValue("Doctor.LLM.BaseUrl", baseUrlVal);
+            setDoctorSetting("Doctor.General.Language", langSelect.value, app);
+            setDoctorSetting("Doctor.LLM.Provider", providerVal, app);
+            setDoctorSetting("Doctor.LLM.BaseUrl", baseUrlVal, app);
             // S8: API key is session-only — store in memory, NOT in ComfyUI settings.
             setRuntimeApiKey(apiKeyVal);
-            app.ui.settings.setSettingValue("Doctor.LLM.Model", modelValue);
-            app.ui.settings.setSettingValue("Doctor.Privacy.Mode", privacyVal);
+            setDoctorSetting("Doctor.LLM.Model", modelValue, app);
+            setDoctorSetting("Doctor.Privacy.Mode", privacyVal, app);
             // F17: Save auto-open setting and apply immediately
-            app.ui.settings.setSettingValue("Doctor.Behavior.AutoOpenOnError", autoOpenVal);
+            setDoctorSetting("Doctor.Behavior.AutoOpenOnError", autoOpenVal, app);
             doctorUI.autoOpenOnError = autoOpenVal;
 
             // Reload UI Text for new language (which also updates privacy text eventually)

@@ -8,6 +8,12 @@
 export function createMockComfyUIApp() {
   const mockSettings = new Map();
   const mockExtensions = [];
+
+  function registerExtensionSettings(extension) {
+    extension.settings?.forEach((setting) => {
+      app.ui.settings.addSetting(setting);
+    });
+  }
   const mockSidebarTabs = [];
   const renderedTabs = new Set();
 
@@ -133,6 +139,7 @@ export function createMockComfyUIApp() {
     },
     graph,
     rootGraph: graph,
+    isGraphReady: true,
     canvas: {
       ds: { scale: 1, offset: [0, 0] },
       selected_nodes: {},
@@ -155,9 +162,10 @@ export function createMockComfyUIApp() {
     registerExtension(extension) {
       console.log('[Mock] Registering extension:', extension.name);
       mockExtensions.push(extension);
+      registerExtensionSettings(extension);
       // Call setup immediately for testing
       if (extension.setup) {
-        setTimeout(() => extension.setup.call(extension), 0);
+        setTimeout(() => extension.setup.call(extension, app), 0);
       }
     },
   };

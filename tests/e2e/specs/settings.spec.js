@@ -74,6 +74,18 @@ test.describe('Settings Panel', () => {
     await waitForI18nLoaded(page);
   });
 
+  test('should register Doctor settings declaratively before setup logic runs', async ({ page }) => {
+    const settings = await page.evaluate(() => ({
+      enabled: window.app.ui.settings.getSettingValue('Doctor.General.Enable'),
+      language: window.app.ui.settings.getSettingValue('Doctor.General.Language'),
+      autoOpen: window.app.ui.settings.getSettingValue('Doctor.Behavior.AutoOpenOnError'),
+    }));
+
+    expect(settings.enabled).toBe(true);
+    expect(settings.language).toBe('en');
+    expect(settings.autoOpen).toBe(true);
+  });
+
   test('should have settings tab button', async ({ page }) => {
     const toggleBtn = page.locator('.doctor-tab-button[data-tab-id="settings"]');
     await expect(toggleBtn).toBeVisible();

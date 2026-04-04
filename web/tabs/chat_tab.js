@@ -64,6 +64,21 @@ export async function render(container) {
         // Note: fallbackRender was already called by registry
         doctorUI.chatIslandActive = false;
     }
+
+    return () => {
+        doctorUI.chatIslandActive = false;
+        doctorUI.sidebarErrorContext = null;
+        doctorUI.sidebarSanitizationStatus = null;
+        doctorUI.sidebarMessages = null;
+        doctorUI.sidebarInput = null;
+        doctorUI.sidebarSendBtn = null;
+        doctorUI.sidebarClearBtn = null;
+        doctorUI.updateSanitizationStatusVanilla = null;
+        if (isPreactMode) {
+            unmountChatIsland();
+            isPreactMode = false;
+        }
+    };
 }
 
 export function onActivate() {

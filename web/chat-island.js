@@ -23,6 +23,7 @@ import {
 } from './doctor_rendering.js';
 // R5: Error Boundaries
 import { createErrorBoundaryAsync } from './ErrorBoundary.js';
+import { isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
 
 // Shared State
 let preactModules = null;
@@ -41,15 +42,7 @@ let fixHandler = null;
  * Must match the check in doctor.js.
  */
 function isErrorBoundariesEnabled() {
-    try {
-        const setting = window.app?.ui?.settings?.getSettingValue?.(
-            'Doctor.General.ErrorBoundaries',
-            true // Default: enabled
-        );
-        return setting !== false;
-    } catch (err) {
-        return true; // Default to enabled if settings unavailable
-    }
+    return isDoctorErrorBoundariesEnabled(window.app);
 }
 
 // =========================================================

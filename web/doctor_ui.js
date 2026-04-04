@@ -3,6 +3,7 @@
  */
 import { app } from "../../../scripts/app.js";
 import { getRuntimeApiKey } from "./llm_key_store.js";
+import { getComfyRootGraph, getDoctorRuntimeSettings } from "./comfyui_frontend_compat.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { ChatPanel } from "./doctor_chat.js";
 import { doctorContext } from "./doctor_state.js";
@@ -16,9 +17,7 @@ import { doctorContext } from "./doctor_state.js";
  *
  * Problem Pattern (INCORRECT):
  * ```javascript
- * app.ui.settings.addSetting({
- *     name: doctorUI.getUIText('some_key'),  // ❌ ERROR: doctorUI doesn't exist yet!
- * });
+ * const label = doctorUI.getUIText('some_key');  // ❌ ERROR: doctorUI doesn't exist yet!
  * const doctorUI = new DoctorUI({...});  // Created AFTER usage
  * ```
  *
@@ -371,7 +370,7 @@ export class DoctorUI {
 
     getComfyGraph() {
         if (!app) return null;
-        return app.rootGraph || app.graph || null;
+        return getComfyRootGraph(app);
     }
 
     getNodeFromGraph(graph, nodeId) {
@@ -858,14 +857,9 @@ export class DoctorUI {
             // Get LLM settings
             // S8: Use session-only runtime key (backend resolve_api_key handles ENV/store fallback)
             const apiKey = getRuntimeApiKey();
-            const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1");
-            const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
-            const language = app.ui.settings.getSettingValue("Doctor.General.Language", this.language);
+            const { baseUrl, model, language, privacyMode } = getDoctorRuntimeSettings(app);
 
             console.log('[Doctor] LLM Settings:', { baseUrl, model, language, hasApiKey: !!apiKey });
-
-            // S6: Get privacy mode from settings
-            const privacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
 
             const payload = {
                 messages: [{ role: 'user', content: text }],
@@ -1046,10 +1040,7 @@ export class DoctorUI {
         // Get LLM settings
         // S8: Use session-only runtime key (backend resolve_api_key handles ENV/store fallback)
         const apiKey = getRuntimeApiKey();
-        const baseUrl = app.ui.settings.getSettingValue("Doctor.LLM.BaseUrl", "https://api.openai.com/v1") || "";
-        const model = app.ui.settings.getSettingValue("Doctor.LLM.Model", "gpt-4o");
-        const language = app.ui.settings.getSettingValue("Doctor.General.Language", this.language);
-        const provider = app.ui.settings.getSettingValue("Doctor.LLM.Provider", "openai");
+        const { baseUrl, model, language, provider } = getDoctorRuntimeSettings(app);
 
         console.log('[ComfyUI-Doctor] AI Analysis settings:', { apiKey: apiKey ? '***' : 'empty', baseUrl, model, provider, language });
 
@@ -1094,8 +1085,7 @@ export class DoctorUI {
             // F3: Capture workflow context
             const workflowContext = this.getWorkflowContext();
 
-            // S6: Get privacy mode from settings
-            const privacyMode = app.ui.settings.getSettingValue("Doctor.Privacy.Mode", "basic");
+            const { privacyMode } = getDoctorRuntimeSettings(app);
 
             const payload = {
                 error: data.last_error || "Unknown Error",

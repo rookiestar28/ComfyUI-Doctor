@@ -14,6 +14,7 @@ import { createErrorBoundaryAsync } from './ErrorBoundary.js';
 // T14: Utils
 import { formatPatternName, calculateCategoryBreakdown, getCategoryColor } from './utils/stats_logic.js';
 import { t } from './utils/i18n_fallback.js';
+import { getComfyRootGraph, isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
 import { getDominantIntents, hasNoMatchedIntent } from './utils/intent_logic.js';
 
 let preactModules = null;
@@ -29,15 +30,7 @@ let currentContainer = null;
  * Must match the check in doctor.js.
  */
 function isErrorBoundariesEnabled() {
-    try {
-        const setting = window.app?.ui?.settings?.getSettingValue?.(
-            'Doctor.General.ErrorBoundaries',
-            true // Default: enabled
-        );
-        return setting !== false;
-    } catch (err) {
-        return true; // Default to enabled if settings unavailable
-    }
+    return isDoctorErrorBoundariesEnabled(window.app);
 }
 
 // =========================================================
@@ -556,7 +549,7 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
         try {
             // Get workflow from ComfyUI
             // P2: Support newer ComfyUI versions with app.rootGraph
-            const graph = window.app?.rootGraph || window.app?.graph;
+            const graph = getComfyRootGraph(window.app);
             const workflow = graph?.serialize?.() || {};
 
             // P1.5 Fix: Inject doctor metadata for privacy checks
