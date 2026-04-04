@@ -57,6 +57,44 @@ def _is_asyncio_gc_noise(message: str) -> bool:
     return any(pat in message for pat in _ASYNCIO_GC_EXCLUSION_PATTERNS)
 
 
+# IMPORTANT: keep legacy emoji markers here for backward compatibility
+# with old logs and pre-R26 console output. New Doctor-owned output must stay
+# ASCII, but the parser still needs to recognize historical messages.
+_LEGACY_DOCTOR_OUTPUT_MARKERS = (
+    "🎯 ERROR LOCATION:",
+    "💡 SUGGESTION:",
+)
+_ASCII_DOCTOR_OUTPUT_MARKERS = (
+    "ERROR LOCATION:",
+    "SUGGESTION:",
+)
+_LEGACY_TENSOR_ALERT_MARKERS = (
+    "❌ CRITICAL: Tensor contains",
+    "⚠️ Meta Tensor",
+)
+_ASCII_TENSOR_ALERT_MARKERS = (
+    "CRITICAL: Tensor contains",
+    "WARNING: Meta Tensor",
+)
+
+
+def _contains_tensor_alert(message: str) -> bool:
+    if not message:
+        return False
+    return any(marker in message for marker in (_LEGACY_TENSOR_ALERT_MARKERS + _ASCII_TENSOR_ALERT_MARKERS))
+
+
+def _normalize_backend_suggestion(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+
+    normalized = text
+    for prefix in ("💡 SUGGESTION: ", "💡 Suggestion: "):
+        if normalized.startswith(prefix):
+            return "SUGGESTION: " + normalized[len(prefix):]
+    return normalized.replace("💡 SUGGESTION:", "SUGGESTION:")
+
+
 # ==============================================================================
 # R22: Dedicated internal logger (bypasses SafeStreamWrapper)
 # ==============================================================================
@@ -429,7 +467,7 @@ class SafeStreamWrapper:
         if getattr(_stream_reentrance, "active", False):
             try:
                 self._original_stream.write(data)
-            except (OSError, AttributeError):
+            except (OSError, AttributeError, UnicodeError, ValueError):
                 pass
             return
 
@@ -438,7 +476,7 @@ class SafeStreamWrapper:
             # 1. Immediately write to original stream (may be LogInterceptor)
             try:
                 self._original_stream.write(data)
-            except (OSError, AttributeError):
+            except (OSError, AttributeError, UnicodeError, ValueError):
                 pass  # Stream may be closed during shutdown
 
             # 2. Enqueue for background processing (non-blocking)
@@ -462,7 +500,7 @@ class SafeStreamWrapper:
         """Flush original stream."""
         try:
             self._original_stream.flush()
-        except (OSError, AttributeError):
+        except (OSError, AttributeError, UnicodeError, ValueError):
             pass
 
     def __getattr__(self, name):
@@ -490,13 +528,13 @@ class FlushSafeProxy:
     def write(self, data):
         try:
             return self._original_stream.write(data)
-        except (OSError, AttributeError, ValueError):
+        except (OSError, AttributeError, UnicodeError, ValueError):
             return 0
 
     def flush(self):
         try:
             return self._original_stream.flush()
-        except (OSError, AttributeError, ValueError):
+        except (OSError, AttributeError, UnicodeError, ValueError):
             return None
 
     def __getattr__(self, name):
@@ -595,16 +633,16 @@ class DoctorLogProcessor(threading.Thread):
         #
         # SOLUTION: Skip any message that contains Doctor's internal log markers.
         #
-        # ⚠️ DO NOT REMOVE THIS CHECK! It prevents infinite recursion.
+        # DO NOT REMOVE THIS CHECK! It prevents infinite recursion.
         # See: .planning/260106-BUGFIX_DUPLICATE_LOG_CAPTURE.md
         # ═══════════════════════════════════════════════════════════════
         doctor_markers = [
             "[Doctor]",       # Internal logging prefix
             "[Doctor-API]",   # API logging prefix
-            "🎯 ERROR LOCATION:",  # Formatted output header
-            "💡 SUGGESTION:",      # Formatted output suggestion
             "----------------------------------------",  # Divider line
         ]
+        doctor_markers.extend(_ASCII_DOCTOR_OUTPUT_MARKERS)
+        doctor_markers.extend(_LEGACY_DOCTOR_OUTPUT_MARKERS)
         for marker in doctor_markers:
             if marker in message:
                 return  # Skip Doctor's own output to prevent recursion
@@ -617,7 +655,7 @@ class DoctorLogProcessor(threading.Thread):
 
         # P3: Urgent single-line warnings (immediate analysis)
         # R14: Enhanced with detect_fatal_pattern for non-traceback errors
-        is_urgent = "❌ CRITICAL" in message or "⚠️ Meta Tensor" in message
+        is_urgent = _contains_tensor_alert(message)
         
         # R14: Check for fatal patterns (CUDA OOM, CRITICAL, etc.)
         if not is_urgent and detect_fatal_pattern:
@@ -800,6 +838,8 @@ class DoctorLogProcessor(threading.Thread):
             "Failed to validate",
             "❌ CRITICAL",
             "⚠️ Meta Tensor",
+            "CRITICAL: Tensor contains",
+            "WARNING: Meta Tensor",
         ]
         has_error_indicator = any(indicator in full_traceback for indicator in error_indicators)
         
@@ -911,15 +951,16 @@ class DoctorLogProcessor(threading.Thread):
             if node_context.custom_node_path:
                 node_info.append(f"Source: {node_context.custom_node_path}")
 
-            output_parts.append("🎯 ERROR LOCATION: " + " | ".join(node_info))
+            output_parts.append("ERROR LOCATION: " + " | ".join(node_info))
 
         # Add suggestion (defensive: ensure suggestion is a string)
         if suggestion:
             if isinstance(suggestion, str):
-                output_parts.append(suggestion)
+                output_parts.append(_normalize_backend_suggestion(suggestion))
             elif isinstance(suggestion, (tuple, list)) and len(suggestion) > 0:
                 # Handle case where suggestion is accidentally a tuple (e.g., from analyzer)
-                output_parts.append(str(suggestion[0]) if suggestion[0] else "")
+                normalized = str(suggestion[0]) if suggestion[0] else ""
+                output_parts.append(_normalize_backend_suggestion(normalized))
 
         output_parts.append(f"{'-'*40}\n")
 
@@ -928,7 +969,7 @@ class DoctorLogProcessor(threading.Thread):
         # Print to stdout (will be captured by our wrapper and ComfyUI's LogInterceptor)
         try:
             print(formatted_output, file=sys.__stdout__)
-        except Exception:
+        except (OSError, AttributeError, UnicodeError, ValueError):
             pass  # Silently fail if stdout is unavailable
 
     def stop(self):

@@ -294,7 +294,7 @@ def main():
     """Main entry point."""
     project_root = Path(__file__).resolve().parent.parent
 
-    print("🔒 Outbound Funnel Safety Check (T12)")
+    print("Outbound Funnel Safety Check (T12)")
     print(f"Scanning: {project_root}\n")
 
     # Find all Python files
@@ -310,10 +310,10 @@ def main():
 
     # Report results
     if not all_violations:
-        print("✅ All checks passed! No outbound safety violations detected.")
+        print("PASS All checks passed! No outbound safety violations detected.")
         return 0
 
-    print(f"❌ {len(all_violations)} violation(s) detected:\n")
+    print(f"FAIL {len(all_violations)} violation(s) detected:\n")
 
     for v in all_violations:
         print(f"  File: {v.file}:{v.line}:{v.column}")
@@ -322,7 +322,7 @@ def main():
         print(f"\n{v.code_snippet}\n")
         print("-" * 80)
 
-    print(f"\n🚫 {len(all_violations)} outbound safety violation(s) found")
+    print(f"\nABORT: {len(all_violations)} outbound safety violation(s) found")
     return 1
 
 

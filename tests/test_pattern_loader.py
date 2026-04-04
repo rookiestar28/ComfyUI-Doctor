@@ -48,7 +48,7 @@ def test_load_valid_json():
 
         assert count == 1, f"Expected 1 pattern, got {count}"
         assert len(loader.compiled_patterns) == 1
-        print("✅ Test 1 passed: Load valid JSON")
+        print("PASS Test 1 passed: Load valid JSON")
 
 
 def test_schema_validation():
@@ -76,7 +76,7 @@ def test_schema_validation():
         count = loader.load()  # Should skip invalid pattern
 
         assert count == 0, f"Expected 0 patterns (invalid rejected), got {count}"
-        print("✅ Test 2 passed: Schema validation")
+        print("PASS Test 2 passed: Schema validation")
 
 
 def test_pattern_matching():
@@ -111,7 +111,7 @@ def test_pattern_matching():
         error_key, groups = result
         assert error_key == "OOM"
         assert groups == []
-        print("✅ Test 3 passed: Pattern matching")
+        print("PASS Test 3 passed: Pattern matching")
 
 
 def test_priority_sorting():
@@ -150,7 +150,7 @@ def test_priority_sorting():
         result = loader.match("SpecificError occurred")
         error_key, _ = result
         assert error_key == "HIGH", "High priority pattern should match first"
-        print("✅ Test 4 passed: Priority sorting")
+        print("PASS Test 4 passed: Priority sorting")
 
 
 def test_hot_reload():
@@ -213,7 +213,7 @@ def test_hot_reload():
         reloaded = loader.reload_if_changed()
         assert reloaded is True, "Should detect file change"
         assert len(loader.patterns) == 2, "Should have 2 patterns after reload"
-        print("✅ Test 5 passed: Hot-reload")
+        print("PASS Test 5 passed: Hot-reload")
 
 
 def test_fallback_on_error():
@@ -223,7 +223,7 @@ def test_fallback_on_error():
     count = loader.load()
 
     assert count == 0, "Should handle non-existent directory gracefully"
-    print("✅ Test 6 passed: Fallback on error")
+    print("PASS Test 6 passed: Fallback on error")
 
 
 def test_multiple_directories():
@@ -274,7 +274,7 @@ def test_multiple_directories():
         count = loader.load()
 
         assert count == 2, f"Expected 2 patterns from 2 directories, got {count}"
-        print("✅ Test 7 passed: Multiple directories")
+        print("PASS Test 7 passed: Multiple directories")
 
 
 def test_duplicate_id_detection():
@@ -310,7 +310,7 @@ def test_duplicate_id_detection():
         count = loader.load()  # Should reject file due to validation error
 
         assert count == 0, "Should reject file with duplicate IDs"
-        print("✅ Test 8 passed: Duplicate ID detection")
+        print("PASS Test 8 passed: Duplicate ID detection")
 
 
 def test_real_patterns_load():
@@ -328,12 +328,12 @@ def test_real_patterns_load():
     assert stats["total"] >= 21, f"Expected at least 21 patterns, got {stats['total']}"
     assert "core.json" in str(stats["sources"])
 
-    print(f"✅ Test 9 passed: Real patterns loaded ({stats['total']} total)")
+    print(f"PASS Test 9 passed: Real patterns loaded ({stats['total']} total)")
 
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("🧪 PatternLoader Tests (STAGE 2)")
+    print("TEST: PatternLoader Tests (STAGE 2)")
     print("=" * 70 + "\n")
 
     try:
@@ -348,13 +348,13 @@ if __name__ == "__main__":
         test_real_patterns_load()
 
         print("\n" + "=" * 70)
-        print("🎉 All PatternLoader tests passed!")
+        print("DONE: All PatternLoader tests passed!")
         print("=" * 70 + "\n")
     except AssertionError as e:
-        print(f"\n❌ Test failed: {e}\n")
+        print(f"\nFAIL Test failed: {e}\n")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}\n")
+        print(f"\nFAIL Unexpected error: {e}\n")
         import traceback
         traceback.print_exc()
         sys.exit(1)

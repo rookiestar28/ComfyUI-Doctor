@@ -21,7 +21,7 @@ function ensureSupportedNodeVersion() {
     const [major] = process.versions.node.split('.').map(Number);
     if (!Number.isFinite(major) || major < 18) {
         console.error(
-            `❌ Node.js ${process.versions.node} detected. This project requires Node.js 18+.`
+            `FAIL Node.js ${process.versions.node} detected. This project requires Node.js 18+.`
         );
         process.exit(1);
     }
@@ -71,7 +71,7 @@ async function validateFile(filePath) {
 // Main execution
 async function main() {
     ensureSupportedNodeVersion();
-    console.log('🔍 Preflight JS Syntax Check (acorn)\n');
+    console.log('INFO: Preflight JS Syntax Check (acorn)\n');
     console.log(`Scanning: ${WEB_DIR}\n`);
 
     const files = await findJsFiles(WEB_DIR);
@@ -84,23 +84,23 @@ async function main() {
 
     // Report valid files
     for (const r of valid) {
-        console.log(`✅ ${r.file}`);
+        console.log(`PASS ${r.file}`);
     }
 
     // Report errors
     if (errors.length > 0) {
-        console.log('\n❌ Syntax Errors Found:\n');
+        console.log('\nFAIL Syntax Errors Found:\n');
         for (const r of errors) {
-            console.log(`  ❌ ${r.file}`);
+            console.log(`  FAIL ${r.file}`);
             console.log(`     ${r.error}`);
             if (r.line) console.log(`     Line: ${r.line}, Column: ${r.column}`);
             console.log('');
         }
-        console.log(`\n🚫 ${errors.length} file(s) with syntax errors`);
+        console.log(`\nABORT: ${errors.length} file(s) with syntax errors`);
         process.exit(1);
     }
 
-    console.log(`\n✅ All ${valid.length} files passed syntax check`);
+    console.log(`\nPASS All ${valid.length} files passed syntax check`);
     process.exit(0);
 }
 

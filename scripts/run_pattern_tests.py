@@ -26,7 +26,7 @@ def run_tests():
     print("="*70)
     
     # Load data
-    print("\n📂 Loading pattern files...")
+    print("\nINFO: Loading pattern files...")
     pattern_files = load_all_pattern_files()
     print(f"   Found {len(pattern_files)} pattern files")
     
@@ -39,44 +39,44 @@ def run_tests():
     
     print(f"   Loaded {len(all_patterns)} patterns total")
     
-    print("\n📖 Loading i18n data...")
+    print("\nINFO: Loading i18n data...")
     error_keys = extract_error_keys_from_i18n()
     suggestions = extract_suggestions_from_i18n()
     print(f"   Found {len(error_keys)} error keys")
     print(f"   Found translations for {len(suggestions)} languages")
     
     # Test 1: JSON validity
-    print("\n✓ Test 1: JSON Validity")
+    print("\nOK Test 1: JSON Validity")
     for file_path in pattern_files:
         try:
             load_pattern_file(file_path)
-            print(f"   ✅ {file_path.name}")
+            print(f"   PASS {file_path.name}")
         except Exception as e:
-            print(f"   ❌ {file_path.name}: {e}")
+            print(f"   FAIL {file_path.name}: {e}")
             return False
     
     # Test 2: Required fields
-    print("\n✓ Test 2: Required Fields")
+    print("\nOK Test 2: Required Fields")
     required_fields = ["id", "regex", "error_key", "priority", "category"]
     for pattern in all_patterns:
         for field in required_fields:
             if field not in pattern:
-                print(f"   ❌ Pattern {pattern.get('id', 'UNKNOWN')} missing field: {field}")
+                print(f"   FAIL Pattern {pattern.get('id', 'UNKNOWN')} missing field: {field}")
                 return False
-    print(f"   ✅ All {len(all_patterns)} patterns have required fields")
+    print(f"   PASS All {len(all_patterns)} patterns have required fields")
     
     # Test 3: Regex compilation
-    print("\n✓ Test 3: Regex Compilation")
+    print("\nOK Test 3: Regex Compilation")
     for pattern in all_patterns:
         try:
             re.compile(pattern.get("regex", ""))
         except re.error as e:
-            print(f"   ❌ Pattern {pattern.get('id', 'UNKNOWN')}: Invalid regex - {e}")
+            print(f"   FAIL Pattern {pattern.get('id', 'UNKNOWN')}: Invalid regex - {e}")
             return False
-    print(f"   ✅ All {len(all_patterns)} regex patterns compile successfully")
+    print(f"   PASS All {len(all_patterns)} regex patterns compile successfully")
     
-    # Test 4: i18n completeness (FIXED: properly map error_key → ERROR_KEYS → SUGGESTIONS)
-    print("\n✓ Test 4: i18n Completeness")
+    # Test 4: i18n completeness (FIXED: properly map error_key -> ERROR_KEYS -> SUGGESTIONS)
+    print("\nOK Test 4: i18n Completeness")
     
     # Import ERROR_KEYS dict for proper mapping
     import i18n
@@ -86,20 +86,20 @@ def run_tests():
     for pattern in all_patterns:
         error_key = pattern.get("error_key", "")
         if error_key not in ERROR_KEYS_DICT:
-            print(f"   ❌ Pattern {pattern.get('id', 'UNKNOWN')}: error_key '{error_key}' not in i18n.ERROR_KEYS")
+            print(f"   FAIL Pattern {pattern.get('id', 'UNKNOWN')}: error_key '{error_key}' not in i18n.ERROR_KEYS")
             return False
     
     # Second check: all mapped suggestion_keys must have translations in all languages
     for lang in SUPPORTED_LANGUAGES:
         if lang not in suggestions:
-            print(f"   ❌ Language '{lang}' not found in SUGGESTIONS")
+            print(f"   FAIL Language '{lang}' not found in SUGGESTIONS")
             return False
         
         missing_patterns = []
         for pattern in all_patterns:
             error_key = pattern.get("error_key", "")
             # Map error_key to actual suggestion_key via ERROR_KEYS dict
-            # Example: "TYPE_MISMATCH" → "type_mismatch"
+            # Example: "TYPE_MISMATCH" -> "type_mismatch"
             suggestion_key = ERROR_KEYS_DICT.get(error_key)
             
             if suggestion_key is None:
@@ -109,52 +109,52 @@ def run_tests():
             
             # Check if the mapped suggestion_key exists in this language's SUGGESTIONS
             if suggestion_key not in suggestions[lang]:
-                missing_patterns.append(f"{pattern.get('id', 'UNKNOWN')} ({error_key} → {suggestion_key})")
+                missing_patterns.append(f"{pattern.get('id', 'UNKNOWN')} ({error_key} -> {suggestion_key})")
         
         if missing_patterns:
-            print(f"   ❌ {lang}: {len(missing_patterns)} patterns missing translations:")
+            print(f"   FAIL {lang}: {len(missing_patterns)} patterns missing translations:")
             for mp in missing_patterns[:5]:  # Show first 5
                 print(f"      - {mp}")
             if len(missing_patterns) > 5:
                 print(f"      ... and {len(missing_patterns) - 5} more")
             return False
         else:
-            print(f"   ✅ {lang}: All {len(all_patterns)} patterns have translations")
+            print(f"   PASS {lang}: All {len(all_patterns)} patterns have translations")
     
     # Test 5: Priority ranges
-    print("\n✓ Test 5: Priority Ranges (50-95)")
+    print("\nOK Test 5: Priority Ranges (50-95)")
     for pattern in all_patterns:
         priority = pattern.get("priority", 0)
         if not isinstance(priority, int) or not (50 <= priority <= 95):
-            print(f"   ❌ Pattern {pattern.get('id', 'UNKNOWN')}: Invalid priority {priority}")
+            print(f"   FAIL Pattern {pattern.get('id', 'UNKNOWN')}: Invalid priority {priority}")
             return False
-    print(f"   ✅ All priorities valid")
+    print(f"   PASS All priorities valid")
     
     # Test 6: Unique IDs
-    print("\n✓ Test 6: Unique Pattern IDs")
+    print("\nOK Test 6: Unique Pattern IDs")
     seen_ids = {}
     for pattern in all_patterns:
         pattern_id = pattern.get("id", "UNKNOWN")
         if pattern_id in seen_ids:
-            print(f"   ❌ Duplicate ID '{pattern_id}' in:")
+            print(f"   FAIL Duplicate ID '{pattern_id}' in:")
             print(f"      - {seen_ids[pattern_id]}")
             print(f"      - {pattern['_source_file']}")
             return False
         seen_ids[pattern_id] = pattern["_source_file"]
-    print(f"   ✅ All {len(all_patterns)} pattern IDs are unique")
+    print(f"   PASS All {len(all_patterns)} pattern IDs are unique")
     
     # Test 7: Valid categories
-    print("\n✓ Test 7: Valid Categories")
+    print("\nOK Test 7: Valid Categories")
     for pattern in all_patterns:
         category = pattern.get("category", "")
         if category not in VALID_CATEGORIES:
-            print(f"   ❌ Pattern {pattern.get('id', 'UNKNOWN')}: Invalid category '{category}'")
+            print(f"   FAIL Pattern {pattern.get('id', 'UNKNOWN')}: Invalid category '{category}'")
             print(f"      Valid: {', '.join(sorted(VALID_CATEGORIES))}")
             return False
-    print(f"   ✅ All categories valid")
+    print(f"   PASS All categories valid")
     
     # Statistics
-    print("\n📊 Pattern Statistics")
+    print("\nINFO: Pattern Statistics")
     print("="*70)
     print(f"Total patterns: {len(all_patterns)}")
     
@@ -175,7 +175,7 @@ def run_tests():
         print(f"  {src:40s}: {count}")
     
     print("\n" + "="*70)
-    print("✅ ALL TESTS PASSED!")
+    print("PASS ALL TESTS PASSED!")
     print("="*70)
     return True
 

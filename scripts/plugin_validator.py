@@ -158,21 +158,21 @@ def validate_config() -> dict:
 
 def print_validation_result(result: ValidationResult):
     """Print validation result for a plugin."""
-    icon = "✅" if result.passed else "❌"
+    icon = "PASS" if result.passed else "FAIL"
     print(f"{icon} {result.plugin_name}:")
 
     for check_name, passed, message in result.checks:
         if passed is None:
-            icon = "ℹ️"
+            icon = "INFO"
         elif passed:
-            icon = "✓"
+            icon = "OK"
         else:
-            icon = "✗"
+            icon = "X"
 
         print(f"  {icon} {check_name}: {message}")
 
     if not result.passed:
-        print(f"  → Run: python scripts/plugin_manifest.py {PLUGIN_DIR}/{result.plugin_name}.py --write")
+        print(f"  -> Run: python scripts/plugin_manifest.py {PLUGIN_DIR}/{result.plugin_name}.py --write")
 
     print()
 
@@ -183,7 +183,7 @@ def main():
     parser.add_argument("--check-config", action="store_true", help="Check config.json consistency")
     args = parser.parse_args()
 
-    print("✅ Plugin Validation Report\n")
+    print("PASS Plugin Validation Report\n")
 
     if args.check_config:
         # Validate config
@@ -191,15 +191,15 @@ def main():
         print("Config check:")
 
         if not config_result['exists']:
-            print(f"  ✗ {config_result['message']}")
+            print(f"  X {config_result['message']}")
             return 1
 
         if not config_result['valid']:
-            print(f"  ✗ {config_result['message']}")
+            print(f"  X {config_result['message']}")
             return 1
 
         for key, value in config_result['checks'].items():
-            print(f"  ✓ {key}: {value}")
+            print(f"  OK {key}: {value}")
 
         print()
 
@@ -210,7 +210,7 @@ def main():
         manifest_path = plugin_path.with_suffix('.json')
 
         if not plugin_path.exists():
-            print(f"❌ Plugin not found: {plugin_path}")
+            print(f"FAIL Plugin not found: {plugin_path}")
             return 1
 
         result = validate_plugin(plugin_path, manifest_path)
@@ -221,12 +221,12 @@ def main():
     else:
         # Validate all plugins
         if not PLUGIN_DIR.exists():
-            print(f"❌ Plugin directory not found: {PLUGIN_DIR}")
+            print(f"FAIL Plugin directory not found: {PLUGIN_DIR}")
             return 1
 
         plugins = list(PLUGIN_DIR.glob('*.py'))
         if not plugins:
-            print(f"⚠️ No plugins found in {PLUGIN_DIR}")
+            print(f"WARN No plugins found in {PLUGIN_DIR}")
             return 0
 
         results = []

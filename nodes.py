@@ -39,7 +39,7 @@ class DebugPrintNode:
         try:
             self._recursive_inspect(data, depth=0)
         except Exception as e:
-            print(f"  ❌ Error inspecting data: {e}")
+            print(f"  ERROR: failed to inspect data: {e}")
 
         return (data,)
 
@@ -63,7 +63,7 @@ class DebugPrintNode:
             # Special Case: CONDITIONING is usually [[Tensor, Dict], [Tensor, Dict]...]
             if len(data) > 0 and isinstance(data[0], (list, tuple)) and len(data[0]) == 2:
                 if isinstance(data[0][0], torch.Tensor) and isinstance(data[0][1], dict):
-                    print(f"{indent}ℹ️ Detected Structure: CONDITIONING (Prompt + Meta)")
+                    print(f"{indent}INFO: Detected Structure: CONDITIONING (Prompt + Meta)")
             
             # Inspect first and last item if long
             if len(data) > 0:
@@ -80,7 +80,7 @@ class DebugPrintNode:
             
             # Special Case: LATENT
             if "samples" in data:
-                print(f"{indent}ℹ️ Detected Structure: LATENT")
+                print(f"{indent}INFO: Detected Structure: LATENT")
                 print(f"{indent}Key 'samples':")
                 self._recursive_inspect(data["samples"], depth + 1)
                 
@@ -131,11 +131,11 @@ class DebugPrintNode:
         
         # Critical Checks
         if data.is_meta:
-            print(f"{indent}⚠️ Meta Tensor (No data)")
+            print(f"{indent}WARNING: Meta Tensor (No data)")
             return
             
         if hasattr(data, "requires_grad") and data.requires_grad:
-            print(f"{indent}⚠️ WARNING: requires_grad=True (Might waste VRAM/Time if not training)")
+            print(f"{indent}WARNING: requires_grad=True (might waste VRAM/time if not training)")
 
         # Stats
         if data.numel() > 0:
@@ -144,9 +144,9 @@ class DebugPrintNode:
             has_inf = torch.isinf(data).any().item()
             
             if has_nan:
-                print(f"{indent}❌ CRITICAL: Tensor contains NaN (Not a Number)!")
+                print(f"{indent}CRITICAL: Tensor contains NaN (Not a Number)!")
             if has_inf:
-                print(f"{indent}❌ CRITICAL: Tensor contains Inf (Infinity)!")
+                print(f"{indent}CRITICAL: Tensor contains Inf (Infinity)!")
                 
             if not has_nan and not has_inf:
                 # Only calc stats if safe

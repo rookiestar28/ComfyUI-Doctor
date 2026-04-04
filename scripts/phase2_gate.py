@@ -102,10 +102,10 @@ def run_python_gate():
         success, stdout, stderr = run_command(cmd, timeout=120)
 
         if success:
-            print(f"{GREEN}✅ {name}: PASS{RESET}")
+            print(f"{GREEN}PASS {name}: PASS{RESET}")
             print(stdout)
         else:
-            print(f"{RED}❌ {name}: FAIL{RESET}")
+            print(f"{RED}FAIL {name}: FAIL{RESET}")
             print(stdout)
             print(stderr)
             all_passed = False
@@ -122,7 +122,7 @@ def run_e2e_gate():
         print(f"{YELLOW}Installing npm dependencies...{RESET}")
         success, stdout, stderr = run_command(["npm", "ci"], timeout=300)
         if not success:
-            print(f"{RED}❌ npm ci failed{RESET}")
+            print(f"{RED}FAIL npm ci failed{RESET}")
             print(stderr)
             return False
 
@@ -130,7 +130,7 @@ def run_e2e_gate():
     print(f"{YELLOW}Checking Playwright browsers...{RESET}")
     success, stdout, stderr = run_command(["npx", "playwright", "install", "chromium", "--with-deps"], timeout=300)
     if not success:
-        print(f"{RED}❌ Playwright browser installation failed{RESET}")
+        print(f"{RED}FAIL Playwright browser installation failed{RESET}")
         print(stderr)
         return False
 
@@ -139,10 +139,10 @@ def run_e2e_gate():
     success, stdout, stderr = run_command(["npm", "test"], timeout=600)
 
     if success:
-        print(f"{GREEN}✅ E2E Tests: PASS{RESET}")
+        print(f"{GREEN}PASS E2E Tests: PASS{RESET}")
         print(stdout)
     else:
-        print(f"{RED}❌ E2E Tests: FAIL{RESET}")
+        print(f"{RED}FAIL E2E Tests: FAIL{RESET}")
         print(stdout)
         print(stderr)
 
@@ -171,18 +171,18 @@ def main():
     # Final summary
     print_header("Phase 2 Gate Summary")
     if python_passed and e2e_passed:
-        print(f"{GREEN}{BOLD}✅ ALL CHECKS PASSED{RESET}")
-        print(f"\n{GREEN}Security & Governance: ✅{RESET}")
+        print(f"{GREEN}{BOLD}PASS ALL CHECKS PASSED{RESET}")
+        print(f"\n{GREEN}Security & Governance: PASS{RESET}")
         print(f"  Plugin security: PASS")
         print(f"  Metadata contract: PASS")
         print(f"  Dependency policy: PASS")
         print(f"  Outbound payload safety: PASS")
-        print(f"\n{GREEN}Frontend Regression: ✅{RESET}")
+        print(f"\n{GREEN}Frontend Regression: PASS{RESET}")
         print(f"  E2E tests: PASS")
         print(f"\n{GREEN}Your changes are safe to push.{RESET}")
         return 0
     else:
-        print(f"{RED}{BOLD}❌ GATE FAILED{RESET}")
+        print(f"{RED}{BOLD}FAIL GATE FAILED{RESET}")
         if not python_passed:
             print(f"{RED}  Python tests: FAIL{RESET}")
         if not e2e_passed:

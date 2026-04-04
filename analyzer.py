@@ -101,12 +101,14 @@ PATTERNS: List[Tuple[str, str, bool]] = [
     (r"Failed to validate prompt for output \d+:[\s\S]*?\*\s+([^\n]+)\s+\d+:\s*\n\s*-\s+([^\n]+)",
      ERROR_KEYS["VALIDATION_ERROR"], True),
 
+    # IMPORTANT: keep legacy emoji-compatible patterns here so historical
+    # console output still matches after R26 switches new backend output to ASCII.
     # Debug Node: Tensor NaN/Inf
-    (r"❌ CRITICAL: Tensor contains (NaN|Inf)",
+    (r"(?:❌\s*)?CRITICAL: Tensor contains (NaN|Inf)",
      ERROR_KEYS["TENSOR_NAN_INF"], True),
 
     # Debug Node: Meta Tensor
-    (r"⚠️ Meta Tensor",
+    (r"(?:⚠️\s*)?(?:WARNING:\s*)?Meta Tensor",
      ERROR_KEYS["META_TENSOR"], False),
 ]
 

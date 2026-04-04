@@ -60,11 +60,11 @@ foreach ($TestFile in $TestFiles) {
             $count = [int]$match.Matches[0].Groups[1].Value
             $TotalTests += $count
         }
-        Write-Host "  ✅ PASSED" -ForegroundColor Green
+        Write-Host "  PASS PASSED" -ForegroundColor Green
         $PassedFiles++
     }
     else {
-        Write-Host "  ❌ FAILED" -ForegroundColor Red
+        Write-Host "  FAIL FAILED" -ForegroundColor Red
         if (-not $Verbose) {
             Write-Host $result -ForegroundColor DarkGray
         }
@@ -85,6 +85,6 @@ if ($FailedFiles -gt 0) {
     exit 1
 }
 else {
-    Write-Host "`n  All tests passed! ✅" -ForegroundColor Green
+    Write-Host "`n  All tests passed! PASS" -ForegroundColor Green
     exit 0
 }

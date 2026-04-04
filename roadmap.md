@@ -600,7 +600,7 @@ graph TD
   - **Execution Order**: 1 of 3
   - **Plan**: `.planning/260404-R25_PACKAGE_IMPORT_COMPATIBILITY_HARDENING_PLAN.md`
   - **Implementation Record**: `.planning/260404-R25_PACKAGE_IMPORT_COMPATIBILITY_HARDENING_IMPLEMENTATION_RECORD.md`
-- [ ] **R26**: Prestartup Bootstrap, Encoding, and Non-UI Emoji Safety Hardening - High
+- [x] **R26**: Prestartup Bootstrap, Encoding, and Non-UI Emoji Safety Hardening - High *Completed (2026-04-04; stage-resume acceptance passed)*
   - **Problem**: `prestartup_script.py` currently relies on fragile internal import assumptions and emits non-ASCII startup messages that can raise `UnicodeEncodeError` on Windows charmap/code-page consoles. More broadly, non-essential emoji in backend/startup/logging code paths add avoidable encoding risk outside the frontend UI layer.
   - **Scope**:
     - Make prestartup bootstrap explicit and script-safe without requiring the full package to be importable first.
@@ -614,7 +614,8 @@ graph TD
   - **Discovered**: 2026-04-04 (community issue report — Windows startup log encoding failure)
   - **Dependency**: Execute after `R25`
   - **Execution Order**: 2 of 3
-  - **Plan**: `.planning/260404-R25R26T17_PACKAGE_IMPORT_AND_STARTUP_COMPATIBILITY_DEBUG_PLAN.md`
+  - **Plan**: `.planning/260404-R26_PRESTARTUP_BOOTSTRAP_ENCODING_AND_NON_UI_EMOJI_SAFETY_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260404-R26_PRESTARTUP_BOOTSTRAP_ENCODING_AND_NON_UI_EMOJI_SAFETY_HARDENING_IMPLEMENTATION_RECORD.md`
 - [x] **R6**: Network retry logic with exponential backoff - ???Low ??*Completed (2026-01-10)*
   - Created `llm_client.py` with safe retry logic, idempotency keys, timeout budget
   - Exponential backoff with jitter, Retry-After header support

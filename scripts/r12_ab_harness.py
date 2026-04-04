@@ -445,7 +445,7 @@ def main():
     
     print(f"\n--- Threshold ---")
     print(f"  Test Valid Fix Ratio >= Baseline * {report.threshold_valid_fix_ratio}")
-    print(f"  Result: {'✅ PASSED' if report.passed else '❌ FAILED'}")
+    print(f"  Result: {'PASS PASSED' if report.passed else 'FAIL FAILED'}")
     print(f"\nReport saved to: {output_path}")
     
     return 0 if report.passed else 1

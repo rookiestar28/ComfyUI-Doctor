@@ -110,13 +110,13 @@ def write_manifest(manifest_path: Path, manifest: dict):
 
 def process_plugin(plugin_path: Path, write_mode: bool) -> bool:
     """Process a single plugin file."""
-    print(f"\n🔧 Plugin Manifest Generator\n")
+    print("\nPlugin Manifest Generator\n")
     print(f"Analyzing: {plugin_path}")
 
     # Validate
     valid, message = validate_plugin_file(plugin_path)
     if not valid:
-        print(f"  ❌ Validation failed: {message}")
+        print(f"  FAIL Validation failed: {message}")
         return False
 
     # Compute hash
@@ -139,7 +139,7 @@ def process_plugin(plugin_path: Path, write_mode: bool) -> bool:
 
     if write_mode:
         write_manifest(manifest_path, manifest)
-        print(f"\n✅ Manifest written to: {manifest_path}")
+        print(f"\nPASS Manifest written to: {manifest_path}")
     else:
         print(f"\n[--dry-run] Would write to: {manifest_path}")
         print("To write, run with --write flag")
@@ -154,7 +154,7 @@ def main():
     args = parser.parse_args()
 
     if not args.write:
-        print("🔍 Running in DRY-RUN mode (no files will be written)")
+        print("INFO: Running in DRY-RUN mode (no files will be written)")
         print("Use --write to actually create manifest files\n")
 
     success_count = 0
@@ -163,16 +163,16 @@ def main():
             if process_plugin(plugin_path, args.write):
                 success_count += 1
         except Exception as e:
-            print(f"❌ Error processing {plugin_path}: {e}")
+            print(f"FAIL Error processing {plugin_path}: {e}")
 
     print(f"\n{'='*60}")
     print(f"Processed: {success_count}/{len(args.plugins)} plugins")
 
     if success_count == len(args.plugins):
-        print("✅ All plugins processed successfully")
+        print("PASS All plugins processed successfully")
         return 0
     else:
-        print("⚠️ Some plugins failed to process")
+        print("WARN Some plugins failed to process")
         return 1
 
 

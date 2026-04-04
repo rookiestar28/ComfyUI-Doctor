@@ -55,10 +55,10 @@ try:
         SUPPORTED_LANGUAGES, ERROR_KEYS
     )
     from analyzer import ErrorAnalyzer
-    print("✅ All modules imported successfully.")
-    print("✅ All modules imported successfully.")
+    print("PASS All modules imported successfully.")
+    print("PASS All modules imported successfully.")
 except ImportError as e:
-    print(f"❌ Import Error: {e}")
+    print(f"FAIL Import Error: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)
@@ -75,12 +75,12 @@ print(f"Default language: {get_language()}")
 for lang in SUPPORTED_LANGUAGES:
     success = set_language(lang)
     current = get_language()
-    status = "✅" if success and current == lang else "❌"
+    status = "PASS" if success and current == lang else "FAIL"
     print(f"{status} set_language('{lang}'): success={success}, current={current}")
 
 # Test invalid language
 success = set_language("invalid_lang")
-print(f"{'✅' if not success else '❌'} set_language('invalid_lang'): success={success} (should be False)")
+print(f"{'PASS' if not success else 'FAIL'} set_language('invalid_lang'): success={success} (should be False)")
 
 # --- Test Suggestions ---
 print("\n" + "="*50)
@@ -136,7 +136,7 @@ test_cases = [
 
 for traceback_text, expected_key in test_cases:
     result = ErrorAnalyzer.analyze(traceback_text)
-    status = "✅" if result and "💡" in result else "❌"
+    status = "PASS" if result and "SUGGESTION:" in result else "FAIL"
     print(f"{status} {expected_key}: {'Found suggestion' if result else 'No suggestion'}")
 
 # Test complete traceback detection

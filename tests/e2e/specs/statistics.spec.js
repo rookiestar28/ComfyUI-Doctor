@@ -648,17 +648,15 @@ test.describe('Statistics Dashboard', () => {
     await page.fill('#doctor-feedback-suggestion', 'Test suggestion');
 
     await page.click('#doctor-feedback-preview-btn');
-    await page.waitForTimeout(200);
+    await expect.poll(() => previewCalled, { timeout: 3000 }).toBe(true);
 
-    expect(previewCalled).toBe(true);
     expect(previewBody.pattern_candidate.id).toBeTruthy();
     expect(previewBody.suggestion_candidate.message).toBe('Test suggestion');
     await expect(page.locator('#doctor-feedback-preview-output')).toContainText('schema_version');
 
     await page.click('#doctor-feedback-submit-btn');
-    await page.waitForTimeout(200);
+    await expect.poll(() => submitCalled, { timeout: 3000 }).toBe(true);
 
-    expect(submitCalled).toBe(true);
     expect(submitBody.pattern_candidate).toBeTruthy();
     await expect(page.locator('#doctor-feedback-status')).toContainText('GitHub PR created');
     await expect(page.locator('#doctor-feedback-status a')).toHaveAttribute('href', /pull\/123$/);
@@ -787,7 +785,7 @@ test.describe('Statistics Dashboard', () => {
       });
     });
 
-    await page.route('**/doctor/statistics*', async route => {
+    await page.route('**/doctor/statistics?*', async route => {
       // Stats requests may happen multiple times on initial mount/activation.
       // Only switch to EMPTY_STATISTICS after the reset endpoint is called.
       const stats = statsReturnEmpty ? EMPTY_STATISTICS : MOCK_STATISTICS;
@@ -814,10 +812,9 @@ test.describe('Statistics Dashboard', () => {
     // Click reset button
     const resetBtn = page.locator('#doctor-stats-reset-btn');
     await resetBtn.click();
-    await page.waitForTimeout(500);
+    await expect.poll(() => resetApiCalled, { timeout: 3000 }).toBe(true);
 
     // Verify API was called
-    expect(resetApiCalled).toBe(true);
 
     // Verify stats refreshed to show empty/0 state
     await expect(total).toHaveText('0');

@@ -73,25 +73,25 @@ def update_manifest(manifest_path: Path, signature: str, algorithm: str = "hmac-
 
 def process_plugin(plugin_path: Path, key: str) -> bool:
     """Process a single plugin file."""
-    print(f"\n🔐 Plugin HMAC Signer\n")
+    print(f"\nHMAC Plugin HMAC Signer\n")
 
     # Validate key
     valid, message = validate_key(key)
     if not valid:
-        print(f"❌ {message}")
+        print(f"FAIL {message}")
         return False
 
-    print(f"Key length: {len(key)} chars ✓\n")
+    print(f"Key length: {len(key)} chars OK\n")
 
     # Check plugin exists
     if not plugin_path.exists():
-        print(f"❌ Plugin not found: {plugin_path}")
+        print(f"FAIL Plugin not found: {plugin_path}")
         return False
 
     # Check manifest exists
     manifest_path = plugin_path.with_suffix('.json')
     if not manifest_path.exists():
-        print(f"❌ Manifest not found: {manifest_path}")
+        print(f"FAIL Manifest not found: {manifest_path}")
         print("Run plugin_manifest.py first to create manifest")
         return False
 
@@ -111,7 +111,7 @@ def process_plugin(plugin_path: Path, key: str) -> bool:
     print(f"  Added: signature")
     print(f"  Added: signature_alg\n")
 
-    print("✅ Manifest updated successfully")
+    print("PASS Manifest updated successfully")
 
     return True
 
@@ -125,7 +125,7 @@ def main():
     key = get_hmac_key()
 
     if not key:
-        print("❌ No HMAC key provided")
+        print("FAIL No HMAC key provided")
         print("\nSet DOCTOR_PLUGIN_HMAC_KEY environment variable or enter interactively")
         return 1
 
@@ -134,7 +134,7 @@ def main():
         success = process_plugin(args.plugin, key)
         return 0 if success else 1
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"FAIL Error: {e}")
         return 1
     finally:
         # Clear key from memory

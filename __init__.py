@@ -8,15 +8,15 @@ Features:
 - Error analysis with suggestions
 - API endpoint for frontend integration
 
-═══════════════════════════════════════════════════════════════════════════
-⚠️ CRITICAL: Relative Import Warning for Test Maintainers
-═══════════════════════════════════════════════════════════════════════════
+===========================================================================
+CRITICAL: Relative Import Warning for Test Maintainers
+===========================================================================
 This module uses RELATIVE IMPORTS (from .logger import ...) which is REQUIRED
 for ComfyUI custom node extensions.
 
 DO NOT change to absolute imports (from logger import ...) as this will:
-  ❌ Break ComfyUI's module loading system
-  ❌ Cause "ModuleNotFoundError" when ComfyUI tries to load this extension
+  - Break ComfyUI's module loading system
+  - Cause "ModuleNotFoundError" when ComfyUI tries to load this extension
 
 IMPORTANT FOR TESTING:
   - pytest CANNOT directly import this file due to relative imports
@@ -30,7 +30,7 @@ If pytest fails with "attempted relative import with no known parent package":
   3. Do NOT modify these imports - the issue is in test configuration
 
 Last Modified: 2026-01-03 (Added CI testing compatibility notes)
-═══════════════════════════════════════════════════════════════════════════
+===========================================================================
 """
 
 import sys
@@ -44,10 +44,10 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# ═══════════════════════════════════════════════════════════════════════════
-# ⚠️ CRITICAL: DO NOT change these to absolute imports
+# ============================================================================
+# CRITICAL: DO NOT change these to absolute imports
 # These MUST be relative imports for ComfyUI compatibility
-# ═══════════════════════════════════════════════════════════════════════════
+# ============================================================================
 from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history, get_logger_metrics
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
@@ -98,6 +98,14 @@ def _admin_denied_response(code: str, message: str):
     """Standardized admin denial response payload/status for write-sensitive APIs."""
     status_code = 401 if code == "unauthorized" else 403
     return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+
+
+def _startup_print(message: str = "") -> None:
+    safe_message = str(message).encode("ascii", "backslashreplace").decode("ascii")
+    try:
+        print(safe_message)
+    except (OSError, AttributeError, UnicodeError, ValueError):
+        pass
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -160,15 +168,15 @@ prestartup_log_path = os.environ.get("COMFYUI_DOCTOR_LOG_PATH")
 if prestartup_log_path and os.path.exists(prestartup_log_path):
     # Prestartup logger was installed - use the same log file
     log_path = prestartup_log_path
-    print(f"\n[ComfyUI-Doctor] 🟢 Upgrading from Prestartup Logger...")
-    print(f"[ComfyUI-Doctor] 📄 Using existing log: {log_path}")
+    _startup_print(f"\n[ComfyUI-Doctor] Upgrading from prestartup logger...")
+    _startup_print(f"[ComfyUI-Doctor] Using existing log: {log_path}")
 else:
     # No prestartup logger - generate new log filename
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = f"comfyui_debug_{timestamp}.log"
     log_path = os.path.join(log_dir, log_filename)
-    print(f"\n[ComfyUI-Doctor] 🟢 Initializing Smart Debugger...")
-    print(f"[ComfyUI-Doctor] 📄 Log file: {log_path}")
+    _startup_print(f"\n[ComfyUI-Doctor] Initializing smart debugger...")
+    _startup_print(f"[ComfyUI-Doctor] Log file: {log_path}")
 
 
 # --- 4. Install/Upgrade to Full Smart Logger ---
@@ -243,42 +251,35 @@ def setup_api_logger():
 
 # Initialize logger
 logger = setup_api_logger()
-print(f"[ComfyUI-Doctor] 📋 API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
+_startup_print(f"[ComfyUI-Doctor] API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
 
 
 # --- 5. Log System Information (Hardware Snapshot) ---
 def log_system_info() -> None:
     """Log system and hardware information at startup."""
-    # ASCII Art Banner
-    print("\n")
-    print("   ██████╗ ██████╗ ███╗   ███╗███████╗██╗   ██╗██╗   ██╗██╗      ██████╗  ██████╗  ██████╗████████╗ ██████╗ ██████╗ ")
-    print("  ██╔════╝██╔═══██╗████╗ ████║██╔════╝╚██╗ ██╔╝██║   ██║██║      ██╔══██╗██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗")
-    print("  ██║     ██║   ██║██╔████╔██║█████╗   ╚████╔╝ ██║   ██║██║█████╗██║  ██║██║   ██║██║        ██║   ██║   ██║██████╔╝")
-    print("  ██║     ██║   ██║██║╚██╔╝██║██╔══╝    ╚██╔╝  ██║   ██║██║╚════╝██║  ██║██║   ██║██║        ██║   ██║   ██║██╔══██╗")
-    print("  ╚██████╗╚██████╔╝██║ ╚═╝ ██║██║        ██║   ╚██████╔╝██║      ██████╔╝╚██████╔╝╚██████╗   ██║   ╚██████╔╝██║  ██║")
-    print("   ╚═════╝ ╚═════╝ ╚═╝     ╚═╝╚═╝        ╚═╝    ╚═════╝ ╚═╝      ╚═════╝  ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝")
-    print("\n")
-    print(f"{'='*20} SYSTEM SNAPSHOT {'='*20}")
-    print(f"OS: {platform.system()} {platform.release()} ({platform.version()})")
-    print(f"Python: {sys.version.split()[0]}")
+    _startup_print("\n")
+    _startup_print("=== COMFYUI DOCTOR ===")
+    _startup_print(f"{'='*20} SYSTEM SNAPSHOT {'='*20}")
+    _startup_print(f"OS: {platform.system()} {platform.release()} ({platform.version()})")
+    _startup_print(f"Python: {sys.version.split()[0]}")
     
     try:
         import torch
-        print(f"PyTorch: {torch.__version__}")
-        print(f"CUDA Available: {torch.cuda.is_available()}")
+        _startup_print(f"PyTorch: {torch.__version__}")
+        _startup_print(f"CUDA Available: {torch.cuda.is_available()}")
         if torch.cuda.is_available():
-            print(f"CUDA Version: {torch.version.cuda}")
+            _startup_print(f"CUDA Version: {torch.version.cuda}")
             device_count = torch.cuda.device_count()
-            print(f"GPU Count: {device_count}")
+            _startup_print(f"GPU Count: {device_count}")
             for i in range(device_count):
                 props = torch.cuda.get_device_properties(i)
-                print(f"  GPU {i}: {props.name} (VRAM: {props.total_memory / 1024**3:.2f} GB)")
+                _startup_print(f"  GPU {i}: {props.name} (VRAM: {props.total_memory / 1024**3:.2f} GB)")
     except ImportError:
-        print("PyTorch: Not Installed (or not found in this env)")
+        _startup_print("PyTorch: Not Installed (or not found in this env)")
     
     # Log ComfyUI Arguments if available
-    print(f"Args: {sys.argv}")
-    print(f"{'='*57}\n")
+    _startup_print(f"Args: {sys.argv}")
+    _startup_print(f"{'='*57}\n")
 
 log_system_info()
 
@@ -1678,10 +1679,10 @@ try:
                             upstream_nodes = enriched_context['workflow_structure']['upstream_nodes']
                             system_prompt += f"\nUpstream Nodes: {len(upstream_nodes)} connected\n"
                             for up in upstream_nodes[:5]:  # Limit to 5 to prevent token overflow
-                                system_prompt += f"  - {up['class_type']} → {up['connection']}\n"
+                                system_prompt += f"  - {up['class_type']} -> {up['connection']}\n"
 
                         if enriched_context['workflow_structure'].get('missing_connections'):
-                            system_prompt += f"\n⚠️ Missing Required Connections:\n"
+                            system_prompt += "\nMissing Required Connections:\n"
                             for missing in enriched_context['workflow_structure']['missing_connections']:
                                 system_prompt += f"  - {missing['input']} (type: {missing['type']})\n"
                 else:
@@ -2992,44 +2993,44 @@ try:
             logger.error(f"Health ack API error: {str(e)}")
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
-    print("[ComfyUI-Doctor] 🌐 API Hooks registered:")
-    print("  - GET  /debugger/last_analysis")
-    print("  - GET  /debugger/history")
-    print("  - POST /debugger/set_language")
-    print("  - POST /debugger/clear_history")
-    print("  - POST /doctor/analyze")
-    print("  - POST /doctor/chat (SSE streaming)")
-    print("  - POST /doctor/verify_key")
-    print("  - POST /doctor/list_models")
-    print("  - GET  /doctor/secrets/status (S8)")
-    print("  - PUT  /doctor/secrets (S8)")
-    print("  - DELETE /doctor/secrets/{provider} (S8)")
-    print("  - GET  /doctor/statistics (F4)")
-    print("  - POST /doctor/mark_resolved (F4)")
-    print("  - POST /doctor/feedback/preview (F16)")
-    print("  - POST /doctor/feedback/submit (F16)")
-    print("  - GET  /doctor/health")
-    print("  - GET  /doctor/plugins")
-    print("  - GET  /doctor/telemetry/status (S3)")
-    print("  - GET  /doctor/telemetry/buffer (S3)")
-    print("  - POST /doctor/telemetry/track (S3)")
-    print("  - POST /doctor/telemetry/clear (S3)")
-    print("  - GET  /doctor/telemetry/export (S3)")
-    print("  - POST /doctor/telemetry/toggle (S3)")
-    print("  - POST /doctor/health_check (F14)")
-    print("  - GET  /doctor/health_report (F14)")
-    print("  - GET  /doctor/health_history (F14)")
-    print("  - POST /doctor/health_ack (F14)")
-    print("\n")
-    print("💬 Questions? Updates? Suggestions and Contributions are welcome!")
-    print("⭐ Give us a Star on GitHub - it's always good for the Doctor's health! 💝")
-    print("   https://github.com/rookiestar28/ComfyUI-Doctor")
-    print("\n")
+    _startup_print("[ComfyUI-Doctor] API hooks registered:")
+    _startup_print("  - GET  /debugger/last_analysis")
+    _startup_print("  - GET  /debugger/history")
+    _startup_print("  - POST /debugger/set_language")
+    _startup_print("  - POST /debugger/clear_history")
+    _startup_print("  - POST /doctor/analyze")
+    _startup_print("  - POST /doctor/chat (SSE streaming)")
+    _startup_print("  - POST /doctor/verify_key")
+    _startup_print("  - POST /doctor/list_models")
+    _startup_print("  - GET  /doctor/secrets/status (S8)")
+    _startup_print("  - PUT  /doctor/secrets (S8)")
+    _startup_print("  - DELETE /doctor/secrets/{provider} (S8)")
+    _startup_print("  - GET  /doctor/statistics (F4)")
+    _startup_print("  - POST /doctor/mark_resolved (F4)")
+    _startup_print("  - POST /doctor/feedback/preview (F16)")
+    _startup_print("  - POST /doctor/feedback/submit (F16)")
+    _startup_print("  - GET  /doctor/health")
+    _startup_print("  - GET  /doctor/plugins")
+    _startup_print("  - GET  /doctor/telemetry/status (S3)")
+    _startup_print("  - GET  /doctor/telemetry/buffer (S3)")
+    _startup_print("  - POST /doctor/telemetry/track (S3)")
+    _startup_print("  - POST /doctor/telemetry/clear (S3)")
+    _startup_print("  - GET  /doctor/telemetry/export (S3)")
+    _startup_print("  - POST /doctor/telemetry/toggle (S3)")
+    _startup_print("  - POST /doctor/health_check (F14)")
+    _startup_print("  - GET  /doctor/health_report (F14)")
+    _startup_print("  - GET  /doctor/health_history (F14)")
+    _startup_print("  - POST /doctor/health_ack (F14)")
+    _startup_print("\n")
+    _startup_print("Questions, updates, suggestions, and contributions are welcome.")
+    _startup_print("GitHub: https://github.com/rookiestar28/ComfyUI-Doctor")
+    _startup_print("")
+    _startup_print("\n")
 
 except ImportError:
-    print("[ComfyUI-Doctor] ⚠️ Server module not found (Running in standalone mode?)")
+    _startup_print("[ComfyUI-Doctor] WARNING: server module not found (running in standalone mode?)")
 except Exception as e:
-    print(f"[ComfyUI-Doctor] ⚠️ Failed to register API: {e}")
+    _startup_print(f"[ComfyUI-Doctor] WARNING: failed to register API: {e}")
 
 
 # Web directory for frontend assets (required by ComfyUI)

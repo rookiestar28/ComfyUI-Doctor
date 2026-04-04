@@ -4,20 +4,41 @@ This runs BEFORE any custom nodes are imported.
 Installs the SmartLogger as early as possible to capture all import errors.
 """
 
-import sys
-import os
 import datetime
+import importlib.util
+import os
+import sys
 import tempfile
-
-# R18: Prefer canonical Doctor data dir for persisted logs (Desktop-safe)
-try:
-    from services.doctor_paths import get_doctor_data_dir as _get_doctor_data_dir
-except Exception:
-    _get_doctor_data_dir = None
 
 # Get the directory of this script (ComfyUI-Doctor folder)
 DOCTOR_DIR = os.path.dirname(os.path.abspath(__file__))
 _FALLBACK_LOG_DIR = os.path.join(tempfile.gettempdir(), "ComfyUI-Doctor", "logs")
+
+
+def _load_doctor_data_dir():
+    """Resolve doctor_paths without assuming the extension root is on sys.path."""
+    doctor_paths_file = os.path.join(DOCTOR_DIR, "services", "doctor_paths.py")
+    if not os.path.exists(doctor_paths_file):
+        return None
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "comfyui_doctor_prestartup_doctor_paths",
+            doctor_paths_file,
+        )
+        if spec is None or spec.loader is None:
+            return None
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return getattr(module, "get_doctor_data_dir", None)
+    except Exception:
+        return None
+
+
+# R26: keep prestartup bootstrap file-path-based. ComfyUI may execute this
+# before the extension root is available as a top-level import root.
+_get_doctor_data_dir = _load_doctor_data_dir()
 
 def _resolve_log_dir() -> str:
     """
@@ -125,13 +146,13 @@ class PrestartupLogger:
         try:
             self.stream.write(message)
             self.stream.flush()
-        except (OSError, AttributeError):
+        except (OSError, AttributeError, UnicodeError, ValueError):
             pass  # Stream may be unavailable during early startup
         try:
             if PrestartupLogger._log_file:
                 PrestartupLogger._log_file.write(message)
                 PrestartupLogger._log_file.flush()
-        except (OSError, AttributeError):
+        except (OSError, AttributeError, UnicodeError, ValueError):
             pass  # Log file may be unavailable
 
     def flush(self):
@@ -139,7 +160,7 @@ class PrestartupLogger:
             self.stream.flush()
             if PrestartupLogger._log_file:
                 PrestartupLogger._log_file.flush()
-        except (OSError, AttributeError):
+        except (OSError, AttributeError, UnicodeError, ValueError):
             pass  # Stream or file may be unavailable
 
     @property
@@ -159,11 +180,20 @@ class PrestartupLogger:
 # Install minimal logger IMMEDIATELY
 PrestartupLogger.install(LOG_PATH)
 
-print(f"\n[ComfyUI-Doctor] 🏥 Prestartup hook activated (EARLY CAPTURE)")
+
+def _emit_startup_line(message: str) -> None:
+    safe_message = str(message).encode("ascii", "backslashreplace").decode("ascii")
+    try:
+        print(safe_message)
+    except (OSError, AttributeError, UnicodeError, ValueError):
+        pass
+
+
+_emit_startup_line("\n[ComfyUI-Doctor] Prestartup hook activated (early capture)")
 if LOG_PATH:
-    print(f"[ComfyUI-Doctor] 📄 Log file: {LOG_PATH}")
+    _emit_startup_line(f"[ComfyUI-Doctor] Log file: {LOG_PATH}")
 else:
-    print("[ComfyUI-Doctor] ⚠️ Log file: unavailable (fallback disabled)")
+    _emit_startup_line("[ComfyUI-Doctor] WARNING: log file unavailable (fallback disabled)")
 
 # Store log path for __init__.py to retrieve
 if LOG_PATH:

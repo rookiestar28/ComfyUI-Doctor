@@ -143,29 +143,29 @@ def generate_allowlist_config(plugins: List[PluginInfo]) -> dict:
 
 def print_report(plugins: List[PluginInfo]):
     """Print human-readable trust report."""
-    print("\n🔍 Plugin Allowlist Suggester\n")
+    print("\nINFO: Plugin Allowlist Suggester\n")
     print(f"Scanning: {PLUGIN_DIR_DEFAULT}\n")
     print(f"Found {len(plugins)} plugin(s):\n")
 
     for plugin in plugins:
         # Icon based on trust level
         if plugin.trust_level == "TRUSTED":
-            icon = "✅"
+            icon = "PASS"
         elif plugin.trust_level == "UNSIGNED":
-            icon = "⚠️"
+            icon = "WARN"
         else:
-            icon = "❌"
+            icon = "FAIL"
 
         print(f"  {icon} {plugin.name} ({plugin.trust_level})")
 
         if plugin.manifest_path.exists():
-            print(f"     - Manifest: ✓ Valid" if plugin.trust_level == "TRUSTED" else f"     - Manifest: ✗ Invalid")
+            print(f"     - Manifest: OK Valid" if plugin.trust_level == "TRUSTED" else f"     - Manifest: X Invalid")
         else:
-            print(f"     - Manifest: ✗ Missing")
+            print(f"     - Manifest: X Missing")
 
         if plugin.sha256_file and plugin.sha256_manifest:
-            match = "✓" if plugin.sha256_file == plugin.sha256_manifest else "✗"
-            print(f"     - SHA256: {match} {'Match' if match == '✓' else 'Mismatch'}")
+            match = "OK" if plugin.sha256_file == plugin.sha256_manifest else "X"
+            print(f"     - SHA256: {match} {'Match' if match == 'OK' else 'Mismatch'}")
 
         print(f"     - Size: {plugin.size_bytes / 1024:.1f} KiB")
         print(f"     - Symlink: {'Yes' if plugin.path.is_symlink() else 'No'}")
@@ -182,7 +182,7 @@ def print_recommendations(plugins: List[PluginInfo]):
     untrusted = [p for p in plugins if p.trust_level == "UNTRUSTED"]
 
     if unsigned or untrusted:
-        print("⚠️ Review recommendations:")
+        print("WARN Review recommendations:")
 
         for plugin in unsigned:
             print(f"  - {plugin.name}: Create manifest with plugin_manifest.py")
@@ -201,14 +201,14 @@ def main():
     plugin_dir = PLUGIN_DIR_DEFAULT
 
     if not plugin_dir.exists():
-        print(f"❌ Plugin directory not found: {plugin_dir}")
+        print(f"FAIL Plugin directory not found: {plugin_dir}")
         return 1
 
     # Scan plugins
     plugins = scan_plugins(plugin_dir)
 
     if not plugins:
-        print(f"⚠️ No plugins found in {plugin_dir}")
+        print(f"WARN No plugins found in {plugin_dir}")
         return 0
 
     # Classify trust

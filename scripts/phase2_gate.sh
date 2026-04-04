@@ -38,7 +38,7 @@ if [[ -z "$PYTHON_BIN" ]]; then
     elif command -v python3 >/dev/null 2>&1; then
         PYTHON_BIN="python3"
     else
-        echo -e "${RED}❌ No Python interpreter found (need python or python3)${NC}"
+        echo -e "${RED}FAIL No Python interpreter found (need python or python3)${NC}"
         exit 2
     fi
 fi
@@ -60,9 +60,9 @@ if [[ "$RUN_PYTHON" == "true" ]]; then
         echo -e "\n${YELLOW}Running $name ($count tests)...${NC}"
 
         if "$PYTHON_BIN" -m pytest -q "$path" --tb=short; then
-            echo -e "${GREEN}✅ $name: PASS${NC}"
+            echo -e "${GREEN}PASS $name: PASS${NC}"
         else
-            echo -e "${RED}❌ $name: FAIL${NC}"
+            echo -e "${RED}FAIL $name: FAIL${NC}"
             PYTHON_PASSED=false
         fi
     done
@@ -86,9 +86,9 @@ if [[ "$RUN_E2E" == "true" ]]; then
     # Run E2E tests
     echo -e "\n${YELLOW}Running E2E tests (61 tests)...${NC}"
     if npm test; then
-        echo -e "${GREEN}✅ E2E Tests: PASS${NC}"
+        echo -e "${GREEN}PASS E2E Tests: PASS${NC}"
     else
-        echo -e "${RED}❌ E2E Tests: FAIL${NC}"
+        echo -e "${RED}FAIL E2E Tests: FAIL${NC}"
         E2E_PASSED=false
     fi
 fi
@@ -98,11 +98,11 @@ echo -e "\n${BOLD}Phase 2 Gate Summary${NC}"
 echo "===================="
 
 if [[ "$PYTHON_PASSED" == "true" ]] && [[ "$E2E_PASSED" == "true" ]]; then
-    echo -e "${GREEN}${BOLD}✅ ALL CHECKS PASSED${NC}"
+    echo -e "${GREEN}${BOLD}PASS ALL CHECKS PASSED${NC}"
     echo -e "\n${GREEN}Your changes are safe to push.${NC}"
     exit 0
 else
-    echo -e "${RED}${BOLD}❌ GATE FAILED${NC}"
+    echo -e "${RED}${BOLD}FAIL GATE FAILED${NC}"
     [[ "$PYTHON_PASSED" == "false" ]] && echo -e "${RED}  Python tests: FAIL${NC}"
     [[ "$E2E_PASSED" == "false" ]] && echo -e "${RED}  E2E tests: FAIL${NC}"
     echo -e "\n${RED}Please fix the failing checks before pushing.${NC}"
