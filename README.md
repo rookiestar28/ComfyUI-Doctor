@@ -11,6 +11,16 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 <details> <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Startup Compatibility + Validation Gate Hardening</strong></summary>
+
+- Hardened package-internal imports and prestartup bootstrap behavior so real ComfyUI custom-node loading no longer depends on the extension root being a top-level import root.
+- Made startup/backend console output ASCII-safe and removed non-UI emoji from backend/startup/test-script paths to avoid Windows charmap/code-page failures during import and early logging.
+- Added a host-like package/startup validation stage (`scripts/validate_host_load.py`) to the local acceptance gate so package-load and startup encoding regressions surface before backend pytest and E2E.
+- Validation gate status: detect-secrets + pre-commit + host-like package/startup validation + backend full pytest + frontend E2E passed.
+
+</details>
+
+<details>
 <summary><strong>Compatibility + Hardening Follow-up (Desktop Paths, UTC Timestamps, Event Compatibility)</strong></summary>
 
 - Verified Doctor data-path resolution against current ComfyUI Desktop `.venv` installs and modern `user/ComfyUI-Doctor` layouts, with path diagnostics exposed in `/doctor/health`.
@@ -44,7 +54,7 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 - Added targeted desktop failure-injection regression tests for corrupt state recovery, flush-failure non-crash paths, and history migration continuity.
 - Added non-ComfyUI isolation coverage for metadata contract validation and PromptComposer/harness payload compatibility.
 - Added an opt-in online API test lane scaffold (`RUN_ONLINE_API_TESTS=true`) to separate secret-scoped provider checks from default local runs.
-- Validation gate status: detect-secrets + pre-commit + backend full pytest + frontend E2E passed; online provider smoke tests remain opt-in/secret-scoped and skip safely when credentials are absent.
+- Validation gate status: detect-secrets + pre-commit + host-like package/startup validation + backend full pytest + frontend E2E passed; online provider smoke tests remain opt-in/secret-scoped and skip safely when credentials are absent.
 
 </details>
 
@@ -1448,23 +1458,37 @@ And more...
 
 ## Phase 2 Release Gate
 
-Before merging Phase 2 changes (pipeline, security, plugin hardening), all code must pass the **Phase 2 Release Gate**.
+For current validation workflow, use `tests/TEST_SOP.md` as the source of truth. The repo-local acceptance gate now includes a host-like package/startup validation stage in addition to the traditional Python and E2E suites.
 
-### Required Checks
+### Current Local Acceptance Gate
 
-- **Plugin security suite** (10 tests) - Allowlist, trust states, DoS limits
-- **Metadata contract suite** (1 test) - Schema validation
-- **Dependency policy suite** (2 tests) - Requires/provides enforcement
-- **Outbound payload safety suite** (4 tests) - Sanitization funnel
-- **E2E regression suite** (61 tests) - UI stability
+- `detect-secrets`
+- all `pre-commit` hooks
+- host-like package/startup validation (`python scripts/validate_host_load.py`)
+- backend full unit tests
+- frontend E2E
 
-### Run Locally
+### Preferred Local Commands
 
 ```bash
-# Full gate (Python + E2E)
+# Linux / WSL full gate
+bash scripts/run_full_tests_linux.sh
+```
+
+```powershell
+# Windows full gate
+powershell -File scripts/run_full_tests_windows.ps1
+```
+
+### Targeted Phase 2 Checks
+
+`python scripts/phase2_gate.py` remains available for targeted Phase 2 validation and fast Python-only checks, but it is no longer the primary source of truth for full acceptance.
+
+```bash
+# Full targeted Phase 2 gate
 python scripts/phase2_gate.py
 
-# Fast mode (Python only, < 2 minutes)
+# Fast mode (Python only)
 python scripts/phase2_gate.py --fast
 ```
 

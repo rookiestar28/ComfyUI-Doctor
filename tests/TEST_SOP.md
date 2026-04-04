@@ -223,6 +223,8 @@ pre-commit run --all-files --show-diff-on-failure
 python scripts/validate_host_load.py
 ```
 
+This stage exists because repo-root pytest imports can hide real ComfyUI custom-node package-load and prestartup encoding failures. Treat a failure here as a release-blocking regression in import/bootstrap behavior, not as an optional extra check.
+
 1) Backend unit tests (recommended; CI enforces)
 
 ```bash
@@ -509,6 +511,16 @@ PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files --show-diff-on-
 **Playwright fails (missing browsers)**
 
 - Install browsers: `npx playwright install chromium`
+
+**`npm test` fails before Playwright starts with a JS syntax error**
+
+- The shell is using the wrong Node runtime for `scripts/preflight-js.mjs`.
+- In WSL/non-interactive shells, run `source ~/.nvm/nvm.sh && nvm use 18`, confirm `node -v`, then rerun the E2E stage.
+
+**Host-like package/startup validation fails**
+
+- Run `python scripts/validate_host_load.py` directly to see which check failed.
+- Treat import-policy, package-load, or prestartup encoding failures as product regressions that must be fixed before backend tests or E2E.
 
 **E2E fails with “test harness failed to load”**
 

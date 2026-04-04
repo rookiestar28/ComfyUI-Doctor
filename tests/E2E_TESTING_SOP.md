@@ -12,6 +12,10 @@ This SOP describes the verified, repeatable steps to run Playwright E2E tests
 for ComfyUI-Doctor in local development. The E2E suite runs against the test
 harness and mocks (no live ComfyUI backend required).
 
+E2E is the final stage of the repo-local acceptance gate. Run the earlier
+stages from `tests/TEST_SOP.md` first (detect-secrets, pre-commit, host-like
+package/startup validation, and backend unit tests), then run Playwright.
+
 This SOP is split for two supported environments:
 
 - Windows 11 (native)
@@ -63,7 +67,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `87 passed, 8 skipped` (telemetry integration suite skipped by default).
+Expected result: `92 passed` (default local harness run, integration telemetry suite excluded).
 
 ### 3.2 WSL2 (bash)
 
@@ -80,7 +84,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `87 passed, 8 skipped` (telemetry integration suite skipped by default).
+Expected result: `92 passed` (default local harness run, integration telemetry suite excluded).
 
 ---
 
@@ -291,6 +295,20 @@ source ~/.nvm/nvm.sh
 nvm use 18
 node -v
 ```
+
+### `npm test` fails before Playwright starts
+
+If `npm test` stops inside `scripts/preflight-js.mjs` with a JavaScript syntax
+error, your shell is not using the required Node 18+ runtime yet. Load Node 18,
+confirm `node -v`, then rerun the E2E stage.
+
+```bash
+source ~/.nvm/nvm.sh
+nvm use 18
+node -v
+npm test
+```
+
 
 ### Port 3000 already in use
 
