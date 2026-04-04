@@ -2,18 +2,17 @@ import logging
 from typing import Optional, Dict, Any, List
 from ..base import PipelineStage
 from ..context import AnalysisContext
+
+# CRITICAL: keep these relative-first imports. Bare top-level imports here break
+# host-like custom-node package loading when the extension root is not on sys.path.
 try:
-    from services.workflow_pruner import WorkflowPruner
-    from services.context_extractor import (
+    from ...services.workflow_pruner import WorkflowPruner
+    from ...services.context_extractor import (
         extract_error_summary,
         collapse_stack_frames,
         build_context_manifest,
     )
 except ImportError:
-    # Use relative import for flexibility
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from services.workflow_pruner import WorkflowPruner
     from services.context_extractor import (
         extract_error_summary,
@@ -67,8 +66,12 @@ class LLMContextBuilderStage(PipelineStage):
             return context.execution_logs
         
         try:
-            from services.log_ring_buffer import get_ring_buffer
-            from sanitizer import sanitize_for_llm
+            try:
+                from ...services.log_ring_buffer import get_ring_buffer
+                from ...sanitizer import sanitize_for_llm
+            except ImportError:
+                from services.log_ring_buffer import get_ring_buffer
+                from sanitizer import sanitize_for_llm
             ring_buffer = get_ring_buffer()
             
             if ring_buffer.is_empty:
@@ -106,8 +109,11 @@ class LLMContextBuilderStage(PipelineStage):
             return {}
         
         try:
-            from system_info import get_system_environment, canonicalize_system_info
-            
+            try:
+                from ...system_info import get_system_environment, canonicalize_system_info
+            except ImportError:
+                from system_info import get_system_environment, canonicalize_system_info
+
             env_info = get_system_environment()
             privacy_mode = context.settings.get("privacy_mode", "basic")
             

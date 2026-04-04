@@ -85,6 +85,10 @@ Run-Checked "pre-commit all hooks gate" {
     & $VenvPython -m pre_commit run --all-files --show-diff-on-failure
 }
 
+Run-Checked "Host-like package/startup validation" {
+    & $VenvPython scripts/validate_host_load.py
+}
+
 $env:DOCTOR_STATE_DIR = Join-Path $RepoRoot "doctor_state\_local_unit"
 New-Item -ItemType Directory -Force $env:DOCTOR_STATE_DIR | Out-Null
 

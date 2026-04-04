@@ -4,23 +4,19 @@ from typing import List, Tuple, Optional, Any
 from ..base import PipelineStage
 from ..context import AnalysisContext
 from ..plugins import discover_plugins
+
+# CRITICAL: relative-first imports are required here; do not restore sys.path
+# mutation fallbacks or package-loaded hosts can miss these internal modules.
 try:
-    from config import CONFIG
+    from ...config import CONFIG
 except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from config import CONFIG
 
-# Import dependencies (wrappers usually)
 try:
-    from i18n import get_suggestion, ERROR_KEYS
-    from pattern_loader import get_pattern_loader
+    from ...i18n import get_suggestion, ERROR_KEYS
+    from ...pattern_loader import get_pattern_loader
     # analyzer import removed to avoid circular dependency
 except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from i18n import get_suggestion, ERROR_KEYS
     from pattern_loader import get_pattern_loader
 

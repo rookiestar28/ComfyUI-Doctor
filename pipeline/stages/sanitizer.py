@@ -1,13 +1,11 @@
 import logging
 from ..base import PipelineStage
 from ..context import AnalysisContext
+
+# CRITICAL: sanitizer import must stay relative-first for package-loaded hosts.
 try:
-    from sanitizer import PIISanitizer, SanitizationLevel, get_sanitizer
+    from ...sanitizer import PIISanitizer, SanitizationLevel, get_sanitizer
 except ImportError:
-    # Fallback for relative import if needed (mostly for tests)
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from sanitizer import PIISanitizer, SanitizationLevel, get_sanitizer
 
 logger = logging.getLogger(__name__)

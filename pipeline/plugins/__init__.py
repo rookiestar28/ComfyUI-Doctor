@@ -9,12 +9,11 @@ import os
 from pathlib import Path
 from typing import List, Callable, Any, Dict, Optional
 
+# CRITICAL: keep internal config import relative-first. A bare top-level import
+# here can fail when ComfyUI loads the extension as a package.
 try:
-    from config import CONFIG
+    from ...config import CONFIG
 except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
     from config import CONFIG
 
 logger = logging.getLogger(__name__)

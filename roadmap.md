@@ -945,7 +945,7 @@ graph TD
     - New regression tests fail on the pre-fix behavior and pass on the hardened behavior.
     - Pre-push guard fails fast on detached HEAD and logs the validated branch tip.
     - `tests/TEST_SOP.md` documents the branch-tip rerun rule and push-scope boundary.
-- [ ] **T17**: Package Load, Startup Encoding, and Test Harness Hardening - High
+- [x] **T17**: Package Load, Startup Encoding, and Test Harness Hardening - High *Completed (2026-04-04; stage-resume acceptance passed)*
   - **Goal**: Make the newly discovered custom-node package-load and prestartup encoding failures non-regressable, and ensure the repo test scripts reproduce this host-load failure class early.
   - **Scope**:
     - Add regression tests for package loading without assuming the extension root is a top-level import root.
@@ -958,7 +958,8 @@ graph TD
     - The acceptance gate detects reintroduction of the covered import/bootstrap patterns before release.
   - **Dependency**: Execute after `R25` and `R26`
   - **Execution Order**: 3 of 3
-  - **Plan**: `.planning/260404-R25R26T17_PACKAGE_IMPORT_AND_STARTUP_COMPATIBILITY_DEBUG_PLAN.md`
+  - **Plan**: `.planning/260404-T17_PACKAGE_LOAD_STARTUP_ENCODING_AND_TEST_HARNESS_HARDENING_PLAN.md`
+  - **Implementation Record**: `.planning/260404-T17_PACKAGE_LOAD_STARTUP_ENCODING_AND_TEST_HARNESS_HARDENING_IMPLEMENTATION_RECORD.md`
 - [x] **T13**: Desktop-style Failure Injection Tests (Flush/OSError + Corrupt JSON) - ???Medium *Completed (2026-02-17; TEST_SOP gate passed)*
   - **Sprint Plan**: `.planning/260216-R17T13T9T5_NEXT_SPRINT_VALIDATION_EXPANSION_PLAN.md`
   - **Implementation Record**: `.planning/260217-R17T13T9T5_REMEDIATION_RECORD.md`

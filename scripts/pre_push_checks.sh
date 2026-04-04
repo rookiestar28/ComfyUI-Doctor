@@ -66,6 +66,7 @@ fi
 
 log "Running mandatory full test gate before push"
 log "Branch tip under validation: $current_branch @ $current_head"
+log "Gate includes host-like package/startup validation before backend unit tests."
 if [[ "$is_windows_shell" -eq 1 ]]; then
   run_windows_full_tests
 else

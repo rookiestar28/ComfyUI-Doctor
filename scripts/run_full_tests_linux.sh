@@ -97,6 +97,9 @@ run_step "detect-secrets gate" \
 run_step "pre-commit all hooks gate" \
   "$venv_python" -m pre_commit run --all-files --show-diff-on-failure
 
+run_step "Host-like package/startup validation" \
+  "$venv_python" scripts/validate_host_load.py
+
 export DOCTOR_STATE_DIR="$repo_root/doctor_state/_local_unit"
 mkdir -p "$DOCTOR_STATE_DIR"
 
