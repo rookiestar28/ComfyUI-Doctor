@@ -11,6 +11,17 @@ A continuous, real-time runtime diagnostics suite for ComfyUI featuring **LLM-po
 <details> <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Frontend Extension API Modernization + Sidebar Lifecycle Cleanup</strong></summary>
+
+- Migrated Doctor frontend settings registration to the current ComfyUI frontend extension settings API using declarative `settings: [...]`, with a dedicated compatibility adapter for modern and legacy host behavior.
+- Centralized frontend coupling for runtime setting access, `rootGraph`-first graph lookup, and guarded legacy fallback so upstream API drift is isolated to one adapter instead of scattered across runtime modules.
+- Added explicit sidebar/tab cleanup on remount so repeated Doctor panel renders do not retain stale island mounts, tab managers, or listeners.
+- Updated frontend mocks and regression coverage so declarative settings registration is validated before extension setup logic runs.
+- Validation gate status: detect-secrets + pre-commit + host-like package/startup validation + backend full pytest + frontend E2E passed.
+
+</details>
+
+<details>
 <summary><strong>Startup Compatibility + Validation Gate Hardening</strong></summary>
 
 - Hardened package-internal imports and prestartup bootstrap behavior so real ComfyUI custom-node loading no longer depends on the extension root being a top-level import root.
@@ -257,19 +268,15 @@ ComfyUI-Doctor now includes a **Statistics Dashboard** that provides insights in
 
 **How to Use**:
 
-1. Open the Doctor sidebar panel (click the 🏥 icon on the left)
-2. Expand the "📊 Error Statistics" section
-3. View real-time error analytics and trends
-4. Mark errors as resolved/ignored to track your progress
+1. Open the Doctor panel from ComfyUI's left sidebar.
+2. Switch to the **Statistics** tab.
+3. Review trends, top patterns, and current resolution status.
+4. Use the action controls to mark the latest error as resolved, unresolved, or ignored.
 
 **Backend API**:
 
 - `GET /doctor/statistics?time_range_days=30` - Fetch statistics
 - `POST /doctor/mark_resolved` - Update resolution status
-
-**Test Coverage**: 17/17 backend tests ✅ | 14/18 E2E tests (78% pass rate)
-
-**Implementation Details**: See `.planning/260104-F4_STATISTICS_RECORD.md`
 
 </details>
 
@@ -375,18 +382,14 @@ All 57 error patterns are fully translated across all languages, ensuring consis
 
 ### F8: Sidebar Settings Integration
 
-Settings have been streamlined! Configure Doctor directly from the sidebar:
+Doctor's day-to-day configuration now lives in the sidebar **Settings** tab:
 
-- Click the ⚙️ icon in the sidebar header to access all settings
-- Language selection (9 languages)
-- AI Provider quick-switch (OpenAI, DeepSeek, Groq, Gemini, Ollama, etc.)
-- Base URL auto-fill when changing providers
-- API Key management (password-protected input)
-- Model name configuration
-- Settings persist across sessions with localStorage
-- Visual feedback on save (✅ Saved! / ❌ Error)
+- Open the **Settings** tab inside the Doctor sidebar
+- Configure language, AI provider, base URL, session-only API key, model selection/manual entry, privacy mode, and auto-open behavior
+- Use **Advanced Key Store (Server-side)** only when you intentionally need persisted server-side keys
+- Save changes directly from the sidebar without leaving the Doctor workflow
 
-ComfyUI Settings panel now only shows the Enable/Disable toggle - all other settings moved to the sidebar for a cleaner, more integrated experience.
+Doctor also registers compatibility values through ComfyUI's current frontend extension settings API so modern `ComfyUI_frontend` builds keep the same defaults and runtime behavior. The sidebar **Settings** tab remains the recommended UI for routine configuration.
 
 </details>
 
@@ -406,7 +409,7 @@ ComfyUI Settings panel now only shows the Enable/Disable toggle - all other sett
 - [Log Files](#log-files)
 - [Configuration](#configuration)
 - [Supported Error Patterns](#supported-error-patterns)
-- [Phase 2 Release Gate](#phase-2-release-gate)
+- [Validation Gate](#validation-gate)
 - [CSP Compatibility](#csp-compatibility)
 - [Contributing](#contributing)
 
@@ -579,7 +582,7 @@ ComfyUI-Doctor provides an interactive sidebar interface for real-time error mon
 
 ### Accessing the Doctor Panel
 
-Click the **🏥 Doctor** button in the ComfyUI menu (left sidebar) to open the Doctor panel. The panel slides in from the right side of the screen.
+Open the **Doctor** entry in ComfyUI's built-in left sidebar to access the Doctor panel and its tabs. Separate latest-diagnosis notifications still appear on the right side when new errors are detected.
 
 ### Interface Features
 
@@ -587,13 +590,15 @@ Click the **🏥 Doctor** button in the ComfyUI menu (left sidebar) to open the 
 <img src="assets/doctor-side-bar.png" alt="Error Report">
 </div>
 
-The Doctor interface consists of two panels:
+The Doctor interface consists of two coordinated surfaces:
 
 #### Left Sidebar Panel (Doctor Sidebar)
 
-Click the **🏥 Doctor** icon in ComfyUI's left menu to access:
+Use the **Doctor** entry in ComfyUI's left sidebar to access these tabs:
 
-- **Settings Panel** (⚙️ icon): Configure language, AI provider, API keys, and model selection
+- **Chat tab**: Interactive debugging chat, error context card, and follow-up input area
+- **Statistics tab**: Error analytics, diagnostics, Trust & Health, telemetry, and Quick Community Feedback
+- **Settings tab**: Language, provider, base URL, session-only API key, model selection, privacy mode, auto-open behavior, and the optional Advanced Key Store
 - **Error Context Card**: When an error occurs, displays:
   - **💡 Suggestion**: Concise, actionable advice (e.g., "Check input connections and ensure node requirements are met.")
   - **Timestamp**: When the error occurred
@@ -730,11 +735,11 @@ The **Statistics Dashboard** provides real-time insights into your ComfyUI error
 
 **How to Use**:
 
-1. Open the Doctor sidebar (click 🏥 icon on left)
-2. Find the **📊 Error Statistics** collapsible section
-3. Click to expand and view your error analytics
-4. Use **Mark as** buttons to set the latest error status (Resolved / Unresolved / Ignored)
-5. Scroll down to the bottom of the Statistics tab to find **Trust & Health** and **Anonymous Telemetry**
+1. Open the Doctor panel from ComfyUI's left sidebar.
+2. Switch to the **Statistics** tab.
+3. Review error analytics, top patterns, and resolution controls.
+4. Use **Mark as** buttons to set the latest error status (Resolved / Unresolved / Ignored).
+5. Scroll further down in the same tab to find **Diagnostics**, **Quick Community Feedback**, **Trust & Health**, and **Anonymous Telemetry**.
 
 **Diagnostics (F14)**:
 
@@ -824,48 +829,44 @@ The Statistics tab also includes a **Quick Community Feedback** panel for prepar
 
 ## Settings
 
-You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings** tab.
+The primary configuration surface is the **Doctor sidebar → Settings** tab.
 
-### 1. Show error notifications
+### Sidebar Settings Tab
 
-**Function**: Toggle floating error notification cards (toasts) in the top-right corner.
-**Usage**: Disable if you prefer to check errors manually in the sidebar without visual interruptions.
+The Settings tab currently exposes these day-to-day controls:
 
-### 2. Auto-open panel on error
+1. **Language**
+   - Sets the Doctor UI/suggestion language (9 languages supported).
+2. **AI Provider**
+   - Select OpenAI, Anthropic, DeepSeek, Groq, Gemini, xAI, OpenRouter, Ollama, LMStudio, or Custom.
+3. **Base URL**
+   - Auto-populated when the provider changes, but still editable for self-hosted/custom endpoints.
+4. **API Key**
+   - Session-only in the browser and cleared on reload. Leave empty for local LLMs.
+5. **Advanced Key Store (Server-side)**
+   - Optional persisted key management for trusted/admin-controlled environments.
+6. **Model Name**
+   - Choose from fetched provider models or switch to manual entry.
+7. **Privacy Mode**
+   - `none`, `basic`, or `strict` sanitization before outbound AI analysis.
+8. **Auto-open error report panel on new errors**
+   - Controls whether the right-side latest diagnosis panel opens automatically.
 
-**Function**: Automatically opens the **right-side error report panel** when a new error is detected.
-**Default**: **ON** (recommended).
-**Usage**: Disable if you prefer to keep the panel closed and open it manually.
+### ComfyUI Extension Settings Compatibility
 
-### 3. Error Check Interval (ms)
+Doctor also registers compatibility and default values through ComfyUI's current frontend extension settings API. That registration keeps Doctor aligned with modern `ComfyUI_frontend` behavior while the sidebar **Settings** tab remains the recommended UI for routine configuration.
 
-**Function**: Frequency of frontend-backend error checks (in milliseconds). Default: `2000`.
-**Usage**: Lower values (e.g., 500) give faster feedback but increase load; higher values (e.g., 5000) save resources.
+These extension-registered values cover:
 
-### 4. Suggestion Language
+- Doctor enable/disable state (restart required)
+- Error boundaries (restart required)
+- Poll interval and browser notification defaults
+- Language / privacy / auto-open defaults
+- LLM provider / base URL / model defaults
 
-**Function**: Language for diagnostic reports and Doctor suggestions.
-**Usage**: Supports 9 languages: English, Traditional Chinese, Simplified Chinese, Japanese, German, French, Italian, Spanish, and Korean. Changes apply to new errors and refreshed UI text.
+### AI API Key
 
-### 5. Enable Doctor (requires restart)
-
-**Function**: Master switch for the log interception system.
-**Usage**: Turn off to completely disable Doctor's core functionality (requires ComfyUI restart).
-
-### 6. AI Provider
-
-**Function**: Select your preferred LLM service provider from a dropdown menu.
-**Options**: OpenAI, DeepSeek, Groq Cloud, Google Gemini, xAI Grok, OpenRouter, Ollama (Local), LMStudio (Local), Custom.
-**Usage**: Selecting a provider automatically fills in the appropriate Base URL. For local providers (Ollama/LMStudio), an alert displays available models.
-
-### 7. AI Base URL
-
-**Function**: The API endpoint for your LLM service.
-**Usage**: Auto-populated when you select a provider, but can be customized for self-hosted or custom endpoints.
-
-### 8. AI API Key
-
-**Function**: Your API key for authentication with cloud LLM services.
+**Function**: Authenticate cloud LLM requests.
 **Usage**: Required for cloud providers (OpenAI, DeepSeek, etc.). Leave empty for local LLMs (Ollama, LMStudio).
 **Default Behavior**: Session-only in frontend (cleared on reload); not persisted in ComfyUI settings.
 **Runtime Resolution Priority**: Request key → provider-specific ENV → generic ENV → optional server-side key store.
@@ -875,9 +876,9 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 
 <img src="assets/key_store.png" alt="side bar - Advanced Key Store">
 
-1. Expand **🔐 Advanced Key Store (Server-side)** in Settings (collapsed by default).
+1. Expand **Advanced Key Store (Server-side)** in Settings (collapsed by default).
 2. Select provider, paste API key, and provide admin token if configured.
-3. Click **💾 Save to Server** to persist, or **🗑️ Delete** to remove.
+3. Click **Save to Server** to persist, or **Delete** to remove.
 4. Confirm provider status badge (`ENV`, `Server`, `None`) to verify effective source.
 
 **Optional Key Store Runtime Controls (ENV)**:
@@ -887,17 +888,17 @@ You can customize ComfyUI-Doctor behavior via the **Doctor sidebar → Settings*
 - `DOCTOR_SECRET_STORE_WARN_INSECURE`: Controls plaintext-mode warning logs.
 - `DOCTOR_SECRET_STORE_WINDOWS_ACL_HARDEN`: Enables/disables Windows ACL hardening attempts (`icacls`, best-effort).
 
-### 9. AI Model Name
+### AI Model Name
 
 **Function**: Specify which model to use for error analysis.
 **Usage**:
 
-- **Dropdown Mode** (default): Select a model from the automatically-populated dropdown list. Click the 🔄 refresh button to reload available models.
-- **Manual Input Mode**: Check "Enter model name manually" to type a custom model name (e.g., `gpt-4o`, `deepseek-chat`, `llama3.1:8b`).
-- Models are automatically fetched from your selected provider's API when you change providers or click refresh.
-- For local LLMs (Ollama/LMStudio), the dropdown displays all locally available models.
+- **Dropdown Mode** (default): Select a model from the automatically-populated dropdown list. Click the refresh button to reload available models.
+- **Manual Input Mode**: Check "Enter model name manually" to type a custom model name (for example `gpt-4o`, `deepseek-chat`, or `llama3.1:8b`).
+- Models are fetched from your selected provider when you change providers or refresh the list.
+- For local LLMs (Ollama/LMStudio), the dropdown displays locally available models.
 
-> Note: **Trust & Health** and **Anonymous Telemetry** have moved to the **Statistics** tab.
+> Note: **Trust & Health**, **Quick Community Feedback**, **Diagnostics**, and **Anonymous Telemetry** live in the **Statistics** tab, not the Settings tab.
 
 ---
 
@@ -1456,7 +1457,7 @@ And more...
 
 ---
 
-## Phase 2 Release Gate
+## Validation Gate
 
 For current validation workflow, use `tests/TEST_SOP.md` as the source of truth. The repo-local acceptance gate now includes a host-like package/startup validation stage in addition to the traditional Python and E2E suites.
 
@@ -1480,9 +1481,9 @@ bash scripts/run_full_tests_linux.sh
 powershell -File scripts/run_full_tests_windows.ps1
 ```
 
-### Targeted Phase 2 Checks
+### Legacy Phase 2 Helper (Targeted)
 
-`python scripts/phase2_gate.py` remains available for targeted Phase 2 validation and fast Python-only checks, but it is no longer the primary source of truth for full acceptance.
+`python scripts/phase2_gate.py` remains available for targeted legacy Phase 2 validation and fast Python-only checks, but it is no longer the primary source of truth for full acceptance.
 
 ```bash
 # Full targeted Phase 2 gate
@@ -1528,7 +1529,7 @@ ComfyUI-Doctor is **Content Security Policy (CSP) compliant** by design:
 
 1. **Pair with ComfyUI Manager**: Install missing custom nodes automatically
 2. **Check log files**: Full tracebacks are recorded for issue reporting
-3. **Use the built-in sidebar**: Click the 🏥 Doctor icon in the left menu for real-time diagnostics
+3. **Use the built-in sidebar**: Open the Doctor entry in the left sidebar for real-time diagnostics
 4. **Node Debugging**: Connect Debug nodes to inspect suspicious data flow
 
 ---
