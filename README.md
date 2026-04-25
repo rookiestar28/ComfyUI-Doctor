@@ -870,7 +870,7 @@ These extension-registered values cover:
 **Usage**: Required for cloud providers (OpenAI, DeepSeek, etc.). Leave empty for local LLMs (Ollama, LMStudio).
 **Default Behavior**: Session-only in frontend (cleared on reload); not persisted in ComfyUI settings.
 **Runtime Resolution Priority**: Request key → provider-specific ENV → generic ENV → optional server-side key store.
-**Security Warning**: The server-side key store supports optional encryption-at-rest. Use `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` to enable encryption and `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED=1` to fail closed when key material is missing. For production or multi-user environments, ENV-based keys are still recommended.
+**Security Warning**: The server-side key store supports optional encryption-at-rest. Use `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` to enable encryption and `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED=1` to fail closed when key material is missing. The current zero-dependency format derives encryption/MAC keys with PBKDF2-HMAC-SHA256, encrypts with an HMAC-SHA256-derived XOR stream, and authenticates `nonce + ciphertext` with HMAC-SHA256 before decrypting. For production or multi-user environments, ENV-based keys are still recommended.
 
 **Advanced Key Store Setup (optional)**:
 

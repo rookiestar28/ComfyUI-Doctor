@@ -6,6 +6,8 @@ Design:
 - Atomic write (tmp -> replace) to reduce corruption risk
 - Best-effort permission hardening on POSIX/Windows
 - Optional encryption-at-rest via env key (transparent load/save)
+- Encrypted payloads use PBKDF2-HMAC-SHA256 key derivation, HMAC-SHA256
+  stream XOR encryption, and encrypt-then-MAC over nonce + ciphertext
 - Never returns all raw values in status APIs
 """
 
@@ -48,6 +50,10 @@ class SecretStore:
     FORMAT_VERSION = 1
     FORMAT_TYPE = "comfyui-doctor-secret-store"
     ENC_KDF = "pbkdf2_hmac_sha256"
+    ENC_CIPHER = "hmac_sha256_xor_stream"
+    ENC_MAC = "hmac_sha256"
+    ENC_MAC_INPUT = "nonce+ciphertext"
+    ENC_CONSTRUCTION = "encrypt_then_mac"
     ENC_ITERATIONS = 200_000
     ENC_SALT_BYTES = 16
     ENC_NONCE_BYTES = 16
@@ -152,6 +158,7 @@ class SecretStore:
         nonce = secrets.token_bytes(self.ENC_NONCE_BYTES)
         enc_key, mac_key = self._derive_keys(salt)
         ciphertext = self._xor_stream_crypt(plain, enc_key, nonce)
+        # CRITICAL: encrypt first, then MAC nonce + ciphertext before writing.
         mac = hmac.new(mac_key, nonce + ciphertext, hashlib.sha256).digest()
         return {
             "_meta": {
@@ -159,7 +166,13 @@ class SecretStore:
                 "version": self.FORMAT_VERSION,
                 "encrypted": True,
                 "kdf": self.ENC_KDF,
+                "cipher": self.ENC_CIPHER,
+                "mac": self.ENC_MAC,
+                "mac_input": self.ENC_MAC_INPUT,
+                "construction": self.ENC_CONSTRUCTION,
                 "iterations": self.ENC_ITERATIONS,
+                "salt_bytes": self.ENC_SALT_BYTES,
+                "nonce_bytes": self.ENC_NONCE_BYTES,
             },
             "salt_b64": base64.b64encode(salt).decode("ascii"),
             "nonce_b64": base64.b64encode(nonce).decode("ascii"),

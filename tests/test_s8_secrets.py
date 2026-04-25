@@ -104,6 +104,24 @@ class TestSecretStore:
             assert "sk-sensitive-value" not in raw
             payload = json.loads(raw)
             assert payload.get("_meta", {}).get("encrypted") is True
+            assert payload.get("_meta", {}).get("kdf") == "pbkdf2_hmac_sha256"
+            assert payload.get("_meta", {}).get("cipher") == "hmac_sha256_xor_stream"
+            assert payload.get("_meta", {}).get("mac") == "hmac_sha256"
+            assert payload.get("_meta", {}).get("mac_input") == "nonce+ciphertext"
+            assert payload.get("_meta", {}).get("construction") == "encrypt_then_mac"
+            assert store.get_secret("openai") == "sk-sensitive-value"
+
+    def test_encrypted_payload_with_legacy_metadata_remains_readable(self, tmp_path):
+        with patch.dict(os.environ, {"DOCTOR_SECRET_STORE_ENCRYPTION_KEY": "unit-test-secret-store-key"}, clear=False):  # pragma: allowlist secret
+            store = self._make_store(tmp_path)
+            store.set_secret("openai", "sk-sensitive-value")  # pragma: allowlist secret
+            fp = Path(store.filepath)
+            payload = json.loads(fp.read_text(encoding="utf-8"))
+            meta = payload.get("_meta", {})
+            for key in ("cipher", "mac", "mac_input", "construction", "salt_bytes", "nonce_bytes"):
+                meta.pop(key, None)
+            fp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
             assert store.get_secret("openai") == "sk-sensitive-value"
 
     def test_encryption_required_without_key_blocks_write(self, tmp_path):
