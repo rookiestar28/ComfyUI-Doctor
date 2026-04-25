@@ -151,6 +151,14 @@ export function createMockComfyUIApp() {
       draw() {},
     },
     extensionManager: {
+      setting: {
+        get(id) {
+          return app.ui.settings.getSettingValue(id);
+        },
+        set(id, value) {
+          app.ui.settings.setSettingValue(id, value);
+        },
+      },
       registerSidebarTab(config) {
         console.log('[Mock] Registering sidebar tab via extensionManager:', config.id);
         mockSidebarTabs.push(config);

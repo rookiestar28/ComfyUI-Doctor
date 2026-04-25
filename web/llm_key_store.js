@@ -1,4 +1,5 @@
 import { app } from "../../../scripts/app.js";
+import { getDoctorSetting, setDoctorSetting } from "./comfyui_frontend_compat.js";
 
 let runtimeApiKey = "";
 let legacyMigrated = false;
@@ -17,17 +18,14 @@ export function isLegacyApiKeyMigrated() {
 
 export function migrateLegacyApiKeyFromSettings() {
     try {
-        const settings = app?.ui?.settings;
-        if (!settings) return false;
-
-        const legacy = settings.getSettingValue("Doctor.LLM.ApiKey", "");
+        const legacy = getDoctorSetting("Doctor.LLM.ApiKey", "", app);
         if (!legacy || !String(legacy).trim()) {
             return false;
         }
 
         // One-time import to runtime memory, then wipe persisted frontend key.
         runtimeApiKey = String(legacy).trim();
-        settings.setSettingValue("Doctor.LLM.ApiKey", "");
+        setDoctorSetting("Doctor.LLM.ApiKey", "", app);
         legacyMigrated = true;
         console.warn("[ComfyUI-Doctor] Migrated legacy persisted API key to session memory and cleared stored value.");
         return true;
@@ -36,4 +34,3 @@ export function migrateLegacyApiKeyFromSettings() {
         return false;
     }
 }
-

@@ -14,7 +14,7 @@ import { createErrorBoundaryAsync } from './ErrorBoundary.js';
 // T14: Utils
 import { formatPatternName, calculateCategoryBreakdown, getCategoryColor } from './utils/stats_logic.js';
 import { t } from './utils/i18n_fallback.js';
-import { getComfyRootGraph, isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
+import { getComfyRootGraph, getDoctorSetting, isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
 import { getDominantIntents, hasNoMatchedIntent } from './utils/intent_logic.js';
 
 let preactModules = null;
@@ -555,9 +555,9 @@ function DiagnosticsSection({ uiText, onDiagnosticsRun }) {
             // P1.5 Fix: Inject doctor metadata for privacy checks
             if (!workflow.extra) workflow.extra = {};
             workflow.extra.doctor_metadata = {
-                privacy_mode: window.app?.ui?.settings?.getSettingValue?.("Doctor.Privacy.Mode", "basic"),
-                base_url: window.app?.ui?.settings?.getSettingValue?.("Doctor.LLM.BaseUrl", ""),
-                llm_model: window.app?.ui?.settings?.getSettingValue?.("Doctor.LLM.Model", ""),
+                privacy_mode: getDoctorSetting("Doctor.Privacy.Mode", "basic", window.app),
+                base_url: getDoctorSetting("Doctor.LLM.BaseUrl", "", window.app),
+                llm_model: getDoctorSetting("Doctor.LLM.Model", "", window.app),
                 timestamp: Date.now()
             };
 

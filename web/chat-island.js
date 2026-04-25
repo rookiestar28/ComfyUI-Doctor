@@ -5,6 +5,7 @@
  */
 
 import { app } from "../../../scripts/app.js";
+import { getDoctorSetting } from "./comfyui_frontend_compat.js";
 import { loadPreact, isPreactEnabled } from './preact-loader.js';
 import { DoctorAPI } from './doctor_api.js';
 import { FixHandler } from './doctor_fix_handler.js';
@@ -313,7 +314,7 @@ function ChatIsland({ uiText }) {
 
         // 5C.2: Refresh settings via selector
         refreshSettings();
-        const privacyMode = app?.ui?.settings?.getSettingValue?.("Doctor.Privacy.Mode", "basic") || "basic";
+        const privacyMode = getDoctorSetting("Doctor.Privacy.Mode", "basic", app) || "basic";
 
         // 1. Add User Message via selector
         addMessage('user', text);
