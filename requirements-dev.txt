@@ -11,6 +11,10 @@ mypy>=1.13.0
 pytest>=8.0.0
 pytest-cov>=6.0.0
 pytest-asyncio>=0.24.0
+aiohttp>=3.9.0
+anyio>=4.0.0
+numpy>=1.24.0
+pillow>=10.0.0
 
 # Optional: for better test output
 pytest-xdist>=3.6.0  # Parallel test execution
