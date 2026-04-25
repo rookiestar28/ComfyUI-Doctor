@@ -17,8 +17,30 @@ def get_admin_token() -> str:
     return os.getenv("DOCTOR_ADMIN_TOKEN", "").strip()
 
 
+def is_admin_token_required() -> bool:
+    return _is_truthy(os.getenv("DOCTOR_REQUIRE_ADMIN_TOKEN", "0"))
+
+
 def is_remote_admin_allowed() -> bool:
     return _is_truthy(os.getenv("DOCTOR_ALLOW_REMOTE_ADMIN", "0"))
+
+
+def get_admin_guard_startup_warning() -> str:
+    configured_token = get_admin_token()
+    if configured_token:
+        return ""
+
+    if is_admin_token_required():
+        return (
+            "DOCTOR_REQUIRE_ADMIN_TOKEN=1 is set but DOCTOR_ADMIN_TOKEN is not configured; "
+            "admin-gated endpoints will fail closed."
+        )
+
+    return (
+        "DOCTOR_ADMIN_TOKEN is not configured; loopback convenience mode is active. "
+        "Any local process can call admin-gated loopback endpoints. "
+        "Set DOCTOR_REQUIRE_ADMIN_TOKEN=1 with DOCTOR_ADMIN_TOKEN for shared servers."
+    )
 
 
 def is_loopback_request(request: Any) -> bool:
@@ -75,7 +97,11 @@ def validate_admin_request(request: Any, payload: Optional[Dict[str, Any]] = Non
             return True, "ok", "authorized"
         return False, "unauthorized", "Invalid or missing admin token"
 
-    # Convenience mode: no token configured.
+    if is_admin_token_required():
+        # CRITICAL: fail closed for shared-server deployments that opt out of loopback convenience mode.
+        return False, "unauthorized", "Admin token required; configure DOCTOR_ADMIN_TOKEN"
+
+    # Convenience mode: no token configured. Any local process can call loopback endpoints.
     if is_loopback_request(request):
         return True, "ok", "authorized (loopback convenience mode)"
 

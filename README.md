@@ -910,6 +910,13 @@ Denied writes follow unified semantics:
 - `401`: Invalid/missing admin token when token auth is required.
 - `403`: Remote admin denied by policy (for example, non-loopback request without explicit remote admin allowance).
 
+Admin guard modes:
+
+- Default desktop mode: if `DOCTOR_ADMIN_TOKEN` is not configured, loopback requests are allowed for local convenience. Any local process on the same machine can call admin-gated loopback endpoints in this mode.
+- Token mode: set `DOCTOR_ADMIN_TOKEN` to require that token via `X-Doctor-Admin-Token`, `X-Admin-Token`, `Authorization: Bearer ...`, or request body `admin_token`.
+- Shared-server strict mode: set `DOCTOR_REQUIRE_ADMIN_TOKEN=1` together with `DOCTOR_ADMIN_TOKEN`. If strict mode is enabled without a token, admin-gated endpoints fail closed.
+- Remote opt-in without token remains available only when `DOCTOR_ALLOW_REMOTE_ADMIN=1` and strict mode is not enabled.
+
 ### GET `/debugger/last_analysis`
 
 Retrieve the most recent error analysis:

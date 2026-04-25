@@ -63,7 +63,7 @@ from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
 from .services.doctor_paths import get_doctor_data_dir, get_path_diagnostics
 from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
-from .services.admin_guard import validate_admin_request
+from .services.admin_guard import get_admin_guard_startup_warning, validate_admin_request
 from .services.audit import ActionAudit
 from .services.community_feedback import build_feedback_preview, submit_feedback, GitHubFeedbackConfig, FeedbackValidationError
 
@@ -252,6 +252,11 @@ def setup_api_logger():
 # Initialize logger
 logger = setup_api_logger()
 _startup_print(f"[ComfyUI-Doctor] API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
+
+admin_guard_warning = get_admin_guard_startup_warning()
+if admin_guard_warning:
+    logger.warning(admin_guard_warning)
+    _startup_print(f"[ComfyUI-Doctor] WARNING: {admin_guard_warning}")
 
 
 # --- 5. Log System Information (Hardware Snapshot) ---
