@@ -104,6 +104,24 @@ class TestSecretStore:
             assert "sk-sensitive-value" not in raw
             payload = json.loads(raw)
             assert payload.get("_meta", {}).get("encrypted") is True
+            assert payload.get("_meta", {}).get("kdf") == "pbkdf2_hmac_sha256"
+            assert payload.get("_meta", {}).get("cipher") == "hmac_sha256_xor_stream"
+            assert payload.get("_meta", {}).get("mac") == "hmac_sha256"
+            assert payload.get("_meta", {}).get("mac_input") == "nonce+ciphertext"
+            assert payload.get("_meta", {}).get("construction") == "encrypt_then_mac"
+            assert store.get_secret("openai") == "sk-sensitive-value"
+
+    def test_encrypted_payload_with_legacy_metadata_remains_readable(self, tmp_path):
+        with patch.dict(os.environ, {"DOCTOR_SECRET_STORE_ENCRYPTION_KEY": "unit-test-secret-store-key"}, clear=False):  # pragma: allowlist secret
+            store = self._make_store(tmp_path)
+            store.set_secret("openai", "sk-sensitive-value")  # pragma: allowlist secret
+            fp = Path(store.filepath)
+            payload = json.loads(fp.read_text(encoding="utf-8"))
+            meta = payload.get("_meta", {})
+            for key in ("cipher", "mac", "mac_input", "construction", "salt_bytes", "nonce_bytes"):
+                meta.pop(key, None)
+            fp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
             assert store.get_secret("openai") == "sk-sensitive-value"
 
     def test_encryption_required_without_key_blocks_write(self, tmp_path):
@@ -263,7 +281,7 @@ class TestGetProviderStatus:
 # ---------------------------------------------------------------------------
 # admin_guard
 # ---------------------------------------------------------------------------
-from services.admin_guard import validate_admin_request, is_loopback_request
+from services.admin_guard import get_admin_guard_startup_warning, is_loopback_request, validate_admin_request
 
 
 class TestAdminGuard:
@@ -276,15 +294,26 @@ class TestAdminGuard:
     def test_loopback_allowed_without_token(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
+            os.environ.pop("DOCTOR_REQUIRE_ADMIN_TOKEN", None)
             req = self._mock_request(remote="127.0.0.1")
             allowed, code, msg = validate_admin_request(req)
             assert allowed is True
             assert code == "ok"
 
+    def test_loopback_denied_when_token_required_without_configured_token(self):
+        with patch.dict(os.environ, {"DOCTOR_REQUIRE_ADMIN_TOKEN": "1"}, clear=False):
+            os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
+            req = self._mock_request(remote="127.0.0.1")
+            allowed, code, msg = validate_admin_request(req)
+            assert allowed is False
+            assert code == "unauthorized"
+            assert "DOCTOR_ADMIN_TOKEN" in msg
+
     def test_remote_denied_by_default(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
             os.environ.pop("DOCTOR_ALLOW_REMOTE_ADMIN", None)
+            os.environ.pop("DOCTOR_REQUIRE_ADMIN_TOKEN", None)
             req = self._mock_request(remote="192.168.1.100")
             allowed, code, msg = validate_admin_request(req)
             assert allowed is False
@@ -312,9 +341,41 @@ class TestAdminGuard:
     def test_remote_allowed_with_opt_in(self):
         with patch.dict(os.environ, {"DOCTOR_ALLOW_REMOTE_ADMIN": "1"}, clear=False):
             os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
+            os.environ.pop("DOCTOR_REQUIRE_ADMIN_TOKEN", None)
             req = self._mock_request(remote="10.0.0.5")
             allowed, code, msg = validate_admin_request(req)
             assert allowed is True
+
+    def test_remote_opt_in_denied_when_token_required_without_configured_token(self):
+        with patch.dict(
+            os.environ,
+            {"DOCTOR_ALLOW_REMOTE_ADMIN": "1", "DOCTOR_REQUIRE_ADMIN_TOKEN": "1"},
+            clear=False,
+        ):
+            os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
+            req = self._mock_request(remote="10.0.0.5")
+            allowed, code, msg = validate_admin_request(req)
+            assert allowed is False
+            assert code == "unauthorized"
+
+    def test_startup_warning_describes_loopback_convenience_mode(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
+            os.environ.pop("DOCTOR_REQUIRE_ADMIN_TOKEN", None)
+            warning = get_admin_guard_startup_warning()
+            assert "loopback convenience mode is active" in warning
+            assert "Any local process" in warning
+
+    def test_startup_warning_describes_fail_closed_missing_token(self):
+        with patch.dict(os.environ, {"DOCTOR_REQUIRE_ADMIN_TOKEN": "1"}, clear=False):
+            os.environ.pop("DOCTOR_ADMIN_TOKEN", None)
+            warning = get_admin_guard_startup_warning()
+            assert "fail closed" in warning
+            assert "DOCTOR_ADMIN_TOKEN is not configured" in warning
+
+    def test_startup_warning_empty_when_token_configured(self):
+        with patch.dict(os.environ, {"DOCTOR_ADMIN_TOKEN": "configured"}, clear=False):
+            assert get_admin_guard_startup_warning() == ""
 
     def test_payload_admin_token(self):
         with patch.dict(os.environ, {"DOCTOR_ADMIN_TOKEN": "body-tok"}, clear=False):

@@ -123,16 +123,30 @@ const DOCTOR_SETTING_DEFAULT_MAP = new Map(
     DOCTOR_EXTENSION_SETTINGS.map((setting) => [setting.id, setting.defaultValue])
 );
 
-function getSettingsApi(appInstance = app) {
+function getModernSettingsApi(appInstance = app) {
+    return appInstance?.extensionManager?.setting || null;
+}
+
+function getLegacySettingsApi(appInstance = app) {
     return appInstance?.ui?.settings || null;
 }
 
 export function getDoctorSetting(id, fallback, appInstance = app) {
-    const settings = getSettingsApi(appInstance);
+    const modernSettings = getModernSettingsApi(appInstance);
+    const legacySettings = getLegacySettingsApi(appInstance);
     const resolvedFallback = fallback ?? DOCTOR_SETTING_DEFAULT_MAP.get(id);
 
-    if (settings?.getSettingValue) {
-        const value = settings.getSettingValue(id, resolvedFallback);
+    if (modernSettings?.get) {
+        try {
+            const value = modernSettings.get(id);
+            return value === undefined ? resolvedFallback : value;
+        } catch (error) {
+            console.warn(`[ComfyUI-Doctor] Modern settings get failed for ${id}; falling back`, error);
+        }
+    }
+
+    if (legacySettings?.getSettingValue) {
+        const value = legacySettings.getSettingValue(id, resolvedFallback);
         return value === undefined ? resolvedFallback : value;
     }
 
@@ -140,9 +154,25 @@ export function getDoctorSetting(id, fallback, appInstance = app) {
 }
 
 export function setDoctorSetting(id, value, appInstance = app) {
-    const settings = getSettingsApi(appInstance);
-    if (settings?.setSettingValue) {
-        settings.setSettingValue(id, value);
+    const modernSettings = getModernSettingsApi(appInstance);
+    const legacySettings = getLegacySettingsApi(appInstance);
+
+    if (modernSettings?.set) {
+        try {
+            const result = modernSettings.set(id, value);
+            if (result && typeof result.catch === "function") {
+                result.catch((error) => {
+                    console.warn(`[ComfyUI-Doctor] Modern settings set failed for ${id}`, error);
+                });
+            }
+            return value;
+        } catch (error) {
+            console.warn(`[ComfyUI-Doctor] Modern settings set failed for ${id}; falling back`, error);
+        }
+    }
+
+    if (legacySettings?.setSettingValue) {
+        legacySettings.setSettingValue(id, value);
     }
     return value;
 }
@@ -175,7 +205,7 @@ export function isDoctorEnabled(appInstance = app) {
 
 
 export function ensureDoctorSettingsRegistered(appInstance = app) {
-    const settings = getSettingsApi(appInstance);
+    const settings = getLegacySettingsApi(appInstance);
     if (!settings?.addSetting) return;
 
     let settingsLookup = null;

@@ -347,6 +347,54 @@ test.describe('Doctor Chat Interface', () => {
     expect(capturedData.execution_context.current_inputs).toEqual({ "seed": [12345] });
   });
 
+  test('should enrich bare execution_error lineage from prior progress_state event', async ({ page }) => {
+    await page.evaluate(() => {
+      window.api._triggerEvent("progress_state", {
+        detail: {
+          prompt_id: "prompt-r31",
+          nodes: {
+            "63": {
+              node_id: "63",
+              prompt_id: "prompt-r31",
+              display_node_id: "65:70:63",
+              parent_node_id: "65:70",
+              real_node_id: "63",
+              value: 0,
+              max: 1,
+              state: "running"
+            }
+          }
+        }
+      });
+
+      window.api._triggerEvent("execution_error", {
+        detail: {
+          prompt_id: "prompt-r31",
+          node_id: "63",
+          node_type: "KSampler",
+          executed: [],
+          exception_message: "subgraph failed",
+          exception_type: "RuntimeError",
+          traceback: ["Traceback line"],
+          current_inputs: {},
+          current_outputs: {}
+        }
+      });
+    });
+
+    await page.waitForTimeout(300);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    const nodeContext = capturedData.node_context;
+
+    expect(nodeContext.node_id).toBe("63");
+    expect(nodeContext.display_node).toBe("65:70:63");
+    expect(nodeContext.parent_node).toBe("65:70");
+    expect(nodeContext.real_node_id).toBe("63");
+    expect(nodeContext.preferred_node_id).toBe("65:70:63");
+    expect(nodeContext.subgraph_lineage).toEqual(["65:70", "65:70:63", "63"]);
+  });
+
   test('should have Doctor title in header', async ({ page }) => {
     // Check for Doctor title icon in the sidebar header
     const header = page.locator('#mock-sidebar-tabs');

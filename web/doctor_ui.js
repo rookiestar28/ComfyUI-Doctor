@@ -71,6 +71,9 @@ export class DoctorUI {
         this.lastErrorTimestamp = 0;
         this.ERROR_DEBOUNCE_MS = 1000;  // Ignore duplicate errors within 1 second
         this.nodeContextBySignature = new Map();
+        this.executionLineageByKey = new Map();
+        this.EXECUTION_LINEAGE_TTL_MS = 5 * 60 * 1000;
+        this.MAX_EXECUTION_LINEAGE_ENTRIES = 200;
 
         // ═══════════════════════════════════════════════════════════════
         // CRITICAL: UI Text Loading Order
@@ -261,10 +264,35 @@ export class DoctorUI {
             return;
         }
 
+        this.api.addEventListener("executing", (event) => {
+            this.rememberExecutionLineage(this.extractEventDetail(event));
+        });
+        this.api.addEventListener("executed", (event) => {
+            this.rememberExecutionLineage(this.extractEventDetail(event));
+        });
+        this.api.addEventListener("progress_state", (event) => {
+            this.rememberProgressStateLineage(this.extractEventDetail(event));
+        });
+        this.api.addEventListener("execution_start", (event) => {
+            const detail = this.extractEventDetail(event);
+            this.clearExecutionLineage(detail?.prompt_id);
+        });
+        this.api.addEventListener("execution_success", (event) => {
+            const detail = this.extractEventDetail(event);
+            this.clearExecutionLineage(detail?.prompt_id);
+        });
+        this.api.addEventListener("execution_interrupted", (event) => {
+            const detail = this.extractEventDetail(event);
+            this.clearExecutionLineage(detail?.prompt_id);
+        });
+        this.api.addEventListener("reconnected", () => {
+            this.clearExecutionLineage();
+        });
+
         this.api.addEventListener("execution_error", (event) => {
             console.log("[ComfyUI-Doctor] 🔴 Execution error received via WebSocket");
 
-            const detail = event?.detail || event || {};
+            const detail = this.extractEventDetail(event);
             const {
                 node_id,
                 node_type,
@@ -276,7 +304,11 @@ export class DoctorUI {
                 current_inputs,
                 current_outputs,
             } = detail;
-            const preferredNodeId = display_node || node_id || real_node_id;
+            const cachedLineage = this.lookupExecutionLineage(detail);
+            const enrichedDisplayNode = display_node || cachedLineage?.display_node || null;
+            const enrichedParentNode = parent_node || cachedLineage?.parent_node || null;
+            const enrichedRealNodeId = real_node_id || cachedLineage?.real_node_id || null;
+            const preferredNodeId = enrichedDisplayNode || node_id || enrichedRealNodeId;
             const tracebackText = this.formatExecutionTraceback(detail);
 
             // Create error hash for deduplication
@@ -292,7 +324,7 @@ export class DoctorUI {
             this.lastErrorHash = errorHash;
             this.lastErrorTimestamp = now;
 
-            const subgraphLineage = [parent_node, display_node, real_node_id, node_id]
+            const subgraphLineage = [enrichedParentNode, enrichedDisplayNode, enrichedRealNodeId, node_id]
                 .filter(value => value !== null && value !== undefined && value !== '')
                 .map(value => String(value))
                 .filter((value, index, self) => self.indexOf(value) === index);
@@ -313,9 +345,9 @@ export class DoctorUI {
                     node_name: node_type || null,  // node_type is the class name
                     node_class: node_type || null,
                     custom_node_path: null,
-                    display_node: display_node ? String(display_node) : null,
-                    parent_node: parent_node ? String(parent_node) : null,
-                    real_node_id: real_node_id ? String(real_node_id) : null,
+                    display_node: enrichedDisplayNode ? String(enrichedDisplayNode) : null,
+                    parent_node: enrichedParentNode ? String(enrichedParentNode) : null,
+                    real_node_id: enrichedRealNodeId ? String(enrichedRealNodeId) : null,
                     preferred_node_id: preferredNodeId ? String(preferredNodeId) : null,
                     subgraph_lineage: subgraphLineage,
                 },
@@ -326,6 +358,105 @@ export class DoctorUI {
         });
 
         console.log("[ComfyUI-Doctor] 📡 Subscribed to execution_error events");
+    }
+
+    extractEventDetail(event) {
+        return event?.detail || event || {};
+    }
+
+    lineageCacheKey(promptId, nodeId) {
+        if (nodeId === null || nodeId === undefined || nodeId === '') return null;
+        return `${promptId || '*'}:${String(nodeId)}`;
+    }
+
+    rememberExecutionLineage(detail) {
+        if (!detail || typeof detail !== 'object') return;
+        const lineage = {
+            prompt_id: detail.prompt_id || null,
+            node_id: detail.node_id || detail.node || null,
+            display_node: detail.display_node || detail.display_node_id || null,
+            parent_node: detail.parent_node || detail.parent_node_id || null,
+            real_node_id: detail.real_node_id || detail.real_node || null,
+            timestamp: Date.now(),
+        };
+
+        if (!lineage.node_id && !lineage.display_node && !lineage.real_node_id) return;
+        this.storeExecutionLineage(lineage);
+    }
+
+    rememberProgressStateLineage(detail) {
+        const nodes = detail?.nodes;
+        if (!nodes || typeof nodes !== 'object') return;
+
+        Object.entries(nodes).forEach(([fallbackNodeId, state]) => {
+            if (!state || typeof state !== 'object') return;
+            this.storeExecutionLineage({
+                prompt_id: state.prompt_id || detail.prompt_id || null,
+                node_id: state.node_id || fallbackNodeId,
+                display_node: state.display_node_id || state.display_node || null,
+                parent_node: state.parent_node_id || state.parent_node || null,
+                real_node_id: state.real_node_id || state.real_node || null,
+                timestamp: Date.now(),
+            });
+        });
+    }
+
+    storeExecutionLineage(lineage) {
+        this.compactExecutionLineage();
+        const ids = [lineage.node_id, lineage.display_node, lineage.real_node_id]
+            .filter(value => value !== null && value !== undefined && value !== '')
+            .map(value => String(value));
+
+        ids.forEach((id) => {
+            const promptKey = this.lineageCacheKey(lineage.prompt_id, id);
+            const globalKey = this.lineageCacheKey(null, id);
+            if (promptKey) this.executionLineageByKey.set(promptKey, lineage);
+            if (globalKey) this.executionLineageByKey.set(globalKey, lineage);
+        });
+    }
+
+    lookupExecutionLineage(detail) {
+        this.compactExecutionLineage();
+        const promptId = detail?.prompt_id || null;
+        const ids = [detail?.node_id, detail?.display_node, detail?.real_node_id]
+            .filter(value => value !== null && value !== undefined && value !== '')
+            .map(value => String(value));
+
+        for (const id of ids) {
+            const promptKey = this.lineageCacheKey(promptId, id);
+            const globalKey = this.lineageCacheKey(null, id);
+            const match = this.executionLineageByKey.get(promptKey) || this.executionLineageByKey.get(globalKey);
+            if (match) return match;
+        }
+        return null;
+    }
+
+    compactExecutionLineage() {
+        const now = Date.now();
+        for (const [key, lineage] of this.executionLineageByKey.entries()) {
+            if (!lineage?.timestamp || (now - lineage.timestamp) > this.EXECUTION_LINEAGE_TTL_MS) {
+                this.executionLineageByKey.delete(key);
+            }
+        }
+
+        while (this.executionLineageByKey.size > this.MAX_EXECUTION_LINEAGE_ENTRIES) {
+            const oldestKey = this.executionLineageByKey.keys().next().value;
+            if (oldestKey === undefined) break;
+            this.executionLineageByKey.delete(oldestKey);
+        }
+    }
+
+    clearExecutionLineage(promptId = null) {
+        if (!promptId) {
+            this.executionLineageByKey.clear();
+            return;
+        }
+        const prefix = `${promptId}:`;
+        for (const key of this.executionLineageByKey.keys()) {
+            if (key.startsWith(prefix)) {
+                this.executionLineageByKey.delete(key);
+            }
+        }
     }
 
     /**

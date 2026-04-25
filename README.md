@@ -870,7 +870,7 @@ These extension-registered values cover:
 **Usage**: Required for cloud providers (OpenAI, DeepSeek, etc.). Leave empty for local LLMs (Ollama, LMStudio).
 **Default Behavior**: Session-only in frontend (cleared on reload); not persisted in ComfyUI settings.
 **Runtime Resolution Priority**: Request key → provider-specific ENV → generic ENV → optional server-side key store.
-**Security Warning**: The server-side key store supports optional encryption-at-rest. Use `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` to enable encryption and `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED=1` to fail closed when key material is missing. For production or multi-user environments, ENV-based keys are still recommended.
+**Security Warning**: The server-side key store supports optional encryption-at-rest. Use `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` to enable encryption and `DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED=1` to fail closed when key material is missing. The current zero-dependency format derives encryption/MAC keys with PBKDF2-HMAC-SHA256, encrypts with an HMAC-SHA256-derived XOR stream, and authenticates `nonce + ciphertext` with HMAC-SHA256 before decrypting. For production or multi-user environments, ENV-based keys are still recommended.
 
 **Advanced Key Store Setup (optional)**:
 
@@ -909,6 +909,13 @@ Denied writes follow unified semantics:
 
 - `401`: Invalid/missing admin token when token auth is required.
 - `403`: Remote admin denied by policy (for example, non-loopback request without explicit remote admin allowance).
+
+Admin guard modes:
+
+- Default desktop mode: if `DOCTOR_ADMIN_TOKEN` is not configured, loopback requests are allowed for local convenience. Any local process on the same machine can call admin-gated loopback endpoints in this mode.
+- Token mode: set `DOCTOR_ADMIN_TOKEN` to require that token via `X-Doctor-Admin-Token`, `X-Admin-Token`, `Authorization: Bearer ...`, or request body `admin_token`.
+- Shared-server strict mode: set `DOCTOR_REQUIRE_ADMIN_TOKEN=1` together with `DOCTOR_ADMIN_TOKEN`. If strict mode is enabled without a token, admin-gated endpoints fail closed.
+- Remote opt-in without token remains available only when `DOCTOR_ALLOW_REMOTE_ADMIN=1` and strict mode is not enabled.
 
 ### GET `/debugger/last_analysis`
 

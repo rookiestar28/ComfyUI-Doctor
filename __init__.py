@@ -63,7 +63,7 @@ from .services.prompt_composer import get_prompt_composer, PromptComposerConfig
 from .services.doctor_paths import get_doctor_data_dir, get_path_diagnostics
 from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
-from .services.admin_guard import validate_admin_request
+from .services.admin_guard import get_admin_guard_startup_warning, validate_admin_request
 from .services.audit import ActionAudit
 from .services.community_feedback import build_feedback_preview, submit_feedback, GitHubFeedbackConfig, FeedbackValidationError
 
@@ -253,6 +253,11 @@ def setup_api_logger():
 logger = setup_api_logger()
 _startup_print(f"[ComfyUI-Doctor] API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
 
+admin_guard_warning = get_admin_guard_startup_warning()
+if admin_guard_warning:
+    logger.warning(admin_guard_warning)
+    _startup_print(f"[ComfyUI-Doctor] WARNING: {admin_guard_warning}")
+
 
 # --- 5. Log System Information (Hardware Snapshot) ---
 def log_system_info() -> None:
@@ -434,349 +439,63 @@ def collect_error_context(error_data, workflow_data):
 
 
 # Multi-language error analysis prompt templates (Option B Phase 1)
-# System prompts are written in English with explicit language directives
+# System prompts are written in English with explicit language directives.
+ERROR_ANALYSIS_BASE_TEMPLATE = """You are analyzing a ComfyUI workflow execution error.
+
+**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
+
+**Response Language**: {response_language}
+
+**Error Categories**:
+1. **Connection Errors**: Missing required inputs, disconnected nodes
+2. **Model Missing**: .safetensors, .ckpt files not found in local directories
+3. **Validation Errors**: Parameter value not in allowed list
+4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
+5. **Execution Errors**: Python exceptions during generation
+
+**Analysis Steps**:
+1. Categorize the error (which category above?)
+2. Identify the root cause (why did it happen?)
+3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
+4. Provide reasoning (why will this fix work?)
+
+**Fix Format** (if applicable):
+```json
+{
+  "fixes": [
+    {
+      "node_id": "42",
+      "widget": "scheduler",
+      "from": "Normal",
+      "to": "normal",
+      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    }
+  ]
+}
+```
+
+**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
+
+ERROR_ANALYSIS_RESPONSE_LANGUAGES = {
+    "en": "English",
+    "zh_TW": "繁體中文",
+    "zh_CN": "简体中文",
+    "ja": "日本語",
+    "de": "Deutsch",
+    "fr": "Français",
+    "it": "Italiano",
+    "es": "Español",
+    "ko": "한국어",
+}
+
+
 ERROR_ANALYSIS_TEMPLATES = {
-    "en": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: English
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
+    language_code: {
+        "system_instruction": ERROR_ANALYSIS_BASE_TEMPLATE.replace(
+            "{response_language}", response_language
+        )
     }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "zh_TW": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: 繁體中文
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "zh_CN": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: 简体中文
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "ja": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: 日本語
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "de": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: Deutsch
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "fr": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: Français
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "it": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: Italiano
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "es": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: Español
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    },
-
-    "ko": {
-        "system_instruction": """You are analyzing a ComfyUI workflow execution error.
-
-**YOUR TASK**: Identify the ROOT CAUSE and suggest fixes that will PREVENT THE CRASH.
-
-**Response Language**: 한국어
-
-**Error Categories**:
-1. **Connection Errors**: Missing required inputs, disconnected nodes
-2. **Model Missing**: .safetensors, .ckpt files not found in local directories
-3. **Validation Errors**: Parameter value not in allowed list
-4. **Type Errors**: Wrong data type passed to node (e.g., tensor vs image)
-5. **Execution Errors**: Python exceptions during generation
-
-**Analysis Steps**:
-1. Categorize the error (which category above?)
-2. Identify the root cause (why did it happen?)
-3. Suggest ONE-CLICK fixes (node_id, widget, value changes)
-4. Provide reasoning (why will this fix work?)
-
-**Fix Format** (if applicable):
-```json
-{
-  "fixes": [
-    {
-      "node_id": "42",
-      "widget": "scheduler",
-      "from": "Normal",
-      "to": "normal",
-      "reason": "Scheduler parameter is case-sensitive. 'Normal' → 'normal'"
-    }
-  ]
-}
-```
-
-**Remember**: Focus on CRASH PREVENTION, not quality improvement."""
-    }
+    for language_code, response_language in ERROR_ANALYSIS_RESPONSE_LANGUAGES.items()
 }
 
 

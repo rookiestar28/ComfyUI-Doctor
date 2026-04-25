@@ -76,9 +76,9 @@ test.describe('Settings Panel', () => {
 
   test('should register Doctor settings declaratively before setup logic runs', async ({ page }) => {
     const settings = await page.evaluate(() => ({
-      enabled: window.app.ui.settings.getSettingValue('Doctor.General.Enable'),
-      language: window.app.ui.settings.getSettingValue('Doctor.General.Language'),
-      autoOpen: window.app.ui.settings.getSettingValue('Doctor.Behavior.AutoOpenOnError'),
+      enabled: window.app.extensionManager.setting.get('Doctor.General.Enable'),
+      language: window.app.extensionManager.setting.get('Doctor.General.Language'),
+      autoOpen: window.app.extensionManager.setting.get('Doctor.Behavior.AutoOpenOnError'),
     }));
 
     expect(settings.enabled).toBe(true);
@@ -287,7 +287,7 @@ test.describe('Settings Panel', () => {
 
     // Verify setting was stored
     const storedValue = await page.evaluate(() => {
-      return window.app.ui.settings.getSettingValue('Doctor.Behavior.AutoOpenOnError');
+      return window.app.extensionManager.setting.get('Doctor.Behavior.AutoOpenOnError');
     });
     expect(storedValue).toBe(false);
   });

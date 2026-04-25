@@ -8,6 +8,8 @@
  * @module privacy_utils
  */
 
+import { getDoctorSetting } from "./comfyui_frontend_compat.js";
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PATTERNS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -37,10 +39,7 @@ const PATTERNS = {
  */
 function getPrivacyMode() {
     try {
-        const mode = window.app?.ui?.settings?.getSettingValue?.(
-            'Doctor.Privacy.Mode',
-            'basic'
-        );
+        const mode = getDoctorSetting('Doctor.Privacy.Mode', 'basic', window.app);
         return mode || 'basic';
     } catch (err) {
         return 'basic'; // Default to basic
