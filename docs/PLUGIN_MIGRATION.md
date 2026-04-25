@@ -1,10 +1,10 @@
 # Plugin Migration Guide
 
-This guide helps you migrate existing plugins to the new safe-by-default plugin system introduced in Phase 2.
+This guide helps you migrate existing plugins to the current safe-by-default plugin system.
 
 ## Overview
 
-Phase 2 introduces a trust-based plugin system with:
+The plugin system uses a trust-based model with:
 
 - **Safe-by-default**: Plugins are OFF by default
 - **Manifest requirement**: All plugins need a `.json` manifest

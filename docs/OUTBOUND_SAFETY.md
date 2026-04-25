@@ -97,7 +97,7 @@ python scripts/check_outbound_safety.py
 
 **Output Example**:
 ```
-🔒 Outbound Funnel Safety Check (T12)
+Outbound Funnel Safety Check
 Scanning: /path/to/ComfyUI-Doctor
 
 Checking 42 Python files...

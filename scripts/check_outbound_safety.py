@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Outbound Funnel Static Safety Check (T12)
+Outbound Funnel Static Safety Check
 
 Prevents bypass of outbound.py sanitization funnel by detecting:
 1. Direct use of raw context fields in outbound payloads
@@ -294,7 +294,7 @@ def main():
     """Main entry point."""
     project_root = Path(__file__).resolve().parent.parent
 
-    print("Outbound Funnel Safety Check (T12)")
+    print("Outbound Funnel Safety Check")
     print(f"Scanning: {project_root}\n")
 
     # Find all Python files
