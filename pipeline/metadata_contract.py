@@ -19,6 +19,8 @@ ALLOWED_KEYS = {
     "priority": int,
     "match_source": str,
     "estimated_tokens": (int, float),
+    "context_manifest": dict,
+    "workflow_pruning": dict,
     "plugin": dict,
     "context_extraction": dict,
 }

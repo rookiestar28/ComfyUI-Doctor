@@ -172,10 +172,18 @@ class LLMContextBuilderStage(PipelineStage):
         pruned_workflow = None
         if context.workflow_json and context.node_context and context.node_context.node_id:
             try:
-                pruned_workflow = self.pruner.prune(
+                prune_result = self.pruner.prune(
                     context.workflow_json, 
                     context.node_context.node_id
                 )
+                pruned_workflow = getattr(prune_result, "pruned_workflow_json", prune_result)
+                if hasattr(prune_result, "kept_node_ids"):
+                    context.add_metadata("workflow_pruning", {
+                        "kept_node_ids": list(getattr(prune_result, "kept_node_ids", [])),
+                        "dropped_nodes_count": getattr(prune_result, "dropped_nodes_count", 0),
+                        "mode": getattr(prune_result, "mode", None),
+                        "reason": getattr(prune_result, "reason", None),
+                    })
             except Exception as e:
                 logger.warning(f"Workflow pruning failed: {e}")
                 pruned_workflow = context.workflow_json

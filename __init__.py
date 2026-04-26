@@ -52,8 +52,9 @@ from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
 from .config import CONFIG
+from .analyzer import ErrorAnalyzer
 from .session_manager import SessionManager
-from .system_info import get_system_environment, format_env_for_llm, canonicalize_system_info
+from .system_info import get_system_environment, format_env_for_llm
 from .sanitizer import PIISanitizer, SanitizationLevel
 from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_ssrf_metrics
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
@@ -888,33 +889,17 @@ try:
             # R14: Use PromptComposer for unified context formatting
             if CONFIG.r14_use_prompt_composer:
                 try:
-                    from .services.context_extractor import extract_error_summary
-                    
-                    # Extract error summary for summary-first ordering
-                    error_summary_obj = extract_error_summary(error_text)
-                    error_summary_str = error_summary_obj.to_string() if error_summary_obj else error_text[:200]
-                    
-                    # Build llm_context compatible with PromptComposer
-                    llm_context = {
-                        "error_summary": error_summary_str,
-                        "node_info": node_context if node_context else {},
+                    pipeline_context = ErrorAnalyzer.build_llm_context(
+                        error_text,
+                        workflow_json=workflow,
+                        node_context=node_context,
+                        settings={"privacy_mode": privacy_mode},
+                    )
+                    llm_context = pipeline_context.llm_context or {
                         "traceback": error_text,
-                        "execution_logs": [],  # Not available in analyze endpoint
-                        "workflow_subset": workflow,
-                        "system_info": {}  # Will be added below
+                        "node_info": node_context if node_context else {},
                     }
-                    
-                    # R15: Add canonicalized system environment
-                    try:
-                        env_info = get_system_environment()
-                        llm_context["system_info"] = canonicalize_system_info(
-                            env_info, 
-                            error_text=error_text,
-                            privacy_mode=privacy_mode
-                        )
-                    except Exception:
-                        pass
-                    
+
                     composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
                     prompt_composer = get_prompt_composer()
                     user_prompt = prompt_composer.compose(llm_context, composer_config)
@@ -1302,50 +1287,30 @@ try:
                     if CONFIG.r14_use_prompt_composer:
                         try:
                             r14_composer_succeeded = True  # Assume success until exception
-                            # Build llm_context compatible with PromptComposer
-                            from .services.context_extractor import extract_error_summary
-                            
-                            # Extract error summary for summary-first ordering
-                            traceback_text = str(enriched_context.get('traceback', ''))
-                            error_summary_obj = extract_error_summary(traceback_text)
-                            error_summary_str = error_summary_obj.to_string() if error_summary_obj else enriched_context['error_message']
-                            
+                            traceback_text = str(enriched_context.get('traceback') or '')
                             failed_node = enriched_context.get('failed_node', {})
-                            llm_context = {
-                                "error_summary": error_summary_str,
-                                "node_info": {
-                                    "node_id": failed_node.get('id') or node_context.get('node_id'),
-                                    "node_name": failed_node.get('title') or node_context.get('node_name'),
-                                    "node_class": failed_node.get('class_type') or node_context.get('node_class'),
-                                    "display_node": failed_node.get('display_node') or node_context.get('display_node'),
-                                    "parent_node": failed_node.get('parent_node') or node_context.get('parent_node'),
-                                    "real_node_id": failed_node.get('real_node_id') or node_context.get('real_node_id'),
-                                    "preferred_node_id": (
-                                        failed_node.get('display_node')
-                                        or failed_node.get('id')
-                                        or node_context.get('preferred_node_id')
-                                        or node_context.get('display_node')
-                                        or node_context.get('node_id')
-                                        or node_context.get('real_node_id')
-                                    ),
-                                    "subgraph_lineage": failed_node.get('subgraph_lineage') or node_context.get('subgraph_lineage') or [],
-                                },
+                            pipeline_node_context = {
+                                "node_id": failed_node.get('id') or node_context.get('node_id'),
+                                "node_name": failed_node.get('title') or node_context.get('node_name'),
+                                "node_class": failed_node.get('class_type') or node_context.get('node_class'),
+                                "display_node": failed_node.get('display_node') or node_context.get('display_node'),
+                                "parent_node": failed_node.get('parent_node') or node_context.get('parent_node'),
+                                "real_node_id": failed_node.get('real_node_id') or node_context.get('real_node_id'),
+                            }
+                            pipeline_context = ErrorAnalyzer.build_llm_context(
+                                traceback_text or enriched_context['error_message'],
+                                workflow_json=workflow_data or workflow,
+                                node_context=pipeline_node_context,
+                                execution_logs=enriched_context.get('execution_logs', []),
+                                settings={"privacy_mode": privacy_mode},
+                            )
+                            llm_context = pipeline_context.llm_context or {
+                                "error_summary": enriched_context['error_message'],
+                                "node_info": pipeline_node_context,
                                 "traceback": traceback_text,
                                 "execution_logs": enriched_context.get('execution_logs', []),
                                 "workflow_subset": enriched_context.get('workflow_structure'),
-                                "system_info": {}  # R15: Added below
                             }
-                            
-                            # R15: Add canonicalized system environment to llm_context
-                            try:
-                                _env_info = get_system_environment()
-                                llm_context["system_info"] = canonicalize_system_info(
-                                    _env_info, 
-                                    error_text=traceback_text,
-                                    privacy_mode=privacy_mode
-                                )
-                            except Exception:
-                                pass
                             
                             composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
                             prompt_composer = get_prompt_composer()
