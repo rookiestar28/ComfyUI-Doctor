@@ -11,8 +11,10 @@ Captured context can include:
 - Python traceback text.
 - Matched JSON pattern ID and localized suggestion.
 - Recent ComfyUI execution/progress event context.
-- Node ID, node name, node class, and custom-node path when available.
+- Validated node ID, node name, node class, subgraph lineage, and custom-node path when available.
 - System context useful for debugging, such as Python, PyTorch, CUDA, and package information.
+
+When optional LLM analysis is enabled, Doctor builds the LLM prompt context from the same analysis pipeline. That structured context can include the sanitized traceback, failed-node details, recent execution logs, a pruned workflow subset, and canonical system information.
 
 ## Doctor Sidebar
 
@@ -29,6 +31,7 @@ Use it when:
 - You want to compare likely causes across workflow, model, and environment context.
 
 Cloud providers require a credential. Local providers such as Ollama and LMStudio can be used without a cloud credential.
+Provider-specific request and response formats are normalized by Doctor's backend for chat, single-shot analysis, model listing, and connectivity checks.
 
 ### Statistics Tab
 
@@ -90,6 +93,7 @@ The Settings UI supports:
 - LMStudio.
 
 Provider defaults are fetched from Doctor's backend. Ollama and LMStudio base URLs can be overridden with environment variables when Windows, WSL2, Docker, or remote-host layouts need explicit routing.
+OpenAI-compatible providers, Anthropic, and Ollama use dedicated backend adapters so request payloads, non-stream responses, streaming chunks, and model lists are parsed consistently.
 
 ## Privacy Modes
 
@@ -113,6 +117,7 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 - Environment mismatch hints.
 
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
+The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.
 
 ## Quick Community Feedback
 

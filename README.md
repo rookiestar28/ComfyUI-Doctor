@@ -12,6 +12,18 @@ ComfyUI-Doctor is a real-time diagnostics and debugging assistant for ComfyUI. I
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Unified LLM Context, Provider Handling, and API Hardening</strong></summary>
+
+- Routed LLM prompt context through the analysis pipeline so sanitized tracebacks, node context, recent logs, workflow snippets, and system details use one structured path.
+- Centralized OpenAI-compatible, Anthropic, and Ollama request/response handling for chat, analysis, model listing, and provider connectivity checks.
+- Standardized API error payloads with `success`, `error`, and `message` fields while preserving existing success response shapes.
+- Improved node-context stability with immutable, validated node identity data used by analysis, locate actions, and prompt context.
+- Removed obsolete no-op diagnostics output now that concrete local diagnostics checks are available.
+- Hardened import fallback behavior and logger traceback reset handling for more reliable ComfyUI host loading and history clearing.
+
+</details>
+
+<details>
 <summary><strong>Host Compatibility, Security Controls, and Coverage Baseline</strong></summary>
 
 - Added host compatibility checks for the ComfyUI, ComfyUI frontend, and Desktop surfaces Doctor depends on.
@@ -28,12 +40,13 @@ ComfyUI-Doctor is a real-time diagnostics and debugging assistant for ComfyUI. I
 
 - Real-time ComfyUI console/error capture from startup.
 - Built-in suggestions from 58 JSON-based error patterns, including 22 core patterns and 36 community-extension patterns.
-- Node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
+- Validated node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
 - Doctor sidebar with Chat, Statistics, and Settings tabs.
-- Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio.
+- Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
 - Local diagnostics, statistics, plugin trust report, telemetry controls, and community feedback preview/submit tools.
+- Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
 
 ## Screenshots
@@ -69,6 +82,7 @@ Restart ComfyUI after cloning. Doctor should print its startup diagnostics and r
 ### Automatic Diagnostics
 
 After installation, Doctor passively records ComfyUI runtime output, detects tracebacks, matches known error patterns, and shows the latest diagnosis in the sidebar and optional right-side report panel.
+When optional LLM analysis is used, Doctor builds prompt context from the same structured pipeline that handles sanitization, node context, execution logs, workflow pruning, and system information.
 
 ### Doctor Sidebar
 
@@ -85,6 +99,7 @@ Right-click the canvas, add **Smart Debug Node**, and place it inline to inspect
 ## Optional LLM Setup
 
 Cloud providers require a credential supplied through the session-only UI field, environment variables, or the optional admin-gated server store. Local providers such as Ollama and LMStudio can run without a cloud credential.
+Doctor normalizes provider-specific request and response formats for OpenAI-compatible APIs, Anthropic, and Ollama so chat, single-shot analysis, model listing, and connectivity checks share the same backend behavior.
 
 Recommended defaults:
 

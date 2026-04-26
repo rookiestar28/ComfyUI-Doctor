@@ -31,6 +31,8 @@ Local endpoint overrides:
 - `OLLAMA_BASE_URL`
 - `LMSTUDIO_BASE_URL`
 
+Provider handling is centralized for OpenAI-compatible APIs, Anthropic, and Ollama. The backend adapter layer normalizes chat/analysis payloads, model-list parsing, non-stream responses, and streaming chunks while route handlers keep the security controls described below.
+
 ## Admin Guard
 
 Write-sensitive endpoints are admin-gated.
@@ -66,6 +68,8 @@ Doctor applies outbound safety checks before sending provider-bound data:
 - Redirect restrictions for sensitive outbound checks.
 - DNS/private-target checks for hostname-based private or metadata targets.
 - Redacted audit records for external enrichment submit actions.
+
+LLM prompt context is assembled through the analysis pipeline after sanitization. The provider adapter layer should receive already-sanitized payloads from route handlers.
 
 See [Outbound Safety](OUTBOUND_SAFETY.md) for the static checker and contribution rules around outbound request paths.
 
