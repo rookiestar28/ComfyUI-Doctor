@@ -86,20 +86,5 @@ def init_checks():
         runner.register_check(name, check_fn)
 
 
-# Placeholder checks for P0 (will be replaced in P1)
-# These ensure the system works end-to-end during initial development
-
-
-@register_check("placeholder")
-async def check_placeholder(workflow: Dict[str, Any], request: HealthCheckRequest) -> List[HealthIssue]:
-    """
-    Placeholder check for P0 skeleton.
-
-    Returns empty list - actual checks will be implemented in P1.
-    """
-    return []
-
-
-# Auto-initialize when module is imported
 # Auto-initialize when module is imported
 init_checks()
