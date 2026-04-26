@@ -5,7 +5,9 @@ from ..context import AnalysisContext
 # CRITICAL: sanitizer import must stay relative-first for package-loaded hosts.
 try:
     from ...sanitizer import PIISanitizer, SanitizationLevel, get_sanitizer
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from sanitizer import PIISanitizer, SanitizationLevel, get_sanitizer
 
 logger = logging.getLogger(__name__)

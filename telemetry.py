@@ -25,14 +25,18 @@ from typing import Optional, List, Dict, Set, Tuple, Any
 try:
     try:
         from .services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
-    except ImportError:
+    except ImportError as import_error:
+        from import_compat import ensure_absolute_import_fallback_allowed
+        ensure_absolute_import_fallback_allowed(import_error)
         from services.doctor_paths import get_doctor_data_dir as _get_canonical_doctor_data_dir
 except Exception:
     _get_canonical_doctor_data_dir = None
 
 try:
     from .services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
 
 
@@ -136,7 +140,9 @@ class TelemetryEvent:
 # R7: Import shared RateLimiter from rate_limiter.py (avoid code duplication)
 try:
     from .rate_limiter import RateLimiter
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from rate_limiter import RateLimiter
 
 
@@ -159,7 +165,9 @@ def get_pattern_allowlist() -> Set[str]:
     try:
         try:
             from .pattern_loader import PatternLoader
-        except ImportError:
+        except ImportError as import_error:
+            from import_compat import ensure_absolute_import_fallback_allowed
+            ensure_absolute_import_fallback_allowed(import_error)
             from pattern_loader import PatternLoader
         loader = PatternLoader()
         patterns = loader.get_all_patterns()

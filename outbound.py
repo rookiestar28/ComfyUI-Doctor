@@ -12,7 +12,9 @@ from typing import Any, Dict, Tuple
 try:
     from .sanitizer import PIISanitizer, SanitizationLevel
     from .security import is_local_llm_url
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from sanitizer import PIISanitizer, SanitizationLevel
     from security import is_local_llm_url
 
@@ -59,4 +61,3 @@ def sanitize_outbound_payload(payload: Any, sanitizer: PIISanitizer) -> Any:
         return [sanitize_outbound_payload(item, sanitizer) for item in payload]
 
     return payload
-

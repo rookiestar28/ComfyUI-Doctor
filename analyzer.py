@@ -16,7 +16,9 @@ try:
     from .pipeline import AnalysisPipeline, AnalysisContext, NodeContext
     from .pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
     from .i18n import get_suggestion, ERROR_KEYS
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from pipeline import AnalysisPipeline, AnalysisContext, NodeContext
     from pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
     from i18n import get_suggestion, ERROR_KEYS
@@ -242,12 +244,13 @@ class ErrorAnalyzer:
         try:
             try:
                 from .pattern_loader import get_pattern_loader
-            except ImportError:
+            except ImportError as import_error:
+                from import_compat import ensure_absolute_import_fallback_allowed
+                ensure_absolute_import_fallback_allowed(import_error)
                 from pattern_loader import get_pattern_loader
             loader = get_pattern_loader()
             return loader.reload_if_changed()
         except Exception as e:
             logging.warning(f"[ErrorAnalyzer] Failed to reload patterns: {e}")
             return False
-
 

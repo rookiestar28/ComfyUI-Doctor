@@ -12,7 +12,9 @@ from typing import Optional, List
 # guarantee the extension root is a top-level import root.
 try:
     from .services.config_guardrails import GuardrailConfig
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from services.config_guardrails import GuardrailConfig
 
 
@@ -27,7 +29,9 @@ def _get_config_path_candidates() -> List[str]:
     try:
         try:
             from .services.doctor_paths import get_doctor_data_dir  # local import to avoid import-time coupling
-        except ImportError:
+        except ImportError as import_error:
+            from import_compat import ensure_absolute_import_fallback_allowed
+            ensure_absolute_import_fallback_allowed(import_error)
             from services.doctor_paths import get_doctor_data_dir
         candidates.append(os.path.join(get_doctor_data_dir(), "config.json"))
     except Exception:

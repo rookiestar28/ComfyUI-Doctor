@@ -9,14 +9,18 @@ from ..plugins import discover_plugins
 # mutation fallbacks or package-loaded hosts can miss these internal modules.
 try:
     from ...config import CONFIG
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from config import CONFIG
 
 try:
     from ...i18n import get_suggestion, ERROR_KEYS
     from ...pattern_loader import get_pattern_loader
     # analyzer import removed to avoid circular dependency
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from i18n import get_suggestion, ERROR_KEYS
     from pattern_loader import get_pattern_loader
 

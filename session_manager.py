@@ -15,7 +15,9 @@ from typing import Optional
 
 try:
     from .rate_limiter import RateLimiter, ConcurrencyLimiter
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from rate_limiter import RateLimiter, ConcurrencyLimiter
 
 logger = logging.getLogger(__name__)

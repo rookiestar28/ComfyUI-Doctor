@@ -15,7 +15,9 @@ from .providers import registry as provider_registry
 
 try:
     from ..config import CONFIG
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from config import CONFIG
 
 
@@ -45,7 +47,9 @@ async def api_plugins(request):
 
         try:
             from ..pipeline.plugins import scan_plugins
-        except ImportError:
+        except ImportError as import_error:
+            from import_compat import ensure_absolute_import_fallback_allowed
+            ensure_absolute_import_fallback_allowed(import_error)
             from pipeline.plugins import scan_plugins
 
         plugin_dir = Path(__file__).resolve().parent.parent / "pipeline" / "plugins" / "community"

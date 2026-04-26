@@ -28,7 +28,9 @@ from typing import Optional, Dict, Any, List
 
 try:
     from .services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
 
 # ==============================================================================
@@ -112,8 +114,10 @@ try:
     from .services.log_ring_buffer import get_ring_buffer
     from .services.context_extractor import detect_fatal_pattern
     from .services import doctor_paths
-except ImportError:
+except ImportError as import_error:
     # Fallback for direct execution (tests)
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from analyzer import ErrorAnalyzer
     from config import CONFIG
     from history_store import HistoryStore, HistoryEntry

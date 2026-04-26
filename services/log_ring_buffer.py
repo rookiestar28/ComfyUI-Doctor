@@ -68,7 +68,9 @@ class LogRingBuffer:
             # Use the convenience function that returns str, not SanitizationResult
             try:
                 from ..sanitizer import sanitize_for_llm
-            except ImportError:
+            except ImportError as import_error:
+                from import_compat import ensure_absolute_import_fallback_allowed
+                ensure_absolute_import_fallback_allowed(import_error)
                 from sanitizer import sanitize_for_llm
             self._sanitizer = sanitize_for_llm
         except ImportError:

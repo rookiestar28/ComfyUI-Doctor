@@ -16,7 +16,9 @@ from datetime import datetime
 
 try:
     from .services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
 
 

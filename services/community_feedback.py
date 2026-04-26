@@ -19,7 +19,9 @@ import aiohttp
 
 try:
     from ..sanitizer import PIISanitizer, SanitizationLevel
-except ImportError:  # pragma: no cover - tests may import as top-level package
+except ImportError as import_error:  # pragma: no cover - tests may import as top-level package
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from sanitizer import PIISanitizer, SanitizationLevel
 
 

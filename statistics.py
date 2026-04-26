@@ -10,7 +10,9 @@ from collections import Counter
 try:
     from .services.node_health import NodeHealthService
     from .services.time_utils import ensure_utc, parse_utc_timestamp, utc_now
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from services.node_health import NodeHealthService
     from services.time_utils import ensure_utc, parse_utc_timestamp, utc_now
 

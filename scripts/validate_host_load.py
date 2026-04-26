@@ -47,6 +47,7 @@ PACKAGE_MODULES = [
 ]
 SKIP_STATIC_IMPORT_SCAN = {"prestartup_script.py", "verify_routes.py"}
 SKIP_SCAN_DIR_NAMES = {"__pycache__", ".venv", ".venv-wsl", "tests", "scripts", "reference", "docs", "web", "node_modules"}
+ALLOWED_BARE_INTERNAL_IMPORTS = {"import_compat"}
 
 
 
@@ -252,6 +253,8 @@ def check_import_policy(project_root: Path = PROJECT_ROOT) -> list[str]:
                         absolute_modules.append((node.lineno, alias.name))
 
         for lineno, module_name in absolute_modules:
+            if module_name in ALLOWED_BARE_INTERNAL_IMPORTS:
+                continue
             if module_name not in relative_modules:
                 issues.append(
                     f"{path.relative_to(project_root)}:{lineno}: bare internal import '{module_name}' without relative-first fallback"

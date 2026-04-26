@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 try:
     from ..config import CONFIG
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from config import CONFIG
 
 
@@ -277,4 +279,3 @@ def get_job_manager():
             from .doctor_paths import get_doctor_data_dir
             get_job_manager._instance = JobManager(Path(get_doctor_data_dir()))
         return get_job_manager._instance
-

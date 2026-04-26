@@ -47,7 +47,9 @@ def _detect_runtime_environment() -> Dict[str, Optional[str]]:
     try:
         try:
             from .services.doctor_paths import get_path_diagnostics
-        except ImportError:
+        except ImportError as import_error:
+            from import_compat import ensure_absolute_import_fallback_allowed
+            ensure_absolute_import_fallback_allowed(import_error)
             from services.doctor_paths import get_path_diagnostics
 
         diagnostics = get_path_diagnostics()

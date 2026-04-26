@@ -43,7 +43,9 @@ class BaseProviderAdapter(ABC):
             # CRITICAL: keep this import local to avoid module import coupling at startup.
             try:
                 from ...config import CONFIG  # pylint: disable=import-outside-toplevel
-            except ImportError:
+            except ImportError as import_error:
+                from import_compat import ensure_absolute_import_fallback_allowed
+                ensure_absolute_import_fallback_allowed(import_error)
                 from config import CONFIG  # pylint: disable=import-outside-toplevel
             default_timeout = float(getattr(CONFIG.guardrails, "PROVIDER_TIMEOUT_SECONDS", 30))
             default_retries = int(getattr(CONFIG.guardrails, "PROVIDER_MAX_RETRIES", 2))
@@ -115,7 +117,9 @@ class BaseProviderAdapter(ABC):
             try:
                 from ...config import CONFIG
                 from ...outbound import get_outbound_sanitizer, sanitize_outbound_payload
-            except ImportError:
+            except ImportError as import_error:
+                from import_compat import ensure_absolute_import_fallback_allowed
+                ensure_absolute_import_fallback_allowed(import_error)
                 from config import CONFIG
                 from outbound import get_outbound_sanitizer, sanitize_outbound_payload
 

@@ -186,7 +186,9 @@ class PromptComposer:
             try:
                 try:
                     from ..system_info import canonicalize_system_info
-                except ImportError:
+                except ImportError as import_error:
+                    from import_compat import ensure_absolute_import_fallback_allowed
+                    ensure_absolute_import_fallback_allowed(import_error)
                     from system_info import canonicalize_system_info
                 sys_info = canonicalize_system_info(sys_info, max_packages=20)
             except ImportError:

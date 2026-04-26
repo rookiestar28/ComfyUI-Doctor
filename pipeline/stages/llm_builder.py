@@ -12,7 +12,9 @@ try:
         collapse_stack_frames,
         build_context_manifest,
     )
-except ImportError:
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
     from services.workflow_pruner import WorkflowPruner
     from services.context_extractor import (
         extract_error_summary,
@@ -69,7 +71,9 @@ class LLMContextBuilderStage(PipelineStage):
             try:
                 from ...services.log_ring_buffer import get_ring_buffer
                 from ...sanitizer import sanitize_for_llm
-            except ImportError:
+            except ImportError as import_error:
+                from import_compat import ensure_absolute_import_fallback_allowed
+                ensure_absolute_import_fallback_allowed(import_error)
                 from services.log_ring_buffer import get_ring_buffer
                 from sanitizer import sanitize_for_llm
             ring_buffer = get_ring_buffer()
@@ -111,7 +115,9 @@ class LLMContextBuilderStage(PipelineStage):
         try:
             try:
                 from ...system_info import get_system_environment, canonicalize_system_info
-            except ImportError:
+            except ImportError as import_error:
+                from import_compat import ensure_absolute_import_fallback_allowed
+                ensure_absolute_import_fallback_allowed(import_error)
                 from system_info import get_system_environment, canonicalize_system_info
 
             env_info = get_system_environment()
