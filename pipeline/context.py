@@ -1,29 +1,43 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, ClassVar
 from .metadata_contract import METADATA_SCHEMA_VERSION
 
-# Forward reference for NodeContext to avoid circular import if needed in future,
-# but for now we can define it or import it if it's moved.
-# Since we are planning to move NodeContext, let's keep it flexible.
-# For now, we will type hint it as Any or import it if appropriate.
-# However, the plan says "Stage 3 Output: Node Context", and NodeContext currently is in analyzer.py.
-# To avoid circular imports between analyzer and pipeline, we should eventually move NodeContext to pipeline/context.py or a shared model file.
-# For this step, I will define a placeholder or duplicate minimal structure if needed, 
-# or better yet, move NodeContext definition here or import it if analyzer imports pipeline.
-# analyzer.py will import pipeline, so pipeline cannot import analyzer.
-# SO: NodeContext MUST be moved to here or acceptable common place.
-# I will define NodeContext here as part of the refactor plan implies "Strongly Typed Data Class".
-
-@dataclass
+@dataclass(frozen=True)
 class NodeContext:
     """Context information about the node where an error occurred."""
-    node_id: Optional[str] = None
-    node_name: Optional[str] = None
-    node_class: Optional[str] = None
-    custom_node_path: Optional[str] = None
-    display_node: Optional[str] = None
-    parent_node: Optional[str] = None
-    real_node_id: Optional[str] = None
+    node_id: Optional[Any] = None
+    node_name: Optional[Any] = None
+    node_class: Optional[Any] = None
+    custom_node_path: Optional[Any] = None
+    display_node: Optional[Any] = None
+    parent_node: Optional[Any] = None
+    real_node_id: Optional[Any] = None
+
+    _FIELD_NAMES: ClassVar[tuple[str, ...]] = (
+        "node_id",
+        "node_name",
+        "node_class",
+        "custom_node_path",
+        "display_node",
+        "parent_node",
+        "real_node_id",
+    )
+
+    def __post_init__(self) -> None:
+        for field_name in self._FIELD_NAMES:
+            normalized = self._normalize_field(field_name, getattr(self, field_name))
+            object.__setattr__(self, field_name, normalized)
+
+    @staticmethod
+    def _normalize_field(field_name: str, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if any(ord(ch) < 32 for ch in text):
+            raise ValueError(f"{field_name} contains control characters")
+        return text
 
     def preferred_node_id(self) -> Optional[str]:
         """Return the best node id for UI navigation and workflow targeting."""
