@@ -1,5 +1,12 @@
 # Test SOP
 
+### Problem-First Test Design Rule (Mandatory)
+
+All test scripts, test harnesses, and validation flows must be designed first to reproduce real failures and catch bugs early.
+
+The purpose of testing is to expose defects, regressions, drift, and broken assumptions before users hit them. Tests must not be designed merely to produce a green validation result, satisfy a checklist, or prove that a happy path still passes. Do not waste validation time on pass-only checks that cannot fail for the bug class under review.
+
+Every bugfix or high-risk change must start from the question: "Which test would have caught this before release?" If the existing gate missed the bug, update the targeted test or SOP flow so the same class of bug fails deterministically next time.
 This document defines the **mandatory test workflow** for this repo. Run it **before every push** (unless you explicitly document why you’re skipping).
 
 ## Acceptance Rule (SOP)
@@ -526,3 +533,64 @@ PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files --show-diff-on-
 
 - Check the console error (module import/exports mismatch is the most common cause).
 - Verify all referenced JS modules exist and export expected names.
+<!-- ROOKIEUI-GLOBAL-TEST-SOP-RULES:START -->
+## RookieUI-Derived Global Testing Rules
+
+These rules preserve this repository's existing test lanes while adding the shared testing baseline used across this workspace.
+
+### Required Reading Order
+
+1. `tests/TEST_SOP.md`
+2. `tests/E2E_TESTING_NOTICE.md`
+3. `tests/E2E_TESTING_SOP.md`
+
+### Acceptance Rule
+
+A change is not accepted until required checks pass and evidence is recorded. Existing repo-specific gates remain authoritative; this section adds the shared minimum expectations.
+
+Required shared gate:
+
+1. `pre-commit run detect-secrets --all-files`
+2. `pre-commit run --all-files --show-diff-on-failure`
+3. backend/unit tests through the repo's documented runner, preferring `scripts/run_unittests.py` when present
+4. frontend/E2E tests through the repo's documented Playwright or harness lane, usually `npm test` when a Node harness exists
+5. targeted type/static validation when the changed surface has a typed frontend or equivalent static contract
+
+If a repo has no frontend/E2E harness, the SOP must state the non-applicability and identify the replacement smoke, unit, or integration lane that catches the same user-facing risk.
+
+### Problem-First Test Design Rule
+
+All test scripts, test harnesses, and validation flows must be designed first to reproduce real failures and catch bugs early.
+
+The purpose of testing is to expose defects, regressions, drift, and broken assumptions before users hit them. Tests must not be designed merely to produce a green validation result, satisfy a checklist, or prove that a happy path still passes. Do not waste validation time on pass-only checks that cannot fail for the bug class under review.
+
+Every bugfix or high-risk change must start from the question: "Which test would have caught this before release?" If the existing gate missed the bug, update the targeted test or SOP flow so the same class of bug fails deterministically next time.
+
+### Bugfix/Hotfix Rule (Reproduce -> Pin -> Sweep)
+
+For bugfix/hotfix work, acceptance evidence must include:
+
+1. pre-fix reproduction evidence
+2. post-fix targeted regression evidence
+3. final full-gate evidence
+
+A green full gate alone is not sufficient bugfix evidence unless the record also shows how the specific failure was reproduced and pinned.
+
+### Documentation-only Exception
+
+If all touched files are documentation/planning text only and no code, tests, scripts, config, generated artifacts, dependency manifests, or runtime behavior changed, full test execution is optional. Once executable or runtime-affecting files change, this exception does not apply.
+
+### Environment Guardrails
+
+- Keep the Python interpreter consistent across all commands.
+- Prefer a project-local virtual environment: `.venv` on Windows and `.venv-wsl` on WSL/Linux when the repo supports dual-OS validation.
+- Do not mix global and venv-installed `pre-commit` accidentally.
+- Node.js must be 18+ before running frontend/E2E tests.
+- On Windows, prefer repo-local `PRE_COMMIT_HOME` to avoid cache lock issues.
+- On WSL, if `python` is missing but `python3` exists, create a local shim before running Playwright or harness commands.
+- If pre-commit modifies files, review/stage/commit those changes and rerun hooks until clean.
+
+### Evidence Recording
+
+Implementation records must include date/time, OS/environment, command log reference, and pass/fail result for each required stage. If a gate is intentionally skipped as non-applicable, record why and name the replacement validation lane.
+<!-- ROOKIEUI-GLOBAL-TEST-SOP-RULES:END -->
