@@ -34,6 +34,8 @@ Denied writes use:
 
 ## LLM and Chat Endpoints
 
+Doctor normalizes provider-specific behavior for OpenAI-compatible APIs, Anthropic, and Ollama behind a shared backend adapter layer. The route endpoints still enforce SSRF checks, credential resolution, privacy sanitization, retry/concurrency limits, and streaming response handling.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/doctor/provider_defaults` | Return provider default base URLs. |
@@ -42,6 +44,8 @@ Denied writes use:
 | `POST` | `/doctor/verify_key` | Validate provider connectivity and credential availability. |
 | `POST` | `/doctor/list_models` | List models from the selected provider when supported. |
 | `GET` | `/doctor/ui_text` | Return localized UI text for the frontend. |
+
+LLM failure responses use the standard JSON error envelope. The chat streaming path reports stream connection or provider errors as terminal SSE events.
 
 ## Credential Store Endpoints
 
@@ -91,3 +95,5 @@ Denied writes use:
 | `GET` | `/doctor/health_report` | Return the latest diagnostics report. |
 | `GET` | `/doctor/health_history` | Return diagnostics history. |
 | `POST` | `/doctor/health_ack` | Acknowledge, ignore, or resolve diagnostics issues. |
+
+Diagnostics reports are produced by concrete local checks such as workflow linting, dependency checks, model asset checks, privacy/security checks, runtime performance checks, and signature-pack checks.

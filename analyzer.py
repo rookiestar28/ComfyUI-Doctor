@@ -7,21 +7,23 @@ Refactored to use Plugin-based Analysis Pipeline (A6).
 import re
 import functools
 import logging
-from dataclasses import dataclass
+import json
 from typing import Optional, Tuple, List, Dict, Any
 
 # CRITICAL: keep relative-first fallback; ComfyUI loads Doctor as a package,
 # while pytest imports these modules as top-level files.
 try:
     from .pipeline import AnalysisPipeline, AnalysisContext, NodeContext
-    from .pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
-    from .i18n import get_suggestion, ERROR_KEYS
+    from .pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage, LLMContextBuilderStage
+    from .i18n import ERROR_KEYS
+    from .services.workflow_pruner import WorkflowPruner
 except ImportError as import_error:
     from import_compat import ensure_absolute_import_fallback_allowed
     ensure_absolute_import_fallback_allowed(import_error)
     from pipeline import AnalysisPipeline, AnalysisContext, NodeContext
-    from pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage
-    from i18n import get_suggestion, ERROR_KEYS
+    from pipeline.stages import SanitizerStage, PatternMatcherStage, ContextEnhancerStage, LLMContextBuilderStage
+    from i18n import ERROR_KEYS
+    from services.workflow_pruner import WorkflowPruner
 
 # Keep PATTERNS for Legacy Fallback (Stage 2)
 # Pattern definitions: (regex_pattern, error_key, has_groups)
@@ -124,7 +126,7 @@ def get_pipeline():
             SanitizerStage(),
             PatternMatcherStage(legacy_patterns=PATTERNS),
             ContextEnhancerStage(),
-            # LLMContextBuilderStage will be added here in Phase 3
+            LLMContextBuilderStage(WorkflowPruner()),
         ]
         _pipeline_instance = AnalysisPipeline(stages)
     return _pipeline_instance
@@ -161,6 +163,76 @@ class ErrorAnalyzer:
         if any(keyword in key_lower for keyword in ['cuda', 'cudnn', 'torch', 'mps', 'insightface', 'module']):
             return 'framework'
         return 'generic'
+
+    @staticmethod
+    def _coerce_node_context(node_context: Any) -> Optional[NodeContext]:
+        """Convert route/client node context dictionaries into pipeline NodeContext."""
+        if isinstance(node_context, NodeContext):
+            return node_context
+        if not isinstance(node_context, dict) or not node_context:
+            return None
+
+        def _value(*keys: str) -> Optional[str]:
+            for key in keys:
+                value = node_context.get(key)
+                if value is not None and value != "":
+                    return str(value)
+            return None
+
+        return NodeContext(
+            node_id=_value("node_id", "id"),
+            node_name=_value("node_name", "title", "name"),
+            node_class=_value("node_class", "class_type", "type"),
+            custom_node_path=_value("custom_node_path"),
+            display_node=_value("display_node"),
+            parent_node=_value("parent_node"),
+            real_node_id=_value("real_node_id"),
+        )
+
+    @staticmethod
+    def _coerce_workflow_json(workflow_json: Any) -> Optional[Dict[str, Any]]:
+        """Normalize route workflow payloads before pipeline pruning."""
+        if isinstance(workflow_json, dict):
+            return workflow_json
+        if isinstance(workflow_json, str) and workflow_json.strip():
+            try:
+                parsed = json.loads(workflow_json)
+            except json.JSONDecodeError:
+                return None
+            return parsed if isinstance(parsed, dict) else None
+        return None
+
+    @staticmethod
+    def build_llm_context(
+        traceback_text: str,
+        *,
+        workflow_json: Optional[Any] = None,
+        node_context: Optional[Any] = None,
+        execution_logs: Optional[List[str]] = None,
+        system_info: Optional[Dict[str, Any]] = None,
+        settings: Optional[Dict[str, Any]] = None,
+    ) -> AnalysisContext:
+        """
+        Build structured LLM context through the active analysis pipeline.
+
+        Route handlers pass already-sanitized inputs here; the pipeline owns
+        summary, node, workflow, log, system-info, and manifest assembly.
+        """
+        ctx = AnalysisContext(
+            traceback=traceback_text or "",
+            workflow_json=ErrorAnalyzer._coerce_workflow_json(workflow_json),
+            system_info=system_info or {},
+            settings=settings or {},
+        )
+        coerced_node = ErrorAnalyzer._coerce_node_context(node_context)
+        if coerced_node:
+            ctx.node_context = coerced_node
+        if execution_logs:
+            ctx.execution_logs = [str(line) for line in execution_logs]
+
+        pipeline = get_pipeline()
+        pipeline.run(ctx)
+        return ctx
     
     @staticmethod
     def extract_node_context(traceback_text: str) -> NodeContext:
@@ -190,11 +262,7 @@ class ErrorAnalyzer:
             return (None, None)
 
         try:
-            pipeline = get_pipeline()
-            ctx = AnalysisContext(traceback=traceback_text)
-            
-            # Run the pipeline
-            pipeline.run(ctx)
+            ctx = ErrorAnalyzer.build_llm_context(traceback_text)
             
             return (ctx.suggestion, ctx.metadata)
             
@@ -253,4 +321,3 @@ class ErrorAnalyzer:
         except Exception as e:
             logging.warning(f"[ErrorAnalyzer] Failed to reload patterns: {e}")
             return False
-

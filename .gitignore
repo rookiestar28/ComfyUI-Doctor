@@ -23,8 +23,8 @@ user/*
 
 # Agent/local project exclusions
 .pla*/
-re*/
-RE*/
+ref*/
+REF*/
 ROA*.md
 roa*.md
 AG*.md

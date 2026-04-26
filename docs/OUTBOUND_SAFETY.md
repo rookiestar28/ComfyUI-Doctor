@@ -12,6 +12,7 @@ The static safety check prevents accidental bypass of the outbound sanitization 
 ## Why This Matters
 
 ComfyUI-Doctor sends error context to LLM providers for analysis. To protect user privacy, all outbound payloads MUST go through the sanitization funnel in `outbound.py`.
+Provider-specific LLM request construction is centralized in `services/llm_provider_adapters.py`, but route handlers remain responsible for sanitizing the completed payload immediately before network transmission.
 
 **Sensitive Fields**:
 - `context.traceback` - Raw Python stack trace with user paths
@@ -104,14 +105,13 @@ Checking 42 Python files...
 
 ❌ 1 violation(s) detected:
 
-  File: pipeline/stages/llm_builder.py:63:12
+  File: tests/fixtures/outbound_violations.py:12:8
   Rule: DANGEROUS_FALLBACK
   Message: Dangerous fallback: context.sanitized_traceback or context.traceback
 
-   61:         # 2. Build LLM Context Dict
-   62:         llm_data = {
-   63:             "traceback": context.sanitized_traceback or context.traceback,
-   64:             "node_info": context.node_context.to_dict() if context.node_context else {},
+   10:     payload = {
+   11:         "traceback": context.sanitized_traceback or context.traceback,
+   12:     }
 
 --------------------------------------------------------------------------------
 
@@ -147,6 +147,7 @@ The following files are excluded from checking:
 ## Resources
 
 - **Sanitization Funnel**: `outbound.py`
+- **LLM Provider Adapters**: `services/llm_provider_adapters.py`
 - **Privacy Modes**: `sanitizer.py`
 - **Test Fixtures**: `tests/fixtures/outbound_violations.py`
 - **Test Suite**: `tests/test_outbound_safety_gate.py`

@@ -52,10 +52,11 @@ from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
 from .config import CONFIG
+from .analyzer import ErrorAnalyzer
 from .session_manager import SessionManager
-from .system_info import get_system_environment, format_env_for_llm, canonicalize_system_info
+from .system_info import get_system_environment, format_env_for_llm
 from .sanitizer import PIISanitizer, SanitizationLevel
-from .security import is_local_llm_url, validate_ssrf_url, parse_base_url, get_ssrf_metrics
+from .security import is_local_llm_url, validate_ssrf_url, get_ssrf_metrics
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig
@@ -65,6 +66,7 @@ from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
 from .services.admin_guard import get_admin_guard_startup_warning, validate_admin_request
 from .services.api_response import admin_denied_response, error_response
+from .services.llm_provider_adapters import get_llm_provider_adapter
 from .services.audit import ActionAudit
 from .services.community_feedback import build_feedback_preview, submit_feedback, GitHubFeedbackConfig, FeedbackValidationError
 
@@ -122,14 +124,6 @@ DOCTOR_LLM_MODEL = os.getenv("DOCTOR_LLM_MODEL", "gpt-4o")
 # Allows cross-platform compatibility (Windows vs WSL2, Docker, etc.)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234/v1")
-
-
-
-def is_anthropic(base_url: str) -> bool:
-    """Check if the base URL is for Anthropic API."""
-    info = parse_base_url(base_url)
-    hostname = (info.get("hostname") if info else "") or ""
-    return hostname.lower().endswith("anthropic.com")
 
 # --- 1. Setup Log Directory (Local to Node) ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -888,33 +882,17 @@ try:
             # R14: Use PromptComposer for unified context formatting
             if CONFIG.r14_use_prompt_composer:
                 try:
-                    from .services.context_extractor import extract_error_summary
-                    
-                    # Extract error summary for summary-first ordering
-                    error_summary_obj = extract_error_summary(error_text)
-                    error_summary_str = error_summary_obj.to_string() if error_summary_obj else error_text[:200]
-                    
-                    # Build llm_context compatible with PromptComposer
-                    llm_context = {
-                        "error_summary": error_summary_str,
-                        "node_info": node_context if node_context else {},
+                    pipeline_context = ErrorAnalyzer.build_llm_context(
+                        error_text,
+                        workflow_json=workflow,
+                        node_context=node_context,
+                        settings={"privacy_mode": privacy_mode},
+                    )
+                    llm_context = pipeline_context.llm_context or {
                         "traceback": error_text,
-                        "execution_logs": [],  # Not available in analyze endpoint
-                        "workflow_subset": workflow,
-                        "system_info": {}  # Will be added below
+                        "node_info": node_context if node_context else {},
                     }
-                    
-                    # R15: Add canonicalized system environment
-                    try:
-                        env_info = get_system_environment()
-                        llm_context["system_info"] = canonicalize_system_info(
-                            env_info, 
-                            error_text=error_text,
-                            privacy_mode=privacy_mode
-                        )
-                    except Exception:
-                        pass
-                    
+
                     composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
                     prompt_composer = get_prompt_composer()
                     user_prompt = prompt_composer.compose(llm_context, composer_config)
@@ -949,68 +927,20 @@ try:
             
             # Normalize Base URL
             base_url = base_url.rstrip("/")
-
-            base_info = parse_base_url(base_url)
-            hostname = (base_info.get("hostname") if base_info else "") or ""
             is_local = is_local_llm_url(base_url)
-
-            # Determine API type
-            is_ollama = is_local and base_info and base_info.get("port") == 11434
-            is_anthropic_api = is_anthropic(base_url)
-
-            # Prepare headers and payload based on API type
-            if is_anthropic_api:
-                # Anthropic API uses different format
-                headers = {
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json"
-                }
-                url = f"{base_url}/v1/messages"
-                # Anthropic doesn't support system message in messages array
-                payload = {
-                    "model": model,
-                    "system": system_prompt,
-                    "messages": [
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "max_tokens": 4096
-                }
-            elif is_ollama:
-                # Ollama uses /api/chat endpoint (remove /v1 if present)
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                if base_url.endswith("/v1"):
-                    base_url = base_url[:-3]
-                url = f"{base_url}/api/chat"
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "stream": False
-                }
-            else:
-                # OpenAI-compatible APIs
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                # Auto-append /v1 if missing and looks like a standard provider
-                if not base_url.endswith("/v1") and hostname.lower().endswith(("openai.com", "deepseek.com")):
-                    base_url += "/v1"
-                url = f"{base_url}/chat/completions"
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": 0.5
-                }
+            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            provider_request = llm_adapter.build_chat_request(
+                base_url,
+                api_key,
+                model,
+                system_prompt,
+                [{"role": "user", "content": user_prompt}],
+                stream=False,
+                temperature=0.5,
+            )
+            url = provider_request.url
+            headers = provider_request.headers
+            payload = provider_request.payload
 
             # R7: Rate limit check (core limiter for heavy endpoint)
             if not SessionManager.get_core_limiter().allow():
@@ -1060,14 +990,7 @@ try:
                     # Safely parse JSON response
                     try:
                         resp_data = await response.json()
-                        # Handle Anthropic, Ollama, and OpenAI response formats
-                        if is_anthropic_api:
-                            # Anthropic format: {"content": [{"text": "..."}]}
-                            content = resp_data.get('content', [{}])[0].get('text', '')
-                        elif is_ollama:
-                            content = resp_data.get('message', {}).get('content', '')
-                        else:
-                            content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                        content = llm_adapter.parse_chat_response(resp_data)
                         if not content:
                             return _error_response("Empty response from LLM", status=502, code="empty_llm_response")
                             
@@ -1302,50 +1225,30 @@ try:
                     if CONFIG.r14_use_prompt_composer:
                         try:
                             r14_composer_succeeded = True  # Assume success until exception
-                            # Build llm_context compatible with PromptComposer
-                            from .services.context_extractor import extract_error_summary
-                            
-                            # Extract error summary for summary-first ordering
-                            traceback_text = str(enriched_context.get('traceback', ''))
-                            error_summary_obj = extract_error_summary(traceback_text)
-                            error_summary_str = error_summary_obj.to_string() if error_summary_obj else enriched_context['error_message']
-                            
+                            traceback_text = str(enriched_context.get('traceback') or '')
                             failed_node = enriched_context.get('failed_node', {})
-                            llm_context = {
-                                "error_summary": error_summary_str,
-                                "node_info": {
-                                    "node_id": failed_node.get('id') or node_context.get('node_id'),
-                                    "node_name": failed_node.get('title') or node_context.get('node_name'),
-                                    "node_class": failed_node.get('class_type') or node_context.get('node_class'),
-                                    "display_node": failed_node.get('display_node') or node_context.get('display_node'),
-                                    "parent_node": failed_node.get('parent_node') or node_context.get('parent_node'),
-                                    "real_node_id": failed_node.get('real_node_id') or node_context.get('real_node_id'),
-                                    "preferred_node_id": (
-                                        failed_node.get('display_node')
-                                        or failed_node.get('id')
-                                        or node_context.get('preferred_node_id')
-                                        or node_context.get('display_node')
-                                        or node_context.get('node_id')
-                                        or node_context.get('real_node_id')
-                                    ),
-                                    "subgraph_lineage": failed_node.get('subgraph_lineage') or node_context.get('subgraph_lineage') or [],
-                                },
+                            pipeline_node_context = {
+                                "node_id": failed_node.get('id') or node_context.get('node_id'),
+                                "node_name": failed_node.get('title') or node_context.get('node_name'),
+                                "node_class": failed_node.get('class_type') or node_context.get('node_class'),
+                                "display_node": failed_node.get('display_node') or node_context.get('display_node'),
+                                "parent_node": failed_node.get('parent_node') or node_context.get('parent_node'),
+                                "real_node_id": failed_node.get('real_node_id') or node_context.get('real_node_id'),
+                            }
+                            pipeline_context = ErrorAnalyzer.build_llm_context(
+                                traceback_text or enriched_context['error_message'],
+                                workflow_json=workflow_data or workflow,
+                                node_context=pipeline_node_context,
+                                execution_logs=enriched_context.get('execution_logs', []),
+                                settings={"privacy_mode": privacy_mode},
+                            )
+                            llm_context = pipeline_context.llm_context or {
+                                "error_summary": enriched_context['error_message'],
+                                "node_info": pipeline_node_context,
                                 "traceback": traceback_text,
                                 "execution_logs": enriched_context.get('execution_logs', []),
                                 "workflow_subset": enriched_context.get('workflow_structure'),
-                                "system_info": {}  # R15: Added below
                             }
-                            
-                            # R15: Add canonicalized system environment to llm_context
-                            try:
-                                _env_info = get_system_environment()
-                                llm_context["system_info"] = canonicalize_system_info(
-                                    _env_info, 
-                                    error_text=traceback_text,
-                                    privacy_mode=privacy_mode
-                                )
-                            except Exception:
-                                pass
                             
                             composer_config = PromptComposerConfig(use_legacy_format=CONFIG.r14_use_legacy_format)
                             prompt_composer = get_prompt_composer()
@@ -1438,68 +1341,24 @@ try:
 
             # Prepare request
             base_url = base_url.rstrip("/")
-
-            base_info = parse_base_url(base_url)
-            hostname = (base_info.get("hostname") if base_info else "") or ""
             is_local = is_local_llm_url(base_url)
-
-            # Determine API type
-            is_ollama = is_local and base_info and base_info.get("port") == 11434
-            is_anthropic_api = is_anthropic(base_url)
 
             # Limit conversation history to prevent token overflow
             MAX_HISTORY = 10
             recent_messages = messages[-MAX_HISTORY:] if len(messages) > MAX_HISTORY else messages
-
-            if is_anthropic_api:
-                # Anthropic uses different format
-                headers = {
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json"
-                }
-                url = f"{base_url}/v1/messages"
-                payload = {
-                    "model": model,
-                    "system": system_prompt,
-                    "messages": recent_messages,
-                    "max_tokens": 4096,
-                    "temperature": 0.7,
-                    "stream": stream
-                }
-            elif is_ollama:
-                # Ollama uses /api/chat endpoint (remove /v1 if present)
-                if base_url.endswith("/v1"):
-                    base_url = base_url[:-3]
-                url = f"{base_url}/api/chat"
-                headers = {
-                    "Content-Type": "application/json"
-                }
-                api_messages = [{"role": "system", "content": system_prompt}]
-                api_messages.extend(recent_messages)
-                payload = {
-                    "model": model,
-                    "messages": api_messages,
-                    "temperature": 0.7,
-                    "stream": stream
-                }
-            else:
-                # OpenAI-compatible: auto-append /v1 if needed
-                if not base_url.endswith("/v1") and hostname.lower().endswith(("openai.com", "deepseek.com")):
-                    base_url += "/v1"
-                url = f"{base_url}/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                api_messages = [{"role": "system", "content": system_prompt}]
-                api_messages.extend(recent_messages)
-                payload = {
-                    "model": model,
-                    "messages": api_messages,
-                    "temperature": 0.7,
-                    "stream": stream
-                }
+            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            provider_request = llm_adapter.build_chat_request(
+                base_url,
+                api_key,
+                model,
+                system_prompt,
+                recent_messages,
+                stream=stream,
+                temperature=0.7,
+            )
+            url = provider_request.url
+            headers = provider_request.headers
+            payload = provider_request.payload
 
             logger.info(f"Connecting to LLM: {url}")
             
@@ -1545,13 +1404,7 @@ try:
                             return _error_response(f"LLM Error: {error_msg[:500]}", status=response.status, code="llm_error")
                         
                         resp_data = await response.json()
-                        # Handle Anthropic, Ollama, and OpenAI response formats
-                        if is_anthropic_api:
-                            content = resp_data.get('content', [{}])[0].get('text', '')
-                        elif is_ollama:
-                            content = resp_data.get('message', {}).get('content', '')
-                        else:
-                            content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                        content = llm_adapter.parse_chat_response(resp_data)
                         # R19: Clean output (strip hidden reasoning)
                         from .services.providers.base import BaseProviderAdapter
                         content = BaseProviderAdapter.clean_llm_output(content)
@@ -1628,76 +1481,22 @@ try:
                                 if not line:
                                     continue
 
-                                # Handle different streaming formats
-                                if is_anthropic_api:
-                                    # Anthropic uses SSE format with different event types
-                                    if not line.startswith('data:'):
-                                        # Skip event: type lines
-                                        continue
+                                try:
+                                    parsed_chunk = llm_adapter.parse_stream_line(line)
+                                except json.JSONDecodeError:
+                                    continue
 
-                                    payload_str = line[5:].strip()
-                                    if not payload_str:
-                                        continue
+                                if parsed_chunk.done:
+                                    done_data = json.dumps({"delta": "", "done": True})
+                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                                    stream_done = True
+                                    break
+                                if parsed_chunk.skip or not parsed_chunk.delta:
+                                    continue
 
-                                    try:
-                                        chunk_json = json.loads(payload_str)
-                                        event_type = chunk_json.get('type', '')
-
-                                        if event_type == 'message_stop':
-                                            done_data = json.dumps({"delta": "", "done": True})
-                                            await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                            stream_done = True
-                                            break
-                                        elif event_type == 'content_block_delta':
-                                            delta = chunk_json.get('delta', {}).get('text', '')
-                                            if delta:
-                                                full_content += delta  # F7: Accumulate
-                                                chunk_data = json.dumps({"delta": delta, "done": False})
-                                                await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                    except json.JSONDecodeError:
-                                        continue
-                                elif is_ollama:
-                                    # Ollama uses newline-delimited JSON (not SSE)
-                                    try:
-                                        chunk_json = json.loads(line)
-                                        # Check if stream is done
-                                        if chunk_json.get('done', False):
-                                            done_data = json.dumps({"delta": "", "done": True})
-                                            await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                            stream_done = True
-                                            break
-                                        # Extract content delta
-                                        delta = chunk_json.get('message', {}).get('content', '')
-                                        if delta:
-                                            full_content += delta  # F7: Accumulate
-                                            chunk_data = json.dumps({"delta": delta, "done": False})
-                                            await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                    except json.JSONDecodeError:
-                                        continue
-                                else:
-                                    # OpenAI uses SSE format
-                                    if not line.startswith('data:'):
-                                        continue
-
-                                    payload_str = line[5:].strip()
-                                    if payload_str == '[DONE]':
-                                        done_data = json.dumps({"delta": "", "done": True})
-                                        await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                        stream_done = True
-                                        break
-
-                                    if not payload_str:
-                                        continue
-
-                                    try:
-                                        chunk_json = json.loads(payload_str)
-                                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                                        if delta:
-                                            full_content += delta  # F7: Accumulate
-                                            chunk_data = json.dumps({"delta": delta, "done": False})
-                                            await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                    except json.JSONDecodeError:
-                                        continue
+                                full_content += parsed_chunk.delta  # F7: Accumulate
+                                chunk_data = json.dumps({"delta": parsed_chunk.delta, "done": False})
+                                await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
 
                             if stream_done:
                                 break
@@ -1705,37 +1504,17 @@ try:
                     # Process any remaining buffered line if stream ended without newline
                     if not stream_done and buffer.strip():
                         line = buffer.strip()
-                        if is_ollama:
-                            # Ollama newline-delimited JSON
-                            try:
-                                chunk_json = json.loads(line)
-                                if chunk_json.get('done', False):
-                                    done_data = json.dumps({"delta": "", "done": True})
-                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                else:
-                                    delta = chunk_json.get('message', {}).get('content', '')
-                                    if delta:
-                                        chunk_data = json.dumps({"delta": delta, "done": False})
-                                        await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                            except json.JSONDecodeError:
-                                pass
-                        else:
-                            # OpenAI SSE format
-                            if line.startswith('data:'):
-                                payload_str = line[5:].strip()
-                                if payload_str == '[DONE]':
-                                    done_data = json.dumps({"delta": "", "done": True})
-                                    await response.write(f"data: {done_data}\n\n".encode('utf-8'))
-                                else:
-                                    try:
-                                        chunk_json = json.loads(payload_str)
-                                        delta = chunk_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                                        if delta:
-                                            full_content += delta  # F7: Accumulate
-                                            chunk_data = json.dumps({"delta": delta, "done": False})
-                                            await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
-                                    except json.JSONDecodeError:
-                                        pass
+                        try:
+                            parsed_chunk = llm_adapter.parse_stream_line(line)
+                            if parsed_chunk.done:
+                                done_data = json.dumps({"delta": "", "done": True})
+                                await response.write(f"data: {done_data}\n\n".encode('utf-8'))
+                            elif not parsed_chunk.skip and parsed_chunk.delta:
+                                full_content += parsed_chunk.delta  # F7: Accumulate
+                                chunk_data = json.dumps({"delta": parsed_chunk.delta, "done": False})
+                                await response.write(f"data: {chunk_data}\n\n".encode('utf-8'))
+                        except json.JSONDecodeError:
+                            pass
 
                     # F7: Detect and send fix suggestions after stream completes
                     if full_content:
@@ -1946,14 +1725,13 @@ try:
             
             # Normalize base URL
             base_url = base_url.rstrip("/")
-            
+
             # Use placeholder for local LLMs without key
             if is_local and not api_key:
                 api_key = "local-llm"
-            
-            # Prepare request
-            headers = {"Authorization": f"Bearer {api_key}"}
-            url = f"{base_url}/models"
+
+            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            provider_request = llm_adapter.build_models_request(base_url, api_key)
             
             # R7: Rate limit check (light limiter for quick requests)
             if not SessionManager.get_light_limiter().allow():
@@ -1966,7 +1744,7 @@ try:
                 )
             
             session = await SessionManager.get_session()
-            async with session.get(url, headers=headers, allow_redirects=False) as response:
+            async with session.get(provider_request.url, headers=provider_request.headers, allow_redirects=False) as response:
                 if response.status == 200:
                     msg = "API key is valid" if not is_local else "Local LLM connection successful"
                     logger.info(f"API key verification successful - base_url={base_url}, is_local={is_local}")
@@ -2037,22 +1815,11 @@ try:
             logger.info(f"List-models key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             base_url = base_url.rstrip("/")
-            base_info = parse_base_url(base_url)
             if is_local and not api_key:
                 api_key = "local-llm"
 
-            # Determine if this is Ollama or OpenAI-compatible API
-            is_ollama = is_local and base_info and base_info.get("port") == 11434
-
-            if is_ollama:
-                # Ollama uses /api/tags endpoint (remove /v1 if present)
-                if base_url.endswith("/v1"):
-                    base_url = base_url[:-3]
-                url = f"{base_url}/api/tags"
-            else:
-                url = f"{base_url}/models"
-
-            headers = {"Authorization": f"Bearer {api_key}"}
+            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            provider_request = llm_adapter.build_models_request(base_url, api_key)
             
             # R7: Rate limit check (light limiter for quick requests)
             if not SessionManager.get_light_limiter().allow():
@@ -2065,7 +1832,7 @@ try:
                 )
             
             session = await SessionManager.get_session()
-            async with session.get(url, headers=headers, allow_redirects=False) as response:
+            async with session.get(provider_request.url, headers=provider_request.headers, allow_redirects=False) as response:
                 if response.status != 200:
                     return _error_response(
                         f"Failed to fetch models ({response.status})",
@@ -2076,26 +1843,9 @@ try:
                 
                 try:
                     result = await response.json()
-                    models = []
-                    
-                    # Handle OpenAI-style response
-                    if "data" in result:
-                        for m in result["data"]:
-                            model_id = m.get("id", "")
-                            models.append({
-                                "id": model_id,
-                                "name": model_id
-                            })
-                    # Handle Ollama-style response
-                    elif "models" in result:
-                        for m in result["models"]:
-                            model_name = m.get("name", m.get("model", ""))
-                            models.append({
-                                "id": model_name,
-                                "name": model_name
-                            })
+                    models = llm_adapter.parse_models_response(result)
 
-                    logger.info(f"Retrieved {len(models)} models from {url}")
+                    logger.info(f"Retrieved {len(models)} models from {provider_request.url}")
                     return web.json_response({
                         "success": True,
                         "models": models,
