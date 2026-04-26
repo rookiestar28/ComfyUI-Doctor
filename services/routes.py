@@ -9,6 +9,7 @@ import time
 import aiohttp.web as web
 
 from .admin_guard import validate_admin_request
+from .api_response import admin_denied_response, error_response
 from . import job_manager
 from .providers import registry as provider_registry
 
@@ -22,8 +23,7 @@ logger = logging.getLogger("ComfyUI-Doctor.routes")
 
 
 def _admin_denied_response(code: str, message: str):
-    status_code = 401 if code == "unauthorized" else 403
-    return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+    return admin_denied_response(web, code, message)
 
 
 async def _optional_json_payload(request):
@@ -97,7 +97,7 @@ async def api_plugins(request):
         return web.json_response({"success": True, "plugins": payload})
     except Exception as e:
         logger.error(f"Plugins API error: {str(e)}")
-        return web.json_response({"success": False, "error": str(e)}, status=500)
+        return error_response(web, str(e), status=500)
 
 
 async def api_get_job(request):
@@ -107,7 +107,7 @@ async def api_get_job(request):
     job_id = request.match_info.get("job_id", "")
     job = job_manager.get_job_manager().get_job(job_id)
     if not job:
-        return web.json_response({"success": False, "error": "Job not found"}, status=404)
+        return error_response(web, "Job not found", status=404, code="not_found")
 
     return web.json_response({
         "success": True,
@@ -128,10 +128,15 @@ async def api_resume_job(request):
     job_id = request.match_info.get("job_id", "")
     job = job_manager.get_job_manager().get_job(job_id)
     if not job:
-        return web.json_response({"success": False, "error": "Job not found"}, status=404)
+        return error_response(web, "Job not found", status=404, code="not_found")
 
     if job.status.value not in ("failed", "cancelled", "pending"):
-        return web.json_response({"success": False, "message": f"Cannot resume job in state {job.status}"}, status=400)
+        return error_response(
+            web,
+            f"Cannot resume job in state {job.status}",
+            status=400,
+            code="invalid_job_state",
+        )
 
     job_manager.get_job_manager().update_job(job_id, status=job_manager.JobStatus.PENDING, meta_update={"resumed_at": time.time()})
     return web.json_response({"success": True, "message": "Job resumed"})
@@ -149,7 +154,7 @@ async def api_cancel_job(request):
     job_id = request.match_info.get("job_id", "")
     if job_manager.get_job_manager().update_job(job_id, status=job_manager.JobStatus.CANCELLED):
         return web.json_response({"success": True, "message": "Job cancelled"})
-    return web.json_response({"success": False, "error": "Job not found"}, status=404)
+    return error_response(web, "Job not found", status=404, code="not_found")
 
 
 async def api_provider_status(request):
@@ -159,7 +164,7 @@ async def api_provider_status(request):
     provider_id = request.match_info.get("provider_id", "")
     cap = provider_registry.ProviderRegistry.get_capability(provider_id)
     if not cap:
-        return web.json_response({"success": False, "error": "Provider not found"}, status=404)
+        return error_response(web, "Provider not found", status=404, code="not_found")
 
     return web.json_response({
         "success": True,

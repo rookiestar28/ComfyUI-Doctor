@@ -64,6 +64,7 @@ from .services.doctor_paths import get_doctor_data_dir, get_path_diagnostics
 from .services.llm_keys import resolve_api_key, get_provider_status
 from .services.secret_store import get_secret_store
 from .services.admin_guard import get_admin_guard_startup_warning, validate_admin_request
+from .services.api_response import admin_denied_response, error_response
 from .services.audit import ActionAudit
 from .services.community_feedback import build_feedback_preview, submit_feedback, GitHubFeedbackConfig, FeedbackValidationError
 
@@ -96,8 +97,12 @@ def _close_retry_response(result: RetryResult) -> None:
 
 def _admin_denied_response(code: str, message: str):
     """Standardized admin denial response payload/status for write-sensitive APIs."""
-    status_code = 401 if code == "unauthorized" else 403
-    return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+    return admin_denied_response(web, code, message)
+
+
+def _error_response(message: str, status: int, code: str | None = None, extra: dict | None = None):
+    """Standardized Doctor API error response payload/status."""
+    return error_response(web, message, status, code=code, extra=extra)
 
 
 def _startup_print(message: str = "") -> None:
@@ -717,9 +722,9 @@ try:
             if "language" in data:
                 set_language(data["language"])
                 return web.json_response({"success": True, "language": data["language"]})
-            return web.json_response({"success": False, "message": "Missing language parameter"}, status=400)
+            return _error_response("Missing language parameter", status=400, code="missing_language")
         except Exception as e:
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/ui_text")
     async def api_get_ui_text(request):
@@ -783,7 +788,7 @@ try:
                 "meta": _get_doctor_meta(),
             })
         except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/analyze")
     async def api_analyze_error(request):
@@ -811,7 +816,7 @@ try:
             is_valid, ssrf_error = validate_ssrf_url(base_url)
             if not is_valid:
                 logger.warning(f"SSRF blocked: {ssrf_error}")
-                return web.json_response({"error": f"Invalid Base URL: {ssrf_error}"}, status=400)
+                return _error_response(f"Invalid Base URL: {ssrf_error}", status=400, code="invalid_base_url")
 
             # Resolve API key via request -> ENV -> server store
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
@@ -820,11 +825,11 @@ try:
                 request_api_key=api_key,
             )
             if not api_key and not is_local:
-                return web.json_response({"error": "Missing API Key"}, status=401)
+                return _error_response("Missing API Key", status=401, code="missing_api_key")
             logger.info(f"Analyze key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
 
             if not error_text:
-                return web.json_response({"error": "No error text provided"}, status=400)
+                return _error_response("No error text provided", status=400, code="missing_error_text")
 
             # S6: PII Sanitization - Remove sensitive info before sending to LLM
             sanitizer, downgraded = get_outbound_sanitizer(base_url, privacy_mode)
@@ -1010,9 +1015,10 @@ try:
             # R7: Rate limit check (core limiter for heavy endpoint)
             if not SessionManager.get_core_limiter().allow():
                 logger.warning("Rate limit exceeded for /doctor/analyze")
-                return web.json_response(
-                    {"error": "Rate limit exceeded. Please wait before retrying."},
-                    status=429
+                return _error_response(
+                    "Rate limit exceeded. Please wait before retrying.",
+                    status=429,
+                    code="rate_limited",
                 )
             
             # R7: Concurrency limit (prevent connection pool exhaustion)
@@ -1037,10 +1043,7 @@ try:
                     _close_retry_response(result)
                     error_msg = result.error or "Unknown error"
                     logger.error(f"LLM request failed after {result.attempts} attempts: {error_msg}")
-                    return web.json_response(
-                        {"error": f"LLM Error: {error_msg}"},
-                        status=503
-                    )
+                    return _error_response(f"LLM Error: {error_msg}", status=503, code="llm_error")
                 
                 async with result.response as response:
                     if response.status != 200:
@@ -1048,9 +1051,10 @@ try:
                         # Truncate error message for readability
                         if len(error_msg) > 500:
                             error_msg = error_msg[:500] + "..."
-                        return web.json_response(
-                            {"error": f"LLM Provider Error ({response.status}): {error_msg}"},
-                            status=response.status
+                        return _error_response(
+                            f"LLM Provider Error ({response.status}): {error_msg}",
+                            status=response.status,
+                            code="llm_provider_error",
                         )
 
                     # Safely parse JSON response
@@ -1065,7 +1069,7 @@ try:
                         else:
                             content = resp_data.get('choices', [{}])[0].get('message', {}).get('content', '')
                         if not content:
-                            return web.json_response({"error": "Empty response from LLM"}, status=502)
+                            return _error_response("Empty response from LLM", status=502, code="empty_llm_response")
                             
                         # R19: Clean output (strip hidden reasoning)
                         from .services.providers.base import BaseProviderAdapter
@@ -1074,18 +1078,19 @@ try:
                         logger.info(f"Analysis successful, response length={len(content)}, attempts={result.attempts}")
                         return web.json_response({"analysis": content})
                     except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
-                        return web.json_response(
-                            {"error": f"Failed to parse LLM response: {str(parse_err)}"}, 
-                            status=502
+                        return _error_response(
+                            f"Failed to parse LLM response: {str(parse_err)}",
+                            status=502,
+                            code="llm_parse_error",
                         )
 
         except aiohttp.ClientError as e:
             # Network-level errors (timeout, connection refused, etc.)
             logger.error(f"LLM Network Error: {str(e)}")
-            return web.json_response({"error": f"Network Error: {str(e)}"}, status=503)
+            return _error_response(f"Network Error: {str(e)}", status=503, code="network_error")
         except Exception as e:
             logger.error(f"LLM Analysis Failed: {str(e)}")
-            return web.json_response({"error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/chat")
     async def api_chat(request):
@@ -1126,7 +1131,7 @@ try:
             is_valid, ssrf_error = validate_ssrf_url(base_url)
             if not is_valid:
                 logger.warning(f"SSRF blocked: {ssrf_error}")
-                return web.json_response({"error": f"Invalid Base URL: {ssrf_error}"}, status=400)
+                return _error_response(f"Invalid Base URL: {ssrf_error}", status=400, code="invalid_base_url")
 
             # Resolve API key via request -> ENV -> server store
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
@@ -1135,11 +1140,11 @@ try:
                 request_api_key=api_key,
             )
             if not api_key and not is_local:
-                return web.json_response({"error": "Missing API Key"}, status=401)
+                return _error_response("Missing API Key", status=401, code="missing_api_key")
             logger.info(f"Chat key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             if not messages:
-                return web.json_response({"error": "No messages provided"}, status=400)
+                return _error_response("No messages provided", status=400, code="missing_messages")
 
             # R12: Smart Token Budget
             # Apply budget metrics and trimming BEFORE sanitization and prompt construction
@@ -1501,9 +1506,10 @@ try:
             # R7: Rate limit check (core limiter for heavy endpoint)
             if not SessionManager.get_core_limiter().allow():
                 logger.warning("Rate limit exceeded for /doctor/chat")
-                return web.json_response(
-                    {"error": "Rate limit exceeded. Please wait before retrying."},
-                    status=429
+                return _error_response(
+                    "Rate limit exceeded. Please wait before retrying.",
+                    status=429,
+                    code="rate_limited",
                 )
             
             # R7: Concurrency limit (prevent connection pool exhaustion)
@@ -1530,13 +1536,13 @@ try:
                         _close_retry_response(result)
                         error_msg = result.error or "Unknown error"
                         logger.error(f"LLM non-stream failed after {result.attempts} attempts: {error_msg}")
-                        return web.json_response({"error": f"LLM Error: {error_msg}"}, status=503)
+                        return _error_response(f"LLM Error: {error_msg}", status=503, code="llm_error")
                     
                     async with result.response as response:
                         if response.status != 200:
                             error_msg = await response.text()
                             logger.error(f"LLM non-stream error: {error_msg[:200]}")
-                            return web.json_response({"error": f"LLM Error: {error_msg[:500]}"}, status=response.status)
+                            return _error_response(f"LLM Error: {error_msg[:500]}", status=response.status, code="llm_error")
                         
                         resp_data = await response.json()
                         # Handle Anthropic, Ollama, and OpenAI response formats
@@ -1758,10 +1764,10 @@ try:
             
         except aiohttp.ClientError as e:
             print(f"[ComfyUI-Doctor] Chat Network Error: {e}")
-            return web.json_response({"error": f"Network Error: {str(e)}"}, status=503)
+            return _error_response(f"Network Error: {str(e)}", status=503, code="network_error")
         except Exception as e:
             print(f"[ComfyUI-Doctor] Chat Failed: {e}")
-            return web.json_response({"error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
         
     @server.PromptServer.instance.routes.get("/debugger/history")
     async def api_get_history(request):
@@ -1788,7 +1794,7 @@ try:
             success = clear_analysis_history()
             return web.json_response({"success": success})
         except Exception as e:
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/provider_defaults")
     async def api_get_provider_defaults(request):
@@ -1821,7 +1827,7 @@ try:
             # S8: read-only guard — loopback convenience, remote needs token
             allowed, code, message = validate_admin_request(request)
             if not allowed:
-                return web.json_response({"success": False, "error": message}, status=403 if code == "remote_admin_denied" else 401)
+                return _admin_denied_response(code, message)
 
             providers = get_provider_status()
             return web.json_response({
@@ -1830,7 +1836,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Secrets status API error: {e}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.put("/doctor/secrets")
     async def api_secrets_put(request):
@@ -1841,23 +1847,22 @@ try:
         try:
             data = await request.json()
         except Exception:
-            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+            return _error_response("Invalid JSON", status=400, code="invalid_json")
 
         allowed, code, message = validate_admin_request(request, payload=data)
         if not allowed:
-            status_code = 401 if code == "unauthorized" else 403
-            return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+            return _admin_denied_response(code, message)
 
         provider = (data.get("provider") or "").strip().lower()
         api_key = (data.get("api_key") or "").strip()
         if not provider:
-            return web.json_response({"success": False, "error": "Missing provider"}, status=400)
+            return _error_response("Missing provider", status=400, code="missing_provider")
         if not api_key:
-            return web.json_response({"success": False, "error": "Missing api_key"}, status=400)
+            return _error_response("Missing api_key", status=400, code="missing_api_key")
 
         valid_providers = {"openai", "anthropic", "deepseek", "groq", "gemini", "xai", "openrouter", "generic"}
         if provider not in valid_providers:
-            return web.json_response({"success": False, "error": "Invalid provider"}, status=400)
+            return _error_response("Invalid provider", status=400, code="invalid_provider")
 
         try:
             get_secret_store().set_secret(provider, api_key)
@@ -1865,7 +1870,7 @@ try:
             return web.json_response({"success": True, "message": "Secret saved"})
         except Exception as e:
             logger.error(f"Secrets put API error: {e}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.delete("/doctor/secrets/{provider}")
     async def api_secrets_delete(request):
@@ -1875,7 +1880,7 @@ try:
         """
         provider = (request.match_info.get("provider") or "").strip().lower()
         if not provider:
-            return web.json_response({"success": False, "error": "Missing provider"}, status=400)
+            return _error_response("Missing provider", status=400, code="missing_provider")
 
         # For DELETE we read optional JSON body if present, but also support headers-only.
         payload = {}
@@ -1887,18 +1892,17 @@ try:
 
         allowed, code, message = validate_admin_request(request, payload=payload)
         if not allowed:
-            status_code = 401 if code == "unauthorized" else 403
-            return web.json_response({"success": False, "error": code, "message": message}, status=status_code)
+            return _admin_denied_response(code, message)
 
         try:
             deleted = get_secret_store().clear_secret(provider)
             if not deleted:
-                return web.json_response({"success": False, "error": "Not found"}, status=404)
+                return _error_response("Not found", status=404, code="not_found")
             logger.info(f"Secret deleted for provider={provider}")
             return web.json_response({"success": True, "message": "Secret deleted"})
         except Exception as e:
             logger.error(f"Secrets delete API error: {e}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/verify_key")
     async def api_verify_key(request):
@@ -1919,11 +1923,12 @@ try:
             is_valid, ssrf_error = validate_ssrf_url(base_url)
             if not is_valid:
                 logger.warning(f"SSRF blocked in verify_key: {ssrf_error}")
-                return web.json_response({
-                    "success": False,
-                    "message": f"Invalid Base URL: {ssrf_error}",
-                    "is_local": False
-                })
+                return _error_response(
+                    f"Invalid Base URL: {ssrf_error}",
+                    status=200,
+                    code="invalid_base_url",
+                    extra={"is_local": False},
+                )
 
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
                 base_url=base_url,
@@ -1931,11 +1936,12 @@ try:
                 request_api_key=api_key,
             )
             if not api_key and not is_local:
-                return web.json_response({
-                    "success": False,
-                    "message": "No API key provided",
-                    "is_local": False
-                })
+                return _error_response(
+                    "No API key provided",
+                    status=200,
+                    code="missing_api_key",
+                    extra={"is_local": False},
+                )
             logger.info(f"Verify key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             # Normalize base URL
@@ -1952,11 +1958,12 @@ try:
             # R7: Rate limit check (light limiter for quick requests)
             if not SessionManager.get_light_limiter().allow():
                 logger.warning("Rate limit exceeded for /doctor/verify_key")
-                return web.json_response({
-                    "success": False,
-                    "message": "Rate limit exceeded. Please wait before retrying.",
-                    "is_local": is_local
-                })
+                return _error_response(
+                    "Rate limit exceeded. Please wait before retrying.",
+                    status=200,
+                    code="rate_limited",
+                    extra={"is_local": is_local},
+                )
             
             session = await SessionManager.get_session()
             async with session.get(url, headers=headers, allow_redirects=False) as response:
@@ -1973,24 +1980,22 @@ try:
                     if len(error_text) > 200:
                         error_text = error_text[:200] + "..."
                     logger.warning(f"API key verification failed - status={response.status}, base_url={base_url}")
-                    return web.json_response({
-                        "success": False,
-                        "message": f"Verification failed ({response.status}): {error_text}",
-                        "is_local": is_local
-                    })
+                    return _error_response(
+                        f"Verification failed ({response.status}): {error_text}",
+                        status=200,
+                        code="verification_failed",
+                        extra={"is_local": is_local},
+                    )
                         
         except aiohttp.ClientError as e:
-            return web.json_response({
-                "success": False,
-                "message": f"Connection error: {str(e)}",
-                "is_local": is_local_llm_url(data.get("base_url", "")) if 'data' in locals() else False
-            })
+            return _error_response(
+                f"Connection error: {str(e)}",
+                status=200,
+                code="connection_error",
+                extra={"is_local": is_local_llm_url(data.get("base_url", "")) if 'data' in locals() else False},
+            )
         except Exception as e:
-            return web.json_response({
-                "success": False,
-                "message": f"Error: {str(e)}",
-                "is_local": False
-            })
+            return _error_response(f"Error: {str(e)}", status=200, extra={"is_local": False})
 
     @server.PromptServer.instance.routes.post("/doctor/list_models")
     async def api_list_models(request):
@@ -2010,11 +2015,12 @@ try:
             is_valid, ssrf_error = validate_ssrf_url(base_url)
             if not is_valid:
                 logger.warning(f"SSRF blocked in list_models: {ssrf_error}")
-                return web.json_response({
-                    "success": False,
-                    "models": [],
-                    "message": f"Invalid Base URL: {ssrf_error}"
-                })
+                return _error_response(
+                    f"Invalid Base URL: {ssrf_error}",
+                    status=200,
+                    code="invalid_base_url",
+                    extra={"models": []},
+                )
 
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
                 base_url=base_url,
@@ -2022,11 +2028,12 @@ try:
                 request_api_key=api_key,
             )
             if not api_key and not is_local:
-                return web.json_response({
-                    "success": False,
-                    "models": [],
-                    "message": "No API key provided"
-                })
+                return _error_response(
+                    "No API key provided",
+                    status=200,
+                    code="missing_api_key",
+                    extra={"models": []},
+                )
             logger.info(f"List-models key source={key_source}, provider={resolved_provider or 'unknown'}, local={is_local}")
             
             base_url = base_url.rstrip("/")
@@ -2050,20 +2057,22 @@ try:
             # R7: Rate limit check (light limiter for quick requests)
             if not SessionManager.get_light_limiter().allow():
                 logger.warning("Rate limit exceeded for /doctor/list_models")
-                return web.json_response({
-                    "success": False,
-                    "models": [],
-                    "message": "Rate limit exceeded. Please wait before retrying."
-                })
+                return _error_response(
+                    "Rate limit exceeded. Please wait before retrying.",
+                    status=200,
+                    code="rate_limited",
+                    extra={"models": []},
+                )
             
             session = await SessionManager.get_session()
             async with session.get(url, headers=headers, allow_redirects=False) as response:
                 if response.status != 200:
-                    return web.json_response({
-                        "success": False,
-                        "models": [],
-                        "message": f"Failed to fetch models ({response.status})"
-                    })
+                    return _error_response(
+                        f"Failed to fetch models ({response.status})",
+                        status=200,
+                        code="model_fetch_failed",
+                        extra={"models": []},
+                    )
                 
                 try:
                     result = await response.json()
@@ -2094,24 +2103,22 @@ try:
                     })
                     
                 except (json.JSONDecodeError, KeyError) as e:
-                    return web.json_response({
-                        "success": False,
-                        "models": [],
-                        "message": f"Failed to parse model list: {str(e)}"
-                    })
+                    return _error_response(
+                        f"Failed to parse model list: {str(e)}",
+                        status=200,
+                        code="model_parse_failed",
+                        extra={"models": []},
+                    )
                         
         except aiohttp.ClientError as e:
-            return web.json_response({
-                "success": False,
-                "models": [],
-                "message": f"Connection error: {str(e)}"
-            })
+            return _error_response(
+                f"Connection error: {str(e)}",
+                status=200,
+                code="connection_error",
+                extra={"models": []},
+            )
         except Exception as e:
-            return web.json_response({
-                "success": False,
-                "models": [],
-                "message": f"Error: {str(e)}"
-            })
+            return _error_response(f"Error: {str(e)}", status=200, extra={"models": []})
     
     # ---- F4: Statistics Dashboard API Endpoints ----
     
@@ -2153,18 +2160,20 @@ try:
             })
         except Exception as e:
             logger.error(f"Statistics API error: {str(e)}")
-            return web.json_response({
-                "success": False,
-                "error": str(e),
-                "statistics": {
+            return _error_response(
+                str(e),
+                status=500,
+                extra={
+                    "statistics": {
                     "total_errors": 0,
                     "pattern_frequency": {},
                     "category_breakdown": {},
                     "top_patterns": [],
                     "resolution_rate": {"resolved": 0, "unresolved": 0, "ignored": 0},
                     "trend": {"last_24h": 0, "last_7d": 0, "last_30d": 0}
-                }
-            })
+                    }
+                },
+            )
     
     @server.PromptServer.instance.routes.post("/doctor/statistics/reset")
     async def api_reset_statistics(request):
@@ -2191,10 +2200,10 @@ try:
                 logger.info("Statistics reset (history cleared)")
                 return web.json_response({"success": True, "message": "Statistics reset successfully"})
             else:
-                return web.json_response({"success": False, "message": "Failed to clear history"}, status=500)
+                return _error_response("Failed to clear history", status=500, code="clear_history_failed")
         except Exception as e:
             logger.error(f"Statistics reset API error: {str(e)}")
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
     
     @server.PromptServer.instance.routes.post("/doctor/mark_resolved")
     async def api_mark_error_resolved(request):
@@ -2211,7 +2220,7 @@ try:
         try:
             data = await request.json()
         except Exception:
-            return web.json_response({"success": False, "message": "Invalid JSON"}, status=400)
+            return _error_response("Invalid JSON", status=400, code="invalid_json")
 
         # CRITICAL: write-sensitive endpoint must remain admin-gated.
         allowed, code, message = validate_admin_request(request, payload=data)
@@ -2223,10 +2232,10 @@ try:
             status = data.get("status", "resolved")
 
             if not timestamp:
-                return web.json_response({"success": False, "message": "Missing timestamp"}, status=400)
+                return _error_response("Missing timestamp", status=400, code="missing_timestamp")
 
             if status not in ["resolved", "unresolved", "ignored"]:
-                return web.json_response({"success": False, "message": "Invalid status"}, status=400)
+                return _error_response("Invalid status", status=400, code="invalid_status")
 
             from .logger import update_resolution_status
 
@@ -2234,11 +2243,11 @@ try:
                 logger.info(f"Error marked as {status}: {timestamp}")
                 return web.json_response({"success": True, "message": f"Error marked as {status}"})
 
-            return web.json_response({"success": False, "message": "Timestamp not found"}, status=404)
+            return _error_response("Timestamp not found", status=404, code="not_found")
 
         except Exception as e:
             logger.error(f"Mark resolved API error: {str(e)}")
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     # ---- F16: Quick Community Feedback (GitHub PR) ----
 
@@ -2251,23 +2260,21 @@ try:
         try:
             data = await request.json()
         except Exception:
-            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+            return _error_response("Invalid JSON", status=400, code="invalid_json")
 
         try:
             preview = build_feedback_preview(data, github_config=GitHubFeedbackConfig.from_env())
             return web.json_response({"success": True, **preview})
         except FeedbackValidationError as e:
-            return web.json_response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "field_errors": getattr(e, "field_errors", {}) or {},
-                },
+            return _error_response(
+                str(e),
                 status=400,
+                code="validation_error",
+                extra={"field_errors": getattr(e, "field_errors", {}) or {}},
             )
         except Exception as e:
             logger.error(f"Feedback preview API error: {e}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/feedback/submit")
     async def api_feedback_submit(request):
@@ -2278,7 +2285,7 @@ try:
         try:
             data = await request.json()
         except Exception:
-            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+            return _error_response("Invalid JSON", status=400, code="invalid_json")
 
         # IMPORTANT: write-sensitive endpoint must remain admin-gated.
         allowed, code, message = validate_admin_request(request, payload=data)
@@ -2307,17 +2314,15 @@ try:
 
             return web.json_response({"success": True, **result})
         except FeedbackValidationError as e:
-            return web.json_response(
-                {
-                    "success": False,
-                    "error": str(e),
-                    "field_errors": getattr(e, "field_errors", {}) or {},
-                },
+            return _error_response(
+                str(e),
                 status=400,
+                code="validation_error",
+                extra={"field_errors": getattr(e, "field_errors", {}) or {}},
             )
         except Exception as e:
             logger.error(f"Feedback submit API error: {e}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/health")
     async def api_health(request):
@@ -2345,7 +2350,7 @@ try:
             return web.json_response({"success": True, "health": payload})
         except Exception as e:
             logger.error(f"Health API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     # ---- S3: Telemetry API Endpoints ----
     from .telemetry import get_telemetry_store
@@ -2371,7 +2376,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Telemetry status API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/telemetry/buffer")
     async def api_telemetry_buffer(request):
@@ -2389,7 +2394,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Telemetry buffer API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/telemetry/track")
     async def api_telemetry_track(request):
@@ -2407,28 +2412,28 @@ try:
                 from urllib.parse import urlparse
                 origin_host = urlparse(origin).netloc
                 if origin_host and host and origin_host != host:
-                    return web.Response(status=403, text="Cross-origin request rejected")
+                    return _error_response("Cross-origin request rejected", status=403, code="cross_origin_rejected")
             
             # Security: Check Content-Type
             content_type = request.headers.get("Content-Type", "")
             if "application/json" not in content_type:
-                return web.Response(status=400, text="Content-Type must be application/json")
+                return _error_response("Content-Type must be application/json", status=400, code="invalid_content_type")
             
             # Security: Payload size limit (1KB)
             content_length = request.content_length or 0
             if content_length > 1024:
-                return web.Response(status=413, text="Payload too large")
+                return _error_response("Payload too large", status=413, code="payload_too_large")
             
             # Parse JSON
             try:
                 data = await request.json()
             except Exception:
-                return web.Response(status=400, text="Invalid JSON")
+                return _error_response("Invalid JSON", status=400, code="invalid_json")
             
             # Security: Reject unexpected fields
             allowed_fields = {"category", "action", "label", "value"}
             if set(data.keys()) - allowed_fields:
-                return web.Response(status=400, text="Unexpected fields")
+                return _error_response("Unexpected fields", status=400, code="unexpected_fields")
             
             # Track event
             store = get_telemetry_store()
@@ -2437,7 +2442,7 @@ try:
             return web.json_response({"success": success, "message": message})
         except Exception as e:
             logger.error(f"Telemetry track API error: {str(e)}")
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/telemetry/clear")
     async def api_telemetry_clear(request):
@@ -2463,7 +2468,7 @@ try:
             return web.json_response({"success": True, "message": "Buffer cleared"})
         except Exception as e:
             logger.error(f"Telemetry clear API error: {str(e)}")
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/telemetry/export")
     async def api_telemetry_export(request):
@@ -2484,7 +2489,7 @@ try:
             )
         except Exception as e:
             logger.error(f"Telemetry export API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/telemetry/toggle")
     async def api_telemetry_toggle(request):
@@ -2496,7 +2501,7 @@ try:
         try:
             data = await request.json()
         except Exception:
-            return web.json_response({"success": False, "message": "Invalid JSON"}, status=400)
+            return _error_response("Invalid JSON", status=400, code="invalid_json")
 
         # CRITICAL: write-sensitive endpoint must remain admin-gated.
         allowed, code, message = validate_admin_request(request, payload=data)
@@ -2516,7 +2521,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Telemetry toggle API error: {str(e)}")
-            return web.json_response({"success": False, "message": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     # ---- API Routes (R20) ----
     try:
@@ -2595,7 +2600,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Health check API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/health_report")
     async def api_health_report(request):
@@ -2636,7 +2641,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Health report API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/doctor/health_history")
     async def api_health_history(request):
@@ -2663,7 +2668,7 @@ try:
             })
         except Exception as e:
             logger.error(f"Health history API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.post("/doctor/health_ack")
     async def api_health_ack(request):
@@ -2675,7 +2680,7 @@ try:
         try:
             data = await request.json()
         except Exception:
-            return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+            return _error_response("Invalid JSON", status=400, code="invalid_json")
 
         # CRITICAL: write-sensitive endpoint must remain admin-gated.
         allowed, code, message = validate_admin_request(request, payload=data)
@@ -2686,10 +2691,11 @@ try:
             ack_request = HealthAckRequest.from_dict(data)
 
             if not ack_request.report_id or not ack_request.issue_id:
-                return web.json_response({
-                    "success": False,
-                    "error": "Missing report_id or issue_id",
-                }, status=400)
+                return _error_response(
+                    "Missing report_id or issue_id",
+                    status=400,
+                    code="missing_issue_reference",
+                )
 
             store = get_diagnostics_store()
             updated = store.update_issue_status(
@@ -2704,13 +2710,10 @@ try:
                     "message": f"Issue status updated to {ack_request.status.value}",
                 })
             else:
-                return web.json_response({
-                    "success": False,
-                    "error": "Issue not found",
-                }, status=404)
+                return _error_response("Issue not found", status=404, code="not_found")
         except Exception as e:
             logger.error(f"Health ack API error: {str(e)}")
-            return web.json_response({"success": False, "error": str(e)}, status=500)
+            return _error_response(str(e), status=500)
 
     _startup_print("[ComfyUI-Doctor] API hooks registered:")
     _startup_print("  - GET  /debugger/last_analysis")

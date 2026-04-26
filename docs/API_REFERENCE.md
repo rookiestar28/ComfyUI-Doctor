@@ -6,6 +6,18 @@ This document lists the public ComfyUI-Doctor HTTP endpoints. Exact response pay
 
 Write-sensitive endpoints require admin authorization unless desktop loopback convenience mode applies. For shared servers, configure `DOCTOR_ADMIN_TOKEN` and `DOCTOR_REQUIRE_ADMIN_TOKEN=1`.
 
+JSON error responses use a consistent envelope:
+
+```json
+{
+  "success": false,
+  "error": "machine_or_legacy_error_text",
+  "message": "Human-readable error message"
+}
+```
+
+Some endpoint-specific failure payloads may include additional fields such as `models`, `is_local`, `field_errors`, or `statistics`; existing success payloads keep their documented shapes.
+
 Denied writes use:
 
 - `401` for missing or invalid token authorization.
