@@ -415,9 +415,8 @@ def clear_analysis_history() -> bool:
 
     try:
         if _log_processor:
-            _log_processor.buffer = []
-            _log_processor._set_traceback_state(False)
-            _log_processor.last_buffer_time = 0
+            # IMPORTANT: keep traceback state reset inside DoctorLogProcessor; direct field writes race capture.
+            _log_processor.reset_traceback_state()
     except Exception:
         success = False
 
@@ -579,6 +578,7 @@ class DoctorLogProcessor(threading.Thread):
         }
 
         # Traceback buffer state (migrated from SmartLogger)
+        self._buffer_lock = threading.RLock()
         self.buffer = []
         self.in_traceback = False
         self.last_buffer_time = 0
@@ -612,6 +612,10 @@ class DoctorLogProcessor(threading.Thread):
                 logging.error(f"[Doctor] LogProcessor error: {e}", exc_info=True)
 
     def _process_message(self, message):
+        with self._buffer_lock:
+            return self._process_message_locked(message)
+
+    def _process_message_locked(self, message):
         """
         Process a single message (migrated from SmartLogger._analyze_stream).
         """
@@ -743,17 +747,25 @@ class DoctorLogProcessor(threading.Thread):
 
     def _check_buffer_timeout(self):
         """Check if buffer has timed out (called on queue.Empty)."""
-        if self.in_traceback and self.buffer:
-            current_time = time.time()
-            if current_time - self.last_buffer_time > CONFIG.traceback_timeout_seconds:
-                full_traceback = "".join(self.buffer)
-                result = ErrorAnalyzer.analyze(full_traceback)
-                suggestion, metadata = result if result else (None, None)
-                if suggestion or "Failed to validate" in full_traceback:
-                    self._record_analysis(full_traceback, suggestion, metadata)
-                self._metrics["traceback_resets"] += 1
-                self._set_traceback_state(False)
-                self.buffer = []
+        with self._buffer_lock:
+            if self.in_traceback and self.buffer:
+                current_time = time.time()
+                if current_time - self.last_buffer_time > CONFIG.traceback_timeout_seconds:
+                    full_traceback = "".join(self.buffer)
+                    result = ErrorAnalyzer.analyze(full_traceback)
+                    suggestion, metadata = result if result else (None, None)
+                    if suggestion or "Failed to validate" in full_traceback:
+                        self._record_analysis(full_traceback, suggestion, metadata)
+                    self._metrics["traceback_resets"] += 1
+                    self._set_traceback_state(False)
+                    self.buffer = []
+
+    def reset_traceback_state(self) -> None:
+        """Clear in-flight traceback assembly under the processor-owned lock."""
+        with self._buffer_lock:
+            self.buffer = []
+            self._set_traceback_state(False)
+            self.last_buffer_time = 0
 
     def _set_traceback_state(self, active: bool) -> None:
         self.in_traceback = active
