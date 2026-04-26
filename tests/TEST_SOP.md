@@ -261,245 +261,66 @@ npm test
 
 For OS-specific E2E setup (Windows/WSL temp-dir shims), see `tests/E2E_TESTING_SOP.md`.
 
-## Chat Connector (Telegram / Discord / LINE) — Manual Test SOP
+## Doctor Admin and LLM Manual Checks
 
-The chat connector runs as a **separate process** and talks to your local ComfyUI/OpenClaw via HTTP.
+These checks are optional manual smoke tests for local ComfyUI sessions. They are
+not a replacement for the required automated gate above.
 
-### Prereq: use the correct Python interpreter
+### Admin token mode
 
-The connector requires `aiohttp`. A common failure mode on Windows is:
+Doctor write-sensitive endpoints use `DOCTOR_ADMIN_TOKEN` and
+`DOCTOR_REQUIRE_ADMIN_TOKEN`.
 
-- `pip show aiohttp` succeeds (installed in your conda env)
-- but `python3 -m connector` uses a different Python (e.g. system Python) and crashes with `ModuleNotFoundError: aiohttp`
-
-Sanity check:
-
-```powershell
-python -c "import sys; print(sys.executable)"
-python -c "import aiohttp; print(aiohttp.__version__)"
-```
-
-Run the connector with **the same** interpreter:
+PowerShell example:
 
 ```powershell
-python -m connector
+$env:DOCTOR_ADMIN_TOKEN="your_admin_token_here"
+$env:DOCTOR_REQUIRE_ADMIN_TOKEN="1"
 ```
 
-### Common env (all platforms)
-
-- `OPENCLAW_CONNECTOR_URL`: ComfyUI base URL (default: `http://127.0.0.1:8188`)
-- `OPENCLAW_CONNECTOR_ADMIN_TOKEN`: optional; required for admin endpoints if your server enforces it
-- `OPENCLAW_CONNECTOR_DEBUG=1`: verbose logs (recommended while setting up allowlists)
-
-### 1) Telegram (recommended first: no webhook/HTTPS required)
-
-Minimum:
-
-```powershell
-$env:OPENCLAW_CONNECTOR_TELEGRAM_TOKEN="123456:ABC..."
-$env:OPENCLAW_CONNECTOR_TELEGRAM_ALLOWED_USERS="123456789"   # your Telegram user_id
-$env:OPENCLAW_CONNECTOR_ADMIN_USERS="123456789"             # for admin-only commands
-python -m connector
-```
-
-Test commands (in Telegram chat with the bot):
-
-- `/help`
-- `/status`
-- `/jobs`
-- `/run <template_id> key=value --approval`
-- `/approvals`
-- `/approve <approval_id>`
-
-### 2) Discord (no webhook/HTTPS required; requires Message Content Intent)
-
-In Discord Developer Portal, enable **Message Content Intent** for your bot, otherwise the connector can connect but won’t receive message text.
-
-Minimum:
-
-```powershell
-$env:OPENCLAW_CONNECTOR_DISCORD_TOKEN="discord_bot_token"
-$env:OPENCLAW_CONNECTOR_DISCORD_ALLOWED_USERS="your_discord_user_id"
-$env:OPENCLAW_CONNECTOR_ADMIN_USERS="your_discord_user_id"
-python -m connector
-```
-
-Optional allowlist by channel instead:
-
-```powershell
-$env:OPENCLAW_CONNECTOR_DISCORD_ALLOWED_CHANNELS="your_channel_id"
-```
-
-### 3) LINE (requires a public HTTPS webhook URL)
-
-LINE is webhook-based: LINE servers must be able to `POST` into your connector.
-Localhost (`127.0.0.1`) is not reachable from LINE, so you typically need **Cloudflare Tunnel** or **ngrok**.
-
-Minimum:
-
-```powershell
-$env:OPENCLAW_CONNECTOR_LINE_CHANNEL_SECRET="line_channel_secret"
-$env:OPENCLAW_CONNECTOR_LINE_CHANNEL_ACCESS_TOKEN="line_channel_access_token"
-$env:OPENCLAW_CONNECTOR_LINE_ALLOWED_USERS="your_line_user_id"
-$env:OPENCLAW_CONNECTOR_ADMIN_USERS="your_line_user_id"
-python -m connector
-```
-
-Optional bind/port/path:
-
-```powershell
-$env:OPENCLAW_CONNECTOR_LINE_BIND="127.0.0.1"
-$env:OPENCLAW_CONNECTOR_LINE_PORT="8099"
-$env:OPENCLAW_CONNECTOR_LINE_PATH="/line/webhook"
-$env:OPENCLAW_CONNECTOR_PUBLIC_BASE_URL="https://<public-host>" # Required for images
-```
-
-After starting the connector, expose it via tunnel and set the LINE webhook URL to:
-`https://<public-host>/line/webhook`
-
-If messages are ignored, enable debug and check allowlist logs (user/group/room IDs).
-
-#### LINE Image Delivery (F33) — Quick Test
-1) Ensure `OPENCLAW_CONNECTOR_PUBLIC_BASE_URL` is set to a **public HTTPS** URL.
-2) Send `/run <template_id> <prompt> --approval` and approve if required.
-3) On completion, the bot should push an image message to LINE.
-
-If you receive a text fallback warning, the public URL is missing, not HTTPS, or unreachable from LINE.
-
-## Templates + `/run` — Authoring & Validation SOP
-
-`/run` does **not** take a ComfyUI “workflow id”. It takes a **`template_id`** that maps to a JSON workflow file.
-
-### Where templates live
-
-In this repo (and in your ComfyUI install), templates are loaded from:
-
-- `data/templates/*.json` (the exported ComfyUI workflow in API format)
-- `data/templates/manifest.json` (optional metadata: defaults, etc)
-
-### Step-by-step: create a new template
-
-1) Export a workflow JSON from ComfyUI (API format)
-
-- Build your workflow in ComfyUI
-- Export the workflow JSON (API format) to a file, e.g. `z.json`
-
-1) Copy the exported file into the template directory
-
-- Place it at: `data/templates/z.json`
-
-1) Replace input values with placeholders
-
-The renderer performs **strict placeholder substitution**:
-
-- ✅ supported: a JSON string value exactly equal to `{{key}}`
-  - Example: `"text": "{{positive_prompt}}"`
-- ❌ not supported: partial substitutions
-  - Example: `"text": "Prompt: {{positive_prompt}}"` (will not be replaced)
-
-So for each field you want to make configurable via chat/webhook, replace the value with a placeholder:
-
-- `{{positive_prompt}}`
-- `{{negative_prompt}}`
-- `{{seed}}`
-- etc.
-
-1) Add an entry to `manifest.json`
-
-This step is **optional**. If you want defaults/metadata, add a new entry under `templates` in `data/templates/manifest.json`:
-
-```json
-"your_template_id": {
-  "path": "z.json",
-  "allowed_inputs": ["positive_prompt"],
-  "defaults": {}
-}
-```
-
-Rules:
-
-- `your_template_id` becomes the identifier used by `/run your_template_id ...` (typically match the file name, e.g. `z`)
-- `allowed_inputs` is **metadata only** (not enforced); it can be used by UIs/tools for hints
-- `defaults` is optional but recommended (use `{}` if none)
-- JSON cannot contain trailing commas
-
-1) Restart ComfyUI
-
-Not strictly required (the backend hot-reloads `manifest.json`), but restarting ComfyUI is still recommended after significant template changes.
-
-### Validate templates are visible
-
-Use the template quick-list endpoint:
-
-- `GET /openclaw/templates`
-- `GET /api/openclaw/templates` (browser-friendly)
-- Diagnostics (when a template is unexpectedly missing):
-  - `GET /api/openclaw/templates?debug=1` (shows which `manifest.json` path was actually loaded)
-
-Expected response:
-
-- `ok: true`
-- `templates: [{ id, allowed_inputs, defaults }, ...]`
-
-### Use `/run` from chat
-
-**Free-text prompt support (no `key=value` needed):**
-
-- `/run <template_id> <free text> seed=-1`
-- Connector maps free-text to a prompt key:
-  - If `manifest.json` `allowed_inputs` has exactly one key → it uses that.
-  - Otherwise prefers: `positive_prompt` → `prompt` → `text` → `positive` → `caption`.
-  - If none match, defaults to `positive_prompt`.
-- Ensure the template uses the same placeholder (e.g., `"text": "{{positive_prompt}}"`).
-
-Once the template appears in `/openclaw/templates`, you can run it via chat:
-
-- Run immediately:
-  - `/run your_template_id positive_prompt="a cat" seed=123`
-- Request approval:
-  - `/run your_template_id positive_prompt="a cat" seed=123 --approval`
-
-Unused keys have no effect unless the workflow contains a matching `{{key}}` placeholder.
-
-## Admin Token & UI Usage (SOP)
-
-**Key rule:** `OPENCLAW_ADMIN_TOKEN` is a **server-side environment variable**.
-The UI can **use** an Admin Token for authenticated requests, but **cannot set or persist** the server token.
-
-### Recommended setup (local only)
-
-1) **Set server token (env)**
-
-```powershell
-$env:OPENCLAW_ADMIN_TOKEN="your_admin_token_here"
-```
-
-2) **Restart ComfyUI**
-2) **Enter the same token in the Settings UI**
-   - This only stores it in the browser session for API calls.
-
-### Windows CMD (per-session)
+CMD example:
 
 ```cmd
-set OPENCLAW_ADMIN_TOKEN=your_admin_token_here
-set OPENCLAW_LLM_API_KEY=your_api_key_here
-set OPENCLAW_LLM_PROVIDER=gemini
+set DOCTOR_ADMIN_TOKEN=your_admin_token_here
+set DOCTOR_REQUIRE_ADMIN_TOKEN=1
 ```
 
-### Windows CMD (persistent, user-level)
+After changing server-side environment variables, restart ComfyUI. The Settings
+UI can send an admin token with guarded requests, but it cannot set the server's
+admin token.
+
+### LLM credential mode
+
+Cloud providers require credentials from the session-only UI field, provider
+environment variables, the generic `DOCTOR_LLM_API_KEY`, or the optional
+server-side credential store.
+
+Examples:
+
+```powershell
+$env:DOCTOR_OPENAI_API_KEY="<set-in-local-shell>"
+$env:DOCTOR_LLM_BASE_URL="https://api.openai.com/v1"
+```
 
 ```cmd
-setx OPENCLAW_ADMIN_TOKEN "your_admin_token_here"
-setx OPENCLAW_LLM_API_KEY "your_api_key_here"
-setx OPENCLAW_LLM_PROVIDER "gemini"
+set DOCTOR_GEMINI_API_KEY=<set-in-local-shell>
+set DOCTOR_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
 ```
 
-> After `setx`, open a **new** terminal session before launching ComfyUI.
+Manual verification path:
 
-### Security Notes
+1. Start ComfyUI with Doctor installed.
+2. Open the Doctor sidebar Settings tab.
+3. Select provider, base URL, privacy mode, and model.
+4. Use key verification or model listing when available.
+5. Trigger a known local error and verify Chat can stream or return a response.
 
-- Do **not** expose ComfyUI to the internet with UI-only tokens.
-- Admin token must remain server-side and protected by OS/environment.
+Security notes:
+
+- Do not expose ComfyUI to the internet with only browser-held tokens.
+- Keep server tokens and cloud credentials in environment variables or the
+  admin-gated server store.
+- Use `Privacy Mode: Basic` or `Strict` for cloud providers.
 
 ## WSL / Restricted Environments
 

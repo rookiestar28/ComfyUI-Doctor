@@ -40,9 +40,9 @@ tests/e2e/
 ├── specs/                    # Test specifications
 │   ├── sidebar.spec.js       # ✅ Sidebar toggle and navigation
 │   ├── settings.spec.js      # ✅ Settings panel interaction
-│   ├── chat.spec.js          # 🚧 TODO
-│   ├── errors.spec.js        # 🚧 TODO
-│   └── i18n.spec.js          # 🚧 TODO
+│   ├── statistics.spec.js    # ✅ Statistics, diagnostics, telemetry, feedback
+│   ├── preact-loader.spec.js # ✅ Preact loader and fallback behavior
+│   └── error-boundaries.spec.js # ✅ Island error boundaries and recovery
 ├── mocks/                    # Mock data
 │   ├── comfyui-app.js        # Mock ComfyUI app/api objects
 │   └── ui-text.json          # Mock i18n translations
@@ -56,14 +56,15 @@ tests/e2e/
 ### ✅ Completed
 - Playwright setup and configuration
 - Test harness with ComfyUI mocks
-- Sidebar tests (8 test cases)
-- Settings panel tests (11 test cases)
+- Sidebar and chat-context tests
+- Settings panel tests
+- Statistics, diagnostics, telemetry, and feedback tests
+- Preact loader and vanilla fallback tests
+- Error boundary and recovery tests
 
 ### 🚧 TODO
-- Chat interface tests
-- Error display tests
-- i18n switching tests
-- CI/CD integration
+- Keep adding focused E2E assertions for new user-visible regressions.
+- Run `npm run test:integration` separately when validating telemetry against a live ComfyUI backend.
 
 ## Writing New Tests
 

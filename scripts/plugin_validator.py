@@ -27,6 +27,7 @@ from typing import List, Optional
 PLUGIN_DIR = Path(__file__).parent.parent / 'pipeline' / 'plugins' / 'community'
 CONFIG_PATH = Path(__file__).parent.parent / 'config.json'
 VALID_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9_]+\.py$')
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass
@@ -42,6 +43,21 @@ def parse_version(version_str: str) -> tuple:
     """Parse version string to tuple for comparison."""
     parts = re.split(r'[.-]', version_str)
     return tuple(int(p) for p in parts if p.isdigit())
+
+
+def get_doctor_version() -> str:
+    """Read the canonical Doctor version from pyproject.toml."""
+    pyproject = PROJECT_ROOT / "pyproject.toml"
+    try:
+        match = re.search(
+            r'(?m)^version\s*=\s*["\']([^"\']+)["\']',
+            pyproject.read_text(encoding="utf-8", errors="ignore"),
+        )
+        if match:
+            return match.group(1).strip()
+    except Exception:
+        pass
+    return "0.0.0"
 
 
 def validate_plugin(plugin_path: Path, manifest_path: Path) -> ValidationResult:
@@ -102,8 +118,7 @@ def validate_plugin(plugin_path: Path, manifest_path: Path) -> ValidationResult:
     min_version = manifest.get('min_doctor_version', '')
     try:
         parsed_min = parse_version(min_version)
-        # Assume current version is 1.4.0 (from ROADMAP context)
-        current = (1, 4, 0)
+        current = parse_version(get_doctor_version())
         compatible = parsed_min <= current
         checks.append(("Min Doctor version", compatible, f"{min_version} ({'compatible' if compatible else 'incompatible'})"))
     except Exception as e:

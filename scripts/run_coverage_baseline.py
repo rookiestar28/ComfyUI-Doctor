@@ -74,7 +74,6 @@ def main(argv: list[str] | None = None) -> int:
 
     env = os.environ.copy()
     env.setdefault("DOCTOR_STATE_DIR", str(PROJECT_ROOT / "doctor_state" / "_coverage"))
-    env.setdefault("MOLTBOT_STATE_DIR", str(PROJECT_ROOT / "moltbot_state" / "_coverage"))
 
     command = build_coverage_command(
         sys.executable,

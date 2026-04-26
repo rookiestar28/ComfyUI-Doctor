@@ -51,7 +51,7 @@ Fields:
   "name": "Example Plugin",
   "version": "1.0.0",
   "author": "you",
-  "min_doctor_version": "1.3.0",
+  "min_doctor_version": "1.7.5",
   "sha256": "<sha256 of the .py file>",
   "signature": "<optional hmac-sha256 of the .py file>",
   "signature_alg": "hmac-sha256"

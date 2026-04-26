@@ -10,8 +10,9 @@ Runs the required end-to-end validation sequence in one command on Windows:
 
 1. `detect-secrets`
 2. all `pre-commit` hooks
-3. backend unit tests
-4. frontend E2E
+3. host-like package/startup validation
+4. backend unit tests
+5. frontend E2E
 
 The script always uses the project-local `.venv` interpreter for Python tooling and tests (Windows track).
 
@@ -60,11 +61,11 @@ git config core.hooksPath .githooks
 
 ---
 
-## Phase 2 Release Gate
+## Focused Release Gate
 
 ### phase2_gate.py
 
-Runs the Phase 2 Release Gate checks locally before pushing.
+Runs the focused security, contract, and E2E regression gate locally. This is a targeted lane, not a replacement for the full local gate above.
 
 **Usage**:
 ```bash

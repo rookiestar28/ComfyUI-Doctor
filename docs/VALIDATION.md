@@ -33,7 +33,8 @@ Use this flow when debugging one validation stage at a time.
 ```bash
 pre-commit run detect-secrets --all-files
 pre-commit run --all-files --show-diff-on-failure
-MOLTBOT_STATE_DIR="$(pwd)/moltbot_state/_local_unit" python scripts/run_unittests.py --start-dir tests --pattern "test_*.py"
+python scripts/validate_host_load.py
+DOCTOR_STATE_DIR="$(pwd)/doctor_state/_local_unit" python scripts/run_unittests.py --start-dir tests --pattern "test_*.py"
 node -v
 npm install
 npx playwright install chromium

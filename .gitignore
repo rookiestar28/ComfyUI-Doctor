@@ -2,6 +2,7 @@
 *.pyo
 *.pyd
 docs/reference/
+docs/artifacts/
 logs/*
 !logs/.gitkeep
 AGEN*.md

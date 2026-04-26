@@ -26,11 +26,27 @@ VALID_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9_]+\.py$')
 
 # Max file size (256 KiB by default)
 MAX_FILE_SIZE = 262144
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def compute_sha256(file_path: Path) -> str:
     """Compute SHA256 hash of file."""
     return hashlib.sha256(file_path.read_bytes()).hexdigest()
+
+
+def get_doctor_version() -> str:
+    """Read the canonical Doctor version from pyproject.toml."""
+    pyproject = PROJECT_ROOT / "pyproject.toml"
+    try:
+        match = re.search(
+            r'(?m)^version\s*=\s*["\']([^"\']+)["\']',
+            pyproject.read_text(encoding="utf-8", errors="ignore"),
+        )
+        if match:
+            return match.group(1).strip()
+    except Exception:
+        pass
+    return "0.0.0"
 
 
 def validate_plugin_file(file_path: Path) -> tuple[bool, str]:
@@ -69,7 +85,7 @@ def prompt_manifest_fields(plugin_path: Path) -> dict:
     default_name = plugin_name.replace('_', ' ').title()
     default_version = "1.0.0"
     default_author = "Community"
-    default_min_version = "1.3.0"
+    default_min_version = get_doctor_version()
 
     print("\nEnter plugin details (press Enter to use defaults):")
 

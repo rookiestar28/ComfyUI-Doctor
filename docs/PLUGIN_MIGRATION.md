@@ -36,7 +36,7 @@ python scripts/plugin_manifest.py pipeline/plugins/community/example.py --write
   "name": "Example Plugin",
   "version": "1.0.0",
   "author": "Your Name",
-  "min_doctor_version": "1.3.0",
+  "min_doctor_version": "1.7.5",
   "sha256": "014e7c1426b7316d706a0e21799e39b4ae773cb403600895dcbb05d4e295ea5e"
 }
 ```
@@ -110,7 +110,7 @@ python scripts/plugin_validator.py --check-config
   "name": "Example Plugin",            // Human-readable name
   "version": "1.0.0",                  // Semantic version
   "author": "Your Name",               // Plugin author
-  "min_doctor_version": "1.3.0",       // Minimum Doctor version required
+  "min_doctor_version": "1.7.5",       // Minimum Doctor version required
   "sha256": "014e7c14..."              // SHA256 hash of .py file
 }
 ```

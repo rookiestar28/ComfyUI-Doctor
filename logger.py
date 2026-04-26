@@ -2,7 +2,7 @@
 Smart Logger for ComfyUI Runtime Diagnostics.
 Intercepts stdout/stderr to capture logs and provide real-time error analysis.
 
-ARCHITECTURE (v1.3.0):
+ARCHITECTURE (v1.7.5):
 - SafeStreamWrapper: Wraps sys.stdout/stderr (after ComfyUI's LogInterceptor if present)
 - DoctorLogProcessor: Background thread that processes queued messages
 - Zero deadlock risk: write() holds no locks, only enqueues messages

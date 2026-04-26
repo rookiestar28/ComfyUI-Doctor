@@ -43,14 +43,17 @@ def _parse_version(value: str) -> Optional[tuple]:
 
 def _get_doctor_version() -> str:
     root_dir = Path(__file__).resolve().parents[2]
-    package_json = root_dir / "package.json"
-    if not package_json.exists():
-        return "0.0.0"
+    pyproject = root_dir / "pyproject.toml"
     try:
-        data = json.loads(package_json.read_text(encoding="utf-8"))
-        return data.get("version", "0.0.0")
+        match = re.search(
+            r'(?m)^version\s*=\s*["\']([^"\']+)["\']',
+            pyproject.read_text(encoding="utf-8", errors="ignore"),
+        )
+        if match:
+            return match.group(1).strip()
     except Exception:
-        return "0.0.0"
+        pass
+    return "0.0.0"
 
 
 def _read_manifest(py_file: Path, plugin_dir: Path, plugin_count: int) -> Optional[Dict[str, Any]]:

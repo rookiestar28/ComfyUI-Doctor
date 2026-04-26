@@ -72,7 +72,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `92 passed` (default local harness run, integration telemetry suite excluded).
+Expected result: `94 passed` (default local harness run, integration telemetry suite excluded).
 
 ### 3.2 WSL2 (bash)
 
@@ -89,7 +89,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `92 passed` (default local harness run, integration telemetry suite excluded).
+Expected result: `94 passed` (default local harness run, integration telemetry suite excluded).
 
 ---
 
@@ -179,6 +179,7 @@ The required track is merge-blocking. The optional track is informational/non-bl
 tests/
   e2e/
     specs/
+      error-boundaries.spec.js
       preact-loader.spec.js
       settings.spec.js
       sidebar.spec.js
@@ -372,8 +373,8 @@ test('should render vanilla UI when Preact fails', async ({ page }) => {
 
 - Playwright docs: <https://playwright.dev/>
 - E2E README: `tests/e2e/README.md`
-- A7 record: `.planning/260105-A7(Phase 4D)_IMPLEMENTATION_RECORD.md`
-- 5C record: `.planning/260107-A7_PHASE_5C_IMPLEMENTATION_RECORD.md`
+- Project validation SOP: `tests/TEST_SOP.md`
+- E2E harness notes: `tests/e2e/README.md`
 <!-- ROOKIEUI-GLOBAL-E2E-SOP-RULES:START -->
 ## RookieUI-Derived Global E2E Rules
 
