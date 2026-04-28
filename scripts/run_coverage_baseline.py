@@ -14,6 +14,18 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def required_coverage_dependency_modules() -> tuple[tuple[str, str], ...]:
+    """Return import modules required before pytest can collect coverage tests."""
+    return (
+        ("pytest", "pytest"),
+        ("pytest_cov", "pytest-cov"),
+        ("aiohttp", "aiohttp"),
+        ("anyio", "anyio"),
+        ("numpy", "numpy"),
+        ("PIL", "pillow"),
+    )
+
+
 def build_coverage_command(
     python_exe: str,
     *,
@@ -34,18 +46,22 @@ def build_coverage_command(
     return command
 
 
-def _require_pytest_cov() -> None:
+def require_coverage_dependencies() -> None:
     missing = [
-        module_name
-        for module_name in ("pytest", "pytest_cov")
+        package_name
+        for module_name, package_name in required_coverage_dependency_modules()
         if importlib.util.find_spec(module_name) is None
     ]
     if missing:
         packages = ", ".join(missing)
         raise RuntimeError(
-            f"Missing coverage dependency: {packages}. "
+            f"Missing coverage/test dependency: {packages}. "
             "Install dev dependencies with: python -m pip install -r requirements-dev.txt"
         )
+
+
+def _require_pytest_cov() -> None:
+    require_coverage_dependencies()
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -67,7 +83,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     try:
-        _require_pytest_cov()
+        require_coverage_dependencies()
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 2
