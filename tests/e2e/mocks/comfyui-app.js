@@ -106,6 +106,7 @@ export function createMockComfyUIApp(options = {}) {
   function createMockGraph(initialNodes = []) {
     return {
       _nodes: initialNodes,
+      isRootGraph: false,
       subgraphs: new Map(),
       extra: {},
       serialize() {
@@ -125,6 +126,7 @@ export function createMockComfyUIApp(options = {}) {
   }
 
   const graph = createMockGraph();
+  graph.isRootGraph = true;
 
   const app = {
     ui: {
@@ -167,9 +169,18 @@ export function createMockComfyUIApp(options = {}) {
     rootGraph: graph,
     isGraphReady: true,
     canvas: {
+      graph,
+      subgraph: undefined,
       ds: { scale: 1, offset: [0, 0] },
       selected_nodes: {},
+      lastAnimatedBounds: null,
       canvas: { width: 1920, height: 1080 },
+      setGraph(targetGraph) {
+        this.graph = targetGraph;
+      },
+      animateToBounds(bounds) {
+        this.lastAnimatedBounds = bounds;
+      },
       selectNodes(nodes) {
         this.selected_nodes = Object.fromEntries(nodes.map((node) => [String(node.id), node]));
       },
