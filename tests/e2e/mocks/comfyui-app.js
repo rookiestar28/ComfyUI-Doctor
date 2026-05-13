@@ -77,6 +77,30 @@ export function createMockComfyUIApp() {
     }, { once: true });
   }
 
+  function registerSidebarTab(config, options = {}) {
+    console.log('[Mock] Registering sidebar tab:', config.id);
+    if (options.prepend) {
+      mockSidebarTabs.unshift(config);
+    } else {
+      mockSidebarTabs.push(config);
+    }
+    scheduleSidebarRender(config);
+
+    return config;
+  }
+
+  function unregisterSidebarTab(id) {
+    const index = mockSidebarTabs.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+
+    const [removed] = mockSidebarTabs.splice(index, 1);
+    if (removed?.type === 'custom' && typeof removed.destroy === 'function') {
+      removed.destroy();
+    }
+    renderedTabs.delete(id);
+    document.getElementById(`sidebar-tab-${id}`)?.remove();
+  }
+
   function createMockGraph(initialNodes = []) {
     return {
       _nodes: initialNodes,
@@ -159,13 +183,21 @@ export function createMockComfyUIApp() {
           app.ui.settings.setSettingValue(id, value);
         },
       },
+      sidebarTab: {
+        get sidebarTabs() {
+          return mockSidebarTabs;
+        },
+        registerSidebarTab,
+        unregisterSidebarTab,
+        toggleSidebarTab() {},
+      },
       registerSidebarTab(config) {
-        console.log('[Mock] Registering sidebar tab via extensionManager:', config.id);
-        mockSidebarTabs.push(config);
-        scheduleSidebarRender(config);
-
-        return config;
-      }
+        return registerSidebarTab(config);
+      },
+      unregisterSidebarTab,
+      getSidebarTabs() {
+        return mockSidebarTabs;
+      },
     },
     registerExtension(extension) {
       console.log('[Mock] Registering extension:', extension.name);

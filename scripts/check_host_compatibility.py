@@ -8,9 +8,9 @@ not replace full host E2E validation.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,28 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI",
+        file="server.py",
+        label="host /api route duplication",
+        required_patterns=(
+            "Prefix every route with /api",
+            '"/api" + route.path',
+            "self.app.add_routes(api_routes)",
+            "self.app.add_routes(self.routes)",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="server.py",
+        label="feature-flag websocket exchange",
+        required_patterns=(
+            'data.get("type") == "feature_flags"',
+            'self.sockets_metadata[sid]["feature_flags"]',
+            "feature_flags.get_server_features()",
+            '@routes.get("/features")',
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
         file="execution.py",
         label="execution_error websocket payload",
         required_patterns=(
@@ -69,6 +91,29 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         ),
     ),
     SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_execution/progress.py",
+        label="progress_state lineage payload",
+        required_patterns=(
+            '"progress_state"',
+            '"display_node_id"',
+            '"parent_node_id"',
+            '"real_node_id"',
+            "supports_preview_metadata",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_api/feature_flags.py",
+        label="server feature flags",
+        required_patterns=(
+            '"supports_preview_metadata": True',
+            '"extension": {"manager": {"supports_v4": True}}',
+            '"node_replacements": True',
+            "def get_server_features",
+        ),
+    ),
+    SurfaceCheck(
         repo="ComfyUI_frontend",
         file="src/types/extensionTypes.ts",
         label="extensionManager settings/sidebar API",
@@ -76,9 +121,42 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
+        file="src/stores/workspaceStore.ts",
+        label="deprecated sidebar wrapper fallback",
+        required_patterns=(
+            "const sidebarTab = computed(() => useSidebarTabStore())",
+            "Use `sidebarTab.registerSidebarTab` instead",
+            "sidebarTab.value.registerSidebarTab(tab)",
+            "Use `sidebarTab.unregisterSidebarTab` instead",
+            "sidebarTab.value.unregisterSidebarTab(id)",
+            "Use `sidebarTab.sidebarTabs` instead",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/stores/workspace/sidebarTabStore.ts",
+        label="current sidebarTab store API",
+        required_patterns=(
+            "defineStore('sidebarTab'",
+            "const sidebarTabs = ref<SidebarTabExtension[]>([])",
+            "const activeSidebarTabId = ref<string | null>(null)",
+            "const registerSidebarTab =",
+            "const unregisterSidebarTab =",
+            "toggleSidebarTab",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
         file="src/schemas/apiSchema.ts",
         label="frontend execution_error schema",
-        required_patterns=("zExecutionErrorWsMessage", "node_id:", "node_type:", "traceback:", "current_inputs:", "current_outputs:"),
+        required_patterns=(
+            "zExecutionErrorWsMessage",
+            "node_id:",
+            "node_type:",
+            "traceback:",
+            "current_inputs:",
+            "current_outputs:",
+        ),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -90,13 +168,45 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         repo="desktop",
         file="src/main-process/comfyServer.ts",
         label="Desktop base/user/input/output directories",
-        required_patterns=("userDirectoryPath", "path.join(this.basePath, 'user')", "'base-directory': this.basePath"),
+        required_patterns=(
+            "userDirectoryPath",
+            "inputDirectoryPath",
+            "outputDirectoryPath",
+            "path.join(this.basePath, 'user')",
+            "'user-directory': this.userDirectoryPath",
+            "'input-directory': this.inputDirectoryPath",
+            "'output-directory': this.outputDirectoryPath",
+            "'front-end-root': this.webRootPath",
+            "'base-directory': this.basePath",
+            "'database-url': this.databaseUrl",
+            "'extra-model-paths-config': ComfyServerConfig.configPath",
+        ),
     ),
     SurfaceCheck(
         repo="desktop",
         file="src/virtualEnvironment.ts",
         label="Desktop managed .venv layout",
         required_patterns=("this.venvPath = path.join(basePath, '.venv')", "Scripts', 'python.exe'", "bin', 'python'"),
+    ),
+    SurfaceCheck(
+        repo="desktop",
+        file="src/config/comfyConfigManager.ts",
+        label="Desktop valid basePath shape",
+        required_patterns=(
+            "DEFAULT_DIRECTORIES",
+            "'custom_nodes'",
+            "'input'",
+            "'output'",
+            "['user', ['default']]",
+            "'models'",
+            "const requiredSubdirs = ['models', 'input', 'user', 'output', 'custom_nodes']",
+        ),
+    ),
+    SurfaceCheck(
+        repo="desktop",
+        file="src/config/comfySettings.ts",
+        label="Desktop settings path",
+        required_patterns=("path.join(this.#basePath, 'user', 'default', 'comfy.settings.json')",),
     ),
 )
 

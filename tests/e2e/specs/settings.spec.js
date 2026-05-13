@@ -86,6 +86,49 @@ test.describe('Settings Panel', () => {
     expect(settings.autoOpen).toBe(true);
   });
 
+  test('host sidebar API mock exposes current and deprecated wrappers', async ({ page }) => {
+    const sidebarApi = await page.evaluate(() => {
+      const current = window.app.extensionManager.sidebarTab;
+      const legacy = window.app.extensionManager;
+      const before = current.sidebarTabs.length;
+
+      legacy.registerSidebarTab({
+        id: 'legacy-host-compat',
+        title: 'Legacy Host Compat',
+        type: 'custom',
+        render() {},
+      });
+      current.registerSidebarTab({
+        id: 'current-host-compat',
+        title: 'Current Host Compat',
+        type: 'custom',
+        render() {},
+      });
+
+      const ids = current.sidebarTabs.map((tab) => tab.id);
+      const deprecatedReadsSameRegistry = legacy.getSidebarTabs().length === current.sidebarTabs.length;
+
+      legacy.unregisterSidebarTab('legacy-host-compat');
+      current.unregisterSidebarTab('current-host-compat');
+
+      return {
+        hasCurrentRegister: typeof current.registerSidebarTab === 'function',
+        hasDeprecatedRegister: typeof legacy.registerSidebarTab === 'function',
+        ids,
+        deprecatedReadsSameRegistry,
+        after: current.sidebarTabs.length,
+        before,
+      };
+    });
+
+    expect(sidebarApi.hasCurrentRegister).toBe(true);
+    expect(sidebarApi.hasDeprecatedRegister).toBe(true);
+    expect(sidebarApi.ids).toContain('legacy-host-compat');
+    expect(sidebarApi.ids).toContain('current-host-compat');
+    expect(sidebarApi.deprecatedReadsSameRegistry).toBe(true);
+    expect(sidebarApi.after).toBe(sidebarApi.before);
+  });
+
   test('should have settings tab button', async ({ page }) => {
     const toggleBtn = page.locator('.doctor-tab-button[data-tab-id="settings"]');
     await expect(toggleBtn).toBeVisible();
