@@ -5,9 +5,10 @@
  * allowing us to test the UI without running a full ComfyUI instance.
  */
 
-export function createMockComfyUIApp() {
+export function createMockComfyUIApp(options = {}) {
   const mockSettings = new Map();
   const mockExtensions = [];
+  const sidebarRegistrationCalls = [];
 
   function registerExtensionSettings(extension) {
     extension.settings?.forEach((setting) => {
@@ -77,9 +78,10 @@ export function createMockComfyUIApp() {
     }, { once: true });
   }
 
-  function registerSidebarTab(config, options = {}) {
+  function registerSidebarTab(config, registerOptions = {}, source = 'extensionManager.sidebarTab') {
     console.log('[Mock] Registering sidebar tab:', config.id);
-    if (options.prepend) {
+    sidebarRegistrationCalls.push({ id: config.id, source });
+    if (registerOptions.prepend) {
       mockSidebarTabs.unshift(config);
     } else {
       mockSidebarTabs.push(config);
@@ -183,16 +185,18 @@ export function createMockComfyUIApp() {
           app.ui.settings.setSettingValue(id, value);
         },
       },
-      sidebarTab: {
+      sidebarTab: options.sidebarApiMode === 'deprecated-only' ? undefined : {
         get sidebarTabs() {
           return mockSidebarTabs;
         },
-        registerSidebarTab,
+        registerSidebarTab(config, registerOptions) {
+          return registerSidebarTab(config, registerOptions, 'extensionManager.sidebarTab');
+        },
         unregisterSidebarTab,
         toggleSidebarTab() {},
       },
       registerSidebarTab(config) {
-        return registerSidebarTab(config);
+        return registerSidebarTab(config, {}, 'extensionManager.registerSidebarTab');
       },
       unregisterSidebarTab,
       getSidebarTabs() {
@@ -207,6 +211,9 @@ export function createMockComfyUIApp() {
       if (extension.setup) {
         setTimeout(() => extension.setup.call(extension, app), 0);
       }
+    },
+    __getSidebarRegistrationCalls() {
+      return sidebarRegistrationCalls.map((call) => ({ ...call }));
     },
   };
 

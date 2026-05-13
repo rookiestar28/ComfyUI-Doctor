@@ -23,6 +23,7 @@ import {
     getDoctorSetting,
     isDoctorEnabled,
     isDoctorErrorBoundariesEnabled,
+    registerDoctorSidebarTab,
 } from "./comfyui_frontend_compat.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -140,16 +141,15 @@ app.registerExtension({
         }
 
         // ========================================
-        // Register Sidebar Tab (Modern ComfyUI API)
+        // Register Sidebar Tab
         // ========================================
-        // Check if the new sidebar API is available (ComfyUI 2024+)
-        if (app.extensionManager && typeof app.extensionManager.registerSidebarTab === 'function') {
-            app.extensionManager.registerSidebarTab({
+        const sidebarRegistrationSource = registerDoctorSidebarTab(app, {
                 id: "comfyui-doctor",
                 icon: "pi pi-heart-fill",  // PrimeVue icon
                 title: doctorUI.getUIText('sidebar_doctor_title'),
                 tooltip: doctorUI.getUIText('sidebar_doctor_tooltip'),
                 type: "custom",
+                destroy: () => destroyDoctorSidebarMount(doctorUI),
                 render: (container) => {
                     destroyDoctorSidebarMount(doctorUI);
                     tabRegistry.clear();
@@ -568,7 +568,8 @@ app.registerExtension({
                     }
                 }
             });
-            console.log("[ComfyUI-Doctor] ✅ Sidebar tab registered successfully");
+        if (sidebarRegistrationSource) {
+            console.log(`[ComfyUI-Doctor] ✅ Sidebar tab registered via ${sidebarRegistrationSource}`);
         } else {
             console.log("[ComfyUI-Doctor] Sidebar API not available, using legacy menu button");
         }

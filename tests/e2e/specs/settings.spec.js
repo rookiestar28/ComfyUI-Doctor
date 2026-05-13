@@ -129,6 +129,49 @@ test.describe('Settings Panel', () => {
     expect(sidebarApi.after).toBe(sidebarApi.before);
   });
 
+  test('should register Doctor sidebar through current sidebar API when present', async ({ page }) => {
+    const registration = await page.evaluate(() => {
+      const calls = window.app.__getSidebarRegistrationCalls()
+        .filter((call) => call.id === 'comfyui-doctor');
+      const sidebarTabs = window.app.extensionManager.sidebarTab.sidebarTabs
+        .filter((tab) => tab.id === 'comfyui-doctor');
+      return {
+        lastSource: calls.at(-1)?.source,
+        callCount: calls.length,
+        tabCount: sidebarTabs.length,
+      };
+    });
+
+    expect(registration.lastSource).toBe('extensionManager.sidebarTab');
+    expect(registration.callCount).toBe(1);
+    expect(registration.tabCount).toBe(1);
+  });
+
+  test('should fall back to deprecated sidebar wrapper when current API is absent', async ({ page }) => {
+    await page.goto('test-harness.html?sidebarApi=deprecated-only');
+    await waitForDoctorReady(page);
+    await waitForI18nLoaded(page);
+
+    const registration = await page.evaluate(() => {
+      const calls = window.app.__getSidebarRegistrationCalls()
+        .filter((call) => call.id === 'comfyui-doctor');
+      const sidebarTabs = window.app.extensionManager.getSidebarTabs()
+        .filter((tab) => tab.id === 'comfyui-doctor');
+      return {
+        hasCurrentApi: Boolean(window.app.extensionManager.sidebarTab),
+        lastSource: calls.at(-1)?.source,
+        callCount: calls.length,
+        tabCount: sidebarTabs.length,
+      };
+    });
+
+    expect(registration.hasCurrentApi).toBe(false);
+    expect(registration.lastSource).toBe('extensionManager.registerSidebarTab');
+    expect(registration.callCount).toBe(1);
+    expect(registration.tabCount).toBe(1);
+    await expect(page.locator('.doctor-tab-button[data-tab-id="settings"]')).toBeVisible();
+  });
+
   test('should have settings tab button', async ({ page }) => {
     const toggleBtn = page.locator('.doctor-tab-button[data-tab-id="settings"]');
     await expect(toggleBtn).toBeVisible();

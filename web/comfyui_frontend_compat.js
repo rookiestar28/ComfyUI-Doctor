@@ -283,6 +283,54 @@ export function markComfyGraphDirty(appInstance = app, foreground = true, backgr
     }
 }
 
+function tryRegisterSidebarTab(registerFn, unregisterFn, tabConfig, sourceLabel) {
+    if (typeof registerFn !== "function") return null;
+
+    try {
+        // IMPORTANT: unregister first to avoid duplicate tabs after repeated setup or hot reload.
+        if (tabConfig?.id && typeof unregisterFn === "function") {
+            unregisterFn(tabConfig.id);
+        }
+        registerFn(tabConfig);
+        return sourceLabel;
+    } catch (error) {
+        console.warn(`[ComfyUI-Doctor] Sidebar registration failed via ${sourceLabel}; falling back`, error);
+        return null;
+    }
+}
+
+export function registerDoctorSidebarTab(appInstance = app, tabConfig) {
+    const extensionManager = appInstance?.extensionManager;
+    const sidebarTab = extensionManager?.sidebarTab;
+
+    const currentSource = tryRegisterSidebarTab(
+        sidebarTab?.registerSidebarTab?.bind(sidebarTab),
+        sidebarTab?.unregisterSidebarTab?.bind(sidebarTab),
+        tabConfig,
+        "extensionManager.sidebarTab",
+    );
+    if (currentSource) return currentSource;
+
+    const deprecatedSource = tryRegisterSidebarTab(
+        extensionManager?.registerSidebarTab?.bind(extensionManager),
+        extensionManager?.unregisterSidebarTab?.bind(extensionManager),
+        tabConfig,
+        "extensionManager.registerSidebarTab",
+    );
+    if (deprecatedSource) return deprecatedSource;
+
+    const legacySidebarTab = globalThis?.comfyAPI?.sidebarTab;
+    const legacySource = tryRegisterSidebarTab(
+        legacySidebarTab?.addTab?.bind(legacySidebarTab),
+        legacySidebarTab?.removeTab?.bind(legacySidebarTab),
+        tabConfig,
+        "comfyAPI.sidebarTab",
+    );
+    if (legacySource) return legacySource;
+
+    return null;
+}
+
 export function destroyDoctorSidebarMount(doctorUI) {
     if (typeof doctorUI?.sidebarCleanup === "function") {
         try {
