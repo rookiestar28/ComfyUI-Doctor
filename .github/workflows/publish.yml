@@ -23,6 +23,13 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Supply-chain dependency gate
+        run: |
+          python scripts/check_supply_chain.py --skip-install-trees
       - name: Publish Custom Node
         # Pinned from Comfy-Org/publish-node-action v1 branch on 2026-05-13.
         uses: Comfy-Org/publish-node-action@0eb6cd742945443bee7f79eeddd4f732780029a1

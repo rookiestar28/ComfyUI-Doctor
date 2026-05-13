@@ -52,6 +52,10 @@ Run-Checked "Verify .venv interpreter" {
     & $VenvPython -c "import sys; print(sys.executable)"
 }
 
+Run-Checked "Supply-chain dependency gate" {
+    & $VenvPython scripts/check_supply_chain.py --skip-install-trees
+}
+
 if (-not $SkipBootstrap) {
     Run-Checked "Upgrade pip/setuptools/wheel in .venv" {
         & $VenvPython -m pip install --upgrade pip setuptools wheel

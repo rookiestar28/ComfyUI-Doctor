@@ -62,6 +62,20 @@ KNOWN_COMPROMISED_VERSIONS = {
     ("lightning", "2.5.3"),
 }
 
+ROOT_LIFECYCLE_SCRIPTS = {
+    "preinstall",
+    "install",
+    "postinstall",
+    "prepare",
+    "prepack",
+    "postpack",
+}
+
+ALLOWED_INSTALL_SCRIPT_PACKAGES = {
+    "esbuild",
+    "fsevents",
+}
+
 PAYLOAD_FILENAMES = {
     "router_init.js",
     "router_runtime.js",
@@ -218,13 +232,24 @@ def scan_package_json(path: Path, root: Path) -> list[Finding]:
                 version="[redacted-spec]",
                 message="Dependency spec uses a git/GitHub artifact instead of a registry tarball.",
             )
+    scripts = data.get("scripts")
+    if isinstance(scripts, dict):
+        for script_name in sorted(ROOT_LIFECYCLE_SCRIPTS.intersection(scripts)):
+            _add(
+                findings,
+                rule_id="deps.root-lifecycle-script",
+                severity="high",
+                path=path,
+                root=root,
+                message=f"Root package.json defines lifecycle script '{script_name}', which runs during install/publish flows.",
+            )
     return findings
 
 
 def _package_name_from_lock_path(lock_path: str) -> str:
     prefix = "node_modules/"
-    if lock_path.startswith(prefix):
-        return lock_path[len(prefix) :]
+    if prefix in lock_path:
+        return lock_path.rsplit(prefix, 1)[1]
     return lock_path
 
 
@@ -298,6 +323,17 @@ def scan_package_lock(path: Path, root: Path) -> list[Finding]:
                 package=name,
                 version=version,
                 message="npm lockfile package entry lacks integrity metadata.",
+            )
+        if meta.get("hasInstallScript") is True and name not in ALLOWED_INSTALL_SCRIPT_PACKAGES:
+            _add(
+                findings,
+                rule_id="deps.unexpected-install-script",
+                severity="high",
+                path=path,
+                root=root,
+                package=name,
+                version=version,
+                message="npm lockfile package entry declares an install script outside the reviewed allowlist.",
             )
     return findings
 

@@ -14,7 +14,8 @@
     "test:report": "playwright show-report",
     "test:unit": "vitest run tests/unit",
     "install-browsers": "playwright install chromium",
-    "preflight:js": "node scripts/preflight-js.mjs"
+    "preflight:js": "node scripts/preflight-js.mjs",
+    "supply-chain:check": "python scripts/check_supply_chain.py --skip-install-trees"
   },
   "keywords": [
     "comfyui",

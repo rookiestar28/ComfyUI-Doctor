@@ -39,6 +39,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
+      - name: Supply-chain dependency gate
+        run: |
+          python scripts/check_supply_chain.py --skip-install-trees
+
       - name: Install dev dependencies
         run: |
           python -m pip install --upgrade pip
