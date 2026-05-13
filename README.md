@@ -12,6 +12,19 @@ ComfyUI-Doctor is a real-time diagnostics and debugging assistant for ComfyUI. I
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Supply-Chain Hardening, Host Alignment, and Node Focus Compatibility</strong></summary>
+
+- Added a repo-local supply-chain scanner for dependency manifests, lockfiles, workflow risk patterns, install trees, and optional workstation config indicators.
+- Added a sanitized incident-response checklist and wired the supply-chain gate into local full-test scripts and CI dependency-install paths.
+- Hardened GitHub Actions permissions, token exposure defaults, install sequencing, and dependency audit posture for the development test stack.
+- Updated Doctor runtime state resolution to prefer ComfyUI's private system-user directory when available, with legacy fallback/migration and path diagnostics.
+- Expanded host compatibility checks for current ComfyUI, ComfyUI frontend, and Desktop contracts.
+- Updated sidebar registration to prefer the current ComfyUI frontend sidebar API while keeping legacy fallback behavior and duplicate-tab cleanup.
+- Aligned locate-node behavior with current upstream focus semantics for root graph nodes, grouped execution ids, and nested subgraph execution ids.
+
+</details>
+
+<details>
 <summary><strong>Unified LLM Context, Provider Handling, and API Hardening</strong></summary>
 
 - Routed LLM prompt context through the analysis pipeline so sanitized tracebacks, node context, recent logs, workflow snippets, and system details use one structured path.
@@ -375,6 +388,7 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Built-in suggestions from 58 JSON-based error patterns, including 22 core patterns and 36 community-extension patterns.
 - Validated node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
 - Doctor sidebar with Chat, Statistics, and Settings tabs.
+- Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds.
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
@@ -424,6 +438,8 @@ Open **Doctor** in ComfyUI's left sidebar:
 - **Chat**: review latest error context and ask follow-up debugging questions.
 - **Statistics**: inspect recent error trends, diagnostics, trust/health information, telemetry controls, and feedback tools.
 - **Settings**: choose language, LLM provider, base URL, model, privacy mode, auto-open behavior, and optional server-side credential storage.
+
+When node context is available, locate actions use the host canvas focus APIs when possible, including graph/subgraph switching for nested execution ids.
 
 ### Smart Debug Node
 
@@ -475,7 +491,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 

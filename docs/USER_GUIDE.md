@@ -71,6 +71,7 @@ Doctor can show a compact right-side panel when a new error is detected. It disp
 - A locate action when the related node can be found on the canvas.
 
 The auto-open behavior is controlled in **Doctor -> Settings**.
+When host canvas APIs are available, locate actions focus the resolved node bounds and can switch into the relevant graph or subgraph for nested execution ids.
 
 ## Smart Debug Node
 
@@ -135,6 +136,6 @@ Submit actions are admin-gated. Preview is intended to help users inspect what w
 
 ## Data Locations
 
-Doctor resolves its runtime state paths for regular ComfyUI installs, portable layouts, and ComfyUI Desktop-style `.venv` installs. The health endpoint exposes path diagnostics for troubleshooting.
+Doctor resolves runtime state paths through ComfyUI's private system-user directory when the host exposes that API. Older `user/ComfyUI-Doctor` layouts remain readable through fallback and migration behavior. The health endpoint exposes path diagnostics for troubleshooting regular ComfyUI installs, portable layouts, and ComfyUI Desktop-style `.venv` installs.
 
 Runtime-generated timestamps are serialized as UTC with a trailing `Z`. Older persisted records with naive timestamps remain readable for compatibility.

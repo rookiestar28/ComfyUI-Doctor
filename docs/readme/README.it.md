@@ -118,7 +118,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-Il full gate copre secrets detection, pre-commit hooks, host-like startup validation, backend unit tests e frontend Playwright E2E tests. Vedi la [Validation Guide](../VALIDATION.md) per i comandi staged espliciti e le lanes opzionali.
+Il full gate copre supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests e frontend Playwright E2E tests. Vedi la [Validation Guide](../VALIDATION.md) per i comandi staged espliciti e le lanes opzionali.
 
 ## Requisiti
 

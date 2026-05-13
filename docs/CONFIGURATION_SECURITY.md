@@ -59,6 +59,12 @@ Runtime controls:
 
 The current zero-dependency encrypted format derives encryption and MAC keys with PBKDF2-HMAC-SHA256, encrypts with an HMAC-SHA256-derived XOR stream, and authenticates `nonce + ciphertext` with HMAC-SHA256 before decrypting.
 
+## Runtime State Location
+
+Doctor stores runtime state under ComfyUI's private system-user directory when the host provides that API. This keeps Doctor's generated state aligned with current ComfyUI and Desktop user-data boundaries.
+
+Older `user/ComfyUI-Doctor` layouts remain supported through fallback and best-effort migration. The health endpoint exposes path diagnostics so users can confirm which host directory is active without exposing secret values.
+
 ## Outbound Safety
 
 Doctor applies outbound safety checks before sending provider-bound data:
@@ -72,6 +78,16 @@ Doctor applies outbound safety checks before sending provider-bound data:
 LLM prompt context is assembled through the analysis pipeline after sanitization. The provider adapter layer should receive already-sanitized payloads from route handlers.
 
 See [Outbound Safety](OUTBOUND_SAFETY.md) for the static checker and contribution rules around outbound request paths.
+
+## Supply-Chain Validation
+
+The repository includes a static supply-chain scanner for dependency manifests, lockfiles, GitHub Actions workflows, and known high-risk package or payload indicators. The full local validation scripts run this scanner before dependency installation.
+
+```bash
+npm run supply-chain:check
+```
+
+The scanner is a local validation aid; it does not replace normal dependency review, package-manager audit output, or workstation incident response if an external advisory reports a compromised dependency.
 
 ## External Enrichment and Resumable Jobs
 

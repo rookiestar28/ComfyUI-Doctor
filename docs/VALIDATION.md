@@ -20,17 +20,19 @@ bash scripts/run_full_tests_linux.sh
 
 The full gate runs:
 
-1. `pre-commit run detect-secrets --all-files`
-2. `pre-commit run --all-files --show-diff-on-failure`
-3. Host-like package/startup validation.
-4. Backend unit tests.
-5. Frontend Playwright E2E tests.
+1. Supply-chain dependency and workflow risk checks.
+2. `pre-commit run detect-secrets --all-files`
+3. `pre-commit run --all-files --show-diff-on-failure`
+4. Host-like package/startup validation.
+5. Backend unit tests.
+6. Frontend Playwright E2E tests.
 
 ## Explicit Staged Commands
 
 Use this flow when debugging one validation stage at a time.
 
 ```bash
+python scripts/check_supply_chain.py --skip-install-trees
 pre-commit run detect-secrets --all-files
 pre-commit run --all-files --show-diff-on-failure
 python scripts/validate_host_load.py
@@ -45,13 +47,23 @@ Windows users can run the equivalent commands from PowerShell with the project `
 
 ## Host Compatibility Lane
 
-After refreshing local ComfyUI, ComfyUI frontend, or Desktop checkouts under `reference/`, run:
+After refreshing local ComfyUI, ComfyUI frontend, or Desktop host checkouts used for development compatibility review, run:
 
 ```bash
 python scripts/check_host_compatibility.py
 ```
 
 This lane checks the host API surfaces Doctor currently depends on.
+
+## Supply-Chain Check
+
+The supply-chain scanner is static and does not execute dependency lifecycle scripts. It checks repository manifests, lockfiles, workflow configuration, known high-risk dependency indicators, and install-tree indicators when enabled.
+
+```bash
+npm run supply-chain:check
+```
+
+The full-test scripts run this check before dependency installation so obvious dependency or workflow risk drift is caught early.
 
 ## Coverage Baseline Lane
 

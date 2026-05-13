@@ -118,7 +118,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-Full gate 會涵蓋 secrets detection、pre-commit hooks、host-like startup validation、backend unit tests 與 frontend Playwright E2E tests。明確的分階段指令與可選 lanes 請參閱 [Validation Guide](../VALIDATION.md)。
+Full gate 會涵蓋 supply-chain checks、secrets detection、pre-commit hooks、host-like startup validation、backend unit tests 與 frontend Playwright E2E tests。明確的分階段指令與可選 lanes 請參閱 [Validation Guide](../VALIDATION.md)。
 
 ## 需求
 
