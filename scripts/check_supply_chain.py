@@ -76,6 +76,35 @@ ALLOWED_INSTALL_SCRIPT_PACKAGES = {
     "fsevents",
 }
 
+TRIAGE_CHECKLIST = """Supply-chain incident triage checklist
+
+1. Stop activity
+   - Pause dependency install, build, test, and publish jobs on the affected host or runner.
+   - Preserve scanner output, workflow run ids, package versions, lockfile state, and timestamps.
+   - Do not paste credentials, full config files, private logs, or environment dumps into public issues.
+
+2. Classify finding
+   - Dependency finding: inspect package name, version, lockfile entry, install time, and registry history.
+   - Payload finding: isolate the machine, preserve the path, and remove persistence only after evidence capture.
+   - CI finding: inspect workflow trigger, checkout target, cache scope, job permissions, and publish boundaries.
+   - Registry finding: review recent package publishes, release tags, and generated archives.
+
+3. Rotate credentials after evidence capture
+   - Rotate source-control, registry, cloud, SSH, editor/AI-tool, and application credentials reachable from the affected host or runner.
+   - Revoke broad tokens first when active misuse is plausible, then replace with least-privilege credentials.
+
+4. Clean and rebuild
+   - Purge affected CI caches.
+   - Remove confirmed editor/AI-tool persistence hooks and payload files.
+   - Reinstall dependencies from clean manifests and lockfiles.
+   - Re-run the supply-chain scanner before resuming normal work.
+
+5. Return to service
+   - Confirm scanner passes.
+   - Run the full repository validation gate.
+   - Record sanitized evidence, commands, environment, known limitations, and follow-up actions in the internal incident record.
+"""
+
 PAYLOAD_FILENAMES = {
     "router_init.js",
     "router_runtime.js",
@@ -590,6 +619,10 @@ def _print_text(findings: list[Finding]) -> None:
         print(f"{finding.severity.upper()} {finding.rule_id} {finding.path}{package}{version} - {finding.message}")
 
 
+def print_triage_checklist() -> None:
+    print(TRIAGE_CHECKLIST.rstrip())
+
+
 def _exit_code(findings: list[Finding], strict: bool) -> int:
     if strict:
         return 1 if findings else 0
@@ -611,11 +644,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Opt in to targeted home .claude/.vscode IOC checks. Does not print file contents.",
     )
+    parser.add_argument(
+        "--print-triage-checklist",
+        action="store_true",
+        help="Print a sanitized supply-chain incident response checklist and exit without scanning.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.print_triage_checklist:
+        print_triage_checklist()
+        return 0
     findings = scan_repository(
         Path(args.root),
         include_install_trees=not args.skip_install_trees,
