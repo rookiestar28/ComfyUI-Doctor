@@ -8,16 +8,15 @@ This module is responsible for determining the safe, permanent location for:
 - Doctor debug logs
 - Any other persisted state
 
-It prioritizes the standard ComfyUI user directory to ensure compatibility
-with ComfyUI Desktop (which often makes the custom_nodes directory read-only
-or ephemeral in 'resources/').
+It prioritizes ComfyUI's private system-user directory when available, with
+legacy user-directory fallbacks for older hosts and Desktop resource layouts.
 """
 
 import logging
 import os
+import shutil
 import sys
 import tempfile
-from typing import Dict, Optional
 
 try:
     import folder_paths
@@ -26,6 +25,9 @@ except ImportError:
 
 # Fallback logger if main logger not set up
 logger = logging.getLogger("ComfyUI-Doctor.paths")
+
+_DOCTOR_SYSTEM_USER_NAME = "comfyui_doctor"
+_DOCTOR_LEGACY_USER_DIR_NAME = "ComfyUI-Doctor"
 
 
 _DESKTOP_RESOURCE_INDICATORS = [
@@ -52,7 +54,7 @@ def is_desktop_resources_path(path: str) -> bool:
     return any(indicator in normalized for indicator in _DESKTOP_RESOURCE_INDICATORS)
 
 
-def _detect_desktop_base_path_from_python(python_executable: Optional[str] = None) -> Optional[str]:
+def _detect_desktop_base_path_from_python(python_executable: str | None = None) -> str | None:
     """Infer ComfyUI Desktop basePath from the managed `.venv` interpreter layout.
 
     Upstream Desktop now keeps Python at:
@@ -77,7 +79,7 @@ def _detect_desktop_base_path_from_python(python_executable: Optional[str] = Non
     return os.path.dirname(os.path.dirname(os.path.dirname(executable)))
 
 
-def _detect_comfy_root_from_extension(module_file: Optional[str] = None) -> Optional[str]:
+def _detect_comfy_root_from_extension(module_file: str | None = None) -> str | None:
     """Infer portable/git-clone ComfyUI root from extension layout."""
     current_file = os.path.abspath(module_file or __file__)
     services_dir = os.path.dirname(current_file)
@@ -90,9 +92,16 @@ def _detect_comfy_root_from_extension(module_file: Optional[str] = None) -> Opti
     return os.path.dirname(custom_nodes_dir)
 
 
-def get_path_diagnostics() -> Dict[str, Optional[str]]:
+def get_path_diagnostics() -> dict[str, str | None]:
     """Return best-effort install-mode diagnostics for health/debug output."""
     folder_user_directory = None
+    folder_system_user_directory = None
+    if folder_paths and hasattr(folder_paths, "get_system_user_directory"):
+        try:
+            folder_system_user_directory = folder_paths.get_system_user_directory(_DOCTOR_SYSTEM_USER_NAME)
+        except Exception as exc:
+            logger.debug(f"Failed to get_system_user_directory for diagnostics: {exc}")
+
     if folder_paths and hasattr(folder_paths, "get_user_directory"):
         try:
             folder_user_directory = folder_paths.get_user_directory()
@@ -103,7 +112,10 @@ def get_path_diagnostics() -> Dict[str, Optional[str]]:
     portable_comfy_root = _detect_comfy_root_from_extension()
     portable_is_desktop_resources = is_desktop_resources_path(portable_comfy_root or "")
 
-    if folder_user_directory:
+    if folder_system_user_directory:
+        install_mode = "standard"
+        source = "folder_paths.get_system_user_directory"
+    elif folder_user_directory:
         install_mode = "standard"
         source = "folder_paths.get_user_directory"
     elif portable_comfy_root and not portable_is_desktop_resources:
@@ -122,6 +134,7 @@ def get_path_diagnostics() -> Dict[str, Optional[str]]:
     return {
         "install_mode": install_mode,
         "source": source,
+        "folder_system_user_directory": folder_system_user_directory,
         "folder_user_directory": folder_user_directory,
         "desktop_base_path": desktop_base_path,
         "portable_comfy_root": portable_comfy_root,
@@ -129,25 +142,71 @@ def get_path_diagnostics() -> Dict[str, Optional[str]]:
     }
 
 
+def _copy_missing_legacy_data(source_dir: str | None, target_dir: str | None) -> None:
+    """Best-effort copy of legacy public-user state into the private system-user dir."""
+    if not source_dir or not target_dir:
+        return
+
+    source_abs = os.path.abspath(source_dir)
+    target_abs = os.path.abspath(target_dir)
+    if os.path.normcase(source_abs) == os.path.normcase(target_abs):
+        return
+    if not os.path.isdir(source_abs):
+        return
+    if is_desktop_resources_path(source_abs) or is_desktop_resources_path(target_abs):
+        return
+
+    try:
+        if os.path.commonpath([source_abs, target_abs]) == source_abs:
+            logger.debug("Skipping legacy state migration because target is inside source")
+            return
+    except ValueError:
+        return
+
+    try:
+        for root, dirs, files in os.walk(source_abs, topdown=True):
+            # SECURITY: do not follow symlinks while copying legacy user data into private state.
+            dirs[:] = [dirname for dirname in dirs if not os.path.islink(os.path.join(root, dirname))]
+            relative_root = os.path.relpath(root, source_abs)
+            destination_root = target_abs if relative_root == "." else os.path.join(target_abs, relative_root)
+            os.makedirs(destination_root, exist_ok=True)
+
+            for filename in files:
+                source_file = os.path.join(root, filename)
+                if os.path.islink(source_file):
+                    continue
+
+                destination_file = os.path.join(destination_root, filename)
+                if os.path.exists(destination_file):
+                    continue
+
+                shutil.copy2(source_file, destination_file)
+    except Exception as exc:
+        logger.debug(f"Best-effort legacy state migration failed: {exc}")
+
+
 def get_doctor_data_dir() -> str:
     """
     Resolve the canonical data directory for ComfyUI-Doctor.
 
     Priority Order:
-    1. ComfyUI User Directory (`folder_paths.get_user_directory()`)
-    2. Desktop base path inferred from managed `.venv` (`<basePath>/user/ComfyUI-Doctor`)
-    3. Portable / Git clone sibling (`<ComfyUI root>/user/ComfyUI-Doctor`)
-    4. Legacy portable fallback (`<ComfyUI root>/user_data/ComfyUI-Doctor`)
-    5. Extension-local logs (only when not inside Desktop resources)
-    6. OS Temporary Directory
+    1. ComfyUI system-user directory (`folder_paths.get_system_user_directory()`)
+    2. Legacy ComfyUI User Directory (`folder_paths.get_user_directory()/ComfyUI-Doctor`)
+    3. Desktop base path inferred from managed `.venv` (`<basePath>/user/ComfyUI-Doctor`)
+    4. Portable / Git clone sibling (`<ComfyUI root>/user/ComfyUI-Doctor`)
+    5. Legacy portable fallback (`<ComfyUI root>/user_data/ComfyUI-Doctor`)
+    6. Extension-local logs (only when not inside Desktop resources)
+    7. OS Temporary Directory
 
     Returns:
         Absolute path to a writable directory.
     """
     candidates = []
     seen = set()
+    system_user_dir = None
+    legacy_user_dir = None
 
-    def add_candidate(path: Optional[str]) -> None:
+    def add_candidate(path: str | None) -> None:
         if not path:
             return
         normalized = os.path.normcase(os.path.abspath(path))
@@ -156,16 +215,25 @@ def get_doctor_data_dir() -> str:
         seen.add(normalized)
         candidates.append(path)
 
-    # 1. ComfyUI User Directory (Best when folder_paths is available)
+    # 1. ComfyUI system-user directory (private host state on current ComfyUI)
+    if folder_paths and hasattr(folder_paths, "get_system_user_directory"):
+        try:
+            system_user_dir = folder_paths.get_system_user_directory(_DOCTOR_SYSTEM_USER_NAME)
+            add_candidate(system_user_dir)
+        except Exception as exc:
+            logger.debug(f"Failed to get_system_user_directory: {exc}")
+
+    # 2. ComfyUI User Directory (legacy fallback when folder_paths is available)
     if folder_paths and hasattr(folder_paths, "get_user_directory"):
         try:
             user_dir = folder_paths.get_user_directory()
             if user_dir:
-                add_candidate(os.path.join(user_dir, "ComfyUI-Doctor"))
+                legacy_user_dir = os.path.join(user_dir, _DOCTOR_LEGACY_USER_DIR_NAME)
+                add_candidate(legacy_user_dir)
         except Exception as exc:
             logger.debug(f"Failed to get_user_directory: {exc}")
 
-    # 2/3/4. Desktop vs portable/git-clone fallback ordering
+    # 3/4/5. Desktop vs portable/git-clone fallback ordering
     # IMPORTANT: when the extension path clearly resolves through a real
     # `custom_nodes` layout outside Desktop resources, prefer that portable/git
     # root over the current Python `.venv` heuristic. This avoids false Desktop
@@ -176,15 +244,15 @@ def get_doctor_data_dir() -> str:
         portable_is_desktop_resources = is_desktop_resources_path(comfy_root or "")
 
         if comfy_root and not portable_is_desktop_resources:
-            add_candidate(os.path.join(comfy_root, "user", "ComfyUI-Doctor"))
-            add_candidate(os.path.join(comfy_root, "user_data", "ComfyUI-Doctor"))
+            add_candidate(os.path.join(comfy_root, "user", _DOCTOR_LEGACY_USER_DIR_NAME))
+            add_candidate(os.path.join(comfy_root, "user_data", _DOCTOR_LEGACY_USER_DIR_NAME))
 
         if desktop_base_path:
-            add_candidate(os.path.join(desktop_base_path, "user", "ComfyUI-Doctor"))
+            add_candidate(os.path.join(desktop_base_path, "user", _DOCTOR_LEGACY_USER_DIR_NAME))
 
         if comfy_root and portable_is_desktop_resources:
-            add_candidate(os.path.join(comfy_root, "user", "ComfyUI-Doctor"))
-            add_candidate(os.path.join(comfy_root, "user_data", "ComfyUI-Doctor"))
+            add_candidate(os.path.join(comfy_root, "user", _DOCTOR_LEGACY_USER_DIR_NAME))
+            add_candidate(os.path.join(comfy_root, "user_data", _DOCTOR_LEGACY_USER_DIR_NAME))
 
         if comfy_root:
             legacy_internal = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
@@ -193,8 +261,8 @@ def get_doctor_data_dir() -> str:
     except Exception:
         pass
 
-    # 5. OS Temp (Last Resort)
-    add_candidate(os.path.join(tempfile.gettempdir(), "ComfyUI-Doctor"))
+    # 7. OS Temp (Last Resort)
+    add_candidate(os.path.join(tempfile.gettempdir(), _DOCTOR_LEGACY_USER_DIR_NAME))
 
     for path in candidates:
         try:
@@ -207,9 +275,13 @@ def get_doctor_data_dir() -> str:
             with open(test_file, "w", encoding="utf-8") as handle:
                 handle.write("ok")
             os.remove(test_file)
+            if system_user_dir and os.path.normcase(os.path.abspath(path)) == os.path.normcase(
+                os.path.abspath(system_user_dir)
+            ):
+                _copy_missing_legacy_data(legacy_user_dir, system_user_dir)
             return path
         except Exception as exc:
             logger.debug(f"Candidate path {path} failed: {exc}")
             continue
 
-    return os.path.join(tempfile.gettempdir(), "ComfyUI-Doctor")
+    return os.path.join(tempfile.gettempdir(), _DOCTOR_LEGACY_USER_DIR_NAME)

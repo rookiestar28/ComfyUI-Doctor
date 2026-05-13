@@ -514,26 +514,122 @@ export class DoctorUI {
             || null;
     }
 
-    getNodeByExecutionId(nodeId) {
+    getChildGraphFromNode(node) {
+        if (!node) return null;
+        if (node.subgraph && (typeof node.isSubgraphNode !== 'function' || node.isSubgraphNode())) {
+            return node.subgraph;
+        }
+        return null;
+    }
+
+    isHostGroupNode(node) {
+        if (!node) return false;
+        return node.isGroupNode?.() === true
+            || node.isVirtualNode === true
+            || typeof node.getInnerNodes === 'function';
+    }
+
+    getFocusTargetByExecutionId(nodeId) {
         const executionId = this.normalizeNodeId(nodeId);
         const rootGraph = this.getComfyGraph();
         if (!executionId || !rootGraph) return null;
 
         if (!executionId.includes(':')) {
-            return this.getNodeFromGraph(rootGraph, executionId);
+            const node = this.getNodeFromGraph(rootGraph, executionId);
+            return node ? { node, graph: node.graph || rootGraph } : null;
         }
 
         const parts = executionId.split(':');
         const localNodeId = parts.pop();
         let currentGraph = rootGraph;
 
+        const rootParent = this.getNodeFromGraph(rootGraph, parts[0]);
+        if (this.isHostGroupNode(rootParent)) {
+            return { node: rootParent, graph: rootParent.graph || rootGraph };
+        }
+
         for (const part of parts) {
             const subgraphNode = this.getNodeFromGraph(currentGraph, part);
-            currentGraph = subgraphNode?.subgraph || null;
+            currentGraph = this.getChildGraphFromNode(subgraphNode);
             if (!currentGraph) return null;
         }
 
-        return this.getNodeFromGraph(currentGraph, localNodeId);
+        const node = this.getNodeFromGraph(currentGraph, localNodeId);
+        return node ? { node, graph: node.graph || currentGraph } : null;
+    }
+
+    getNodeByExecutionId(nodeId) {
+        return this.getFocusTargetByExecutionId(nodeId)?.node || null;
+    }
+
+    navigateCanvasToGraph(graph) {
+        const canvas = app?.canvas;
+        if (!canvas || !graph || canvas.graph === graph) return;
+
+        // IMPORTANT: mirror upstream focus navigation; missing host methods must fall back safely.
+        canvas.subgraph = graph.isRootGraph ? undefined : graph;
+        if (typeof canvas.setGraph === 'function') {
+            canvas.setGraph(graph);
+        } else {
+            canvas.graph = graph;
+        }
+    }
+
+    getNodeBounds(node) {
+        if (node?.boundingRect) return node.boundingRect;
+        if (!Array.isArray(node?.pos)) return null;
+        const width = Array.isArray(node.size) ? (node.size[0] || 100) : 100;
+        const height = Array.isArray(node.size) ? (node.size[1] || 50) : 50;
+        return [node.pos[0], node.pos[1], width, height];
+    }
+
+    focusCanvasOnNode(node, graph) {
+        const canvas = app?.canvas;
+        if (!canvas || !node) return;
+
+        this.navigateCanvasToGraph(graph);
+
+        if (typeof canvas.selectNodes === 'function') {
+            canvas.selectNodes([node]);
+            console.log('[ComfyUI-Doctor] Used selectNodes method');
+        }
+
+        const bounds = this.getNodeBounds(node);
+        if (bounds && typeof canvas.animateToBounds === 'function') {
+            canvas.animateToBounds(bounds);
+            console.log('[ComfyUI-Doctor] Used animateToBounds method');
+        } else if (Array.isArray(node.pos)) {
+            const nodeSize = Array.isArray(node.size) ? node.size : [100, 50];
+            const nodeX = node.pos[0] + (nodeSize[0] || 100) / 2;
+            const nodeY = node.pos[1] + (nodeSize[1] || 50) / 2;
+
+            const canvasWidth = canvas.canvas?.width || canvas.bgcanvas?.width || 1920;
+            const canvasHeight = canvas.canvas?.height || canvas.bgcanvas?.height || 1080;
+            const scale = canvas.ds?.scale || 1;
+
+            const offsetX = canvasWidth / 2 / scale - nodeX;
+            const offsetY = canvasHeight / 2 / scale - nodeY;
+
+            if (canvas.ds) {
+                canvas.ds.offset[0] = offsetX;
+                canvas.ds.offset[1] = offsetY;
+            } else if (canvas.offset) {
+                canvas.offset[0] = offsetX;
+                canvas.offset[1] = offsetY;
+            }
+        }
+
+        if (!canvas.selected_nodes || !canvas.selected_nodes[node.id]) {
+            canvas.selected_nodes = {};
+            canvas.selected_nodes[node.id] = node;
+        }
+
+        if (typeof canvas.setDirty === 'function') {
+            canvas.setDirty(true, true);
+        }
+        if (typeof canvas.draw === 'function') {
+            canvas.draw(true);
+        }
     }
 
     /**
@@ -1103,55 +1199,15 @@ export class DoctorUI {
                 return;
             }
 
-            const node = this.getNodeByExecutionId(executionId);
+            const focusTarget = this.getFocusTargetByExecutionId(executionId);
+            const node = focusTarget?.node;
             if (!node) {
                 console.warn('[ComfyUI-Doctor] Node not found in graph:', executionId);
                 return;
             }
 
             console.log('[ComfyUI-Doctor] Found node:', node.title || node.type, 'at pos:', node.pos);
-
-            // Method 1: Use selectNodes (ComfyUI's NodesMap approach) - jumps and selects
-            if (typeof app.canvas.selectNodes === 'function') {
-                app.canvas.selectNodes([node]);
-                console.log('[ComfyUI-Doctor] Used selectNodes method');
-            }
-
-            // Method 2: Center on node using offset calculation
-            const canvas = app.canvas;
-            const nodeX = node.pos[0] + (node.size[0] || 100) / 2;
-            const nodeY = node.pos[1] + (node.size[1] || 50) / 2;
-
-            // Get canvas dimensions
-            const canvasWidth = canvas.canvas?.width || canvas.bgcanvas?.width || 1920;
-            const canvasHeight = canvas.canvas?.height || canvas.bgcanvas?.height || 1080;
-            const scale = canvas.ds?.scale || 1;
-
-            // Calculate offset to center the node
-            const offsetX = canvasWidth / 2 / scale - nodeX;
-            const offsetY = canvasHeight / 2 / scale - nodeY;
-
-            if (canvas.ds) {
-                canvas.ds.offset[0] = offsetX;
-                canvas.ds.offset[1] = offsetY;
-            } else if (canvas.offset) {
-                canvas.offset[0] = offsetX;
-                canvas.offset[1] = offsetY;
-            }
-
-            // Ensure the node is selected (fallback)
-            if (!canvas.selected_nodes || !canvas.selected_nodes[node.id]) {
-                canvas.selected_nodes = {};
-                canvas.selected_nodes[node.id] = node;
-            }
-
-            // Redraw canvas
-            if (typeof canvas.setDirty === 'function') {
-                canvas.setDirty(true, true);
-            }
-            if (typeof canvas.draw === 'function') {
-                canvas.draw(true);
-            }
+            this.focusCanvasOnNode(node, focusTarget.graph);
 
             console.log('[ComfyUI-Doctor] Successfully located node:', executionId);
         } catch (e) {

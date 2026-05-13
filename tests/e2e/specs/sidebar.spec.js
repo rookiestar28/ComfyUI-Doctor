@@ -235,41 +235,117 @@ test.describe('Doctor Chat Interface', () => {
     expect(nodeContext.subgraph_lineage).toEqual(['11', '42', '99']);
   });
 
+  test('should focus root graph nodes with host canvas bounds API', async ({ page }) => {
+    const focusState = await page.evaluate(() => {
+      const rootNode = {
+        id: 42,
+        title: 'Root KSampler',
+        type: 'KSampler',
+        pos: [240, 120],
+        size: [160, 80],
+        boundingRect: [240, 120, 160, 80],
+      };
+      rootNode.graph = window.app.rootGraph;
+      window.app.rootGraph._nodes = [rootNode];
+      window.app.canvas.graph = null;
+      window.app.canvas.subgraph = { stale: true };
+      window.app.canvas.selected_nodes = {};
+      window.app.canvas.lastAnimatedBounds = null;
+
+      window.app.Doctor.locateNodeOnCanvas('42');
+
+      return {
+        graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
+        subgraphCleared: window.app.canvas.subgraph === undefined,
+        selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+        lastAnimatedBounds: window.app.canvas.lastAnimatedBounds,
+      };
+    });
+
+    expect(focusState.graphIsRoot).toBe(true);
+    expect(focusState.subgraphCleared).toBe(true);
+    expect(focusState.selectedNodeIds).toContain('42');
+    expect(focusState.lastAnimatedBounds).toEqual([240, 120, 160, 80]);
+  });
+
+  test('should focus group node parent for grouped execution ids', async ({ page }) => {
+    const focusState = await page.evaluate(() => {
+      const groupNode = {
+        id: 65,
+        title: 'Executable Group',
+        type: 'Group',
+        pos: [80, 90],
+        size: [420, 260],
+        boundingRect: [80, 90, 420, 260],
+        getInnerNodes() {
+          return [{ id: 63, title: 'Grouped KSampler' }];
+        },
+      };
+      groupNode.graph = window.app.rootGraph;
+      window.app.rootGraph._nodes = [groupNode];
+      window.app.canvas.selected_nodes = {};
+      window.app.canvas.lastAnimatedBounds = null;
+
+      window.app.Doctor.locateNodeOnCanvas('65:63');
+
+      return {
+        graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
+        selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+        lastAnimatedBounds: window.app.canvas.lastAnimatedBounds,
+      };
+    });
+
+    expect(focusState.graphIsRoot).toBe(true);
+    expect(focusState.selectedNodeIds).toContain('65');
+    expect(focusState.lastAnimatedBounds).toEqual([80, 90, 420, 260]);
+  });
+
   test('should locate subgraph execution ids via rootGraph traversal (R23)', async ({ page }) => {
-    await page.evaluate(() => {
+    const focusState = await page.evaluate(() => {
       const innerNode = {
         id: 63,
         title: 'Inner KSampler',
         type: 'KSampler',
         pos: [640, 480],
         size: [160, 90],
+        boundingRect: [640, 480, 160, 90],
       };
       const subgraph = {
+        isRootGraph: false,
         _nodes: [innerNode],
         getNodeById(id) {
           return this._nodes.find((node) => String(node.id) === String(id)) || null;
         },
       };
+      innerNode.graph = subgraph;
       const hostNode = {
         id: 65,
         title: 'Subgraph Host',
         type: 'Subgraph',
         pos: [0, 0],
         size: [100, 60],
+        isSubgraphNode: () => true,
         subgraph,
       };
+      hostNode.graph = window.app.rootGraph;
       window.app.rootGraph._nodes = [hostNode];
       window.app.canvas.selected_nodes = {};
       window.app.canvas.ds.offset = [0, 0];
+      window.app.canvas.lastAnimatedBounds = null;
       window.app.Doctor.locateNodeOnCanvas('65:63');
+
+      return {
+        graphIsSubgraph: window.app.canvas.graph === subgraph,
+        subgraphIsTarget: window.app.canvas.subgraph === subgraph,
+        selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+        lastAnimatedBounds: window.app.canvas.lastAnimatedBounds,
+      };
     });
 
-    const selectedNodeIds = await page.evaluate(() => Object.keys(window.app.canvas.selected_nodes));
-    expect(selectedNodeIds).toContain('63');
-
-    const offsets = await page.evaluate(() => window.app.canvas.ds.offset.slice());
-    expect(offsets[0]).not.toBe(0);
-    expect(offsets[1]).not.toBe(0);
+    expect(focusState.graphIsSubgraph).toBe(true);
+    expect(focusState.subgraphIsTarget).toBe(true);
+    expect(focusState.selectedNodeIds).toContain('63');
+    expect(focusState.lastAnimatedBounds).toEqual([640, 480, 160, 90]);
   });
 
   test('should display error summary in chat context card', async ({ page }) => {

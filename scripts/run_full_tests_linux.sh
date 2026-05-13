@@ -73,6 +73,9 @@ source "$venv_dir/bin/activate"
 
 run_step "Verify .venv interpreter" "$venv_python" -c "import sys; print(sys.executable)"
 
+run_step "Supply-chain dependency gate" \
+  "$venv_python" scripts/check_supply_chain.py --skip-install-trees
+
 if [[ "$skip_bootstrap" -eq 0 ]]; then
   run_step "Upgrade pip/setuptools/wheel in .venv" \
     "$venv_python" -m pip install --upgrade pip setuptools wheel

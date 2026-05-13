@@ -5,9 +5,10 @@
  * allowing us to test the UI without running a full ComfyUI instance.
  */
 
-export function createMockComfyUIApp() {
+export function createMockComfyUIApp(options = {}) {
   const mockSettings = new Map();
   const mockExtensions = [];
+  const sidebarRegistrationCalls = [];
 
   function registerExtensionSettings(extension) {
     extension.settings?.forEach((setting) => {
@@ -77,9 +78,35 @@ export function createMockComfyUIApp() {
     }, { once: true });
   }
 
+  function registerSidebarTab(config, registerOptions = {}, source = 'extensionManager.sidebarTab') {
+    console.log('[Mock] Registering sidebar tab:', config.id);
+    sidebarRegistrationCalls.push({ id: config.id, source });
+    if (registerOptions.prepend) {
+      mockSidebarTabs.unshift(config);
+    } else {
+      mockSidebarTabs.push(config);
+    }
+    scheduleSidebarRender(config);
+
+    return config;
+  }
+
+  function unregisterSidebarTab(id) {
+    const index = mockSidebarTabs.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+
+    const [removed] = mockSidebarTabs.splice(index, 1);
+    if (removed?.type === 'custom' && typeof removed.destroy === 'function') {
+      removed.destroy();
+    }
+    renderedTabs.delete(id);
+    document.getElementById(`sidebar-tab-${id}`)?.remove();
+  }
+
   function createMockGraph(initialNodes = []) {
     return {
       _nodes: initialNodes,
+      isRootGraph: false,
       subgraphs: new Map(),
       extra: {},
       serialize() {
@@ -99,6 +126,7 @@ export function createMockComfyUIApp() {
   }
 
   const graph = createMockGraph();
+  graph.isRootGraph = true;
 
   const app = {
     ui: {
@@ -141,9 +169,18 @@ export function createMockComfyUIApp() {
     rootGraph: graph,
     isGraphReady: true,
     canvas: {
+      graph,
+      subgraph: undefined,
       ds: { scale: 1, offset: [0, 0] },
       selected_nodes: {},
+      lastAnimatedBounds: null,
       canvas: { width: 1920, height: 1080 },
+      setGraph(targetGraph) {
+        this.graph = targetGraph;
+      },
+      animateToBounds(bounds) {
+        this.lastAnimatedBounds = bounds;
+      },
       selectNodes(nodes) {
         this.selected_nodes = Object.fromEntries(nodes.map((node) => [String(node.id), node]));
       },
@@ -159,13 +196,23 @@ export function createMockComfyUIApp() {
           app.ui.settings.setSettingValue(id, value);
         },
       },
+      sidebarTab: options.sidebarApiMode === 'deprecated-only' ? undefined : {
+        get sidebarTabs() {
+          return mockSidebarTabs;
+        },
+        registerSidebarTab(config, registerOptions) {
+          return registerSidebarTab(config, registerOptions, 'extensionManager.sidebarTab');
+        },
+        unregisterSidebarTab,
+        toggleSidebarTab() {},
+      },
       registerSidebarTab(config) {
-        console.log('[Mock] Registering sidebar tab via extensionManager:', config.id);
-        mockSidebarTabs.push(config);
-        scheduleSidebarRender(config);
-
-        return config;
-      }
+        return registerSidebarTab(config, {}, 'extensionManager.registerSidebarTab');
+      },
+      unregisterSidebarTab,
+      getSidebarTabs() {
+        return mockSidebarTabs;
+      },
     },
     registerExtension(extension) {
       console.log('[Mock] Registering extension:', extension.name);
@@ -175,6 +222,9 @@ export function createMockComfyUIApp() {
       if (extension.setup) {
         setTimeout(() => extension.setup.call(extension, app), 0);
       }
+    },
+    __getSidebarRegistrationCalls() {
+      return sidebarRegistrationCalls.map((call) => ({ ...call }));
     },
   };
 

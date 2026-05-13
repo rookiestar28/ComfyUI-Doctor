@@ -86,6 +86,92 @@ test.describe('Settings Panel', () => {
     expect(settings.autoOpen).toBe(true);
   });
 
+  test('host sidebar API mock exposes current and deprecated wrappers', async ({ page }) => {
+    const sidebarApi = await page.evaluate(() => {
+      const current = window.app.extensionManager.sidebarTab;
+      const legacy = window.app.extensionManager;
+      const before = current.sidebarTabs.length;
+
+      legacy.registerSidebarTab({
+        id: 'legacy-host-compat',
+        title: 'Legacy Host Compat',
+        type: 'custom',
+        render() {},
+      });
+      current.registerSidebarTab({
+        id: 'current-host-compat',
+        title: 'Current Host Compat',
+        type: 'custom',
+        render() {},
+      });
+
+      const ids = current.sidebarTabs.map((tab) => tab.id);
+      const deprecatedReadsSameRegistry = legacy.getSidebarTabs().length === current.sidebarTabs.length;
+
+      legacy.unregisterSidebarTab('legacy-host-compat');
+      current.unregisterSidebarTab('current-host-compat');
+
+      return {
+        hasCurrentRegister: typeof current.registerSidebarTab === 'function',
+        hasDeprecatedRegister: typeof legacy.registerSidebarTab === 'function',
+        ids,
+        deprecatedReadsSameRegistry,
+        after: current.sidebarTabs.length,
+        before,
+      };
+    });
+
+    expect(sidebarApi.hasCurrentRegister).toBe(true);
+    expect(sidebarApi.hasDeprecatedRegister).toBe(true);
+    expect(sidebarApi.ids).toContain('legacy-host-compat');
+    expect(sidebarApi.ids).toContain('current-host-compat');
+    expect(sidebarApi.deprecatedReadsSameRegistry).toBe(true);
+    expect(sidebarApi.after).toBe(sidebarApi.before);
+  });
+
+  test('should register Doctor sidebar through current sidebar API when present', async ({ page }) => {
+    const registration = await page.evaluate(() => {
+      const calls = window.app.__getSidebarRegistrationCalls()
+        .filter((call) => call.id === 'comfyui-doctor');
+      const sidebarTabs = window.app.extensionManager.sidebarTab.sidebarTabs
+        .filter((tab) => tab.id === 'comfyui-doctor');
+      return {
+        lastSource: calls.at(-1)?.source,
+        callCount: calls.length,
+        tabCount: sidebarTabs.length,
+      };
+    });
+
+    expect(registration.lastSource).toBe('extensionManager.sidebarTab');
+    expect(registration.callCount).toBe(1);
+    expect(registration.tabCount).toBe(1);
+  });
+
+  test('should fall back to deprecated sidebar wrapper when current API is absent', async ({ page }) => {
+    await page.goto('test-harness.html?sidebarApi=deprecated-only');
+    await waitForDoctorReady(page);
+    await waitForI18nLoaded(page);
+
+    const registration = await page.evaluate(() => {
+      const calls = window.app.__getSidebarRegistrationCalls()
+        .filter((call) => call.id === 'comfyui-doctor');
+      const sidebarTabs = window.app.extensionManager.getSidebarTabs()
+        .filter((tab) => tab.id === 'comfyui-doctor');
+      return {
+        hasCurrentApi: Boolean(window.app.extensionManager.sidebarTab),
+        lastSource: calls.at(-1)?.source,
+        callCount: calls.length,
+        tabCount: sidebarTabs.length,
+      };
+    });
+
+    expect(registration.hasCurrentApi).toBe(false);
+    expect(registration.lastSource).toBe('extensionManager.registerSidebarTab');
+    expect(registration.callCount).toBe(1);
+    expect(registration.tabCount).toBe(1);
+    await expect(page.locator('.doctor-tab-button[data-tab-id="settings"]')).toBeVisible();
+  });
+
   test('should have settings tab button', async ({ page }) => {
     const toggleBtn = page.locator('.doctor-tab-button[data-tab-id="settings"]');
     await expect(toggleBtn).toBeVisible();
