@@ -50,6 +50,9 @@ on:
         default: 'http://127.0.0.1:8188'
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   phase2-python-gate:
     name: Phase 2 Python Security & Contract Tests

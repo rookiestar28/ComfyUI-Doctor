@@ -20,6 +20,9 @@ on:
       - '.github/workflows/coverage-baseline.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   coverage-baseline:
     runs-on: ubuntu-latest
