@@ -87,12 +87,16 @@ Doctor는 OpenAI-compatible APIs, Anthropic, Ollama의 provider-specific request
 ## 문서
 
 - [User Guide](../USER_GUIDE.md): UI walkthrough, diagnostics, privacy modes, LLM setup, feedback flow.
+- [Architecture](../ARCHITECTURE.md): host startup, backend/frontend boundaries, data flows, security/storage boundaries, test lanes.
 - [Configuration and Security](../CONFIGURATION_SECURITY.md): environment variables, admin guard behavior, credential storage, outbound safety, telemetry, CSP notes.
 - [API Reference](../API_REFERENCE.md): public Doctor and debugger endpoints.
-- [Validation Guide](../VALIDATION.md): local full-gate commands and optional compatibility/coverage lanes.
+- [OpenAPI Contract](../openapi.json): machine-readable API contract.
+- [Validation Guide](../VALIDATION.md): local full-gate commands and optional focused, integration, stress, compatibility, coverage, audit lanes.
+- [Security Audit](../SECURITY_AUDIT.md): quarterly audit cadence, report template, manual checks, optional external scanners, evidence handling.
 - [Plugin Guide](../PLUGIN_GUIDE.md): community plugin trust model and plugin authoring notes.
 - [Plugin Migration](../PLUGIN_MIGRATION.md): migration tooling for plugin manifests and allowlists.
 - [Outbound Safety](../OUTBOUND_SAFETY.md): static checker and outbound request safety rules.
+- [Contributing](../../CONTRIBUTING.md): setup, development workflow, validation expectations, PR readiness.
 
 ## 지원되는 오류 패턴
 

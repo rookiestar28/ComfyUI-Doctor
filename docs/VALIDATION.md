@@ -65,6 +65,35 @@ npm run supply-chain:check
 
 The full-test scripts run this check before dependency installation so obvious dependency or workflow risk drift is caught early.
 
+## Focused Security / Contract Lane
+
+The focused gate is a supplemental lane for security and contract regressions. It does not replace the full local gate.
+
+```bash
+python scripts/focused_gate.py --fast
+```
+
+Run the full focused lane, including E2E, when changing frontend behavior in the same work:
+
+```bash
+python scripts/focused_gate.py
+```
+
+The old `scripts/phase2_gate.py` and `scripts/phase2_gate.sh` entrypoints remain compatibility wrappers only. New docs and automation should use the focused-gate names.
+
+## E2E Integration and Stress Lanes
+
+The default `npm test` run excludes `@integration` and `@stress` specs. Use the opt-in lanes when validating telemetry endpoint behavior beyond the default UI harness.
+
+```bash
+npm run test:integration
+npm run test:stress
+```
+
+`npm run test:integration` uses the Playwright harness backend by default. Set `COMFYUI_URL` only when you intentionally want to run the same telemetry assertions against a live ComfyUI backend.
+
+`npm run test:stress` uses the harness backend and exercises telemetry burst/state behavior.
+
 ## Coverage Baseline Lane
 
 Coverage is currently an informational baseline, not a default acceptance threshold:
@@ -74,6 +103,16 @@ python scripts/run_coverage_baseline.py --xml coverage.xml
 ```
 
 Use this lane to track test coverage movement without changing the default full gate.
+
+## Quarterly Security Audit Lane
+
+Use the security audit generator and scheduled workflow for recurring review. Generated templates are public-safe starting points; private target details and raw scanner output should stay in maintainer-private storage.
+
+```bash
+python scripts/security_audit.py --date 2026-05-31 --quarter Q2
+```
+
+See [Security Audit](SECURITY_AUDIT.md) for the quarterly cadence, manual SSRF/XSS/path traversal checks, optional Semgrep/Snyk/ZAP lanes, and report-handling rules.
 
 ## Frontend E2E Requirements
 

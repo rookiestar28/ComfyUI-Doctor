@@ -89,6 +89,16 @@ npm run supply-chain:check
 
 The scanner is a local validation aid; it does not replace normal dependency review, package-manager audit output, or workstation incident response if an external advisory reports a compromised dependency.
 
+## Quarterly Security Audit
+
+Maintainers can run the recurring audit template generator and scheduled security-audit workflow for quarterly review:
+
+```bash
+python scripts/security_audit.py --date 2026-05-31 --quarter Q2
+```
+
+See [Security Audit](SECURITY_AUDIT.md) for manual SSRF, XSS, path traversal, admin-bypass, credential-exposure, telemetry, and optional Semgrep/Snyk/ZAP review guidance.
+
 ## External Enrichment and Resumable Jobs
 
 Optional external enrichment uses a fail-closed provider policy model:

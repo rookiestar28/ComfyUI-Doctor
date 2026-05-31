@@ -87,12 +87,16 @@ Doctor 會標準化 OpenAI-compatible APIs、Anthropic、Ollama 的 provider-spe
 ## 文件
 
 - [User Guide](../USER_GUIDE.md)：UI 導覽、診斷、隱私模式、LLM 設定與回饋流程。
+- [Architecture](../ARCHITECTURE.md)：host startup、backend/frontend boundaries、data flows、security/storage boundaries 與 test lanes。
 - [Configuration and Security](../CONFIGURATION_SECURITY.md)：環境變數、admin guard 行為、憑證儲存、outbound safety、telemetry 與 CSP 注意事項。
 - [API Reference](../API_REFERENCE.md)：公開的 Doctor 與 debugger endpoints。
-- [Validation Guide](../VALIDATION.md)：本機 full-gate 指令與可選的相容性/coverage lanes。
+- [OpenAPI Contract](../openapi.json)：machine-readable API contract。
+- [Validation Guide](../VALIDATION.md)：本機 full-gate 指令與可選的 focused、integration、stress、compatibility、coverage、audit lanes。
+- [Security Audit](../SECURITY_AUDIT.md)：季度 audit cadence、report template、manual checks、optional external scanners 與 evidence handling。
 - [Plugin Guide](../PLUGIN_GUIDE.md)：社群 plugin trust model 與 plugin authoring notes。
 - [Plugin Migration](../PLUGIN_MIGRATION.md)：plugin manifest 與 allowlist 的 migration tooling。
 - [Outbound Safety](../OUTBOUND_SAFETY.md)：static checker 與 outbound request safety rules。
+- [Contributing](../../CONTRIBUTING.md)：setup、development workflow、validation expectations 與 PR readiness。
 
 ## 支援的錯誤模式
 

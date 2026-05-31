@@ -203,6 +203,16 @@ DOCTOR_PLUGIN_HMAC_KEY="secret" python scripts/plugin_hmac_sign.py example.py
 
 ## Other Scripts
 
+### security_audit.py
+
+Generates a sanitized quarterly security-audit report template. This supports the scheduled/manual audit workflow and does not run external scanners by itself.
+
+**Usage**:
+```bash
+python scripts/security_audit.py --date 2026-05-31 --quarter Q2
+python scripts/security_audit.py --output security-audit-template.md --force
+```
+
 ### run-playwright.mjs
 
 Wrapper for running Playwright E2E tests with proper environment setup.
@@ -226,5 +236,6 @@ These scripts mirror the GitHub Actions workflows:
 
 - `focused_gate.py` ↔ `.github/workflows/focused-regression-gate.yml`
 - `check_outbound_safety.py` ↔ `.github/workflows/outbound-safety.yml`
+- `security_audit.py` ↔ `.github/workflows/security-audit.yml`
 
 Run scripts locally before pushing to catch issues early.

@@ -87,12 +87,16 @@ Impostazioni consigliate:
 ## Documentazione
 
 - [User Guide](../USER_GUIDE.md): UI walkthrough, diagnostics, privacy modes, LLM setup e feedback flow.
+- [Architecture](../ARCHITECTURE.md): host startup, backend/frontend boundaries, data flows, security/storage boundaries e test lanes.
 - [Configuration and Security](../CONFIGURATION_SECURITY.md): environment variables, admin guard behavior, credential storage, outbound safety, telemetry e CSP notes.
 - [API Reference](../API_REFERENCE.md): endpoint pubblici Doctor e debugger.
-- [Validation Guide](../VALIDATION.md): comandi full-gate locali e lanes opzionali compatibility/coverage.
+- [OpenAPI Contract](../openapi.json): machine-readable API contract.
+- [Validation Guide](../VALIDATION.md): comandi full-gate locali e lanes opzionali focused, integration, stress, compatibility, coverage e audit.
+- [Security Audit](../SECURITY_AUDIT.md): quarterly audit cadence, report template, manual checks, optional external scanners e evidence handling.
 - [Plugin Guide](../PLUGIN_GUIDE.md): community plugin trust model e plugin authoring notes.
 - [Plugin Migration](../PLUGIN_MIGRATION.md): migration tooling per plugin manifests e allowlists.
 - [Outbound Safety](../OUTBOUND_SAFETY.md): static checker e outbound request safety rules.
+- [Contributing](../../CONTRIBUTING.md): setup, development workflow, validation expectations e PR readiness.
 
 ## Pattern di errore supportati
 

@@ -72,7 +72,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `94 passed` (default local harness run, integration telemetry suite excluded).
+Expected result: `103 passed` (default local harness run, integration and stress telemetry suites excluded).
 
 ### 3.2 WSL2 (bash)
 
@@ -89,7 +89,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `94 passed` (default local harness run, integration telemetry suite excluded).
+Expected result: `103 passed` (default local harness run, integration and stress telemetry suites excluded).
 
 ---
 
@@ -167,7 +167,7 @@ gate stays fast and stable.
 
 `focused-regression-gate.yml` runs E2E in two tracks:
 
-- Required track: `npm test` (stable harness tests, excludes `@integration`)
+- Required track: `npm test` (stable harness tests, excludes `@integration` and `@stress`)
 - Optional track: `npm run test:integration` (backend-dependent telemetry tests)
 
 How to enable optional track:
@@ -191,6 +191,8 @@ tests/
       settings.spec.js
       sidebar.spec.js
       statistics.spec.js
+      telemetry.spec.js
+      stress.spec.js
     mocks/
       comfyui-app.js
       ui-text.json

@@ -8,10 +8,40 @@
 
 ComfyUI-Doctor is a real-time diagnostics and debugging assistant for ComfyUI. It captures runtime errors, identifies likely node context, shows actionable local suggestions, and can optionally use an LLM chat workflow for deeper troubleshooting.
 
-Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | API contract: [docs/API_REFERENCE.md](docs/API_REFERENCE.md) / [docs/openapi.json](docs/openapi.json)
 
 <details>
 <summary><h2>Latest Updates - Click to expand</h2></summary>
+
+<details>
+<summary><strong>Architecture, API contract, contribution, and security-audit docs added</strong></summary>
+
+- Added a public architecture guide that maps ComfyUI startup, backend service domains, frontend modules, security/storage boundaries, telemetry, diagnostics, and validation lanes.
+- Added a machine-readable OpenAPI contract and public API reference for Doctor/debugger endpoints, admin-gated writes, telemetry, diagnostics, jobs, and provider status.
+- Added a root contributor guide covering setup, repository orientation, validation workflow, documentation expectations, security/privacy boundaries, and pull-request readiness.
+- Added a quarterly security-audit SOP, sanitized report-template generator, and scheduled/manual GitHub Actions workflow with required local checks plus optional Semgrep, Snyk, and OWASP ZAP lanes.
+
+</details>
+
+<details>
+<summary><strong>Host alignment, service boundaries, and UI maintainability refreshed</strong></summary>
+
+- Decomposed route registration and route handlers so host-facing startup remains compact while service-owned endpoints stay easier to review.
+- Added stable service-domain entry points for LLM, security, infrastructure, and community modules.
+- Moved frontend i18n text into data files and split the right-side diagnosis panel out of the main sidebar renderer.
+- Added a chat provider quick switch that stays synchronized with Settings while preserving the existing provider configuration flow.
+
+</details>
+
+<details>
+<summary><strong>Validation lanes expanded for deterministic integration, stress, and audit coverage</strong></summary>
+
+- Renamed the supplemental security/contract/E2E gate to the neutral focused-gate entrypoints while preserving compatibility wrappers for old local automation.
+- Made telemetry integration E2E deterministic by default through the Playwright harness backend, with live-backend testing kept as explicit opt-in via `COMFYUI_URL`.
+- Added an opt-in telemetry stress lane for burst/state behavior while keeping the default `npm test` run fast and stable.
+- Updated public validation docs to distinguish the mandatory full gate from focused, integration, stress, compatibility, coverage, and quarterly audit lanes.
+
+</details>
 
 <details>
 <summary><strong>Supply-Chain Hardening, Host Alignment, and Node Focus Compatibility</strong></summary>
@@ -212,7 +242,7 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 <details>
 <summary><strong>CI Gates & Plugin Tooling</strong></summary>
 
-- Added release gate automation covering focused pytest suites and frontend E2E validation.
+- Added focused regression gate automation covering security/contract pytest suites and frontend E2E validation.
 - Added local validation scripts with fast and E2E modes for release preparation.
 - Added an AST-based outbound safety checker in `scripts/check_outbound_safety.py`.
 - Added plugin manifest, allowlist, validator, and optional HMAC signing tools.
@@ -462,12 +492,16 @@ Recommended defaults:
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md): UI walkthrough, diagnostics, privacy modes, LLM setup, and feedback flow.
+- [Architecture](docs/ARCHITECTURE.md): host startup, backend/frontend boundaries, data flows, security/storage boundaries, and test lanes.
 - [Configuration and Security](docs/CONFIGURATION_SECURITY.md): environment variables, admin guard behavior, credential storage, outbound safety, telemetry, and CSP notes.
 - [API Reference](docs/API_REFERENCE.md): public Doctor and debugger endpoints.
-- [Validation Guide](docs/VALIDATION.md): local full-gate commands and optional compatibility/coverage lanes.
+- [OpenAPI Contract](docs/openapi.json): machine-readable API contract.
+- [Validation Guide](docs/VALIDATION.md): local full-gate commands and optional focused, integration, stress, compatibility, coverage, and audit lanes.
+- [Security Audit](docs/SECURITY_AUDIT.md): quarterly audit cadence, report template generation, manual checks, optional external scanners, and evidence handling.
 - [Plugin Guide](docs/PLUGIN_GUIDE.md): community plugin trust model and plugin authoring notes.
 - [Plugin Migration](docs/PLUGIN_MIGRATION.md): migration tooling for plugin manifests and allowlists.
 - [Outbound Safety](docs/OUTBOUND_SAFETY.md): static checker and outbound request safety rules.
+- [Contributing](CONTRIBUTING.md): setup, development workflow, validation expectations, and PR readiness.
 
 ## Supported Error Patterns
 
