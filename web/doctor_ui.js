@@ -3,7 +3,12 @@
  */
 import { app } from "../../../scripts/app.js";
 import { getRuntimeApiKey } from "./llm_key_store.js";
-import { getComfyRootGraph, getDoctorRuntimeSettings } from "./comfyui_frontend_compat.js";
+import {
+    getComfyNodeById,
+    getComfyRootGraph,
+    getComfyValidationNodeErrors,
+    getDoctorRuntimeSettings,
+} from "./comfyui_frontend_compat.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { ChatPanel } from "./doctor_chat.js";
 import { doctorContext } from "./doctor_state.js";
@@ -276,6 +281,7 @@ export class DoctorUI {
         this.api.addEventListener("execution_start", (event) => {
             const detail = this.extractEventDetail(event);
             this.clearExecutionLineage(detail?.prompt_id);
+            this.scheduleFrontendValidationErrorSync();
         });
         this.api.addEventListener("execution_success", (event) => {
             const detail = this.extractEventDetail(event);
@@ -313,16 +319,11 @@ export class DoctorUI {
 
             // Create error hash for deduplication
             const errorHash = this.getErrorHash(preferredNodeId, exception_type, exception_message);
-            const now = Date.now();
 
-            // Deduplicate: skip if same error within debounce window
-            if (errorHash === this.lastErrorHash && (now - this.lastErrorTimestamp) < this.ERROR_DEBOUNCE_MS) {
+            if (this.shouldIgnoreDuplicateError(errorHash)) {
                 console.log("[ComfyUI-Doctor] Duplicate error ignored");
                 return;
             }
-
-            this.lastErrorHash = errorHash;
-            this.lastErrorTimestamp = now;
 
             const subgraphLineage = [enrichedParentNode, enrichedDisplayNode, enrichedRealNodeId, node_id]
                 .filter(value => value !== null && value !== undefined && value !== '')
@@ -467,6 +468,17 @@ export class DoctorUI {
         return `${nodeId || 'unknown'}-${exceptionType || 'Error'}-${msg}`;
     }
 
+    shouldIgnoreDuplicateError(errorHash) {
+        const now = Date.now();
+        if (errorHash === this.lastErrorHash && (now - this.lastErrorTimestamp) < this.ERROR_DEBOUNCE_MS) {
+            return true;
+        }
+
+        this.lastErrorHash = errorHash;
+        this.lastErrorTimestamp = now;
+        return false;
+    }
+
     normalizeNodeId(nodeId) {
         if (nodeId === null || nodeId === undefined || nodeId === '') return null;
         return String(nodeId);
@@ -497,6 +509,84 @@ export class DoctorUI {
             return tracebackText;
         }
         return `${tracebackText}\n${summary}`;
+    }
+
+    scheduleFrontendValidationErrorSync() {
+        this.syncFrontendValidationErrors();
+        window.setTimeout(() => this.syncFrontendValidationErrors(), 50);
+    }
+
+    syncFrontendValidationErrors() {
+        const nodeErrors = getComfyValidationNodeErrors(app);
+        if (!nodeErrors) return;
+
+        Object.entries(nodeErrors).forEach(([nodeId, nodeError]) => {
+            const normalized = this.normalizeFrontendValidationError(nodeId, nodeError);
+            if (!normalized) return;
+
+            const errorHash = this.getErrorHash(
+                normalized.node_context?.preferred_node_id || normalized.node_context?.node_id,
+                "ValidationError",
+                normalized.execution_context?.validation_summary || normalized.last_error,
+            );
+            if (this.shouldIgnoreDuplicateError(errorHash)) return;
+
+            this.handleNewError(normalized);
+        });
+    }
+
+    normalizeFrontendValidationError(nodeId, nodeError) {
+        if (!nodeError || typeof nodeError !== 'object') return null;
+
+        const validationErrors = Array.isArray(nodeError.errors) ? nodeError.errors : [];
+        if (!validationErrors.length) return null;
+
+        const preferredNodeId = this.normalizeNodeId(nodeId);
+        if (!preferredNodeId) return null;
+
+        const graphNode = getComfyNodeById(preferredNodeId, app);
+        const nodeClass = nodeError.class_type || graphNode?.type || graphNode?.title || 'Unknown';
+        const summary = validationErrors
+            .map(error => this.formatFrontendValidationError(error))
+            .filter(Boolean)
+            .join('; ');
+        if (!summary) return null;
+
+        return {
+            last_error: `ValidationError: ${summary}`,
+            traceback: null,
+            suggestion: `Validation Error in ${nodeClass}: ${summary}. Check input connections and ensure node requirements are met.`,
+            timestamp: new Date().toISOString(),
+            execution_context: {
+                source: "extensionManager.lastNodeErrors",
+                has_traceback: false,
+                validation_summary: summary,
+                validation_error_count: validationErrors.length,
+            },
+            node_context: {
+                node_id: preferredNodeId,
+                node_name: nodeClass,
+                node_class: nodeClass,
+                custom_node_path: null,
+                display_node: null,
+                parent_node: null,
+                real_node_id: null,
+                preferred_node_id: preferredNodeId,
+                subgraph_lineage: [preferredNodeId],
+            },
+        };
+    }
+
+    formatFrontendValidationError(error) {
+        if (!error || typeof error !== 'object') return '';
+
+        const inputName = error.extra_info?.input_name;
+        const label = error.type || 'validation_error';
+        const message = error.message || error.details || '';
+        const details = error.details && error.details !== message ? error.details : '';
+        return [label, inputName ? `input "${inputName}"` : '', message, details]
+            .filter(Boolean)
+            .join(': ');
     }
 
     getComfyGraph() {

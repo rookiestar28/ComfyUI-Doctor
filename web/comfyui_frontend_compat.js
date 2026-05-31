@@ -199,6 +199,34 @@ export function getDoctorRuntimeSettings(appInstance = app) {
     };
 }
 
+function unwrapMaybeRef(value) {
+    if (value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "value")) {
+        return value.value;
+    }
+    return value;
+}
+
+export function getComfyValidationNodeErrors(appInstance = app) {
+    const extensionManager = appInstance?.extensionManager;
+    const candidates = [
+        extensionManager?.lastNodeErrors,
+        appInstance?.lastNodeErrors,
+    ];
+
+    for (const candidate of candidates) {
+        try {
+            const value = unwrapMaybeRef(candidate);
+            if (value && typeof value === "object" && !Array.isArray(value)) {
+                return value;
+            }
+        } catch (_) {
+            // Ignore host getter failures and keep probing compatibility fallbacks.
+        }
+    }
+
+    return null;
+}
+
 export function isDoctorEnabled(appInstance = app) {
     return getDoctorBooleanSetting("Doctor.General.Enable", DOCTOR_DEFAULTS.ENABLED, appInstance);
 }

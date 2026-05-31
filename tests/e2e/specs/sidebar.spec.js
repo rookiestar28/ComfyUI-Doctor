@@ -423,6 +423,97 @@ test.describe('Doctor Chat Interface', () => {
     expect(capturedData.execution_context.current_inputs).toEqual({ "seed": [12345] });
   });
 
+  test('should normalize extensionManager lastNodeErrors validation state', async ({ page }) => {
+    await page.evaluate(() => {
+      window.app.rootGraph._nodes = [
+        { id: 42, type: 'KSampler', title: 'Sampler', pos: [120, 80], size: [180, 80] }
+      ];
+      window.app.extensionManager.lastNodeErrors = {
+        "42": {
+          errors: [
+            {
+              type: "required_input_missing",
+              message: "Missing required input <img src=x onerror=alert(1)>",
+              details: "",
+              extra_info: { input_name: "clip" }
+            }
+          ],
+          class_type: "KSampler",
+          dependent_outputs: []
+        }
+      };
+
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-r34" } });
+    });
+
+    await page.waitForTimeout(150);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    expect(capturedData).toBeDefined();
+    expect(capturedData.node_context.node_id).toBe("42");
+    expect(capturedData.node_context.node_class).toBe("KSampler");
+    expect(capturedData.execution_context.source).toBe("extensionManager.lastNodeErrors");
+    expect(capturedData.last_error).toContain("required_input_missing");
+    expect(capturedData.last_error).toContain('input "clip"');
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    const errorContext = page.locator('#doctor-error-context');
+    await expect(errorContext).toBeVisible({ timeout: 5000 });
+    await expect(errorContext).toContainText("KSampler");
+    await expect(errorContext).toContainText("required_input_missing");
+
+    const errorContextHtml = await errorContext.innerHTML();
+    expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
+  });
+
+  test('should suppress duplicate validation and runtime execution reports', async ({ page }) => {
+    const handledCount = await page.evaluate(async () => {
+      const doctor = window.app.Doctor;
+      const originalHandleNewError = doctor.handleNewError.bind(doctor);
+      doctor.__r34HandleCount = 0;
+      doctor.handleNewError = (data) => {
+        doctor.__r34HandleCount += 1;
+        return originalHandleNewError(data);
+      };
+
+      window.app.extensionManager.lastNodeErrors = {
+        "44": {
+          errors: [
+            {
+              type: "required_input_missing",
+              message: "Missing",
+              details: "",
+              extra_info: { input_name: "model" }
+            }
+          ],
+          class_type: "CheckpointLoaderSimple",
+          dependent_outputs: []
+        }
+      };
+
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-r34-dup" } });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      window.api._triggerEvent("execution_error", {
+        detail: {
+          prompt_id: "prompt-r34-dup",
+          node_id: "44",
+          node_type: "CheckpointLoaderSimple",
+          exception_type: "ValidationError",
+          exception_message: 'required_input_missing: input "model": Missing',
+          traceback: ['required_input_missing: input "model": Missing'],
+          current_inputs: {},
+          current_outputs: {}
+        }
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      return doctor.__r34HandleCount;
+    });
+
+    expect(handledCount).toBe(1);
+  });
+
   test('should enrich bare execution_error lineage from prior progress_state event', async ({ page }) => {
     await page.evaluate(() => {
       window.api._triggerEvent("progress_state", {

@@ -188,6 +188,8 @@ export function createMockComfyUIApp(options = {}) {
       draw() {},
     },
     extensionManager: {
+      lastNodeErrors: null,
+      lastExecutionError: null,
       setting: {
         get(id) {
           return app.ui.settings.getSettingValue(id);
