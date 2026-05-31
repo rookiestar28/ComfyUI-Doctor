@@ -212,6 +212,33 @@ test.describe('Doctor Chat Interface', () => {
     await expect(page.locator('#doctor-messages')).toBeVisible({ timeout: 5000 });
   });
 
+  test('should synchronize provider quick switch with settings', async ({ page }) => {
+    const quickSwitch = page.locator('#doctor-provider-quick-switch');
+    await expect(quickSwitch).toBeVisible({ timeout: 5000 });
+
+    await quickSwitch.selectOption('ollama');
+    await expect(quickSwitch).toHaveValue('ollama');
+    await expect(page.locator('#doctor-provider-quick-status')).toContainText('127.0.0.1:11434');
+
+    const stored = await page.evaluate(() => ({
+      provider: window.app.extensionManager.setting.get('Doctor.LLM.Provider'),
+      baseUrl: window.app.extensionManager.setting.get('Doctor.LLM.BaseUrl'),
+      runtimeProvider: window.app.Doctor?.providerDefaults ? window.app.extensionManager.setting.get('Doctor.LLM.Provider') : null,
+    }));
+
+    expect(stored.provider).toBe('ollama');
+    expect(stored.baseUrl).toBe('http://127.0.0.1:11434');
+    expect(stored.runtimeProvider).toBe('ollama');
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await expect(page.locator('#doctor-provider-select')).toHaveValue('ollama');
+    await expect(page.locator('#doctor-baseurl-input')).toHaveValue('http://127.0.0.1:11434');
+    await expect(page.locator('#doctor-apikey-input')).toHaveValue('');
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    await expect(quickSwitch).toHaveValue('ollama');
+  });
+
   test('should keep locate button after poll update without node id', async ({ page }) => {
     await page.evaluate(() => {
       if (!window.app?.Doctor?.handleNewError) {
@@ -670,6 +697,7 @@ test.describe('Doctor Chat Interface', () => {
 
     // Use shared helper to assert fallback UI
     await assertChatFallbackUI(page);
+    await expect(page.locator('#doctor-provider-quick-switch')).toBeVisible({ timeout: 5000 });
 
     // Clean up
     await page.evaluate(() => {

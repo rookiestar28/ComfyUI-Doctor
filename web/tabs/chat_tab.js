@@ -7,6 +7,7 @@ import { app } from "../../../../scripts/app.js";
 import { register, mount } from "../island_registry.js";
 import { renderChatIsland, unmountChatIsland } from "../chat-island.js";
 import { isPreactEnabled } from "../preact-loader.js";
+import { applyProviderQuickSwitch, getProviderQuickSwitchState } from "../llm_provider_quick_switch.js";
 
 let isPreactMode = false;
 
@@ -121,6 +122,9 @@ function renderVanilla(container) {
     // Container fills parent flex container and uses column layout
     container.style.cssText = 'display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;';
 
+    // 0. LLM Provider Quick Switch
+    container.appendChild(createProviderQuickSwitch());
+
     // 1. Error Context Area
     const errorContext = document.createElement('div');
     errorContext.id = 'doctor-error-context';
@@ -200,6 +204,51 @@ function renderVanilla(container) {
     // Attach update helper to doctorUI for onActivate usage
     doctorUI.updateSanitizationStatusVanilla = (el) => updateSanitizationStatus(doctorUI, el);
     updateSanitizationStatus(doctorUI, sanitizationStatus);
+}
+
+function createProviderQuickSwitch() {
+    const doctorUI = app.Doctor;
+    const state = getProviderQuickSwitchState(app);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'doctor-provider-quick-switch';
+    wrapper.style.cssText = `
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border-color, #444);
+        background: rgba(255, 255, 255, 0.02);
+    `;
+
+    const options = state.options.map((provider) =>
+        `<option value="${provider.value}" ${state.provider === provider.value ? 'selected' : ''}>${provider.label}</option>`
+    ).join('');
+
+    wrapper.innerHTML = `
+        <label for="doctor-provider-quick-switch" style="font-size: 11px; color: #aaa;">
+            ${doctorUI.getUIText('ai_provider_label') || 'AI Provider'}
+        </label>
+        <select
+            id="doctor-provider-quick-switch"
+            aria-label="AI provider quick switch"
+            style="width: 100%; padding: 6px 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 12px;"
+        >
+            ${options}
+        </select>
+        <div id="doctor-provider-quick-status" style="font-size: 10px; color: #777; overflow-wrap: anywhere;"></div>
+    `;
+
+    const select = wrapper.querySelector('#doctor-provider-quick-switch');
+    const status = wrapper.querySelector('#doctor-provider-quick-status');
+    status.textContent = state.baseUrl || '';
+
+    select.addEventListener('change', () => {
+        const result = applyProviderQuickSwitch(select.value, app);
+        status.textContent = result.baseUrl || '';
+    });
+
+    return wrapper;
 }
 
 function updateSanitizationStatus(doctorUI, statusEl) {

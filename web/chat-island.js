@@ -22,6 +22,10 @@ import {
 import {
     loadRenderingAssets, sanitizeHtml, highlightCodeBlocks, addCopyButtons
 } from './doctor_rendering.js';
+import {
+    applyProviderQuickSwitch,
+    getProviderQuickSwitchState,
+} from './llm_provider_quick_switch.js';
 // R5: Error Boundaries
 import { createErrorBoundaryAsync } from './ErrorBoundary.js';
 import { isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
@@ -172,6 +176,51 @@ function ErrorContextCard({ workflowContext, onAnalyze }) {
     `;
 }
 
+function ProviderQuickSwitch({ state, uiText, disabled, onSwitch }) {
+    const { html } = preactModules;
+    const providerLabel = uiText?.ai_provider_label || 'AI Provider';
+    const baseUrlLabel = state?.baseUrl || '';
+
+    return html`
+        <div class="doctor-provider-quick-switch" style="
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color, #444);
+            background: rgba(255, 255, 255, 0.02);
+        ">
+            <label for="doctor-provider-quick-switch" style="font-size: 11px; color: #aaa;">
+                ${providerLabel}
+            </label>
+            <select
+                id="doctor-provider-quick-switch"
+                aria-label="AI provider quick switch"
+                value=${state?.provider || 'openai'}
+                onChange=${(event) => onSwitch(event.currentTarget.value)}
+                disabled=${disabled}
+                style="
+                    width: 100%;
+                    padding: 6px 8px;
+                    background: #111;
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    color: #eee;
+                    font-size: 12px;
+                "
+            >
+                ${(state?.options || []).map((provider) => html`
+                    <option value=${provider.value}>${provider.label}</option>
+                `)}
+            </select>
+            <div id="doctor-provider-quick-status" style="font-size: 10px; color: #777; overflow-wrap: anywhere;">
+                ${baseUrlLabel}
+            </div>
+        </div>
+    `;
+}
+
 function MessageItem({ msg, uiText }) {
     const { html, useEffect, useRef } = preactModules;
     const contentRef = useRef(null);
@@ -249,6 +298,7 @@ function ChatIsland({ uiText }) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [workflowContext, setWorkflowContext] = useState(null);
     const [sanitizationMetadata, setSanitizationMetadata] = useState(null);
+    const [providerSwitchState, setProviderSwitchState] = useState(getProviderQuickSwitchState());
 
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
@@ -260,6 +310,7 @@ function ChatIsland({ uiText }) {
         setMessages(getMessages());
         setWorkflowContext(getWorkflowContext());
         setSanitizationMetadata(getSanitizationMetadata());
+        setProviderSwitchState(getProviderQuickSwitchState());
 
         // Listeners via selectors
         const msgUnsub = onMessagesChanged((msgs) => {
@@ -269,6 +320,7 @@ function ChatIsland({ uiText }) {
         const stateUnsub = onStateChanged((current) => {
             setIsProcessing(current.isProcessing || false);
             setMessages(current.messages || []);
+            setProviderSwitchState(getProviderQuickSwitchState());
             if (current.workflowContext !== workflowContext) {
                 setWorkflowContext(current.workflowContext);
                 setSanitizationMetadata(current.workflowContext?.analysis_metadata?.sanitization);
@@ -387,6 +439,11 @@ function ChatIsland({ uiText }) {
         }
     }, [uiText]);
 
+    const handleProviderSwitch = useCallback((provider) => {
+        applyProviderQuickSwitch(provider);
+        setProviderSwitchState(getProviderQuickSwitchState());
+    }, []);
+
     const handleAnalyze = useCallback(() => {
         if (!workflowContext?.last_error) return;
         const prompt = buildAutoAnalysisPrompt(workflowContext, uiText);
@@ -402,6 +459,12 @@ function ChatIsland({ uiText }) {
     return html`
         <div class="chat-island" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
             
+            <${ProviderQuickSwitch}
+                state=${providerSwitchState}
+                uiText=${uiText}
+                disabled=${isProcessing}
+                onSwitch=${handleProviderSwitch}
+            />
             <${SanitizationStatus} metadata=${sanitizationMetadata} uiText=${uiText} />
             <${ErrorContextCard} workflowContext=${workflowContext} onAnalyze=${handleAnalyze} />
 

@@ -2,6 +2,7 @@ import { app } from "../../../../scripts/app.js";
 import { DoctorAPI } from "../doctor_api.js";
 import { getRuntimeApiKey, setRuntimeApiKey } from "../llm_key_store.js";
 import { SUPPORTED_LANGUAGES, getDoctorRuntimeSettings, getDoctorSetting, setDoctorSetting } from "../comfyui_frontend_compat.js";
+import { LLM_PROVIDER_OPTIONS } from "../llm_provider_quick_switch.js";
 
 export function render(container) {
     const doctorUI = app.Doctor;
@@ -112,16 +113,9 @@ export function render(container) {
             <div>
                 <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">${doctorUI.getUIText('ai_provider_label')}</label>
                 <select id="doctor-provider-select" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px;">
-                    <option value="openai" ${currentProvider === 'openai' ? 'selected' : ''}>OpenAI</option>
-                    <option value="anthropic" ${currentProvider === 'anthropic' ? 'selected' : ''}>Anthropic Claude</option>
-                    <option value="deepseek" ${currentProvider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
-                    <option value="groq" ${currentProvider === 'groq' ? 'selected' : ''}>Groq Cloud (LPU)</option>
-                    <option value="gemini" ${currentProvider === 'gemini' ? 'selected' : ''}>Google Gemini</option>
-                    <option value="xai" ${currentProvider === 'xai' ? 'selected' : ''}>xAI Grok</option>
-                    <option value="openrouter" ${currentProvider === 'openrouter' ? 'selected' : ''}>OpenRouter</option>
-                    <option value="ollama" ${currentProvider === 'ollama' ? 'selected' : ''}>Ollama (Local)</option>
-                    <option value="lmstudio" ${currentProvider === 'lmstudio' ? 'selected' : ''}>LMStudio (Local)</option>
-                    <option value="custom" ${currentProvider === 'custom' ? 'selected' : ''}>Custom</option>
+                    ${LLM_PROVIDER_OPTIONS.map(provider =>
+        `<option value="${provider.value}" ${currentProvider === provider.value ? 'selected' : ''}>${provider.label}</option>`
+    ).join('')}
                 </select>
             </div>
             <div>
