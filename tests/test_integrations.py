@@ -91,9 +91,12 @@ class TestIntegration(unittest.TestCase):
         print("* KSampler 1:")
         print("  - Return type mismatch between linked nodes: scheduler")
         print("Executing prompt: test-123")
-        time.sleep(0.2)
 
+        deadline = time.time() + 2
         last = get_last_analysis()
+        while not last.get("error") and time.time() < deadline:
+            time.sleep(0.05)
+            last = get_last_analysis()
 
         self.assertIsNotNone(last.get("error"))
         self.assertIn("Failed to validate", last.get("error", ""))

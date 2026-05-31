@@ -32,13 +32,12 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import pytest
+import i18n
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent
 PATTERNS_DIR = PROJECT_ROOT / "patterns"
 SCHEMA_PATH = PATTERNS_DIR / "schema.json"
-I18N_PATH = PROJECT_ROOT / "i18n.py"
-
 # Expected languages
 SUPPORTED_LANGUAGES = ["en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko"]
 
@@ -72,75 +71,18 @@ def load_pattern_file(file_path: Path) -> Dict:
 
 def extract_error_keys_from_i18n() -> Dict[str, str]:
     """
-    Extract ERROR_KEYS mapping from i18n.py.
+    Extract ERROR_KEYS mapping from the i18n loader.
 
     Returns:
         Dict mapping uppercase keys to lowercase suggestion keys.
         Example: {"TYPE_MISMATCH": "type_mismatch", "CUDNN_ERROR": "cudnn_error", ...}
     """
-    with open(I18N_PATH, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # Find ERROR_KEYS dictionary
-    start = content.find("ERROR_KEYS = {")
-    if start == -1:
-        return {}
-
-    # Extract key-value pairs (simplified parsing)
-    error_keys_dict = {}
-    lines = content[start:].split("\n")
-    for line in lines:
-        if '"' in line and ":" in line:
-            # Extract key-value from line like: "TYPE_MISMATCH": "type_mismatch",
-            match = re.search(r'"([^"]+)":\s*"([^"]+)"', line)
-            if match:
-                error_keys_dict[match.group(1)] = match.group(2)
-        if line.strip() == "}":
-            break
-    return error_keys_dict
+    return dict(i18n.ERROR_KEYS)
 
 
 def extract_suggestions_from_i18n() -> Dict[str, Set[str]]:
-    """Extract all SUGGESTIONS keys for each language from i18n.py"""
-    with open(I18N_PATH, "r", encoding="utf-8") as f:
-        content = f.read()
-    
-    suggestions_by_lang = {}
-    
-    # Find SUGGESTIONS dictionary
-    start = content.find("SUGGESTIONS")
-    if start == -1:
-        return suggestions_by_lang
-    
-    # Extract suggestions for each language
-    for lang in SUPPORTED_LANGUAGES:
-        lang_start = content.find(f'"{lang}":', start)
-        if lang_start == -1:
-            continue
-        
-        keys = set()
-        lines = content[lang_start:].split("\n")
-        brace_count = 0
-        started = False
-        
-        for line in lines:
-            if "{" in line:
-                brace_count += line.count("{")
-                started = True
-            if "}" in line:
-                brace_count -= line.count("}")
-            
-            if started and '"' in line and ":" in line:
-                match = re.search(r'"([^"]+)":\s*"', line)
-                if match:
-                    keys.add(match.group(1))
-            
-            if started and brace_count == 0:
-                break
-        
-        suggestions_by_lang[lang] = keys
-    
-    return suggestions_by_lang
+    """Extract all SUGGESTIONS keys for each language from loaded i18n data."""
+    return {lang: set(i18n.SUGGESTIONS.get(lang, {})) for lang in SUPPORTED_LANGUAGES}
 
 
 class TestPatternValidation:
