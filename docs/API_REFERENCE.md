@@ -2,6 +2,8 @@
 
 This document lists the public ComfyUI-Doctor HTTP endpoints. Exact response payloads can evolve, but the endpoint roles and admin-guard expectations are stable public behavior.
 
+Machine-readable contract: [`openapi.json`](openapi.json).
+
 ## Admin-Gated Writes
 
 Write-sensitive endpoints require admin authorization unless desktop loopback convenience mode applies. For shared servers, configure `DOCTOR_ADMIN_TOKEN` and `DOCTOR_REQUIRE_ADMIN_TOKEN=1`.

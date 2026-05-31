@@ -1,0 +1,1375 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ComfyUI-Doctor API",
+    "version": "1.8.4",
+    "summary": "HTTP API contract for the ComfyUI-Doctor custom node.",
+    "description": "ComfyUI-Doctor registers these routes on the ComfyUI PromptServer. Write-sensitive endpoints use the Doctor admin guard; shared servers should configure DOCTOR_ADMIN_TOKEN and DOCTOR_REQUIRE_ADMIN_TOKEN=1."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8188",
+      "description": "Local ComfyUI PromptServer"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Debugger",
+      "description": "Current error analysis, history, and language state."
+    },
+    {
+      "name": "LLM",
+      "description": "LLM analysis, chat, provider defaults, key verification, and model listing."
+    },
+    {
+      "name": "Secrets",
+      "description": "Admin-gated server-side provider credential metadata and storage."
+    },
+    {
+      "name": "Statistics",
+      "description": "Error statistics and resolution workflow."
+    },
+    {
+      "name": "Feedback",
+      "description": "Sanitized community feedback preview and admin-gated submission."
+    },
+    {
+      "name": "Health",
+      "description": "Runtime health and proactive diagnostics."
+    },
+    {
+      "name": "Telemetry",
+      "description": "Local telemetry buffer controls."
+    },
+    {
+      "name": "Plugins",
+      "description": "Scan-only community plugin trust reporting."
+    },
+    {
+      "name": "Jobs",
+      "description": "Resumable job state and mutation controls."
+    },
+    {
+      "name": "Providers",
+      "description": "External provider capability status."
+    }
+  ],
+  "paths": {
+    "/debugger/last_analysis": {
+      "get": {
+        "tags": [
+          "Debugger"
+        ],
+        "operationId": "getLastAnalysis",
+        "summary": "Return the latest error analysis state.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/debugger/history": {
+      "get": {
+        "tags": [
+          "Debugger"
+        ],
+        "operationId": "getAnalysisHistory",
+        "summary": "Return recent error-analysis history.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          }
+        }
+      }
+    },
+    "/debugger/set_language": {
+      "post": {
+        "tags": [
+          "Debugger"
+        ],
+        "operationId": "setDebuggerLanguage",
+        "summary": "Change the suggestion language.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/debugger/clear_history": {
+      "post": {
+        "tags": [
+          "Debugger"
+        ],
+        "operationId": "clearAnalysisHistory",
+        "summary": "Clear recorded error-analysis history.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/ui_text": {
+      "get": {
+        "tags": [
+          "LLM"
+        ],
+        "operationId": "getDoctorUiText",
+        "summary": "Return localized UI text and public package metadata.",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/analyze": {
+      "post": {
+        "tags": [
+          "LLM"
+        ],
+        "operationId": "analyzeError",
+        "summary": "Run single-shot LLM analysis for an error context.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/chat": {
+      "post": {
+        "tags": [
+          "LLM"
+        ],
+        "operationId": "chat",
+        "summary": "Run the interactive chat flow with JSON or SSE streaming output.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chat completion response. Streaming requests return Server-Sent Events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE stream with data events containing JSON fragments."
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/provider_defaults": {
+      "get": {
+        "tags": [
+          "LLM"
+        ],
+        "operationId": "getProviderDefaults",
+        "summary": "Return default base URLs for supported LLM providers.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          }
+        }
+      }
+    },
+    "/doctor/verify_key": {
+      "post": {
+        "tags": [
+          "LLM"
+        ],
+        "operationId": "verifyProviderKey",
+        "summary": "Validate provider connectivity and credential availability.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/ProviderCredentialRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          }
+        }
+      }
+    },
+    "/doctor/list_models": {
+      "post": {
+        "tags": [
+          "LLM"
+        ],
+        "operationId": "listProviderModels",
+        "summary": "List models from the selected provider when supported.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/ProviderCredentialRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          }
+        }
+      }
+    },
+    "/doctor/secrets/status": {
+      "get": {
+        "tags": [
+          "Secrets"
+        ],
+        "operationId": "getSecretStatus",
+        "summary": "Return provider credential source status without exposing secret values.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          }
+        }
+      }
+    },
+    "/doctor/secrets": {
+      "put": {
+        "tags": [
+          "Secrets"
+        ],
+        "operationId": "saveProviderSecret",
+        "summary": "Save a provider credential to the optional server-side store.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          }
+        }
+      }
+    },
+    "/doctor/secrets/{provider}": {
+      "delete": {
+        "tags": [
+          "Secrets"
+        ],
+        "operationId": "deleteProviderSecret",
+        "summary": "Delete a stored provider credential.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProviderPath"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalAdminPayload"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/statistics": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "operationId": "getStatistics",
+        "summary": "Return error statistics for the dashboard.",
+        "parameters": [
+          {
+            "name": "time_range_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/statistics/reset": {
+      "post": {
+        "tags": [
+          "Statistics"
+        ],
+        "operationId": "resetStatistics",
+        "summary": "Clear statistics and history data.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalAdminPayload"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/mark_resolved": {
+      "post": {
+        "tags": [
+          "Statistics"
+        ],
+        "operationId": "markErrorResolved",
+        "summary": "Mark an error as resolved, unresolved, or ignored.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/feedback/preview": {
+      "post": {
+        "tags": [
+          "Feedback"
+        ],
+        "operationId": "previewFeedback",
+        "summary": "Build and sanitize a community feedback preview.",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/GenericJson"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/feedback/submit": {
+      "post": {
+        "tags": [
+          "Feedback"
+        ],
+        "operationId": "submitFeedback",
+        "summary": "Submit sanitized feedback through the configured GitHub flow.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/GenericJson"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getRuntimeHealth",
+        "summary": "Return Doctor runtime health and path diagnostics.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/plugins": {
+      "get": {
+        "tags": [
+          "Plugins"
+        ],
+        "operationId": "getPluginTrustReport",
+        "summary": "Return scan-only plugin trust information.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/telemetry/status": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "operationId": "getTelemetryStatus",
+        "summary": "Return telemetry enabled state and buffer stats.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/telemetry/buffer": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "operationId": "getTelemetryBuffer",
+        "summary": "Return local telemetry buffer contents.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/telemetry/track": {
+      "post": {
+        "tags": [
+          "Telemetry"
+        ],
+        "operationId": "trackTelemetryEvent",
+        "summary": "Add a telemetry event when telemetry is enabled.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryTrackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/telemetry/clear": {
+      "post": {
+        "tags": [
+          "Telemetry"
+        ],
+        "operationId": "clearTelemetryBuffer",
+        "summary": "Clear the local telemetry buffer.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalAdminPayload"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/telemetry/export": {
+      "get": {
+        "tags": [
+          "Telemetry"
+        ],
+        "operationId": "exportTelemetryBuffer",
+        "summary": "Export local telemetry buffer as JSON.",
+        "responses": {
+          "200": {
+            "description": "Telemetry export JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/telemetry/toggle": {
+      "post": {
+        "tags": [
+          "Telemetry"
+        ],
+        "operationId": "toggleTelemetry",
+        "summary": "Enable or disable telemetry.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryToggleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "operationId": "getJob",
+        "summary": "Return resumable job state.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/jobs/{job_id}/resume": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "operationId": "resumeJob",
+        "summary": "Resume an eligible failed, cancelled, or pending job.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobIdPath"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalAdminPayload"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/jobs/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "operationId": "cancelJob",
+        "summary": "Cancel an eligible job.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobIdPath"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/OptionalAdminPayload"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/providers/{provider_id}/status": {
+      "get": {
+        "tags": [
+          "Providers"
+        ],
+        "operationId": "getProviderStatus",
+        "summary": "Return external enrichment provider capability status.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ProviderIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/health_check": {
+      "post": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "runHealthCheck",
+        "summary": "Run local diagnostics for a workflow or context payload.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/health_report": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getHealthReport",
+        "summary": "Return the latest diagnostics report.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/health_history": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getHealthHistory",
+        "summary": "Return diagnostics report history metadata.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/doctor/health_ack": {
+      "post": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "acknowledgeHealthIssue",
+        "summary": "Acknowledge, ignore, or resolve a diagnostics issue.",
+        "security": [
+          {
+            "AdminTokenAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthAckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/JsonObject"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "403": {
+            "$ref": "#/components/responses/AdminDenied"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AdminTokenAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Doctor-Admin-Token",
+        "description": "Doctor admin token. Some existing handlers also accept an admin_token field in JSON payloads for UI compatibility."
+      }
+    },
+    "parameters": {
+      "ProviderPath": {
+        "name": "provider",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "ProviderIdPath": {
+        "name": "provider_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "JobIdPath": {
+        "name": "job_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "requestBodies": {
+      "GenericJson": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "OptionalAdminPayload": {
+        "required": false,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AdminPayload"
+            }
+          }
+        }
+      },
+      "ProviderCredentialRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProviderCredentialRequest"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "JsonObject": {
+        "description": "JSON object response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "Error": {
+        "description": "Standard error envelope.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "AdminDenied": {
+        "description": "Admin authorization denied.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AdminPayload": {
+        "type": "object",
+        "properties": {
+          "admin_token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "AnalyzeRequest": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "node_context": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "workflow": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "api_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "base_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "privacy_mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "basic",
+              "strict"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChatRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AnalyzeRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "stream": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "success",
+          "error",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "HealthAckRequest": {
+        "type": "object",
+        "required": [
+          "report_id",
+          "issue_id",
+          "status"
+        ],
+        "properties": {
+          "report_id": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "acknowledged",
+              "ignored",
+              "resolved"
+            ]
+          },
+          "admin_token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "HealthCheckRequest": {
+        "type": "object",
+        "properties": {
+          "workflow": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "schedule",
+              "pre_exec",
+              "workflow_change"
+            ]
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "LanguageRequest": {
+        "type": "object",
+        "required": [
+          "language"
+        ],
+        "properties": {
+          "language": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProviderCredentialRequest": {
+        "type": "object",
+        "properties": {
+          "base_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "api_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "ResolutionRequest": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "status"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "unresolved",
+              "ignored"
+            ]
+          },
+          "admin_token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SecretWriteRequest": {
+        "type": "object",
+        "required": [
+          "provider",
+          "api_key"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "anthropic",
+              "deepseek",
+              "groq",
+              "gemini",
+              "xai",
+              "openrouter",
+              "generic"
+            ]
+          },
+          "api_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "admin_token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TelemetryToggleRequest": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "admin_token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TelemetryTrackRequest": {
+        "type": "object",
+        "required": [
+          "category",
+          "action"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
