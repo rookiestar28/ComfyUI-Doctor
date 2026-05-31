@@ -79,6 +79,18 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI",
+        file="server.py",
+        label="system_stats current multi-device package versions",
+        required_patterns=(
+            '@routes.get("/system_stats")',
+            "get_all_torch_devices",
+            "device_entries",
+            "comfy_package_versions",
+            "FrontendManager.get_comfy_package_versions()",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
         file="execution.py",
         label="execution_error websocket payload",
         required_patterns=(
@@ -104,6 +116,17 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI",
+        file="folder_paths.py",
+        label="current model folder anchors",
+        required_patterns=(
+            '"geometry_estimation"',
+            '"detection"',
+            "get_system_user_directory",
+            "get_public_user_directory",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
         file="comfy_api/feature_flags.py",
         label="server feature flags",
         required_patterns=(
@@ -111,6 +134,17 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             '"extension": {"manager": {"supports_v4": True}}',
             '"node_replacements": True',
             "def get_server_features",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/types/extensionTypes.ts",
+        label="extensionManager execution error state",
+        required_patterns=(
+            "lastNodeErrors",
+            "lastExecutionError",
+            "ExecutionErrorWsMessage",
+            "NodeError",
         ),
     ),
     SurfaceCheck(
@@ -163,6 +197,16 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         file="src/scripts/app.ts",
         label="frontend rootGraph API",
         required_patterns=("rootGraph", "lastExecutionError"),
+    ),
+    SurfaceCheck(
+        repo="desktop",
+        file="package.json",
+        label="Desktop current bundled host baseline",
+        required_patterns=(
+            '"version": "0.9.4"',
+            '"comfyUI"',
+            '"version": "0.22.3"',
+        ),
     ),
     SurfaceCheck(
         repo="desktop",

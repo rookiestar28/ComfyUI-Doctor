@@ -23,7 +23,13 @@ def _create_minimal_reference(root: Path) -> None:
         "class PromptServer:\n    def __init__(self):\n        self.routes = []\n"
         '@routes.get("/extensions")\n'
         '@routes.get("/features")\n'
+        '@routes.get("/system_stats")\n'
         "def get_extensions():\n    return EXTENSION_WEB_DIRS\n"
+        "def system_stats():\n"
+        "    torch_devices = comfy.model_management.get_all_torch_devices()\n"
+        "    device_entries = []\n"
+        "    comfy_package_versions = FrontendManager.get_comfy_package_versions()\n"
+        "    return {'devices': device_entries, 'comfy_package_versions': comfy_package_versions}\n"
         'if first_message and data.get("type") == "feature_flags":\n'
         '    self.sockets_metadata[sid]["feature_flags"] = client_flags\n'
         "    feature_flags.get_server_features()\n"
@@ -42,6 +48,13 @@ def _create_minimal_reference(root: Path) -> None:
         '"progress_state" "display_node_id" "parent_node_id" "real_node_id" supports_preview_metadata\n',
     )
     _write(
+        root / "ComfyUI" / "folder_paths.py",
+        'folder_names_and_paths["geometry_estimation"] = []\n'
+        'folder_names_and_paths["detection"] = []\n'
+        "def get_system_user_directory(name='system'):\n    return name\n"
+        "def get_public_user_directory(user_id):\n    return user_id\n",
+    )
+    _write(
         root / "ComfyUI" / "comfy_api" / "feature_flags.py",
         '"supports_preview_metadata": True\n'
         '"extension": {"manager": {"supports_v4": True}}\n'
@@ -51,7 +64,9 @@ def _create_minimal_reference(root: Path) -> None:
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
         "registerSidebarTab(tab)\nsetting: {\nget: <T = unknown>(id: string) => undefined\n"
-        "set: <T = unknown>(id: string, value: T) => void\n}\n",
+        "set: <T = unknown>(id: string, value: T) => void\n}\n"
+        "lastNodeErrors: Record<NodeId, NodeError> | null\n"
+        "lastExecutionError: ExecutionErrorWsMessage | null\n",
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "stores" / "workspaceStore.ts",
@@ -77,6 +92,10 @@ def _create_minimal_reference(root: Path) -> None:
         "traceback: z.array(z.string()), current_inputs: z.any(), current_outputs: z.any() })\n",
     )
     _write(root / "ComfyUI_frontend" / "src" / "scripts" / "app.ts", "rootGraph\nlastExecutionError\n")
+    _write(
+        root / "desktop" / "package.json",
+        '{\n  "version": "0.9.4",\n  "config": {"comfyUI": {"version": "0.22.3"}}\n}\n',
+    )
     _write(
         root / "desktop" / "src" / "main-process" / "comfyServer.ts",
         "userDirectoryPath\n"
@@ -122,7 +141,9 @@ def test_host_compatibility_smoke_passes_for_expected_surfaces(tmp_path):
 def test_host_compatibility_smoke_reports_missing_patterns(tmp_path):
     _create_minimal_reference(tmp_path)
     (tmp_path / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts").write_text(
-        "registerSidebarTab(tab)\n",
+        "registerSidebarTab(tab)\n"
+        "lastNodeErrors: Record<NodeId, NodeError> | null\n"
+        "lastExecutionError: ExecutionErrorWsMessage | null\n",
         encoding="utf-8",
     )
 
@@ -147,6 +168,70 @@ def test_host_compatibility_smoke_reports_missing_current_sidebar_store(tmp_path
     assert len(failed) == 1
     assert failed[0].check.label == "current sidebarTab store API"
     assert "const registerSidebarTab =" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_last_node_errors(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("lastNodeErrors", "legacyNodeErrors"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "extensionManager execution error state"
+    assert "lastNodeErrors" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_system_stats_package_versions(tmp_path):
+    _create_minimal_reference(tmp_path)
+    server_path = tmp_path / "ComfyUI" / "server.py"
+    server_path.write_text(
+        server_path.read_text(encoding="utf-8").replace("comfy_package_versions", "frontend_package_versions"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "system_stats current multi-device package versions"
+    assert "comfy_package_versions" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_current_model_folder_anchor(tmp_path):
+    _create_minimal_reference(tmp_path)
+    folder_paths_path = tmp_path / "ComfyUI" / "folder_paths.py"
+    folder_paths_path.write_text(
+        folder_paths_path.read_text(encoding="utf-8").replace('"geometry_estimation"', '"depth_estimation"'),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "current model folder anchors"
+    assert '"geometry_estimation"' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_desktop_current_baseline(tmp_path):
+    _create_minimal_reference(tmp_path)
+    package_path = tmp_path / "desktop" / "package.json"
+    package_path.write_text(
+        package_path.read_text(encoding="utf-8").replace('"version": "0.22.3"', '"version": "0.21.0"'),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "Desktop current bundled host baseline"
+    assert '"version": "0.22.3"' in failed[0].missing_patterns
 
 
 def test_host_compatibility_smoke_reports_missing_deprecated_sidebar_fallback(tmp_path):
