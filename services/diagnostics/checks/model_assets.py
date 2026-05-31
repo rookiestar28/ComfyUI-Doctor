@@ -36,6 +36,7 @@ FILE_LOADING_NODE_TYPES: Set[str] = {
     "ControlNetLoader", "StyleModelLoader", "CLIPVisionLoader",
     "UpscaleModelLoader", "GLIGENLoader", "HypernetworkLoader",
     "UNETLoader", "DualCLIPLoader", "TripleCLIPLoader",
+    "LoadMoGeModel", "LoadMediaPipeFaceLandmarker",
     # Image loaders
     "LoadImage", "LoadImageMask", "LoadLatent",
     # Video loaders (common custom nodes)
@@ -55,7 +56,7 @@ PATH_WIDGET_NAMES: Set[str] = {
 # Common model file extensions
 MODEL_EXTENSIONS: Set[str] = {
     ".safetensors", ".ckpt", ".pt", ".pth", ".bin",
-    ".onnx", ".pkl", ".pickle",
+    ".onnx", ".pkl", ".pickle", ".tflite", ".task",
 }
 
 # Common image/media extensions
@@ -86,6 +87,8 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
         "clip": [],
         "upscale_models": [],
         "embeddings": [],
+        "geometry_estimation": [],
+        "detection": [],
         "input": [],
         "output": [],
     }
@@ -103,6 +106,8 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
             "clip": "clip",
             "upscale_models": "upscale_models",
             "embeddings": "embeddings",
+            "geometry_estimation": "geometry_estimation",
+            "detection": "detection",
         }
 
         for key, folder_name in path_mappings.items():
@@ -341,6 +346,28 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
         return "upscale_models"
     if "embed" in lower_type:
         return "embeddings"
+    if (
+        "moge" in lower_type
+        or "geometry" in lower_type
+        or "depth" in lower_type
+        or "moge" in lower_file
+        or "geometry" in lower_file
+        or "depth_anything" in lower_file
+        or "depth-anything" in lower_file
+    ):
+        return "geometry_estimation"
+    if (
+        "mediapipe" in lower_type
+        or "detection" in lower_type
+        or "landmarker" in lower_type
+        or "blazeface" in lower_type
+        or "mediapipe" in lower_file
+        or "detector" in lower_file
+        or "detection" in lower_file
+        or "landmarker" in lower_file
+        or "blazeface" in lower_file
+    ):
+        return "detection"
     if "loadimage" in lower_type or any(lower_file.endswith(ext) for ext in MEDIA_EXTENSIONS):
         return "input"
 
