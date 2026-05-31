@@ -7,6 +7,7 @@ const baseURL = process.env.PW_BASE_URL || `http://127.0.0.1:${webServerPort}/te
 const testOutputDir = process.env.PW_TEST_OUTPUT_DIR || 'test-results';
 const htmlReportDir = process.env.PW_HTML_REPORT_DIR || 'playwright-report';
 const includeIntegration = process.env.PW_INCLUDE_INTEGRATION === '1';
+const includeStress = process.env.PW_INCLUDE_STRESS === '1';
 const isWsl = !!process.env.WSL_DISTRO_NAME || !!process.env.WSL_INTEROP;
 const isDrvFs = process.platform !== 'win32' && process.cwd().startsWith('/mnt/');
 const isConstrainedFs = isWsl && isDrvFs;
@@ -45,8 +46,8 @@ module.exports = defineConfig({
   // Run tests in files in parallel
   fullyParallel: !isConstrainedFs,
 
-  // Keep integration suites out of default local/CI runs.
-  grepInvert: includeIntegration ? undefined : /@integration/,
+  // Keep opt-in suites out of default local/CI runs.
+  grepInvert: includeIntegration || includeStress ? undefined : /@integration|@stress/,
 
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,

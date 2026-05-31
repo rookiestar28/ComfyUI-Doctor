@@ -8,6 +8,7 @@
     "pretest:integration": "node scripts/preflight-js.mjs",
     "test": "node scripts/run-playwright.mjs",
     "test:integration": "node scripts/run-playwright.mjs --include-integration --grep @integration --workers=1",
+    "test:stress": "node scripts/run-playwright.mjs --include-stress --grep @stress --workers=1",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",

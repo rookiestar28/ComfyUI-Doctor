@@ -20,6 +20,9 @@ npm test
 # Run integration-only tests (uses harness backend by default)
 npm run test:integration
 
+# Run opt-in stress tests (uses harness backend)
+npm run test:stress
+
 # Run with UI mode (interactive)
 npm run test:ui
 
@@ -65,6 +68,7 @@ tests/e2e/
 ### 🚧 TODO
 - Keep adding focused E2E assertions for new user-visible regressions.
 - Run `npm run test:integration` separately for telemetry integration coverage; set `COMFYUI_URL` only when validating against a live ComfyUI backend.
+- Run `npm run test:stress` separately for opt-in telemetry stress coverage.
 
 ## Writing New Tests
 
@@ -121,7 +125,9 @@ Tests run automatically on GitHub Actions when:
 
 Notes:
 - `npm test` excludes `@integration` specs by default.
+- `npm test` excludes `@stress` specs by default.
 - `npm run test:integration` runs the telemetry integration suite against the harness backend by default, or a live backend when `COMFYUI_URL` is set.
+- `npm run test:stress` runs opt-in telemetry stress specs against the harness backend.
 - `focused-regression-gate.yml` uses dual-track CI: required `npm test` + optional integration track.
 
 See `.github/workflows/focused-regression-gate.yml` for configuration.

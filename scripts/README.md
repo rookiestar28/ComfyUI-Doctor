@@ -210,6 +210,8 @@ Wrapper for running Playwright E2E tests with proper environment setup.
 **Usage**:
 ```bash
 npm test  # Calls this script automatically
+npm run test:integration
+npm run test:stress
 ```
 
 ### preflight-js.mjs

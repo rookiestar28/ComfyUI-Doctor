@@ -50,16 +50,22 @@ ensureWritablePlaywrightOutputDirs();
 function resolveCliArgs() {
   const forwarded = [];
   let includeIntegration = process.env.PW_INCLUDE_INTEGRATION === '1';
+  let includeStress = process.env.PW_INCLUDE_STRESS === '1';
 
   for (const arg of process.argv.slice(2)) {
     if (arg === '--include-integration') {
       includeIntegration = true;
       continue;
     }
+    if (arg === '--include-stress') {
+      includeStress = true;
+      continue;
+    }
     forwarded.push(arg);
   }
 
   process.env.PW_INCLUDE_INTEGRATION = includeIntegration ? '1' : '0';
+  process.env.PW_INCLUDE_STRESS = includeStress ? '1' : '0';
   return forwarded;
 }
 

@@ -149,12 +149,17 @@ npm run test:headed
 npm run test:debug
 npm run test:report
 npm run test:integration
+npm run test:stress
 ```
 
 `npm run test:integration` runs only `@integration` specs (currently telemetry).
 By default it uses the Playwright harness backend started by `playwright.config.js`,
 so it is repeatable without a manually started ComfyUI process. Set `COMFYUI_URL`
 to run the same integration assertions against a live ComfyUI backend.
+
+`npm run test:stress` runs only `@stress` specs against the Playwright harness
+backend. It is opt-in and excluded from default `npm test` so the required local
+gate stays fast and stable.
 
 ---
 
