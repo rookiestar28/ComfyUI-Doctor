@@ -8,6 +8,8 @@
 
 ComfyUI-Doctor is a real-time diagnostics and debugging assistant for ComfyUI. It captures runtime errors, identifies likely node context, shows actionable local suggestions, and can optionally use an LLM chat workflow for deeper troubleshooting.
 
+Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+
 <details>
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
