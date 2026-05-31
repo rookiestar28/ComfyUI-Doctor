@@ -50,10 +50,8 @@ def test_analyzer_build_llm_context_uses_pipeline_and_real_workflow_pruner():
 
 def test_routes_delegate_llm_context_construction_to_analyzer_helper():
     project_root = Path(__file__).resolve().parent.parent
-    entrypoint = project_root / "__init__.py"
-    if not entrypoint.exists():
-        entrypoint = project_root / "__init__.py.bak"
-    source = entrypoint.read_text(encoding="utf-8")
+    routes_path = project_root / "api_routes.py"
+    source = routes_path.read_text(encoding="utf-8")
 
     assert "ErrorAnalyzer.build_llm_context" in source
     assert "from .services.context_extractor import extract_error_summary" not in source

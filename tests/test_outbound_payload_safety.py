@@ -37,10 +37,8 @@ def test_sanitize_outbound_payload_recursively_sanitizes_strings():
     assert "<USER_PATH>" in sanitized["extra"]["path"]
 
 
-def test_init_routes_use_outbound_sanitization_funnel():
+def test_llm_routes_use_outbound_sanitization_funnel():
     project_root = Path(__file__).resolve().parents[1]
-    init_path = project_root / "__init__.py"
-    if not init_path.exists():
-        init_path = project_root / "__init__.py.bak"
-    init_text = init_path.read_text(encoding="utf-8")
-    assert "sanitize_outbound_payload(payload, sanitizer)" in init_text
+    routes_path = project_root / "api_routes.py"
+    routes_text = routes_path.read_text(encoding="utf-8")
+    assert "sanitize_outbound_payload(payload, sanitizer)" in routes_text

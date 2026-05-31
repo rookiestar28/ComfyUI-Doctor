@@ -88,7 +88,7 @@ class TokenBudgetService:
         # To effectively trim, R12 needs access to the raw components: 
         # error_text, workflow_json, node_context, system_info.
         
-        # Since we integrate in __init__.py `api_chat`, we likely pass the *internal* context dicts 
+        # Since we integrate in `api_routes.api_chat`, we pass the *internal* context dicts
         # OR we operate on the final payload.
         # Modifying the final prompt string is hard (regex parsing).
         # Ideally we operate on the data used to BUILD the prompt.
@@ -108,7 +108,7 @@ class TokenBudgetService:
         # If "payload" means the strict LLM JSON payload (messages list), we have to parse text.
         # That's messy.
         
-        # Let's look at `api_chat` in __init__.py again.
+        # `api_chat` takes the raw request JSON before building the provider payload.
         # It takes `data = await request.json()`.
         # Then `error_context = data.get("error_context", {})`.
         # Then it builds `system_prompt`.

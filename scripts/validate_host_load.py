@@ -29,6 +29,7 @@ PACKAGE_MODULES = [
     "system_info",
     "telemetry",
     "analyzer",
+    "api_routes",
     "pipeline.orchestrator",
     "pipeline.plugins",
     "pipeline.stages.pattern_matcher",
@@ -43,6 +44,7 @@ PACKAGE_MODULES = [
     "services.providers.base",
     "services.providers.registry",
     "services.prompt_composer",
+    "services.prompt_helpers",
     "services.log_ring_buffer",
 ]
 SKIP_STATIC_IMPORT_SCAN = {"prestartup_script.py", "verify_routes.py"}

@@ -1,35 +1,17 @@
 """
 R30 regression tests for multilingual error-analysis prompt generation.
 
-These tests execute only the prompt helper block from the root module so they
-stay independent of ComfyUI's package-loading context.
+The helpers live outside the ComfyUI package entry point so route refactors can
+keep prompt behavior covered without importing the host startup module.
 """
 
-from pathlib import Path
-
-
-def _load_prompt_namespace() -> dict:
-    root = Path(__file__).resolve().parent.parent
-    for filename in ("__init__.py", "__init__.py.bak"):
-        candidate = root / filename
-        if candidate.exists():
-            source = candidate.read_text(encoding="utf-8")
-            break
-    else:
-        raise FileNotFoundError("Cannot find project root __init__.py or __init__.py.bak")
-
-    start = source.index("# Multi-language error analysis prompt templates")
-    end = source.index("# --- Option B Phase 2: Error Categorization ---")
-    namespace: dict = {}
-    exec(source[start:end], namespace)
-    return namespace
+from services import prompt_helpers
 
 
 def test_r30_prompt_languages_are_generated_from_shared_base_template():
-    namespace = _load_prompt_namespace()
-    base_template = namespace["ERROR_ANALYSIS_BASE_TEMPLATE"]
-    language_labels = namespace["ERROR_ANALYSIS_RESPONSE_LANGUAGES"]
-    templates = namespace["ERROR_ANALYSIS_TEMPLATES"]
+    base_template = prompt_helpers.ERROR_ANALYSIS_BASE_TEMPLATE
+    language_labels = prompt_helpers.ERROR_ANALYSIS_RESPONSE_LANGUAGES
+    templates = prompt_helpers.ERROR_ANALYSIS_TEMPLATES
 
     assert set(templates) == {
         "en",
@@ -51,8 +33,7 @@ def test_r30_prompt_languages_are_generated_from_shared_base_template():
 
 
 def test_r30_prompt_helper_falls_back_to_english():
-    namespace = _load_prompt_namespace()
-    get_error_analysis_prompt = namespace["get_error_analysis_prompt"]
+    get_error_analysis_prompt = prompt_helpers.get_error_analysis_prompt
 
     assert get_error_analysis_prompt("missing") == get_error_analysis_prompt("en")
     assert "**Response Language**: English" in get_error_analysis_prompt("")
