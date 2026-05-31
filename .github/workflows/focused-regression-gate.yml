@@ -1,4 +1,4 @@
-name: Phase 2 Release Gate
+﻿name: Focused Regression Gate
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
       - dev
       - 'release/**'
     paths:
-      # Trigger on Phase 2 critical files
+      # Trigger on focused gate critical files
       - 'pipeline/**/*.py'
       - 'sanitizer.py'
       - 'outbound.py'
@@ -17,9 +17,13 @@ on:
       - 'tests/test_metadata_contract.py'
       - 'tests/test_pipeline_dependency_policy.py'
       - 'tests/test_outbound_payload_safety.py'
+      - 'scripts/focused_gate.py'
+      - 'scripts/focused_gate.sh'
+      - 'scripts/phase2_gate.py'
+      - 'scripts/phase2_gate.sh'
       - 'web/**/*.js'
       - 'tests/e2e/**/*.js'
-      - '.github/workflows/phase2-release-gate.yml'
+      - '.github/workflows/focused-regression-gate.yml'
   pull_request:
     branches:
       - main
@@ -34,9 +38,13 @@ on:
       - 'tests/test_metadata_contract.py'
       - 'tests/test_pipeline_dependency_policy.py'
       - 'tests/test_outbound_payload_safety.py'
+      - 'scripts/focused_gate.py'
+      - 'scripts/focused_gate.sh'
+      - 'scripts/phase2_gate.py'
+      - 'scripts/phase2_gate.sh'
       - 'web/**/*.js'
       - 'tests/e2e/**/*.js'
-      - '.github/workflows/phase2-release-gate.yml'
+      - '.github/workflows/focused-regression-gate.yml'
   workflow_dispatch:
     inputs:
       run_integration_e2e:
@@ -54,8 +62,8 @@ permissions:
   contents: read
 
 jobs:
-  phase2-python-gate:
-    name: Phase 2 Python Security & Contract Tests
+  focused-python-gate:
+    name: Focused Python Security & Contract Tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -100,14 +108,14 @@ jobs:
       - name: Summary
         if: success()
         run: |
-          echo "✅ Phase 2 Python Gate Passed"
+          echo "✅ Focused Python Gate Passed"
           echo "- Plugin security: PASS"
           echo "- Metadata contract: PASS"
           echo "- Dependency policy: PASS"
           echo "- Outbound payload safety: PASS"
 
-  phase2-e2e-gate:
-    name: Phase 2 E2E Regression Tests (Required)
+  focused-e2e-gate:
+    name: Focused E2E Regression Tests (Required)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -160,15 +168,15 @@ jobs:
       - name: Summary
         if: success()
         run: |
-          echo "✅ Phase 2 Required E2E Gate Passed"
+          echo "✅ Focused Required E2E Gate Passed"
           echo "- Preact loader: PASS"
           echo "- Settings UI: PASS"
           echo "- Statistics UI: PASS"
           echo "- Sidebar UI: PASS"
           echo "- Integration-tagged E2E: excluded by design"
 
-  phase2-e2e-integration-optional:
-    name: Phase 2 E2E Integration (Optional)
+  focused-e2e-integration-optional:
+    name: Focused E2E Integration (Optional)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: |
@@ -230,17 +238,17 @@ jobs:
           echo "- Backend URL: ${{ github.event.inputs.comfyui_url || vars.COMFYUI_URL || 'http://127.0.0.1:8188' }}"
           echo "- This job does not block release gate."
 
-  phase2-gate-complete:
-    name: Phase 2 Gate Complete
+  focused-gate-complete:
+    name: Focused Gate Complete
     runs-on: ubuntu-latest
-    needs: [phase2-python-gate, phase2-e2e-gate]
+    needs: [focused-python-gate, focused-e2e-gate]
     if: always()
 
     steps:
       - name: Check gate status
         run: |
-          if [[ "${{ needs.phase2-python-gate.result }}" == "success" ]] && [[ "${{ needs.phase2-e2e-gate.result }}" == "success" ]]; then
-            echo "✅ Phase 2 Release Gate: ALL CHECKS PASSED"
+          if [[ "${{ needs.focused-python-gate.result }}" == "success" ]] && [[ "${{ needs.focused-e2e-gate.result }}" == "success" ]]; then
+            echo "✅ Focused Regression Gate: ALL CHECKS PASSED"
             echo ""
             echo "Security & Governance:"
             echo "  ✅ Plugin security (10 tests)"
@@ -257,11 +265,12 @@ jobs:
             echo "This change is safe to merge."
             exit 0
           else
-            echo "❌ Phase 2 Release Gate: FAILED"
+            echo "❌ Focused Regression Gate: FAILED"
             echo ""
-            echo "Python Gate: ${{ needs.phase2-python-gate.result }}"
-            echo "E2E Gate: ${{ needs.phase2-e2e-gate.result }}"
+            echo "Python Gate: ${{ needs.focused-python-gate.result }}"
+            echo "E2E Gate: ${{ needs.focused-e2e-gate.result }}"
             echo ""
             echo "Please fix the failing checks before merging."
             exit 1
           fi
+

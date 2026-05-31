@@ -11,6 +11,8 @@ ASCII_ONLY_FILES = [
     "__init__.py",
     "nodes.py",
     "scripts/check_outbound_safety.py",
+    "scripts/focused_gate.py",
+    "scripts/focused_gate.sh",
     "scripts/lint.ps1",
     "scripts/phase2_gate.py",
     "scripts/phase2_gate.sh",

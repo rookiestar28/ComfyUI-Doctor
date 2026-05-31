@@ -122,6 +122,6 @@ Tests run automatically on GitHub Actions when:
 Notes:
 - `npm test` excludes `@integration` specs by default.
 - `npm run test:integration` runs the backend-dependent telemetry suite.
-- `phase2-release-gate.yml` uses dual-track CI: required `npm test` + optional integration track.
+- `focused-regression-gate.yml` uses dual-track CI: required `npm test` + optional integration track.
 
-See `.github/workflows/phase2-release-gate.yml` for configuration.
+See `.github/workflows/focused-regression-gate.yml` for configuration.

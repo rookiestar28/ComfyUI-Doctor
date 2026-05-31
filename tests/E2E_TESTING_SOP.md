@@ -158,7 +158,7 @@ expects a live ComfyUI backend at `COMFYUI_URL` (default `http://127.0.0.1:8188`
 
 ## 5. CI Dual-Track Policy
 
-`phase2-release-gate.yml` runs E2E in two tracks:
+`focused-regression-gate.yml` runs E2E in two tracks:
 
 - Required track: `npm test` (stable harness tests, excludes `@integration`)
 - Optional track: `npm run test:integration` (backend-dependent telemetry tests)

@@ -61,22 +61,22 @@ git config core.hooksPath .githooks
 
 ---
 
-## Focused Release Gate
+## Focused Security / Contract / E2E Regression Gate
 
-### phase2_gate.py
+### focused_gate.py
 
 Runs the focused security, contract, and E2E regression gate locally. This is a targeted lane, not a replacement for the full local gate above.
 
 **Usage**:
 ```bash
 # Full gate (Python + E2E tests)
-python scripts/phase2_gate.py
+python scripts/focused_gate.py
 
 # Fast mode (Python tests only, < 2 minutes)
-python scripts/phase2_gate.py --fast
+python scripts/focused_gate.py --fast
 
 # E2E tests only
-python scripts/phase2_gate.py --e2e
+python scripts/focused_gate.py --e2e
 ```
 
 **What it checks**:
@@ -92,21 +92,25 @@ python scripts/phase2_gate.py --e2e
 - `2` = E2E tests failed
 - `3` = Both failed
 
-### phase2_gate.sh
+### focused_gate.sh
 
-Bash alternative to `phase2_gate.py` for Unix environments.
+Bash alternative to `focused_gate.py` for Unix environments.
 
 **Usage**:
 ```bash
 # Full gate
-./scripts/phase2_gate.sh
+./scripts/focused_gate.sh
 
 # Fast mode (Python only)
-./scripts/phase2_gate.sh --fast
+./scripts/focused_gate.sh --fast
 
 # E2E only
-./scripts/phase2_gate.sh --e2e
+./scripts/focused_gate.sh --e2e
 ```
+
+### Deprecated Compatibility Wrappers
+
+The old `scripts/phase2_gate.py` and `scripts/phase2_gate.sh` entrypoints remain as thin wrappers for existing local automation. New commands and documentation should use the focused-gate names above.
 
 ---
 
@@ -218,7 +222,7 @@ Pre-flight checks for JavaScript/E2E tests.
 
 These scripts mirror the GitHub Actions workflows:
 
-- `phase2_gate.py` ↔ `.github/workflows/phase2-release-gate.yml`
+- `focused_gate.py` ↔ `.github/workflows/focused-regression-gate.yml`
 - `check_outbound_safety.py` ↔ `.github/workflows/outbound-safety.yml`
 
 Run scripts locally before pushing to catch issues early.
