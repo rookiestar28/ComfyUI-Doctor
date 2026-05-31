@@ -164,6 +164,54 @@ test.describe('Doctor Chat Interface', () => {
     expect(count).toBeGreaterThan(0);
   });
 
+  test('should remount sidebar cleanly while switching tabs', async ({ page }) => {
+    const remountState = await page.evaluate(async () => {
+      const sidebarApi = window.app?.extensionManager?.sidebarTab;
+      const tabId = 'comfyui-doctor';
+      const tabConfig = sidebarApi?.sidebarTabs?.find((tab) => tab.id === tabId);
+
+      if (!sidebarApi || !tabConfig) {
+        throw new Error('Doctor sidebar tab registration is unavailable');
+      }
+
+      window.__doctorSidebarTabConfig = tabConfig;
+
+      for (let index = 0; index < 2; index += 1) {
+        sidebarApi.unregisterSidebarTab(tabId);
+        sidebarApi.registerSidebarTab(window.__doctorSidebarTabConfig);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      return {
+        mountCount: document.querySelectorAll('#sidebar-tab-comfyui-doctor').length,
+        hasTabManager: Boolean(window.app.Doctor?.tabManager),
+        hasSidebarContainer: Boolean(window.app.Doctor?.sidebarTabContainer),
+        tabButtonCount: document.querySelectorAll('.doctor-tab-button').length,
+      };
+    });
+
+    expect(remountState.mountCount).toBe(1);
+    expect(remountState.hasTabManager).toBe(true);
+    expect(remountState.hasSidebarContainer).toBe(true);
+    expect(remountState.tabButtonCount).toBeGreaterThanOrEqual(3);
+
+    const statsTab = page.locator('.doctor-tab-button[data-tab-id="stats"]');
+    const settingsTab = page.locator('.doctor-tab-button[data-tab-id="settings"]');
+    const chatTab = page.locator('.doctor-tab-button[data-tab-id="chat"]');
+
+    await statsTab.click();
+    await expect(statsTab).toHaveClass(/active/);
+    await expect(page.locator('#doctor-statistics-panel, #doctor-stats-content').first()).toBeVisible({ timeout: 5000 });
+
+    await settingsTab.click();
+    await expect(settingsTab).toHaveClass(/active/);
+    await expect(page.locator('#doctor-settings-panel')).toBeVisible({ timeout: 5000 });
+
+    await chatTab.click();
+    await expect(chatTab).toHaveClass(/active/);
+    await expect(page.locator('#doctor-messages')).toBeVisible({ timeout: 5000 });
+  });
+
   test('should keep locate button after poll update without node id', async ({ page }) => {
     await page.evaluate(() => {
       if (!window.app?.Doctor?.handleNewError) {
