@@ -151,8 +151,10 @@ npm run test:report
 npm run test:integration
 ```
 
-`npm run test:integration` runs only `@integration` specs (currently telemetry) and
-expects a live ComfyUI backend at `COMFYUI_URL` (default `http://127.0.0.1:8188`).
+`npm run test:integration` runs only `@integration` specs (currently telemetry).
+By default it uses the Playwright harness backend started by `playwright.config.js`,
+so it is repeatable without a manually started ComfyUI process. Set `COMFYUI_URL`
+to run the same integration assertions against a live ComfyUI backend.
 
 ---
 

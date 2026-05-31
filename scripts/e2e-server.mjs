@@ -7,6 +7,27 @@ import process from 'node:process';
 const port = Number(process.env.PW_WEB_SERVER_PORT) || 3000;
 const host = '127.0.0.1';
 const rootDir = process.cwd();
+const telemetryState = {
+  enabled: false,
+  events: [],
+};
+
+const allowedTelemetryEvents = {
+  feature: {
+    tab_switch: ['chat', 'stats', 'settings'],
+  },
+  analysis: {
+    pattern_matched: null,
+    llm_called: ['openai', 'deepseek', 'anthropic', 'ollama', 'lmstudio', 'gemini', 'groq', 'openrouter', 'xai', 'custom'],
+  },
+  resolution: {
+    marked: ['resolved', 'unresolved', 'ignored'],
+  },
+  session: {
+    start: null,
+    end: null,
+  },
+};
 
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -43,7 +64,186 @@ function isDoctorPath(pathname) {
   return pathname.startsWith('/doctor/') || pathname.startsWith('/debugger/');
 }
 
-function handleMockEndpoint(req, res, url) {
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => {
+      body += chunk;
+      if (body.length > 1024 * 1024) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+async function readJsonPayload(req) {
+  const body = await readRequestBody(req);
+  if (!body.trim()) {
+    return {};
+  }
+  return JSON.parse(body);
+}
+
+function telemetryStats() {
+  return {
+    count: telemetryState.events.length,
+    oldest: telemetryState.events[0]?.timestamp || null,
+    newest: telemetryState.events[telemetryState.events.length - 1]?.timestamp || null,
+  };
+}
+
+function validateTelemetryEvent(payload) {
+  const category = payload?.category;
+  const action = payload?.action;
+  if (!category || !action) {
+    return 'Missing required field: category or action';
+  }
+  if (!Object.prototype.hasOwnProperty.call(allowedTelemetryEvents, category)) {
+    return `Invalid category: ${category}`;
+  }
+  const actionMap = allowedTelemetryEvents[category];
+  if (!Object.prototype.hasOwnProperty.call(actionMap, action)) {
+    return `Invalid action: ${action} for category ${category}`;
+  }
+  const allowedLabels = actionMap[action];
+  if (Array.isArray(allowedLabels) && payload.label !== undefined && !allowedLabels.includes(payload.label)) {
+    return `Invalid label: ${payload.label}`;
+  }
+  return '';
+}
+
+function telemetryEventFromPayload(payload) {
+  const event = {
+    schema_version: '1.0',
+    event_id: `mock-${Date.now()}-${telemetryState.events.length + 1}`,
+    timestamp: new Date().toISOString(),
+    category: payload.category,
+    action: payload.action,
+  };
+  if (payload.label !== undefined) {
+    event.label = payload.label;
+  }
+  if (payload.value !== undefined) {
+    event.value = payload.value;
+  }
+  return event;
+}
+
+async function handleTelemetryEndpoint(req, res, url) {
+  const { pathname } = url;
+  const method = req.method || 'GET';
+
+  if (pathname === '/doctor/telemetry/status' && method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      enabled: telemetryState.enabled,
+      stats: telemetryStats(),
+      upload_destination: null,
+    });
+    return true;
+  }
+
+  if (pathname === '/doctor/telemetry/buffer' && method === 'GET') {
+    sendJson(res, 200, {
+      success: true,
+      events: telemetryState.events,
+      count: telemetryState.events.length,
+    });
+    return true;
+  }
+
+  if (pathname === '/doctor/telemetry/toggle' && method === 'POST') {
+    const payload = await readJsonPayload(req);
+    telemetryState.enabled = Boolean(payload.enabled);
+    sendJson(res, 200, {
+      success: true,
+      enabled: telemetryState.enabled,
+      message: telemetryState.enabled ? 'Telemetry enabled' : 'Telemetry disabled',
+    });
+    return true;
+  }
+
+  if (pathname === '/doctor/telemetry/clear' && method === 'POST') {
+    await readJsonPayload(req).catch(() => ({}));
+    telemetryState.events = [];
+    sendJson(res, 200, {
+      success: true,
+      message: 'Buffer cleared',
+    });
+    return true;
+  }
+
+  if (pathname === '/doctor/telemetry/track' && method === 'POST') {
+    const origin = req.headers.origin || '';
+    const hostHeader = req.headers.host || '';
+    if (origin) {
+      const originHost = new URL(origin).host;
+      if (originHost && hostHeader && originHost !== hostHeader) {
+        sendJson(res, 403, {
+          success: false,
+          error: 'cross_origin_rejected',
+          message: 'Cross-origin request rejected',
+        });
+        return true;
+      }
+    }
+
+    const contentLength = Number(req.headers['content-length'] || 0);
+    if (contentLength > 1024) {
+      sendJson(res, 413, {
+        success: false,
+        error: 'payload_too_large',
+        message: 'Payload too large',
+      });
+      return true;
+    }
+
+    const payload = await readJsonPayload(req);
+    if (!telemetryState.enabled) {
+      sendJson(res, 200, {
+        success: false,
+        message: 'Telemetry disabled',
+      });
+      return true;
+    }
+
+    const validationError = validateTelemetryEvent(payload);
+    if (validationError) {
+      sendJson(res, 200, {
+        success: false,
+        message: validationError,
+      });
+      return true;
+    }
+
+    telemetryState.events.push(telemetryEventFromPayload(payload));
+    sendJson(res, 200, {
+      success: true,
+      message: 'Event recorded',
+    });
+    return true;
+  }
+
+  if (pathname === '/doctor/telemetry/export' && method === 'GET') {
+    const body = JSON.stringify(telemetryState.events);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Cache-Control': 'no-store',
+      'Content-Disposition': 'attachment; filename=telemetry_export.json',
+    });
+    res.end(body);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleMockEndpoint(req, res, url) {
   const { pathname, searchParams } = url;
   const method = req.method || 'GET';
   // Root cause note: static http.server generated noisy 404/501 for
@@ -51,6 +251,10 @@ function handleMockEndpoint(req, res, url) {
 
   if (method === 'OPTIONS' && isDoctorPath(pathname)) {
     sendNoContent(res);
+    return true;
+  }
+
+  if (await handleTelemetryEndpoint(req, res, url)) {
     return true;
   }
 
@@ -93,16 +297,6 @@ function handleMockEndpoint(req, res, url) {
         resolution_rate: { resolved: 0, unresolved: 0, ignored: 0 },
         trend: { last_24h: 0, last_7d: 0, last_30d: 0 },
       },
-    });
-    return true;
-  }
-
-  if (pathname === '/doctor/telemetry/status' && method === 'GET') {
-    sendJson(res, 200, {
-      success: true,
-      enabled: false,
-      stats: { total_events: 0 },
-      upload_destination: null,
     });
     return true;
   }
@@ -174,18 +368,25 @@ function serveStatic(req, res, pathname) {
   });
 }
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${host}:${port}`);
-  if (handleMockEndpoint(req, res, url)) {
-    return;
-  }
+  try {
+    if (await handleMockEndpoint(req, res, url)) {
+      return;
+    }
 
-  if ((req.method || 'GET') !== 'GET' && (req.method || 'GET') !== 'HEAD') {
-    sendJson(res, 405, { success: false, message: 'Method Not Allowed' });
-    return;
-  }
+    if ((req.method || 'GET') !== 'GET' && (req.method || 'GET') !== 'HEAD') {
+      sendJson(res, 405, { success: false, message: 'Method Not Allowed' });
+      return;
+    }
 
-  serveStatic(req, res, url.pathname);
+    serveStatic(req, res, url.pathname);
+  } catch (error) {
+    sendJson(res, 500, {
+      success: false,
+      message: error instanceof Error ? error.message : 'Mock server error',
+    });
+  }
 });
 
 server.listen(port, host, () => {

@@ -17,7 +17,7 @@ npx playwright install chromium
 # Run all tests
 npm test
 
-# Run integration-only tests (requires live ComfyUI backend)
+# Run integration-only tests (uses harness backend by default)
 npm run test:integration
 
 # Run with UI mode (interactive)
@@ -64,7 +64,7 @@ tests/e2e/
 
 ### 🚧 TODO
 - Keep adding focused E2E assertions for new user-visible regressions.
-- Run `npm run test:integration` separately when validating telemetry against a live ComfyUI backend.
+- Run `npm run test:integration` separately for telemetry integration coverage; set `COMFYUI_URL` only when validating against a live ComfyUI backend.
 
 ## Writing New Tests
 
@@ -121,7 +121,7 @@ Tests run automatically on GitHub Actions when:
 
 Notes:
 - `npm test` excludes `@integration` specs by default.
-- `npm run test:integration` runs the backend-dependent telemetry suite.
+- `npm run test:integration` runs the telemetry integration suite against the harness backend by default, or a live backend when `COMFYUI_URL` is set.
 - `focused-regression-gate.yml` uses dual-track CI: required `npm test` + optional integration track.
 
 See `.github/workflows/focused-regression-gate.yml` for configuration.

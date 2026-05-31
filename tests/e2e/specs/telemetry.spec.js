@@ -1,9 +1,9 @@
 /**
  * E2E Tests for Telemetry Feature (S3)
- * 
- * NOTE: These tests require a running ComfyUI backend (port 8188).
- * They are skipped in CI environments without ComfyUI.
- * 
+ *
+ * Default mode uses the Playwright harness backend started by playwright.config.js.
+ * Set COMFYUI_URL to run the same assertions against a live ComfyUI backend.
+ *
  * Tests:
  * 1. Toggle OFF → no events recorded
  * 2. Toggle ON → events recorded
@@ -14,40 +14,41 @@
 
 const { test, expect } = require('@playwright/test');
 
-// Base URL for ComfyUI API (not the test harness)
-const BASE_URL = process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
+const DEFAULT_BACKEND_URL = `http://127.0.0.1:${process.env.PW_WEB_SERVER_PORT || 3000}`;
+const BASE_URL = process.env.COMFYUI_URL || process.env.PW_BACKEND_URL || DEFAULT_BACKEND_URL;
+const USES_EXPLICIT_LIVE_BACKEND = Boolean(process.env.COMFYUI_URL);
+const ADMIN_TOKEN = process.env.DOCTOR_ADMIN_TOKEN || '';
 
-// Skip all tests if in CI (no ComfyUI backend available)
-// These are integration tests that require the real backend
-const isCI = !!process.env.CI;
 let backendReachable = false;
 let backendSkipReason = '';
 
+function withAdminToken(payload = {}) {
+    return ADMIN_TOKEN ? { ...payload, admin_token: ADMIN_TOKEN } : payload;
+}
+
 test.describe('@integration S3: Telemetry Feature', () => {
     test.beforeAll(async ({ request }) => {
-        if (isCI) {
-            backendSkipReason = 'Skipping telemetry tests in CI - requires running ComfyUI backend';
-            return;
-        }
-
         try {
             const response = await request.get(`${BASE_URL}/doctor/telemetry/status`, { timeout: 3000 });
             backendReachable = response.ok();
             if (!backendReachable) {
-                backendSkipReason = `Skipping telemetry tests - backend responded with status ${response.status()} at ${BASE_URL}`;
+                backendSkipReason = `Telemetry backend responded with status ${response.status()} at ${BASE_URL}`;
             }
         } catch (error) {
             backendReachable = false;
-            backendSkipReason = `Skipping telemetry tests - backend not reachable at ${BASE_URL}`;
+            backendSkipReason = `Telemetry backend not reachable at ${BASE_URL}`;
+        }
+
+        if (!backendReachable && !USES_EXPLICIT_LIVE_BACKEND) {
+            throw new Error(`${backendSkipReason}; local harness backend should be available`);
         }
     });
 
     test.beforeEach(() => {
-        if (isCI) {
-            test.skip(true, backendSkipReason || 'Skipping telemetry tests in CI - requires running ComfyUI backend');
-            return;
-        }
-        test.skip(!backendReachable, backendSkipReason || `Skipping telemetry tests - backend not reachable at ${BASE_URL}`);
+        test.skip(
+            USES_EXPLICIT_LIVE_BACKEND && !backendReachable,
+            backendSkipReason || `Skipping telemetry tests - explicit live backend not reachable at ${BASE_URL}`
+        );
     });
 
 
@@ -59,13 +60,13 @@ test.describe('@integration S3: Telemetry Feature', () => {
         expect(data.success).toBe(true);
         expect(typeof data.enabled).toBe('boolean');
         expect(data.stats).toBeDefined();
-        expect(data.upload_destination).toBeNull(); // Phase 1-3: local only
+        expect(data.upload_destination).toBeNull(); // Telemetry remains local-only.
     });
 
     test('toggle OFF prevents event recording', async ({ request }) => {
         // Disable telemetry
         const toggleRes = await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: false }
+            data: withAdminToken({ enabled: false })
         });
         expect(toggleRes.ok()).toBeTruthy();
         const toggleData = await toggleRes.json();
@@ -83,14 +84,16 @@ test.describe('@integration S3: Telemetry Feature', () => {
     test('toggle ON enables event recording', async ({ request }) => {
         // Enable telemetry
         const toggleRes = await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: true }
+            data: withAdminToken({ enabled: true })
         });
         expect(toggleRes.ok()).toBeTruthy();
         const toggleData = await toggleRes.json();
         expect(toggleData.enabled).toBe(true);
 
         // Clear buffer first
-        await request.post(`${BASE_URL}/doctor/telemetry/clear`);
+        await request.post(`${BASE_URL}/doctor/telemetry/clear`, {
+            data: withAdminToken()
+        });
 
         // Track an event
         const trackRes = await request.post(`${BASE_URL}/doctor/telemetry/track`, {
@@ -107,21 +110,23 @@ test.describe('@integration S3: Telemetry Feature', () => {
 
         // Cleanup: disable telemetry
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: false }
+            data: withAdminToken({ enabled: false })
         });
     });
 
     test('clear empties buffer', async ({ request }) => {
         // Enable and add event
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: true }
+            data: withAdminToken({ enabled: true })
         });
         await request.post(`${BASE_URL}/doctor/telemetry/track`, {
             data: { category: 'session', action: 'start' }
         });
 
         // Clear
-        const clearRes = await request.post(`${BASE_URL}/doctor/telemetry/clear`);
+        const clearRes = await request.post(`${BASE_URL}/doctor/telemetry/clear`, {
+            data: withAdminToken()
+        });
         expect(clearRes.ok()).toBeTruthy();
         const clearData = await clearRes.json();
         expect(clearData.success).toBe(true);
@@ -133,16 +138,18 @@ test.describe('@integration S3: Telemetry Feature', () => {
 
         // Cleanup
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: false }
+            data: withAdminToken({ enabled: false })
         });
     });
 
     test('export returns downloadable JSON', async ({ request }) => {
         // Enable and add event
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: true }
+            data: withAdminToken({ enabled: true })
         });
-        await request.post(`${BASE_URL}/doctor/telemetry/clear`);
+        await request.post(`${BASE_URL}/doctor/telemetry/clear`, {
+            data: withAdminToken()
+        });
         await request.post(`${BASE_URL}/doctor/telemetry/track`, {
             data: { category: 'feature', action: 'tab_switch', label: 'stats' }
         });
@@ -162,7 +169,7 @@ test.describe('@integration S3: Telemetry Feature', () => {
 
         // Cleanup
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: false }
+            data: withAdminToken({ enabled: false })
         });
     });
 
@@ -183,7 +190,7 @@ test.describe('@integration S3: Telemetry Feature', () => {
     test('/track rejects invalid category with error', async ({ request }) => {
         // Enable telemetry
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: true }
+            data: withAdminToken({ enabled: true })
         });
 
         const response = await request.post(`${BASE_URL}/doctor/telemetry/track`, {
@@ -196,14 +203,14 @@ test.describe('@integration S3: Telemetry Feature', () => {
 
         // Cleanup
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: false }
+            data: withAdminToken({ enabled: false })
         });
     });
 
     test('/track rejects payload over 1KB', async ({ request }) => {
         // Enable telemetry
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: true }
+            data: withAdminToken({ enabled: true })
         });
 
         // Create payload > 1KB
@@ -216,7 +223,7 @@ test.describe('@integration S3: Telemetry Feature', () => {
 
         // Cleanup
         await request.post(`${BASE_URL}/doctor/telemetry/toggle`, {
-            data: { enabled: false }
+            data: withAdminToken({ enabled: false })
         });
     });
 
