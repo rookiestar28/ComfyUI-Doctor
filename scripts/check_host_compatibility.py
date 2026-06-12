@@ -91,6 +91,20 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI",
+        file="server.py",
+        label="prompt usage source pass-through",
+        required_patterns=(
+            '"comfy_usage_source" not in extra_data',
+            'request.headers.get("Comfy-Usage-Source")',
+            'extra_data["comfy_usage_source"] = usage_source',
+        ),
+        note=(
+            "Tracks host source-attribution pass-through only; Doctor must not "
+            "attach secrets or private prompt data to usage-source metadata."
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
         file="execution.py",
         label="execution_error websocket payload",
         required_patterns=(
@@ -100,6 +114,30 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             '"traceback"',
             '"current_inputs"',
             '"current_outputs"',
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="execution.py",
+        label="execution usage source hidden input",
+        required_patterns=(
+            "io.Hidden.comfy_usage_source.name in hidden",
+            "hidden_inputs_v3[io.Hidden.comfy_usage_source]",
+            'extra_data.get("comfy_usage_source", None)',
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="execution.py",
+        label="executed output asset enrichment tolerance",
+        required_patterns=(
+            "enrich_output_with_assets(output_ui)",
+            '"executed"',
+            '"output": output_ui',
+        ),
+        note=(
+            "Doctor currently treats executed output as pass-through host data; "
+            "this guard records upstream enrichment without requiring runtime parsing."
         ),
     ),
     SurfaceCheck(
@@ -127,6 +165,24 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI",
+        file="folder_paths.py",
+        label="current expanded model folder anchors",
+        required_patterns=(
+            '"diffusion_models"',
+            '"text_encoders"',
+            '"clip_vision"',
+            '"style_models"',
+            '"photomaker"',
+            '"classifiers"',
+            '"model_patches"',
+            '"audio_encoders"',
+            '"background_removal"',
+            '"frame_interpolation"',
+            '"optical_flow"',
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
         file="comfy_api/feature_flags.py",
         label="server feature flags",
         required_patterns=(
@@ -146,6 +202,17 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "ExecutionErrorWsMessage",
             "NodeError",
         ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/scripts/api.ts",
+        label="frontend queue prompt usage source",
+        required_patterns=(
+            "async queuePrompt(",
+            "extra_data:",
+            "comfy_usage_source: 'comfyui-frontend'",
+        ),
+        note="Tracks frontend prompt source attribution; Doctor does not queue prompts in this item.",
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",

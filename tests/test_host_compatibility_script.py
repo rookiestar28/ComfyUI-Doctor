@@ -25,6 +25,12 @@ def _create_minimal_reference(root: Path) -> None:
         '@routes.get("/features")\n'
         '@routes.get("/system_stats")\n'
         "def get_extensions():\n    return EXTENSION_WEB_DIRS\n"
+        "def queue_prompt(request, json_data):\n"
+        "    extra_data = json_data['extra_data']\n"
+        '    if "comfy_usage_source" not in extra_data:\n'
+        '        usage_source = request.headers.get("Comfy-Usage-Source")\n'
+        "        if usage_source:\n"
+        '            extra_data["comfy_usage_source"] = usage_source\n'
         "def system_stats():\n"
         "    torch_devices = comfy.model_management.get_all_torch_devices()\n"
         "    device_entries = []\n"
@@ -41,7 +47,12 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI" / "execution.py",
-        '"execution_error" "node_id" "node_type" "traceback" "current_inputs" "current_outputs"\n',
+        '"execution_error" "node_id" "node_type" "traceback" "current_inputs" "current_outputs"\n'
+        'if io.Hidden.comfy_usage_source.name in hidden:\n'
+        '    hidden_inputs_v3[io.Hidden.comfy_usage_source] = extra_data.get("comfy_usage_source", None)\n'
+        'input_data_all[x] = [extra_data.get("comfy_usage_source", None)]\n'
+        "output_ui = enrich_output_with_assets(output_ui)\n"
+        '"executed" "output": output_ui\n',
     )
     _write(
         root / "ComfyUI" / "comfy_execution" / "progress.py",
@@ -49,7 +60,18 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI" / "folder_paths.py",
+        'folder_names_and_paths["diffusion_models"] = []\n'
+        'folder_names_and_paths["text_encoders"] = []\n'
+        'folder_names_and_paths["clip_vision"] = []\n'
+        'folder_names_and_paths["style_models"] = []\n'
+        'folder_names_and_paths["photomaker"] = []\n'
+        'folder_names_and_paths["classifiers"] = []\n'
+        'folder_names_and_paths["model_patches"] = []\n'
+        'folder_names_and_paths["audio_encoders"] = []\n'
+        'folder_names_and_paths["background_removal"] = []\n'
+        'folder_names_and_paths["frame_interpolation"] = []\n'
         'folder_names_and_paths["geometry_estimation"] = []\n'
+        'folder_names_and_paths["optical_flow"] = []\n'
         'folder_names_and_paths["detection"] = []\n'
         "def get_system_user_directory(name='system'):\n    return name\n"
         "def get_public_user_directory(user_id):\n    return user_id\n",
@@ -92,6 +114,18 @@ def _create_minimal_reference(root: Path) -> None:
         "traceback: z.array(z.string()), current_inputs: z.any(), current_outputs: z.any() })\n",
     )
     _write(root / "ComfyUI_frontend" / "src" / "scripts" / "app.ts", "rootGraph\nlastExecutionError\n")
+    _write(
+        root / "ComfyUI_frontend" / "src" / "scripts" / "api.ts",
+        "async queuePrompt(number, { output, workflow }) {\n"
+        "  const body = {\n"
+        "    extra_data: {\n"
+        "      client_id: this.clientId,\n"
+        "      comfy_usage_source: 'comfyui-frontend',\n"
+        "    }\n"
+        "  }\n"
+        "  return body\n"
+        "}\n",
+    )
     _write(
         root / "desktop" / "package.json",
         '{\n  "version": "0.9.4",\n  "config": {"comfyUI": {"version": "0.22.3"}}\n}\n',
@@ -263,3 +297,84 @@ def test_host_compatibility_smoke_reports_missing_api_route_duplication(tmp_path
     assert len(failed) == 1
     assert failed[0].check.label == "host /api route duplication"
     assert '"/api" + route.path' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_server_usage_source_pass_through(tmp_path):
+    _create_minimal_reference(tmp_path)
+    server_path = tmp_path / "ComfyUI" / "server.py"
+    server_path.write_text(
+        server_path.read_text(encoding="utf-8").replace('"Comfy-Usage-Source"', '"Legacy-Source"'),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "prompt usage source pass-through"
+    assert 'request.headers.get("Comfy-Usage-Source")' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_execution_usage_source_hidden_input(tmp_path):
+    _create_minimal_reference(tmp_path)
+    execution_path = tmp_path / "ComfyUI" / "execution.py"
+    execution_path.write_text(
+        execution_path.read_text(encoding="utf-8").replace("io.Hidden.comfy_usage_source", "io.Hidden.legacy_source"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "execution usage source hidden input"
+    assert "io.Hidden.comfy_usage_source.name in hidden" in failed[0].missing_patterns
+    assert "hidden_inputs_v3[io.Hidden.comfy_usage_source]" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_frontend_queue_usage_source(tmp_path):
+    _create_minimal_reference(tmp_path)
+    api_path = tmp_path / "ComfyUI_frontend" / "src" / "scripts" / "api.ts"
+    api_path.write_text(
+        api_path.read_text(encoding="utf-8").replace("comfy_usage_source: 'comfyui-frontend'", "usage_source: 'legacy'"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "frontend queue prompt usage source"
+    assert "comfy_usage_source: 'comfyui-frontend'" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_expanded_model_folder_anchor(tmp_path):
+    _create_minimal_reference(tmp_path)
+    folder_paths_path = tmp_path / "ComfyUI" / "folder_paths.py"
+    folder_paths_path.write_text(
+        folder_paths_path.read_text(encoding="utf-8").replace('"background_removal"', '"legacy_background"'),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "current expanded model folder anchors"
+    assert '"background_removal"' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_executed_asset_enrichment_anchor(tmp_path):
+    _create_minimal_reference(tmp_path)
+    execution_path = tmp_path / "ComfyUI" / "execution.py"
+    execution_path.write_text(
+        execution_path.read_text(encoding="utf-8").replace("enrich_output_with_assets(output_ui)", "output_ui"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "executed output asset enrichment tolerance"
+    assert "enrich_output_with_assets(output_ui)" in failed[0].missing_patterns
