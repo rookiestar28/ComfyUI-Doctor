@@ -150,7 +150,9 @@ function ErrorContextCard({ workflowContext, onAnalyze }) {
         return html`<div id="doctor-error-context" style=${style}></div>`;
     }
 
-    const errorSummary = workflowContext.error_summary || summarizeError(workflowContext.last_error);
+    const errorSummary = workflowContext.execution_context?.validation_display_summary
+        || workflowContext.error_summary
+        || summarizeError(workflowContext.last_error);
 
     return html`
         <div id="doctor-error-context" class="error-context-card" style=${style}>

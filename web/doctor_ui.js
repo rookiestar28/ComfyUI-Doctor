@@ -557,15 +557,32 @@ export class DoctorUI {
             .join('; ');
         if (!summary) return null;
 
+        const catalogErrors = validationErrors
+            .map(error => this.resolveFrontendValidationCatalogError(error, nodeClass))
+            .filter(Boolean);
+        const catalogGroups = this.groupFrontendValidationCatalogErrors(catalogErrors);
+        const validationDisplaySummary = catalogGroups
+            .map(group => `${group.display_title}: ${group.display_message}`)
+            .filter(Boolean)
+            .join('; ');
+        const validationDetailsSummary = catalogErrors
+            .map(error => error.display_details || error.display_message || error.raw_summary)
+            .filter(Boolean)
+            .join('; ');
+
         return {
             last_error: `ValidationError: ${summary}`,
             traceback: null,
-            suggestion: `Validation Error in ${nodeClass}: ${summary}. Check input connections and ensure node requirements are met.`,
+            suggestion: validationDetailsSummary || `Validation Error in ${nodeClass}: ${summary}. Check input connections and ensure node requirements are met.`,
             timestamp: new Date().toISOString(),
             execution_context: {
                 source: "extensionManager.lastNodeErrors",
                 has_traceback: false,
                 validation_summary: summary,
+                validation_display_summary: validationDisplaySummary,
+                validation_details_summary: validationDetailsSummary,
+                validation_catalog_errors: catalogErrors,
+                validation_catalog_groups: catalogGroups,
                 validation_error_count: validationErrors.length,
             },
             node_context: {
@@ -592,6 +609,328 @@ export class DoctorUI {
         return [label, inputName ? `input "${inputName}"` : '', message, details]
             .filter(Boolean)
             .join(': ');
+    }
+
+    resolveFrontendValidationCatalogError(error, nodeClass) {
+        if (!error || typeof error !== 'object') return null;
+
+        const nodeName = this.normalizeValidationCatalogNodeName(nodeClass);
+        const inputName = this.getValidationCatalogInputName(error);
+        const errorType = error.type || 'unknown_validation_error';
+        const rawDetails = this.getValidationCatalogRawDetails(error);
+        const rawSummary = this.formatFrontendValidationError(error);
+        const params = this.getValidationCatalogParams(error, nodeName, inputName, rawDetails, errorType);
+        const rule = this.getValidationCatalogRule(error, rawDetails);
+        const displayDetails = this.resolveValidationCatalogDetails(error, rule.catalog_id, params);
+        const toastMessage = this.resolveValidationCatalogToastMessage(error, rule.catalog_id, params, displayDetails);
+
+        return {
+            error_type: errorType,
+            catalog_id: rule.catalog_id,
+            display_title: rule.display_title,
+            display_message: rule.display_message,
+            display_details: displayDetails,
+            display_item_label: rule.item_label === 'node'
+                ? nodeName
+                : `${nodeName} - ${inputName}`,
+            toast_title: rule.toast_title,
+            toast_message: toastMessage,
+            raw_message: error.message || '',
+            raw_details: error.details || '',
+            raw_summary: rawSummary,
+        };
+    }
+
+    groupFrontendValidationCatalogErrors(catalogErrors) {
+        const groups = new Map();
+
+        catalogErrors.forEach((error) => {
+            if (!error?.catalog_id) return;
+            if (!groups.has(error.catalog_id)) {
+                groups.set(error.catalog_id, {
+                    catalog_id: error.catalog_id,
+                    display_title: error.display_title,
+                    display_message: error.display_message,
+                    count: 0,
+                });
+            }
+            groups.get(error.catalog_id).count += 1;
+        });
+
+        return Array.from(groups.values());
+    }
+
+    getValidationCatalogRule(error, rawDetails) {
+        if (this.isImageNotLoadedValidationError(error, rawDetails)) {
+            return {
+                catalog_id: 'image_not_loaded',
+                display_title: 'Image not loaded',
+                display_message: "The system couldn't load this image.",
+                item_label: 'node',
+                toast_title: "Input image couldn't be loaded",
+            };
+        }
+
+        const rules = {
+            required_input_missing: {
+                catalog_id: 'missing_connection',
+                display_title: 'Missing connection',
+                display_message: 'Required input slots have no connection feeding them.',
+                item_label: 'nodeInput',
+                toast_title: 'Required input missing',
+            },
+            bad_linked_input: {
+                catalog_id: 'bad_linked_input',
+                display_title: 'Invalid connection',
+                display_message: 'A node connection could not be read correctly.',
+                item_label: 'nodeInput',
+                toast_title: 'Invalid connection',
+            },
+            return_type_mismatch: {
+                catalog_id: 'return_type_mismatch',
+                display_title: 'Invalid connection',
+                display_message: 'Connected nodes are using incompatible input and output types.',
+                item_label: 'nodeInput',
+                toast_title: 'Invalid connection',
+            },
+            invalid_input_type: {
+                catalog_id: 'invalid_input_type',
+                display_title: 'Invalid input',
+                display_message: 'An input value has the wrong type.',
+                item_label: 'nodeInput',
+                toast_title: 'Invalid input',
+            },
+            value_smaller_than_min: {
+                catalog_id: 'value_smaller_than_min',
+                display_title: 'Input out of range',
+                display_message: 'Some input values are outside the allowed range.',
+                item_label: 'nodeInput',
+                toast_title: 'Input out of range',
+            },
+            value_bigger_than_max: {
+                catalog_id: 'value_bigger_than_max',
+                display_title: 'Input out of range',
+                display_message: 'Some input values are outside the allowed range.',
+                item_label: 'nodeInput',
+                toast_title: 'Input out of range',
+            },
+            value_not_in_list: {
+                catalog_id: 'value_not_in_list',
+                display_title: 'Invalid input',
+                display_message: 'Some input values are not available for this node.',
+                item_label: 'nodeInput',
+                toast_title: 'Invalid input',
+            },
+            custom_validation_failed: {
+                catalog_id: 'custom_validation_failed',
+                display_title: 'Invalid input',
+                display_message: 'A node rejected one or more input values.',
+                item_label: 'nodeInput',
+                toast_title: 'Invalid input',
+            },
+            exception_during_inner_validation: {
+                catalog_id: 'exception_during_inner_validation',
+                display_title: 'Validation failed',
+                display_message: "The workflow couldn't validate a connected node.",
+                item_label: 'nodeInput',
+                toast_title: 'Validation failed',
+            },
+            exception_during_validation: {
+                catalog_id: 'exception_during_validation',
+                display_title: 'Validation failed',
+                display_message: 'The workflow could not be validated because a node validation check failed unexpectedly.',
+                item_label: 'node',
+                toast_title: 'Validation failed',
+            },
+            dependency_cycle: {
+                catalog_id: 'dependency_cycle',
+                display_title: 'Invalid workflow',
+                display_message: 'The workflow has a circular node connection.',
+                item_label: 'node',
+                toast_title: 'Invalid workflow',
+            },
+        };
+
+        return rules[error.type] || {
+            catalog_id: 'unknown_validation_error',
+            display_title: 'Validation failed',
+            display_message: 'A node returned a validation error ComfyUI does not recognize.',
+            item_label: 'node',
+            toast_title: 'Validation failed',
+        };
+    }
+
+    resolveValidationCatalogDetails(error, catalogId, params) {
+        switch (catalogId) {
+            case 'missing_connection':
+                return `${params.nodeName} is missing a required input: ${params.inputName}`;
+            case 'bad_linked_input':
+                return `${params.nodeName} has an invalid connection for ${params.inputName}.`;
+            case 'return_type_mismatch':
+                if (params.expectedType !== undefined && params.receivedType !== undefined) {
+                    return `${params.nodeName}'s ${params.inputName} input expects ${params.expectedType}, but the connected output is ${params.receivedType}.`;
+                }
+                return `${params.nodeName} has an incompatible connection for ${params.inputName}.`;
+            case 'invalid_input_type':
+                if (params.expectedType !== undefined && params.receivedValue !== undefined) {
+                    return `The value ${params.receivedValue} for ${params.nodeName}'s ${params.inputName} couldn't be converted to ${params.expectedType}.`;
+                }
+                return `${params.nodeName} couldn't convert ${params.inputName} to the expected type.`;
+            case 'value_smaller_than_min':
+                if (params.receivedValue !== undefined && params.minValue !== undefined) {
+                    return `The value ${params.receivedValue} for ${params.nodeName}'s ${params.inputName} is below the minimum ${params.minValue}.`;
+                }
+                return `${params.nodeName} has a value below the minimum for ${params.inputName}.`;
+            case 'value_bigger_than_max':
+                if (params.receivedValue !== undefined && params.maxValue !== undefined) {
+                    return `The value ${params.receivedValue} for ${params.nodeName}'s ${params.inputName} is above the maximum ${params.maxValue}.`;
+                }
+                return `${params.nodeName} has a value above the maximum for ${params.inputName}.`;
+            case 'value_not_in_list':
+                if (params.receivedValue !== undefined) {
+                    return `The value ${params.receivedValue} for ${params.nodeName}'s ${params.inputName} is not available.`;
+                }
+                return `${params.nodeName} has an unsupported value for ${params.inputName}.`;
+            case 'custom_validation_failed':
+                if (params.rawDetails) {
+                    return `${params.nodeName} failed custom validation: ${params.rawDetails}`;
+                }
+                return `${params.nodeName} rejected the value for ${params.inputName}.`;
+            case 'exception_during_inner_validation':
+                if (params.rawDetails) {
+                    return `${params.nodeName} couldn't validate ${params.inputName}: ${params.rawDetails}`;
+                }
+                return `${params.nodeName} couldn't validate ${params.inputName}.`;
+            case 'exception_during_validation':
+                if (params.rawDetails) {
+                    return `${params.nodeName} failed during validation: ${params.rawDetails}`;
+                }
+                return `${params.nodeName} failed during validation.`;
+            case 'dependency_cycle':
+                if (params.rawDetails) {
+                    return `${params.nodeName} is part of a circular connection: ${this.formatDependencyCycleDetails(params.rawDetails)}`;
+                }
+                return `${params.nodeName} is part of a circular connection.`;
+            case 'image_not_loaded':
+                return `The image for ${params.nodeName} couldn't be loaded. Try adding it again.`;
+            case 'unknown_validation_error':
+            default:
+                if (params.rawDetails) {
+                    return `${params.nodeName} returned an unrecognized validation error (${params.errorType}): ${params.rawDetails}`;
+                }
+                return `${params.nodeName} returned an unrecognized validation error: ${params.errorType}`;
+        }
+    }
+
+    resolveValidationCatalogToastMessage(error, catalogId, params, displayDetails) {
+        if ([
+            'return_type_mismatch',
+            'invalid_input_type',
+            'value_smaller_than_min',
+            'value_bigger_than_max',
+            'value_not_in_list',
+            'custom_validation_failed',
+            'exception_during_inner_validation',
+            'exception_during_validation',
+        ].includes(catalogId)) {
+            return displayDetails;
+        }
+
+        switch (catalogId) {
+            case 'missing_connection':
+                return `${params.nodeName} is missing a required input: ${params.inputName}`;
+            case 'bad_linked_input':
+                return `${params.nodeName} has an invalid connection for ${params.inputName}.`;
+            case 'dependency_cycle':
+                return `${params.nodeName} is part of a circular connection.`;
+            case 'image_not_loaded':
+                return `The image for ${params.nodeName} couldn't be loaded. Try adding it again.`;
+            case 'unknown_validation_error':
+                return `${params.nodeName} returned an unrecognized validation error.`;
+            default:
+                return displayDetails;
+        }
+    }
+
+    getValidationCatalogParams(error, nodeName, inputName, rawDetails, errorType) {
+        const params = {
+            nodeName,
+            inputName,
+            errorType: errorType || 'unknown',
+            rawDetails: rawDetails || '',
+        };
+
+        const receivedValue = this.formatValidationCatalogValue(error.extra_info?.received_value);
+        const receivedType = this.formatValidationCatalogValue(error.extra_info?.received_type);
+        const expectedType = this.getValidationInputConfigType(error);
+        const minValue = this.getValidationInputConfigValue(error, 'min');
+        const maxValue = this.getValidationInputConfigValue(error, 'max');
+
+        if (receivedValue !== undefined) params.receivedValue = receivedValue;
+        if (receivedType !== undefined) params.receivedType = receivedType;
+        if (expectedType !== undefined) params.expectedType = expectedType;
+        if (minValue !== undefined) params.minValue = minValue;
+        if (maxValue !== undefined) params.maxValue = maxValue;
+
+        return params;
+    }
+
+    normalizeValidationCatalogNodeName(nodeName) {
+        return typeof nodeName === 'string' && nodeName.trim()
+            ? nodeName.trim()
+            : 'This node';
+    }
+
+    getValidationCatalogInputName(error) {
+        const inputName = error?.extra_info?.input_name;
+        return typeof inputName === 'string' && inputName.trim()
+            ? inputName.trim()
+            : 'unknown input';
+    }
+
+    getValidationCatalogRawDetails(error) {
+        const parts = [
+            typeof error?.message === 'string' ? error.message : '',
+            typeof error?.details === 'string' ? error.details : '',
+        ].filter(Boolean);
+        return parts.join('\n').trim();
+    }
+
+    getValidationInputConfigType(error) {
+        const inputConfig = error?.extra_info?.input_config;
+        if (!Array.isArray(inputConfig)) return undefined;
+        return this.formatValidationCatalogValue(inputConfig[0]);
+    }
+
+    getValidationInputConfigValue(error, key) {
+        const inputConfig = error?.extra_info?.input_config;
+        if (!Array.isArray(inputConfig)) return undefined;
+        const config = inputConfig[1];
+        if (!config || typeof config !== 'object') return undefined;
+        return this.formatValidationCatalogValue(config[key]);
+    }
+
+    formatValidationCatalogValue(value) {
+        if (value === undefined || value === null) return undefined;
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return undefined;
+        }
+    }
+
+    formatDependencyCycleDetails(details) {
+        return String(details || '').replace(/\s*->\s*/g, ' to ');
+    }
+
+    isImageNotLoadedValidationError(error, rawDetails) {
+        return error?.type === 'custom_validation_failed'
+            && /invalid image file|\[errno 21\].*is a directory/i.test(rawDetails || '');
     }
 
     getComfyGraph() {
@@ -1012,12 +1351,13 @@ export class DoctorUI {
         errorContext.style.display = 'block';
 
         // Extract suggestion (remove prefix if present)
-        let suggestion = data.suggestion
+        const validationDisplaySummary = data.execution_context?.validation_display_summary || null;
+        let suggestion = validationDisplaySummary || (data.suggestion
             ? data.suggestion.replace("💡 SUGGESTION: ", "").trim()
-            : null;
+            : null);
 
         // Extract only the actionable part (last sentence after final period)
-        if (suggestion) {
+        if (suggestion && !validationDisplaySummary) {
             const sentences = suggestion.split('. ');
             if (sentences.length > 1) {
                 // Take the last sentence (the actionable advice)

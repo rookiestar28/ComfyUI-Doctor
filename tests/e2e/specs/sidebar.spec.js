@@ -530,14 +530,149 @@ test.describe('Doctor Chat Interface', () => {
     expect(capturedData.execution_context.source).toBe("extensionManager.lastNodeErrors");
     expect(capturedData.last_error).toContain("required_input_missing");
     expect(capturedData.last_error).toContain('input "clip"');
+    expect(capturedData.execution_context.validation_catalog_errors[0]).toMatchObject({
+      catalog_id: "missing_connection",
+      display_title: "Missing connection",
+      display_message: "Required input slots have no connection feeding them.",
+      display_item_label: "KSampler - clip",
+    });
+    expect(capturedData.execution_context.validation_catalog_groups[0]).toMatchObject({
+      catalog_id: "missing_connection",
+      display_title: "Missing connection",
+      display_message: "Required input slots have no connection feeding them.",
+      count: 1,
+    });
 
     await page.click('.doctor-tab-button[data-tab-id="chat"]');
     const errorContext = page.locator('#doctor-error-context');
     await expect(errorContext).toBeVisible({ timeout: 5000 });
     await expect(errorContext).toContainText("KSampler");
-    await expect(errorContext).toContainText("required_input_missing");
+    await expect(errorContext).toContainText("Missing connection");
+    await expect(errorContext).toContainText("Required input slots have no connection feeding them.");
 
     const errorContextHtml = await errorContext.innerHTML();
+    expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
+  });
+
+  test('should resolve known validation errors to catalog-style copy and grouping metadata', async ({ page }) => {
+    await page.evaluate(() => {
+      window.app.rootGraph._nodes = [
+        { id: 46, type: 'KSampler', title: 'Sampler', pos: [120, 80], size: [180, 80] }
+      ];
+      window.app.extensionManager.lastNodeErrors = {
+        "46": {
+          errors: [
+            {
+              type: "required_input_missing",
+              message: "Required input is missing",
+              details: "model",
+              extra_info: { input_name: "model" }
+            },
+            {
+              type: "value_not_in_list",
+              message: "Value not in list",
+              details: "scheduler",
+              extra_info: { input_name: "scheduler", received_value: "ddim" }
+            },
+            {
+              type: "return_type_mismatch",
+              message: "Return type mismatch",
+              details: "images, received_type(LATENT) mismatch input_type(IMAGE)",
+              extra_info: {
+                input_name: "images",
+                input_config: ["IMAGE", {}],
+                received_type: "LATENT"
+              }
+            },
+            {
+              type: "invalid_input_type",
+              message: "Invalid input type",
+              details: "steps",
+              extra_info: {
+                input_name: "steps",
+                input_config: ["INT", {}],
+                received_value: "abc"
+              }
+            }
+          ],
+          class_type: "KSampler",
+          dependent_outputs: []
+        }
+      };
+
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-r37-known" } });
+    });
+
+    await page.waitForTimeout(150);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    const catalogErrors = capturedData.execution_context.validation_catalog_errors;
+    const catalogGroups = capturedData.execution_context.validation_catalog_groups;
+
+    expect(catalogErrors.map((error) => error.catalog_id)).toEqual([
+      "missing_connection",
+      "value_not_in_list",
+      "return_type_mismatch",
+      "invalid_input_type",
+    ]);
+    expect(catalogGroups.map((group) => group.catalog_id)).toEqual([
+      "missing_connection",
+      "value_not_in_list",
+      "return_type_mismatch",
+      "invalid_input_type",
+    ]);
+    expect(catalogErrors[1].display_details).toBe("The value ddim for KSampler's scheduler is not available.");
+    expect(catalogErrors[2].display_details).toBe("KSampler's images input expects IMAGE, but the connected output is LATENT.");
+    expect(catalogErrors[3].display_details).toBe("The value abc for KSampler's steps couldn't be converted to INT.");
+    expect(capturedData.execution_context.validation_display_summary).toContain("Missing connection");
+    expect(capturedData.execution_context.validation_display_summary).toContain("Invalid input");
+  });
+
+  test('should use safe catalog fallback for unknown validation errors', async ({ page }) => {
+    await page.evaluate(() => {
+      window.app.rootGraph._nodes = [
+        { id: 47, type: 'CustomNode', title: 'CustomNode', pos: [120, 80], size: [180, 80] }
+      ];
+      window.app.extensionManager.lastNodeErrors = {
+        "47": {
+          errors: [
+            {
+              type: "vendor_specific_failure",
+              message: "Vendor validator failed <script>alert(1)</script>",
+              details: "unsafe <img src=x onerror=alert(1)> detail",
+              extra_info: { input_name: "custom_input" }
+            }
+          ],
+          class_type: "CustomNode",
+          dependent_outputs: []
+        }
+      };
+
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-r37-unknown" } });
+    });
+
+    await page.waitForTimeout(150);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    expect(capturedData.node_context.node_id).toBe("47");
+    expect(capturedData.node_context.node_class).toBe("CustomNode");
+    expect(capturedData.execution_context.validation_catalog_errors[0]).toMatchObject({
+      catalog_id: "unknown_validation_error",
+      display_title: "Validation failed",
+      display_message: "A node returned a validation error ComfyUI does not recognize.",
+      display_item_label: "CustomNode",
+    });
+    expect(capturedData.execution_context.validation_catalog_errors[0].display_details)
+      .toContain("CustomNode returned an unrecognized validation error (vendor_specific_failure)");
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    const errorContext = page.locator('#doctor-error-context');
+    await expect(errorContext).toBeVisible({ timeout: 5000 });
+    await expect(errorContext).toContainText("Validation failed");
+    await expect(errorContext).toContainText("ComfyUI does not recognize");
+
+    const errorContextHtml = await errorContext.innerHTML();
+    expect(errorContextHtml).not.toContain("<script>alert(1)</script>");
     expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
   });
 
