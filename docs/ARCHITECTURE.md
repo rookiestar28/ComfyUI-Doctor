@@ -34,7 +34,7 @@ The backend is organized around a small entry point and focused service modules:
 | LLM | `llm_client.py`, `session_manager.py`, `services/llm_provider_adapters.py`, `services/llm/` | Provider requests, retry, proxy policy, rate/concurrency limits |
 | Security | `security.py`, `outbound.py`, `sanitizer.py`, `services/security/` | SSRF checks, outbound sanitization, admin guard, error envelopes |
 | Storage | `services/doctor_paths.py`, `logger.py`, `history_store.py`, `services/secret_store.py` | Canonical data paths, logs, history, encrypted credential storage |
-| Diagnostics | `services/diagnostics/`, `services/intent/` | Workflow, dependency, model asset, privacy, performance, and signature-pack checks |
+| Diagnostics | `services/diagnostics/`, `services/intent/` | Workflow, dependency, current host model asset folders/loaders, privacy, performance, and signature-pack checks |
 | Community | `services/community_feedback.py`, `pipeline/plugins/` | Feedback preview/submission and scan-only plugin trust reporting |
 | Telemetry | `telemetry.py`, `web/doctor_telemetry.js` | Local-only opt-in event buffer and UI controls |
 
@@ -55,6 +55,7 @@ The public API groups are:
 - resumable jobs and provider capability status
 
 Write-sensitive routes use the Doctor admin guard. The API error shape is centralized through `services/api_response.py`, and the public contract is captured in `docs/openapi.json`.
+Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts may also expose `/api/doctor/...` aliases through host route duplication, but that global alias behavior belongs to the host.
 
 ## Data Flows
 
@@ -89,6 +90,8 @@ Write-sensitive routes use the Doctor admin guard. The API error shape is centra
 3. Registered checks inspect workflow lint, dependencies, model assets, privacy/security, runtime performance, and signature packs.
 4. Reports are saved by the diagnostics store and exposed through report/history endpoints.
 
+Model asset checks track current ComfyUI first-party folder families such as diffusion models, text encoders, CLIP vision, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, and optical flow while retaining legacy folder fallbacks where needed.
+
 ### Telemetry
 
 Telemetry is local-only and disabled by default. When enabled, accepted events are validated against an allowlist and written to the local telemetry buffer. The browser UI can view, export, clear, and toggle telemetry through Doctor endpoints. The integration and stress test lanes use the Playwright harness backend for deterministic telemetry endpoint behavior.
@@ -108,6 +111,7 @@ ComfyUI loads frontend assets from `web/`.
 | Resilience | `web/preact-loader.js`, `web/island_registry.js`, `web/ErrorBoundary.js`, `web/global_error_handler.js` | Local Preact loading, island fallback, error boundaries |
 
 Preact islands improve the Chat and Statistics surfaces, but each island has a vanilla fallback so the sidebar remains usable if the island loader fails.
+Validation-error display is normalized in the frontend so known prompt-validation failures use stable local catalog text and grouping metadata, while unknown validation types fall back safely without breaking runtime error reporting.
 
 ## Security and Storage Boundaries
 
@@ -144,5 +148,6 @@ Additional focused lanes:
 
 - Keep package imports compatible with ComfyUI custom-node loading.
 - Keep frontend registration compatible with current and deprecated host sidebar APIs where support exists.
+- Keep host compatibility checks aligned with prompt queue source metadata, execution event payloads, model asset folder names, and frontend queue source attribution.
 - Keep public route changes reflected in `docs/openapi.json`.
 - Keep local harness tests deterministic; live backend tests must be explicit opt-in.

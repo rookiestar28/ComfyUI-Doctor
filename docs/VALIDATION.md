@@ -54,6 +54,7 @@ python scripts/check_host_compatibility.py
 ```
 
 This lane checks the host API surfaces Doctor currently depends on.
+Current checks cover prompt queue source metadata, frontend queue source attribution, execution event payload shape, output asset enrichment tolerance, host package/version anchors, and model asset folder names.
 
 ## Supply-Chain Check
 

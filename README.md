@@ -14,6 +14,16 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Host API alignment, model diagnostics, and validation UX refreshed</strong></summary>
+
+- Refreshed host compatibility checks for current prompt queue metadata, execution event payloads, model asset folders, and frontend queue source attribution.
+- Expanded model asset diagnostics to recognize current ComfyUI first-party model folders and loader families while keeping legacy folder fallbacks.
+- Improved validation-error display so known prompt-validation failures use stable local catalog copy and grouping, with safe fallback for unknown host errors and duplicate suppression across validation/runtime reports.
+- Clarified canonical `/doctor/...` routes, current host-provided `/api/doctor/...` aliases, and future-safe prompt usage-source metadata policy.
+
+</details>
+
+<details>
 <summary><strong>Architecture, API contract, contribution, and security-audit docs added</strong></summary>
 
 - Added a public architecture guide that maps ComfyUI startup, backend service domains, frontend modules, security/storage boundaries, telemetry, diagnostics, and validation lanes.
@@ -419,12 +429,13 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Real-time ComfyUI console/error capture from startup.
 - Built-in suggestions from 58 JSON-based error patterns, including 22 core patterns and 36 community-extension patterns.
 - Validated node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
+- Stable local display summaries for known prompt-validation errors, with grouping metadata and safe fallback copy for unknown validation types.
 - Doctor sidebar with Chat, Statistics, and Settings tabs.
 - Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds.
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
-- Local diagnostics, statistics, plugin trust report, telemetry controls, and community feedback preview/submit tools.
+- Local diagnostics for workflow linting, current ComfyUI model asset folders/loaders, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
 
@@ -461,6 +472,7 @@ Restart ComfyUI after cloning. Doctor should print its startup diagnostics and r
 ### Automatic Diagnostics
 
 After installation, Doctor passively records ComfyUI runtime output, detects tracebacks, matches known error patterns, and shows the latest diagnosis in the sidebar and optional right-side report panel.
+Prompt-validation failures from ComfyUI are normalized into local catalog summaries when the host reports structured validation details; unknown validation types use safe fallback text.
 When optional LLM analysis is used, Doctor builds prompt context from the same structured pipeline that handles sanitization, node context, execution logs, workflow pruning, and system information.
 
 ### Doctor Sidebar
@@ -494,7 +506,7 @@ Recommended defaults:
 - [User Guide](docs/USER_GUIDE.md): UI walkthrough, diagnostics, privacy modes, LLM setup, and feedback flow.
 - [Architecture](docs/ARCHITECTURE.md): host startup, backend/frontend boundaries, data flows, security/storage boundaries, and test lanes.
 - [Configuration and Security](docs/CONFIGURATION_SECURITY.md): environment variables, admin guard behavior, credential storage, outbound safety, telemetry, and CSP notes.
-- [API Reference](docs/API_REFERENCE.md): public Doctor and debugger endpoints.
+- [API Reference](docs/API_REFERENCE.md): public Doctor and debugger endpoints, route alias behavior, and prompt usage-source policy.
 - [OpenAPI Contract](docs/openapi.json): machine-readable API contract.
 - [Validation Guide](docs/VALIDATION.md): local full-gate commands and optional focused, integration, stress, compatibility, coverage, and audit lanes.
 - [Security Audit](docs/SECURITY_AUDIT.md): quarterly audit cadence, report template generation, manual checks, optional external scanners, and evidence handling.
@@ -527,7 +539,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. Host compatibility checks also track current prompt queue metadata, execution event payloads, model asset folders, and frontend queue source attribution. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 

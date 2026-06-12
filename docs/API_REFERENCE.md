@@ -111,3 +111,5 @@ LLM failure responses use the standard JSON error envelope. The chat streaming p
 | `POST` | `/doctor/health_ack` | Acknowledge, ignore, or resolve diagnostics issues. |
 
 Diagnostics reports are produced by concrete local checks such as workflow linting, dependency checks, model asset checks, privacy/security checks, runtime performance checks, and signature-pack checks.
+
+Model asset diagnostics recognize current ComfyUI first-party folder families such as diffusion models, text encoders, CLIP vision, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, and optical flow. Legacy folder aliases remain supported where Doctor can map them unambiguously.

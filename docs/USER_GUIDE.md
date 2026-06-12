@@ -12,9 +12,11 @@ Captured context can include:
 - Matched JSON pattern ID and localized suggestion.
 - Recent ComfyUI execution/progress event context.
 - Validated node ID, node name, node class, subgraph lineage, and custom-node path when available.
+- Prompt-validation details normalized into safe local display summaries when ComfyUI reports structured validation errors.
 - System context useful for debugging, such as Python, PyTorch, CUDA, and package information.
 
 When optional LLM analysis is enabled, Doctor builds the LLM prompt context from the same analysis pipeline. That structured context can include the sanitized traceback, failed-node details, recent execution logs, a pruned workflow subset, and canonical system information.
+Known host validation failures use Doctor's local catalog copy and grouping so repeated validation/runtime reports are easier to scan. Unknown validation types fall back to generic safe copy while preserving enough detail for local debugging.
 
 ## Doctor Sidebar
 
@@ -113,6 +115,7 @@ Error messages, node names, model names, and workflow structure may remain becau
 Diagnostics can run without an LLM call. Built-in JSON signature packs provide deterministic checks for common workflow and environment problems, including:
 
 - Model path anomalies.
+- Current ComfyUI model asset folder and loader expectations, including diffusion models, text encoders, CLIP vision, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, and optical flow.
 - Missing assets or placeholder values.
 - Node configuration anti-patterns.
 - Environment mismatch hints.
