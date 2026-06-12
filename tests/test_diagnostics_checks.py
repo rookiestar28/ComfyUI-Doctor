@@ -189,9 +189,23 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
     def test_model_assets_discovers_current_host_folders(self):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
+            current_categories = {
+                "diffusion_models",
+                "text_encoders",
+                "clip_vision",
+                "style_models",
+                "photomaker",
+                "model_patches",
+                "audio_encoders",
+                "background_removal",
+                "frame_interpolation",
+                "geometry_estimation",
+                "optical_flow",
+                "detection",
+            }
 
             def get_folder_paths(folder_name):
-                if folder_name in {"geometry_estimation", "detection"}:
+                if folder_name in current_categories:
                     return [str(root / folder_name)]
                 return []
 
@@ -206,6 +220,70 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(paths["geometry_estimation"], [root / "geometry_estimation"])
             self.assertEqual(paths["detection"], [root / "detection"])
+            self.assertEqual(paths["diffusion_models"], [root / "diffusion_models"])
+            self.assertEqual(paths["text_encoders"], [root / "text_encoders"])
+            self.assertEqual(paths["clip_vision"], [root / "clip_vision"])
+            self.assertEqual(paths["style_models"], [root / "style_models"])
+            self.assertEqual(paths["photomaker"], [root / "photomaker"])
+            self.assertEqual(paths["model_patches"], [root / "model_patches"])
+            self.assertEqual(paths["audio_encoders"], [root / "audio_encoders"])
+            self.assertEqual(paths["background_removal"], [root / "background_removal"])
+            self.assertEqual(paths["frame_interpolation"], [root / "frame_interpolation"])
+            self.assertEqual(paths["optical_flow"], [root / "optical_flow"])
+
+    async def test_model_assets_current_loader_references_search_matching_host_folders(self):
+        cases = [
+            ("UNETLoader", "wan2_2_high_noise.safetensors", "diffusion_models"),
+            ("CLIPLoader", "t5xxl_fp16.safetensors", "text_encoders"),
+            ("DualCLIPLoader", "clip_l.safetensors", "text_encoders"),
+            ("TripleCLIPLoader", "clip_g.safetensors", "text_encoders"),
+            ("CLIPVisionLoader", "clip_vision_h.safetensors", "clip_vision"),
+            ("StyleModelLoader", "style_model.safetensors", "style_models"),
+            ("PhotoMakerLoader", "photomaker-v1.bin", "photomaker"),
+            ("LoadBackgroundRemovalModel", "birefnet.safetensors", "background_removal"),
+            ("FrameInterpolationModelLoader", "film_net_fp32.safetensors", "frame_interpolation"),
+            ("OpticalFlowLoader", "raft_large.pth", "optical_flow"),
+            ("AudioEncoderLoader", "whisper_audio_encoder.safetensors", "audio_encoders"),
+            ("ModelPatchLoader", "wan_multitalk_patch.safetensors", "model_patches"),
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            paths = {
+                "checkpoints": [],
+                "vae": [],
+                "loras": [],
+                "controlnet": [],
+                "text_encoders": [],
+                "clip_vision": [],
+                "style_models": [],
+                "diffusion_models": [],
+                "photomaker": [],
+                "model_patches": [],
+                "audio_encoders": [],
+                "background_removal": [],
+                "frame_interpolation": [],
+                "geometry_estimation": [],
+                "optical_flow": [],
+                "detection": [],
+                "input": [],
+                "output": [],
+            }
+
+            for _node_type, filename, category in cases:
+                category_dir = root / "models" / category
+                category_dir.mkdir(parents=True, exist_ok=True)
+                (category_dir / filename).write_bytes(b"x")
+                paths[category] = [category_dir]
+
+            with patch("services.diagnostics.checks.model_assets._get_comfy_model_paths", return_value=paths):
+                for index, (node_type, filename, _category) in enumerate(cases, start=100):
+                    with self.subTest(node_type=node_type):
+                        workflow = {"nodes": [{"id": index, "type": node_type, "widgets_values": [filename]}]}
+                        request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+                        issues = await model_assets.check_model_assets(workflow, request)
+
+                    self.assertEqual(issues, [])
 
     async def test_model_assets_geometry_reference_searches_geometry_folder(self):
         with tempfile.TemporaryDirectory() as temp_root:
@@ -289,13 +367,51 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(temp_root, evidence_text)
             self.assertNotIn("private", evidence_text)
 
+    async def test_model_assets_old_host_does_not_fallback_current_loader_to_checkpoints(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            checkpoint_dir = root / "private" / "models" / "checkpoints"
+            checkpoint_dir.mkdir(parents=True)
+            (checkpoint_dir / "raft_large.pth").write_bytes(b"x")
+
+            with patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value={
+                    "checkpoints": [checkpoint_dir],
+                    "optical_flow": [],
+                    "input": [],
+                    "output": [],
+                },
+            ):
+                workflow = {"nodes": [{"id": 13, "type": "OpticalFlowLoader", "widgets_values": ["raft_large.pth"]}]}
+                request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            self.assertIn("Searched in: optical_flow folders", issues[0].evidence)
+            evidence_text = "\n".join([issues[0].summary, *issues[0].evidence])
+            self.assertIn("raft_large.pth", evidence_text)
+            self.assertNotIn(temp_root, evidence_text)
+            self.assertNotIn("private", evidence_text)
+
     def test_model_assets_preserves_existing_category_detection(self):
         cases = [
             ("CheckpointLoaderSimple", "dreamshaper.safetensors", "checkpoints"),
             ("VAELoader", "anime_vae.safetensors", "vae"),
             ("LoraLoader", "detail_lora.safetensors", "loras"),
             ("ControlNetLoader", "pose_controlnet.safetensors", "controlnet"),
-            ("CLIPLoader", "clip_l.safetensors", "clip"),
+            ("CLIPLoader", "clip_l.safetensors", "text_encoders"),
+            ("DualCLIPLoader", "clip_l.safetensors", "text_encoders"),
+            ("TripleCLIPLoader", "clip_g.safetensors", "text_encoders"),
+            ("UNETLoader", "flux1-dev.safetensors", "diffusion_models"),
+            ("CLIPVisionLoader", "clip_vision_h.safetensors", "clip_vision"),
+            ("StyleModelLoader", "style_model.safetensors", "style_models"),
+            ("PhotoMakerLoader", "photomaker-v1.bin", "photomaker"),
+            ("LoadBackgroundRemovalModel", "birefnet.safetensors", "background_removal"),
+            ("FrameInterpolationModelLoader", "film_net_fp32.safetensors", "frame_interpolation"),
+            ("OpticalFlowLoader", "raft_large.pth", "optical_flow"),
+            ("AudioEncoderLoader", "whisper_audio_encoder.safetensors", "audio_encoders"),
+            ("ModelPatchLoader", "wan_multitalk_patch.safetensors", "model_patches"),
             ("UpscaleModelLoader", "realesrgan.safetensors", "upscale_models"),
             ("EmbeddingLoader", "bad-hands.pt", "embeddings"),
             ("LoadImage", "example.png", "input"),

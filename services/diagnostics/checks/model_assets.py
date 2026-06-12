@@ -36,6 +36,9 @@ FILE_LOADING_NODE_TYPES: Set[str] = {
     "ControlNetLoader", "StyleModelLoader", "CLIPVisionLoader",
     "UpscaleModelLoader", "GLIGENLoader", "HypernetworkLoader",
     "UNETLoader", "DualCLIPLoader", "TripleCLIPLoader",
+    "PhotoMakerLoader", "LoadBackgroundRemovalModel",
+    "FrameInterpolationModelLoader", "OpticalFlowLoader",
+    "AudioEncoderLoader", "ModelPatchLoader",
     "LoadMoGeModel", "LoadMediaPipeFaceLandmarker",
     # Image loaders
     "LoadImage", "LoadImageMask", "LoadLatent",
@@ -85,9 +88,19 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
         "loras": [],
         "controlnet": [],
         "clip": [],
+        "text_encoders": [],
+        "clip_vision": [],
+        "style_models": [],
+        "diffusion_models": [],
+        "photomaker": [],
+        "model_patches": [],
+        "audio_encoders": [],
+        "background_removal": [],
+        "frame_interpolation": [],
         "upscale_models": [],
         "embeddings": [],
         "geometry_estimation": [],
+        "optical_flow": [],
         "detection": [],
         "input": [],
         "output": [],
@@ -104,9 +117,19 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
             "loras": "loras",
             "controlnet": "controlnet",
             "clip": "clip",
+            "text_encoders": "text_encoders",
+            "clip_vision": "clip_vision",
+            "style_models": "style_models",
+            "diffusion_models": "diffusion_models",
+            "photomaker": "photomaker",
+            "model_patches": "model_patches",
+            "audio_encoders": "audio_encoders",
+            "background_removal": "background_removal",
+            "frame_interpolation": "frame_interpolation",
             "upscale_models": "upscale_models",
             "embeddings": "embeddings",
             "geometry_estimation": "geometry_estimation",
+            "optical_flow": "optical_flow",
             "detection": "detection",
         }
 
@@ -116,6 +139,9 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
                 paths[key] = [Path(p) for p in folder_list if p]
             except Exception:
                 pass
+
+        if not paths["text_encoders"] and paths["clip"]:
+            paths["text_encoders"] = list(paths["clip"])
 
         # Input/output folders
         try:
@@ -332,7 +358,7 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
     lower_type = node_type.lower()
     lower_file = filename.lower()
 
-    if "checkpoint" in lower_type or "ckpt" in lower_file:
+    if "checkpoint" in lower_type:
         return "checkpoints"
     if "vae" in lower_type:
         return "vae"
@@ -340,8 +366,26 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
         return "loras"
     if "controlnet" in lower_type:
         return "controlnet"
-    if "clip" in lower_type:
-        return "clip"
+    if "clipvision" in lower_type or "clip_vision" in lower_type or "clip-vision" in lower_type:
+        return "clip_vision"
+    if "stylemodel" in lower_type or "style_model" in lower_type or "style-model" in lower_type:
+        return "style_models"
+    if "unet" in lower_type or "diffusion" in lower_type:
+        return "diffusion_models"
+    if "photomaker" in lower_type:
+        return "photomaker"
+    if "backgroundremoval" in lower_type or "background_removal" in lower_type:
+        return "background_removal"
+    if "frameinterpolation" in lower_type or "frame_interpolation" in lower_type:
+        return "frame_interpolation"
+    if "opticalflow" in lower_type or "optical_flow" in lower_type:
+        return "optical_flow"
+    if "audioencoder" in lower_type or "audio_encoder" in lower_type:
+        return "audio_encoders"
+    if "modelpatch" in lower_type or "model_patch" in lower_type:
+        return "model_patches"
+    if "clip" in lower_type or "textencoder" in lower_type or "text_encoder" in lower_type:
+        return "text_encoders"
     if "upscale" in lower_type:
         return "upscale_models"
     if "embed" in lower_type:
@@ -370,6 +414,42 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
         return "detection"
     if "loadimage" in lower_type or any(lower_file.endswith(ext) for ext in MEDIA_EXTENSIONS):
         return "input"
+    if (
+        "clip_vision" in lower_file
+        or "clip-vision" in lower_file
+        or "clipvision" in lower_file
+    ):
+        return "clip_vision"
+    if "style_model" in lower_file or "style-model" in lower_file:
+        return "style_models"
+    if "photomaker" in lower_file:
+        return "photomaker"
+    if "birefnet" in lower_file or "background_removal" in lower_file:
+        return "background_removal"
+    if "frame_interpolation" in lower_file or "film" in lower_file:
+        return "frame_interpolation"
+    if "optical_flow" in lower_file or "raft" in lower_file:
+        return "optical_flow"
+    if "audio_encoder" in lower_file:
+        return "audio_encoders"
+    if "model_patch" in lower_file:
+        return "model_patches"
+    if (
+        "wan2_2_high_noise" in lower_file
+        or "wan2_2_low_noise" in lower_file
+        or "diffusion" in lower_file
+        or "unet" in lower_file
+    ):
+        return "diffusion_models"
+    if (
+        "clip_" in lower_file
+        or "t5xxl" in lower_file
+        or "text_encoder" in lower_file
+        or "text-encoder" in lower_file
+    ):
+        return "text_encoders"
+    if "ckpt" in lower_file:
+        return "checkpoints"
 
     # Default to checkpoints for unknown model loaders
     return "checkpoints"
