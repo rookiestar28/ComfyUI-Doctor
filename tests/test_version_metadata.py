@@ -17,12 +17,20 @@ def _read_json(path: str) -> dict:
     return json.loads((PROJECT_ROOT / path).read_text(encoding="utf-8"))
 
 
-def test_frontend_package_version_matches_pyproject():
+def _assert_semver(version: str, source: str) -> None:
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"{source} version must use MAJOR.MINOR.PATCH"
+
+
+def test_release_version_metadata_matches_pyproject():
     canonical_version = _read_pyproject_version()
     package_json = _read_json("package.json")
     package_lock = _read_json("package-lock.json")
 
+    _assert_semver(canonical_version, "pyproject.toml")
+    _assert_semver(package_json["version"], "package.json")
+
     assert package_json["version"] == canonical_version
+    assert package_json.get("private") is True
     assert package_lock["version"] == canonical_version
     assert package_lock["packages"][""]["version"] == canonical_version
 
