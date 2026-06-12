@@ -4,7 +4,7 @@
     "title": "ComfyUI-Doctor API",
     "version": "1.8.4",
     "summary": "HTTP API contract for the ComfyUI-Doctor custom node.",
-    "description": "ComfyUI-Doctor registers these routes on the ComfyUI PromptServer. Write-sensitive endpoints use the Doctor admin guard; shared servers should configure DOCTOR_ADMIN_TOKEN and DOCTOR_REQUIRE_ADMIN_TOKEN=1."
+    "description": "ComfyUI-Doctor registers canonical /doctor/... and /debugger/... routes on the ComfyUI PromptServer. Current ComfyUI route duplication may expose /api/doctor/... as a host-provided alias for Doctor routes. Doctor does not currently queue host prompts directly; future prompt queueing should use non-secret usage-source identifier comfyui-doctor and must not include secrets, raw prompts, private paths, cookies, or credentials. Write-sensitive endpoints use the Doctor admin guard; shared servers should configure DOCTOR_ADMIN_TOKEN and DOCTOR_REQUIRE_ADMIN_TOKEN=1."
   },
   "servers": [
     {

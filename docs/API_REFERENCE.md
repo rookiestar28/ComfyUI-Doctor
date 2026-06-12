@@ -4,6 +4,18 @@ This document lists the public ComfyUI-Doctor HTTP endpoints. Exact response pay
 
 Machine-readable contract: [`openapi.json`](openapi.json).
 
+## Route Forms and Host Aliases
+
+The canonical Doctor route form is `/doctor/...`. Current ComfyUI hosts may also expose `/api/doctor/...` as a host-provided alias where ComfyUI route duplication applies.
+
+Doctor documentation and examples use canonical `/doctor/...` paths. Clients running inside a current ComfyUI host may use `/api/doctor/...` when their integration layer expects the host API prefix, but Doctor does not own ComfyUI's global alias behavior.
+
+## Prompt Usage-Source Policy
+
+Doctor does not currently queue host prompts directly. If a future Doctor feature queues a host prompt, it should identify itself only with a non-secret source string such as `comfyui-doctor`.
+
+Usage-source metadata must not include secrets, raw prompts, private paths, cookies, credentials, tokens, API keys, private URLs, or equivalent sensitive material.
+
 ## Admin-Gated Writes
 
 Write-sensitive endpoints require admin authorization unless desktop loopback convenience mode applies. For shared servers, configure `DOCTOR_ADMIN_TOKEN` and `DOCTOR_REQUIRE_ADMIN_TOKEN=1`.
