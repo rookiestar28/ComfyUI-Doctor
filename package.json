@@ -28,11 +28,11 @@
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "acorn": "^8.15.0",
-    "vitest": "^4.1.0"
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "esbuild": "0.28.1",
-    "vite": "6.4.2"
+    "vite": "6.4.3"
   },
   "engines": {
     "node": ">=18.0.0 <26.0.0"
