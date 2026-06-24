@@ -16,7 +16,7 @@ Every implementation plan must include the **full test validation procedure** in
 ## Prerequisites
 
 - Python 3.10+ (CI uses 3.10/3.11)
-- Node.js 18+ (CI uses 20)
+- Node.js >=18 <26 (CI currently uses Node 18 for focused E2E and Node 20 for security/audit lanes)
 - `pre-commit` installed: `python -m pip install pre-commit`
 - Backend test deps available in the same interpreter (`numpy`, `pillow`, `aiohttp`)
 - Frontend deps installed: `npm install`
@@ -33,9 +33,9 @@ Every implementation plan must include the **full test validation procedure** in
   - Activate (bash): `source .venv-wsl/bin/activate` (or `.venv/bin/activate`)
   - Activate (pwsh): `.\.venv\Scripts\Activate.ps1`
   - If tests fail due to missing deps in CI parity, rerun in the project venv used by scripts and record that in the implementation record.
-- **Node version must be 18+** before E2E:
+- **Node version must be >=18 <26** before E2E:
   - Verify: `node -v`
-  - If mismatch in WSL, use the Node 18 path specified below.
+  - If mismatch in WSL, use the Node 18 path specified below. Node 26+ is blocked until validated against Doctor's Playwright harness.
 
 ## Environment Parity Guardrails (CI Safety)
 
@@ -158,7 +158,7 @@ Treat local gate success as "safe to attempt push", not as proof that the remote
 
 ### Optional: One-Command Full Test Scripts (Fastest)
 
-Use these if you want a single command that runs **all required steps** (detect-secrets, pre-commit, host-like package/startup validation, unit tests, E2E). These scripts also handle the most common environment issues (Windows cache locks, Black cache, Node 18).
+Use these if you want a single command that runs **all required steps** (detect-secrets, pre-commit, host-like package/startup validation, unit tests, E2E). These scripts also handle the most common environment issues (Windows cache locks, Black cache, Node >=18 <26).
 Scripts enforce a project-local venv and will bootstrap missing test tooling (`pre-commit`, and `aiohttp` where needed for imports).
 On WSL, scripts prefer `.venv-wsl`; on Windows they use `.venv`.
 If the selected venv exists but is invalid for the current OS/interpreter, rerun via the script so it can recreate that venv.
@@ -241,10 +241,11 @@ DOCTOR_STATE_DIR="$(pwd)/doctor_state/_local_unit" python scripts/run_unittests.
 1) Frontend E2E (Playwright; CI enforces)
 
 ```bash
-# Ensure you are using Node.js 18+ (CI uses 20).
+# Ensure you are using Node.js >=18 <26.
 node -v
 
-# If you're on WSL and `node -v` is < 18, your shell may be picking up the distro Node
+# If you're on WSL and `node -v` is outside >=18 <26, your shell may be picking up
+# the distro Node or an unvalidated future Node runtime.
 # (e.g. `/usr/bin/node`) instead of your user-installed Node. If you use `nvm`, do:
 #   source ~/.nvm/nvm.sh
 #   nvm use 18.20.8
@@ -343,7 +344,7 @@ PRE_COMMIT_HOME=/tmp/pre-commit-cache pre-commit run --all-files --show-diff-on-
 **`npm test` fails before Playwright starts with a JS syntax error**
 
 - The shell is using the wrong Node runtime for `scripts/preflight-js.mjs`.
-- In WSL/non-interactive shells, run `source ~/.nvm/nvm.sh && nvm use 18`, confirm `node -v`, then rerun the E2E stage.
+- In WSL/non-interactive shells, run `source ~/.nvm/nvm.sh && nvm use 18`, confirm `node -v` is within `>=18 <26`, then rerun the E2E stage.
 
 **Host-like package/startup validation fails**
 
@@ -406,7 +407,7 @@ If all touched files are documentation/planning text only and no code, tests, sc
 - Keep the Python interpreter consistent across all commands.
 - Prefer a project-local virtual environment: `.venv` on Windows and `.venv-wsl` on WSL/Linux when the repo supports dual-OS validation.
 - Do not mix global and venv-installed `pre-commit` accidentally.
-- Node.js must be 18+ before running frontend/E2E tests.
+- Node.js must be >=18 <26 before running frontend/E2E tests.
 - On Windows, prefer repo-local `PRE_COMMIT_HOME` to avoid cache lock issues.
 - On WSL, if `python` is missing but `python3` exists, create a local shim before running Playwright or harness commands.
 - If pre-commit modifies files, review/stage/commit those changes and rerun hooks until clean.

@@ -32,8 +32,8 @@ This SOP is split for two supported environments:
 
 | Item | Version | Notes |
 |------|---------|-------|
-| Node.js | 18+ | Required by Playwright and project engines |
-| npm | 9+ | Works with Node 18 LTS |
+| Node.js | >=18 <26 | Doctor supports Node 18 through 25; Node 26+ is blocked until validated |
+| npm | 9+ | Works with supported Node LTS/current runtimes |
 | Playwright browsers | latest | Installed via `npx playwright install chromium` |
 | ComfyUI backend (optional) | latest | Only needed for `@integration` telemetry tests |
 
@@ -51,7 +51,7 @@ Notes:
     `scripts/run-playwright.mjs` auto-defaults these to `/tmp/comfyui-doctor/playwright/...`
     when it detects WSL + `/mnt/*`, so you usually don't need to set them manually.
 - If you run tests from a non-interactive shell (CI/automation/tools), `nvm` may not auto-load.
-  Run `source ~/.nvm/nvm.sh` and confirm `node -v` shows 18+ before `npm test`.
+  Run `source ~/.nvm/nvm.sh` and confirm `node -v` is within `>=18 <26` before `npm test`.
 
 ---
 
@@ -72,7 +72,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `103 passed` (default local harness run, integration and stress telemetry suites excluded).
+Expected result: `107 passed` (default local harness run, integration and stress telemetry suites excluded).
 
 ### 3.2 WSL2 (bash)
 
@@ -89,7 +89,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `103 passed` (default local harness run, integration and stress telemetry suites excluded).
+Expected result: `107 passed` (default local harness run, integration and stress telemetry suites excluded).
 
 ---
 
@@ -303,7 +303,7 @@ WSL `/mnt/*`; this manual override is only for stubborn local environments.
 
 ### Node version mismatch
 
-`npm test` runs a preflight check that requires Node 18+.
+`npm test` runs a preflight check that requires Node.js `>=18 <26`.
 
 ```bash
 source ~/.nvm/nvm.sh
@@ -314,8 +314,9 @@ node -v
 ### `npm test` fails before Playwright starts
 
 If `npm test` stops inside `scripts/preflight-js.mjs` with a JavaScript syntax
-error, your shell is not using the required Node 18+ runtime yet. Load Node 18,
-confirm `node -v`, then rerun the E2E stage.
+or Node policy error, your shell is not using a supported Node runtime yet.
+Load Node 18/20/22/24/25, confirm `node -v` is within `>=18 <26`, then rerun
+the E2E stage.
 
 ```bash
 source ~/.nvm/nvm.sh
@@ -397,7 +398,7 @@ When adding or reviewing E2E coverage, prefer assertions that prove final user-v
 
 ### Requirements
 
-- Node.js 18+
+- Node.js >=18 <26
 - npm 9+ when the repo uses npm
 - Python command available (`python` or a local shim to `python3`) when the harness serves files through Python
 - Playwright Chromium installed with `npx playwright install chromium` when Playwright is used

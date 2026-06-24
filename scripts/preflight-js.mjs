@@ -11,18 +11,46 @@
 
 import { readdir, readFile } from 'fs/promises';
 import { join, relative } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import * as acorn from 'acorn';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const WEB_DIR = join(__dirname, '..', 'web');
+export const NODE_POLICY = {
+    minMajor: 18,
+    maxMajorExclusive: 26,
+    label: 'Node.js >=18 <26',
+};
+
+export function parseNodeMajor(version) {
+    const raw = String(version || '').trim().replace(/^v/, '');
+    const [majorText] = raw.split('.');
+    const major = Number(majorText);
+    return Number.isInteger(major) ? major : null;
+}
+
+export function isSupportedNodeMajor(major) {
+    return Number.isInteger(major)
+        && major >= NODE_POLICY.minMajor
+        && major < NODE_POLICY.maxMajorExclusive;
+}
+
+export function getUnsupportedNodeVersionMessage(version) {
+    const major = parseNodeMajor(version);
+    if (!isSupportedNodeMajor(major)) {
+        return [
+            `FAIL Node.js ${version || 'unknown'} detected. This project requires ${NODE_POLICY.label}.`,
+            'Use a Doctor-supported Node runtime from Node 18 through Node 25.',
+            'Node 26+ is blocked until validated against Doctor\'s Playwright harness.',
+        ].join(' ');
+    }
+    return null;
+}
 
 function ensureSupportedNodeVersion() {
-    const [major] = process.versions.node.split('.').map(Number);
-    if (!Number.isFinite(major) || major < 18) {
-        console.error(
-            `FAIL Node.js ${process.versions.node} detected. This project requires Node.js 18+.`
-        );
+    const message = getUnsupportedNodeVersionMessage(process.versions.node);
+    if (message) {
+        console.error(message);
         process.exit(1);
     }
 }
@@ -104,7 +132,12 @@ async function main() {
     process.exit(0);
 }
 
-main().catch(err => {
-    console.error('Preflight check failed:', err);
-    process.exit(1);
-});
+const isCliEntrypoint = process.argv[1]
+    && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isCliEntrypoint) {
+    main().catch(err => {
+        console.error('Preflight check failed:', err);
+        process.exit(1);
+    });
+}

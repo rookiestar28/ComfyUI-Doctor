@@ -117,8 +117,8 @@ if (-not $SkipE2E) {
     }
 
     $NodeMajor = [int]$Matches[1]
-    if ($NodeMajor -lt 18) {
-        Fail "Node.js 18+ is required for E2E. Current: $NodeVersion"
+    if (($NodeMajor -lt 18) -or ($NodeMajor -ge 26)) {
+        Fail "Node.js >=18 <26 is required for E2E. Current: $NodeVersion. Use a Doctor-supported Node runtime from Node 18 through Node 25; Node 26+ is blocked until validated against Doctor's Playwright harness."
     }
 
     Run-Checked "npm install" { npm install }
