@@ -35,7 +35,16 @@ def _create_minimal_reference(root: Path) -> None:
         "    torch_devices = comfy.model_management.get_all_torch_devices()\n"
         "    device_entries = []\n"
         "    comfy_package_versions = FrontendManager.get_comfy_package_versions()\n"
-        "    return {'devices': device_entries, 'comfy_package_versions': comfy_package_versions}\n"
+        '    return {"devices": device_entries, "comfy_package_versions": comfy_package_versions, '
+        '"deploy_environment": get_deploy_environment()}\n'
+        "def _cancel_job_by_id(job_id):\n"
+        "    return self.prompt_queue.interrupt_if_running(job_id)\n"
+        "    classification = cancel_job(job_id, running, queued, history, interrupt, dequeue)\n"
+        "    return classification in (CANCEL_RUNNING, CANCEL_PENDING)\n"
+        '@routes.post("/api/jobs/{job_id}/cancel")\n'
+        "async def cancel_job_by_id(request):\n    pass\n"
+        '@routes.post("/api/jobs/cancel")\n'
+        "async def cancel_jobs_batch(request):\n    pass\n"
         'if first_message and data.get("type") == "feature_flags":\n'
         '    self.sockets_metadata[sid]["feature_flags"] = client_flags\n'
         "    feature_flags.get_server_features()\n"
@@ -52,7 +61,21 @@ def _create_minimal_reference(root: Path) -> None:
         '    hidden_inputs_v3[io.Hidden.comfy_usage_source] = extra_data.get("comfy_usage_source", None)\n'
         'input_data_all[x] = [extra_data.get("comfy_usage_source", None)]\n'
         "output_ui = enrich_output_with_assets(output_ui)\n"
-        '"executed" "output": output_ui\n',
+        '"executed" "output": output_ui\n'
+        "def interrupt_if_running(self, prompt_id):\n"
+        "    if self.currently_running == prompt_id:\n"
+        "        comfy.model_management.interrupt_processing()\n",
+    )
+    _write(
+        root / "ComfyUI" / "comfy_execution" / "jobs.py",
+        "CANCEL_RUNNING = 'running'\n"
+        "CANCEL_PENDING = 'pending'\n"
+        "CANCEL_TERMINAL = 'terminal'\n"
+        "CANCEL_UNKNOWN = 'unknown'\n"
+        "def classify_job_for_cancel(job_id, running, queued, history):\n"
+        "    return CANCEL_PENDING\n"
+        "def cancel_job(job_id, running, queued, history, interrupt, dequeue):\n"
+        "    return CANCEL_RUNNING\n",
     )
     _write(
         root / "ComfyUI" / "comfy_execution" / "progress.py",
@@ -81,6 +104,7 @@ def _create_minimal_reference(root: Path) -> None:
         '"supports_preview_metadata": True\n'
         '"extension": {"manager": {"supports_v4": True}}\n'
         '"node_replacements": True\n'
+        '"enable_telemetry": {"default": False}\n'
         "def get_server_features():\n    return {}\n",
     )
     _write(
@@ -124,6 +148,12 @@ def _create_minimal_reference(root: Path) -> None:
         "    }\n"
         "  }\n"
         "  return body\n"
+        "}\n"
+        "async cancelJob(jobId: string) {\n"
+        "  return this.fetchApi(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })\n"
+        "}\n"
+        "async cancelJobs(jobIds: string[]) {\n"
+        "  return this.fetchApi('/jobs/cancel', { method: 'POST', body: JSON.stringify({ job_ids: jobIds }) })\n"
         "}\n",
     )
     _write(
@@ -378,3 +408,100 @@ def test_host_compatibility_smoke_reports_missing_executed_asset_enrichment_anch
     assert len(failed) == 1
     assert failed[0].check.label == "executed output asset enrichment tolerance"
     assert "enrich_output_with_assets(output_ui)" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_system_stats_deploy_environment(tmp_path):
+    _create_minimal_reference(tmp_path)
+    server_path = tmp_path / "ComfyUI" / "server.py"
+    server_path.write_text(
+        server_path.read_text(encoding="utf-8").replace("get_deploy_environment", "get_legacy_environment"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "system_stats deploy environment"
+    assert "get_deploy_environment" in failed[0].missing_patterns
+    assert '"deploy_environment": get_deploy_environment()' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_jobs_cancel_endpoint(tmp_path):
+    _create_minimal_reference(tmp_path)
+    server_path = tmp_path / "ComfyUI" / "server.py"
+    server_path.write_text(
+        server_path.read_text(encoding="utf-8").replace("/api/jobs/{job_id}/cancel", "/api/jobs/{job_id}/stop"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "jobs namespace cancel endpoints"
+    assert '@routes.post("/api/jobs/{job_id}/cancel")' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_prompt_queue_interrupt_hook(tmp_path):
+    _create_minimal_reference(tmp_path)
+    execution_path = tmp_path / "ComfyUI" / "execution.py"
+    execution_path.write_text(
+        execution_path.read_text(encoding="utf-8").replace("def interrupt_if_running", "def legacy_interrupt"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "prompt queue running job interrupt hook"
+    assert "def interrupt_if_running" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_jobs_cancel_classification_helper(tmp_path):
+    _create_minimal_reference(tmp_path)
+    jobs_path = tmp_path / "ComfyUI" / "comfy_execution" / "jobs.py"
+    jobs_path.write_text(
+        jobs_path.read_text(encoding="utf-8").replace("CANCEL_TERMINAL", "CANCEL_DONE"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "jobs cancel classification helpers"
+    assert "CANCEL_TERMINAL" in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_enable_telemetry_feature_flag(tmp_path):
+    _create_minimal_reference(tmp_path)
+    feature_flags_path = tmp_path / "ComfyUI" / "comfy_api" / "feature_flags.py"
+    feature_flags_path.write_text(
+        feature_flags_path.read_text(encoding="utf-8").replace('"enable_telemetry":', '"legacy_telemetry":'),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "server feature flags"
+    assert '"enable_telemetry":' in failed[0].missing_patterns
+
+
+def test_host_compatibility_smoke_reports_missing_frontend_jobs_cancel_api(tmp_path):
+    _create_minimal_reference(tmp_path)
+    api_path = tmp_path / "ComfyUI_frontend" / "src" / "scripts" / "api.ts"
+    api_path.write_text(
+        api_path.read_text(encoding="utf-8").replace("async cancelJobs", "async stopJobs"),
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+    failed = [result for result in results if not result.ok]
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "frontend jobs cancel API"
+    assert "async cancelJobs(" in failed[0].missing_patterns

@@ -92,6 +92,28 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     SurfaceCheck(
         repo="ComfyUI",
         file="server.py",
+        label="system_stats deploy environment",
+        required_patterns=(
+            "get_deploy_environment",
+            '"deploy_environment": get_deploy_environment()',
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="server.py",
+        label="jobs namespace cancel endpoints",
+        required_patterns=(
+            'cancel_job(',
+            "CANCEL_RUNNING",
+            "CANCEL_PENDING",
+            "interrupt_if_running",
+            '@routes.post("/api/jobs/{job_id}/cancel")',
+            '@routes.post("/api/jobs/cancel")',
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="server.py",
         label="prompt usage source pass-through",
         required_patterns=(
             '"comfy_usage_source" not in extra_data',
@@ -138,6 +160,29 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         note=(
             "Doctor currently treats executed output as pass-through host data; "
             "this guard records upstream enrichment without requiring runtime parsing."
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="execution.py",
+        label="prompt queue running job interrupt hook",
+        required_patterns=(
+            "def interrupt_if_running",
+            "currently_running",
+            "interrupt_processing",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_execution/jobs.py",
+        label="jobs cancel classification helpers",
+        required_patterns=(
+            "CANCEL_RUNNING",
+            "CANCEL_PENDING",
+            "CANCEL_TERMINAL",
+            "CANCEL_UNKNOWN",
+            "def cancel_job",
+            "def classify_job_for_cancel",
         ),
     ),
     SurfaceCheck(
@@ -189,6 +234,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             '"supports_preview_metadata": True',
             '"extension": {"manager": {"supports_v4": True}}',
             '"node_replacements": True',
+            '"enable_telemetry":',
             "def get_server_features",
         ),
     ),
@@ -213,6 +259,19 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "comfy_usage_source: 'comfyui-frontend'",
         ),
         note="Tracks frontend prompt source attribution; Doctor does not queue prompts in this item.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/scripts/api.ts",
+        label="frontend jobs cancel API",
+        required_patterns=(
+            "async cancelJob(",
+            "/cancel",
+            "async cancelJobs(",
+            "'/jobs/cancel'",
+            "job_ids: jobIds",
+        ),
+        note="Tracks host prompt/job cancellation API adoption; Doctor does not call these endpoints in this item.",
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
