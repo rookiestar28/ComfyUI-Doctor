@@ -128,7 +128,7 @@ El full gate cubre supply-chain checks, secrets detection, pre-commit hooks, hos
 
 - Entorno ComfyUI custom-node.
 - Python 3.10 o más reciente.
-- Node.js 18 o más reciente solo para frontend E2E validation.
+- Node.js `>=18 <26` solo para frontend E2E validation.
 - No se requiere runtime Python package dependency adicional más allá del bundled environment de ComfyUI y la Python standard library.
 
 ## Licencia

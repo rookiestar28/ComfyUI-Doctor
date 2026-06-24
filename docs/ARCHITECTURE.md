@@ -148,6 +148,6 @@ Additional focused lanes:
 
 - Keep package imports compatible with ComfyUI custom-node loading.
 - Keep frontend registration compatible with current and deprecated host sidebar APIs where support exists.
-- Keep host compatibility checks aligned with prompt queue source metadata, execution event payloads, model asset folder names, and frontend queue source attribution.
+- Keep host compatibility checks aligned with prompt queue source metadata, execution event payloads, model asset folder/loader names, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption.
 - Keep public route changes reflected in `docs/openapi.json`.
 - Keep local harness tests deterministic; live backend tests must be explicit opt-in.

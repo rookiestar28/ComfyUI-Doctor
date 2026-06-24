@@ -54,7 +54,7 @@ python scripts/check_host_compatibility.py
 ```
 
 This lane checks the host API surfaces Doctor currently depends on.
-Current checks cover prompt queue source metadata, frontend queue source attribution, execution event payload shape, output asset enrichment tolerance, host package/version anchors, and model asset folder names.
+Current checks cover prompt queue source metadata, frontend queue source attribution, execution event payload shape, output asset enrichment tolerance, host package/version anchors, model asset folder/loader names, system statistics metadata, telemetry feature flags, ComfyUI job-cancel routes, and frontend queue/cancel adoption.
 
 ## Supply-Chain Check
 
@@ -117,7 +117,7 @@ See [Security Audit](SECURITY_AUDIT.md) for the quarterly cadence, manual SSRF/X
 
 ## Frontend E2E Requirements
 
-Frontend E2E requires Node.js 18 or newer.
+Frontend E2E requires Node.js `>=18 <26`.
 
 ```bash
 node -v
@@ -125,5 +125,7 @@ npm install
 npx playwright install chromium
 npm test
 ```
+
+Node 26+ is blocked until Doctor's Playwright harness and package metadata are explicitly validated against that runtime.
 
 When running under WSL from a mounted Windows path, use a writable temp directory and a `python` shim if only `python3` is available. The full Linux script handles these common cases.

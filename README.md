@@ -14,6 +14,16 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Current host contracts, diagnostics, error UX, and tooling policy refreshed</strong></summary>
+
+- Refreshed host compatibility checks for current system statistics metadata, telemetry feature flags, ComfyUI job-cancel routes, and frontend job-cancel adoption.
+- Expanded local model asset diagnostics for current Diffusers, GLIGEN, 3D asset input, and broader CLIP loader/widget naming while preserving legacy folder fallbacks.
+- Improved frontend error UX for current aggregate validation groups, missing model/media/swap-node states, account-precondition filtering, and duplicate validation/runtime reports.
+- Clarified Doctor's frontend validation tooling policy as Node.js `>=18 <26`, with full-test scripts and preflight checks blocking unvalidated Node 26+ runtimes.
+
+</details>
+
+<details>
 <summary><strong>Host API alignment, model diagnostics, and validation UX refreshed</strong></summary>
 
 - Refreshed host compatibility checks for current prompt queue metadata, execution event payloads, model asset folders, and frontend queue source attribution.
@@ -429,13 +439,13 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Real-time ComfyUI console/error capture from startup.
 - Built-in suggestions from 58 JSON-based error patterns, including 22 core patterns and 36 community-extension patterns.
 - Validated node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
-- Stable local display summaries for known prompt-validation errors, with grouping metadata and safe fallback copy for unknown validation types.
+- Stable local display summaries for known prompt-validation and aggregate host errors, with grouping metadata, account-precondition filtering, duplicate suppression, and safe fallback copy for unknown validation types.
 - Doctor sidebar with Chat, Statistics, and Settings tabs.
 - Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds.
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
-- Local diagnostics for workflow linting, current ComfyUI model asset folders/loaders, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
+- Local diagnostics for workflow linting, current ComfyUI model asset folders/loaders including Diffusers, GLIGEN, and 3D input assets, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
 
@@ -539,13 +549,13 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. Host compatibility checks also track current prompt queue metadata, execution event payloads, model asset folders, and frontend queue source attribution. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. Host compatibility checks also track current prompt queue metadata, execution event payloads, model asset folders/loaders, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 
 - ComfyUI custom-node environment.
 - Python 3.10 or newer.
-- Node.js 18 or newer for frontend E2E validation only.
+- Node.js `>=18 <26` for frontend E2E validation only.
 - No runtime Python package dependency is required beyond ComfyUI's bundled environment and Python standard library.
 
 ## License

@@ -16,7 +16,7 @@ Captured context can include:
 - System context useful for debugging, such as Python, PyTorch, CUDA, and package information.
 
 When optional LLM analysis is enabled, Doctor builds the LLM prompt context from the same analysis pipeline. That structured context can include the sanitized traceback, failed-node details, recent execution logs, a pruned workflow subset, and canonical system information.
-Known host validation failures use Doctor's local catalog copy and grouping so repeated validation/runtime reports are easier to scan. Unknown validation types fall back to generic safe copy while preserving enough detail for local debugging.
+Known host validation failures use Doctor's local catalog copy and grouping so repeated validation/runtime reports are easier to scan. Current aggregate validation groups, missing model/media/swap-node states, and duplicate validation/runtime reports are normalized for display; account precondition failures are filtered from the runtime error list. Unknown validation types fall back to generic safe copy while preserving enough detail for local debugging.
 
 ## Doctor Sidebar
 
@@ -115,7 +115,7 @@ Error messages, node names, model names, and workflow structure may remain becau
 Diagnostics can run without an LLM call. Built-in JSON signature packs provide deterministic checks for common workflow and environment problems, including:
 
 - Model path anomalies.
-- Current ComfyUI model asset folder and loader expectations, including diffusion models, text encoders, CLIP vision, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, and optical flow.
+- Current ComfyUI model asset folder and loader expectations, including diffusion models, Diffusers loaders, text encoders, CLIP vision, GLIGEN, 3D input assets, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, optical flow, and broader CLIP widget naming.
 - Missing assets or placeholder values.
 - Node configuration anti-patterns.
 - Environment mismatch hints.
