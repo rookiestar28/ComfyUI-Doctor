@@ -676,6 +676,125 @@ test.describe('Doctor Chat Interface', () => {
     expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
   });
 
+  test('should expose host aggregate metadata for surfaced missing model media and swap-node states', async ({ page }) => {
+    await page.evaluate(() => {
+      window.app.rootGraph._nodes = [
+        { id: 51, type: 'CheckpointLoaderSimple', title: 'Checkpoint', pos: [120, 80], size: [180, 80] },
+        { id: 52, type: 'LoadImage', title: 'Load Image', pos: [320, 80], size: [180, 80] },
+        { id: 53, type: 'LegacyNode', title: 'Legacy Node', pos: [520, 80], size: [180, 80] }
+      ];
+      window.app.extensionManager.lastNodeErrors = {
+        "51": {
+          errors: [
+            {
+              type: "model_file_not_found",
+              message: "Model file not found",
+              details: "missing_model.safetensors does not exist",
+              extra_info: { model_name: "missing_model.safetensors" }
+            }
+          ],
+          class_type: "CheckpointLoaderSimple",
+          dependent_outputs: []
+        },
+        "52": {
+          errors: [
+            {
+              type: "image_not_loaded",
+              message: "The system couldn't load this image <img src=x onerror=alert(1)>",
+              details: "input image could not be loaded",
+              extra_info: { filename: "unsafe_input.png" }
+            }
+          ],
+          class_type: "LoadImage",
+          dependent_outputs: []
+        },
+        "53": {
+          errors: [
+            {
+              type: "missing_node_replaceable",
+              message: "Legacy node can be swapped",
+              details: "LegacyNode has a replacement",
+              extra_info: {
+                isReplaceable: true,
+                replacement: { new_node_id: "CurrentNode" }
+              }
+            }
+          ],
+          class_type: "LegacyNode",
+          dependent_outputs: []
+        }
+      };
+
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-r39-aggregate" } });
+    });
+
+    await page.waitForTimeout(150);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    const aggregateGroups = capturedData.execution_context.frontend_error_groups;
+    expect(aggregateGroups.map((group) => group.type)).toEqual([
+      "swap_nodes",
+      "missing_model",
+      "missing_media",
+    ]);
+    expect(aggregateGroups.map((group) => group.count)).toEqual([1, 1, 1]);
+    expect(capturedData.execution_context.frontend_error_group_count).toBe(3);
+    expect(capturedData.execution_context.frontend_error_total_count).toBe(3);
+    expect(capturedData.execution_context.frontend_error_group_source).toBe("doctor.host_aggregate_overlap");
+    expect(capturedData.execution_context.validation_display_summary).toContain("Swap Nodes");
+    expect(capturedData.execution_context.validation_display_summary).toContain("Missing Models");
+    expect(capturedData.execution_context.validation_display_summary).toContain("Missing Inputs");
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    const errorContext = page.locator('#doctor-error-context');
+    await expect(errorContext).toBeVisible({ timeout: 5000 });
+    await expect(errorContext).toContainText("Swap Nodes");
+    await expect(errorContext).toContainText("Missing Models");
+    await expect(errorContext).toContainText("Missing Inputs");
+
+    const errorContextHtml = await errorContext.innerHTML();
+    expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
+  });
+
+  test('should filter account precondition execution errors from Doctor runtime display', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const doctor = window.app.Doctor;
+      const originalHandleNewError = doctor.handleNewError.bind(doctor);
+      doctor.__r39HandleCount = 0;
+      doctor.handleNewError = (data) => {
+        doctor.__r39HandleCount += 1;
+        return originalHandleNewError(data);
+      };
+
+      window.api._triggerEvent("execution_error", {
+        detail: {
+          prompt_id: "prompt-r39-account",
+          node_id: "61",
+          node_type: "CloudOnlyNode",
+          exception_type: "PermissionError",
+          exception_message: "Unauthorized: Please login first to use this node.",
+          traceback: [],
+          current_inputs: {},
+          current_outputs: {}
+        }
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return {
+        handleCount: doctor.__r39HandleCount,
+        ignored: doctor.lastIgnoredAccountPrecondition,
+        lastErrorData: doctor.lastErrorData || null,
+      };
+    });
+
+    expect(result.handleCount).toBe(0);
+    expect(result.ignored).toMatchObject({
+      kind: "sign_in",
+      node_type: "CloudOnlyNode",
+    });
+    expect(result.lastErrorData).toBeNull();
+  });
+
   test('should suppress duplicate validation and runtime execution reports', async ({ page }) => {
     const handledCount = await page.evaluate(async () => {
       const doctor = window.app.Doctor;

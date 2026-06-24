@@ -84,6 +84,7 @@ export class DoctorUI {
         this.executionLineageByKey = new Map();
         this.EXECUTION_LINEAGE_TTL_MS = 5 * 60 * 1000;
         this.MAX_EXECUTION_LINEAGE_ENTRIES = 200;
+        this.lastIgnoredAccountPrecondition = null;
 
         // ═══════════════════════════════════════════════════════════════
         // CRITICAL: UI Text Loading Order
@@ -321,6 +322,16 @@ export class DoctorUI {
             const enrichedRealNodeId = real_node_id || cachedLineage?.real_node_id || null;
             const preferredNodeId = enrichedDisplayNode || node_id || enrichedRealNodeId;
             const tracebackText = this.formatExecutionTraceback(detail);
+            const accountPrecondition = this.resolveDoctorAccountPrecondition(exception_type, exception_message);
+            if (accountPrecondition) {
+                this.lastIgnoredAccountPrecondition = {
+                    kind: accountPrecondition,
+                    node_type: node_type || null,
+                    timestamp: new Date().toISOString(),
+                };
+                console.log("[ComfyUI-Doctor] Account precondition routed outside Doctor error display");
+                return;
+            }
 
             // Create error hash for deduplication
             const errorHash = this.getErrorHash(preferredNodeId, exception_type, exception_message);
@@ -484,6 +495,32 @@ export class DoctorUI {
         return false;
     }
 
+    resolveDoctorAccountPrecondition(exceptionType, exceptionMessage) {
+        const message = typeof exceptionMessage === 'string'
+            ? exceptionMessage.trim()
+            : '';
+        if (!message) return null;
+
+        const exactMatches = new Map([
+            ['Unauthorized: Please login first to use this node.', 'sign_in'],
+            ['Payment Required: Please add credits to your account to use this node.', 'credits'],
+            ['Payment Required: Please add credits to your workspace to continue.', 'credits'],
+            ['Workspace has no active subscription. Please subscribe to a plan to continue.', 'subscription'],
+            ['User has no active subscription. Please subscribe to a plan to continue.', 'subscription'],
+            ['Subscription required to queue workflows', 'subscription'],
+        ]);
+
+        if (exactMatches.has(message)) {
+            return exactMatches.get(message);
+        }
+
+        if (message.toLowerCase().startsWith('the following private models require a subscription upgrade:')) {
+            return 'subscription';
+        }
+
+        return null;
+    }
+
     normalizeNodeId(nodeId) {
         if (nodeId === null || nodeId === undefined || nodeId === '') return null;
         return String(nodeId);
@@ -525,8 +562,10 @@ export class DoctorUI {
         const nodeErrors = getComfyValidationNodeErrors(app);
         if (!nodeErrors) return;
 
+        const frontendAggregateGroups = this.buildFrontendAggregateGroupsFromNodeErrors(nodeErrors);
+
         Object.entries(nodeErrors).forEach(([nodeId, nodeError]) => {
-            const normalized = this.normalizeFrontendValidationError(nodeId, nodeError);
+            const normalized = this.normalizeFrontendValidationError(nodeId, nodeError, frontendAggregateGroups);
             if (!normalized) return;
 
             const errorHash = this.getErrorHash(
@@ -540,7 +579,7 @@ export class DoctorUI {
         });
     }
 
-    normalizeFrontendValidationError(nodeId, nodeError) {
+    normalizeFrontendValidationError(nodeId, nodeError, frontendAggregateGroups = null) {
         if (!nodeError || typeof nodeError !== 'object') return null;
 
         const validationErrors = Array.isArray(nodeError.errors) ? nodeError.errors : [];
@@ -561,10 +600,17 @@ export class DoctorUI {
             .map(error => this.resolveFrontendValidationCatalogError(error, nodeClass))
             .filter(Boolean);
         const catalogGroups = this.groupFrontendValidationCatalogErrors(catalogErrors);
-        const validationDisplaySummary = catalogGroups
+        const aggregateGroups = Array.isArray(frontendAggregateGroups)
+            ? frontendAggregateGroups
+            : this.groupFrontendAggregateErrors(catalogErrors);
+        const aggregateDisplaySummary = aggregateGroups
             .map(group => `${group.display_title}: ${group.display_message}`)
             .filter(Boolean)
             .join('; ');
+        const validationDisplaySummary = (aggregateDisplaySummary || catalogGroups
+            .map(group => `${group.display_title}: ${group.display_message}`)
+            .filter(Boolean)
+            .join('; '));
         const validationDetailsSummary = catalogErrors
             .map(error => error.display_details || error.display_message || error.raw_summary)
             .filter(Boolean)
@@ -583,6 +629,12 @@ export class DoctorUI {
                 validation_details_summary: validationDetailsSummary,
                 validation_catalog_errors: catalogErrors,
                 validation_catalog_groups: catalogGroups,
+                frontend_error_groups: aggregateGroups,
+                frontend_error_group_count: aggregateGroups.length,
+                frontend_error_total_count: aggregateGroups.reduce((sum, group) => sum + group.count, 0),
+                frontend_error_group_source: aggregateGroups.length
+                    ? 'doctor.host_aggregate_overlap'
+                    : 'doctor.validation_catalog',
                 validation_error_count: validationErrors.length,
             },
             node_context: {
@@ -623,6 +675,7 @@ export class DoctorUI {
         const rule = this.getValidationCatalogRule(error, rawDetails);
         const displayDetails = this.resolveValidationCatalogDetails(error, rule.catalog_id, params);
         const toastMessage = this.resolveValidationCatalogToastMessage(error, rule.catalog_id, params, displayDetails);
+        const hostAggregateGroup = this.resolveFrontendHostAggregateGroup(error, rule.catalog_id, params, rawSummary);
 
         return {
             error_type: errorType,
@@ -638,6 +691,7 @@ export class DoctorUI {
             raw_message: error.message || '',
             raw_details: error.details || '',
             raw_summary: rawSummary,
+            host_aggregate_group: hostAggregateGroup,
         };
     }
 
@@ -658,6 +712,203 @@ export class DoctorUI {
         });
 
         return Array.from(groups.values());
+    }
+
+    buildFrontendAggregateGroupsFromNodeErrors(nodeErrors) {
+        if (!nodeErrors || typeof nodeErrors !== 'object') return [];
+
+        const catalogErrors = [];
+        Object.entries(nodeErrors).forEach(([nodeId, nodeError]) => {
+            if (!nodeError || typeof nodeError !== 'object') return;
+            const validationErrors = Array.isArray(nodeError.errors) ? nodeError.errors : [];
+            if (!validationErrors.length) return;
+
+            const graphNode = getComfyNodeById(this.normalizeNodeId(nodeId), app);
+            const nodeClass = nodeError.class_type || graphNode?.type || graphNode?.title || 'Unknown';
+            validationErrors.forEach((error) => {
+                const catalogError = this.resolveFrontendValidationCatalogError(error, nodeClass);
+                if (catalogError) catalogErrors.push(catalogError);
+            });
+        });
+
+        return this.groupFrontendAggregateErrors(catalogErrors);
+    }
+
+    groupFrontendAggregateErrors(catalogErrors) {
+        const groups = new Map();
+
+        catalogErrors.forEach((error) => {
+            const sourceGroup = error?.host_aggregate_group;
+            if (!sourceGroup?.type) return;
+
+            const key = sourceGroup.group_key || sourceGroup.type;
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    type: sourceGroup.type,
+                    group_key: key,
+                    catalog_id: sourceGroup.catalog_id || key,
+                    display_title: sourceGroup.display_title,
+                    display_message: sourceGroup.display_message,
+                    priority: sourceGroup.priority,
+                    count: 0,
+                });
+            }
+            groups.get(key).count += 1;
+        });
+
+        return Array.from(groups.values()).sort((a, b) => a.priority - b.priority);
+    }
+
+    resolveFrontendHostAggregateGroup(error, catalogId, params, rawSummary) {
+        if (this.isSwapNodeValidationError(error)) {
+            return {
+                type: 'swap_nodes',
+                group_key: 'swap_nodes',
+                catalog_id: 'swap_nodes',
+                display_title: 'Swap Nodes',
+                display_message: 'One or more missing nodes have compatible replacements.',
+                priority: 0,
+            };
+        }
+
+        if (this.isMissingNodeValidationError(error)) {
+            return {
+                type: 'missing_node',
+                group_key: 'missing_node',
+                catalog_id: 'missing_node',
+                display_title: 'Missing Node Packs',
+                display_message: 'One or more node types are unavailable.',
+                priority: 1,
+            };
+        }
+
+        if (this.isMissingModelValidationError(error, rawSummary)) {
+            return {
+                type: 'missing_model',
+                group_key: 'missing_model',
+                catalog_id: 'missing_model',
+                display_title: 'Missing Models',
+                display_message: 'Some referenced models are unavailable.',
+                priority: 2,
+            };
+        }
+
+        if (catalogId === 'image_not_loaded' || this.isMissingMediaValidationError(error, rawSummary)) {
+            return {
+                type: 'missing_media',
+                group_key: 'missing_media',
+                catalog_id: 'missing_media',
+                display_title: 'Missing Inputs',
+                display_message: 'Some referenced input files are unavailable.',
+                priority: 3,
+            };
+        }
+
+        return null;
+    }
+
+    isSwapNodeValidationError(error) {
+        const type = String(error?.type || '').toLowerCase();
+        const info = error?.extra_info || {};
+        return (
+            type === 'swap_nodes'
+            || type === 'missing_node_replaceable'
+            || type === 'node_replacement_available'
+            || info.isReplaceable === true
+            || info.is_replaceable === true
+            || Boolean(info.replacement?.new_node_id || info.new_node_id)
+        );
+    }
+
+    isMissingNodeValidationError(error) {
+        const type = String(error?.type || '').toLowerCase();
+        return type === 'missing_node' || type === 'node_type_missing';
+    }
+
+    isMissingModelValidationError(error, rawSummary) {
+        const type = String(error?.type || '').toLowerCase();
+        if (this.isOrdinaryValidationCatalogType(type)) {
+            return false;
+        }
+        if ([
+            'missing_model',
+            'model_not_found',
+            'model_file_not_found',
+            'checkpoint_not_found',
+            'model_missing',
+        ].includes(type)) {
+            return true;
+        }
+
+        const text = this.buildValidationSearchText(error, rawSummary);
+        const mentionsModel = /\b(model|checkpoint|lora|vae|embedding|controlnet)\b/.test(text);
+        const missingFile = (
+            text.includes('not found')
+            || text.includes('does not exist')
+            || text.includes('no such file')
+            || text.includes('missing model')
+        );
+        return mentionsModel && missingFile;
+    }
+
+    isMissingMediaValidationError(error, rawSummary) {
+        const type = String(error?.type || '').toLowerCase();
+        if ([
+            'missing_media',
+            'media_not_found',
+            'image_not_found',
+            'input_file_not_found',
+            'image_not_loaded',
+        ].includes(type)) {
+            return true;
+        }
+
+        const text = this.buildValidationSearchText(error, rawSummary);
+        const mentionsMedia = /\b(media|image|video|input file|input asset)\b/.test(text);
+        const missingFile = (
+            text.includes('not found')
+            || text.includes('does not exist')
+            || text.includes('no such file')
+            || text.includes('could not be loaded')
+            || text.includes("couldn't load")
+        );
+        return mentionsMedia && missingFile;
+    }
+
+    isOrdinaryValidationCatalogType(type) {
+        return [
+            'required_input_missing',
+            'bad_linked_input',
+            'return_type_mismatch',
+            'invalid_input_type',
+            'value_smaller_than_min',
+            'value_bigger_than_max',
+            'value_not_in_list',
+            'custom_validation_failed',
+            'exception_during_inner_validation',
+            'exception_during_validation',
+            'dependency_cycle',
+        ].includes(type);
+    }
+
+    buildValidationSearchText(error, rawSummary) {
+        const extraInfo = error?.extra_info || {};
+        return [
+            error?.type,
+            error?.message,
+            error?.details,
+            rawSummary,
+            extraInfo.input_name,
+            extraInfo.filename,
+            extraInfo.file,
+            extraInfo.path,
+            extraInfo.model_name,
+            extraInfo.model_path,
+            extraInfo.media_name,
+        ]
+            .filter(value => value !== null && value !== undefined)
+            .map(value => String(value).toLowerCase())
+            .join(' ');
     }
 
     getValidationCatalogRule(error, rawDetails) {
