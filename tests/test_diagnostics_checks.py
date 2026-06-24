@@ -190,6 +190,8 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             current_categories = {
+                "diffusers",
+                "gligen",
                 "diffusion_models",
                 "text_encoders",
                 "clip_vision",
@@ -230,13 +232,19 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(paths["background_removal"], [root / "background_removal"])
             self.assertEqual(paths["frame_interpolation"], [root / "frame_interpolation"])
             self.assertEqual(paths["optical_flow"], [root / "optical_flow"])
+            self.assertEqual(paths["diffusers"], [root / "diffusers"])
+            self.assertEqual(paths["gligen"], [root / "gligen"])
+            self.assertEqual(paths["input_3d"], [root / "input" / "3d"])
 
     async def test_model_assets_current_loader_references_search_matching_host_folders(self):
         cases = [
+            ("DiffusersLoader", "stable-diffusion-v1-5", "diffusers", "dir"),
+            ("GLIGENLoader", "gligen_textbox_model.safetensors", "gligen", "file"),
             ("UNETLoader", "wan2_2_high_noise.safetensors", "diffusion_models"),
             ("CLIPLoader", "t5xxl_fp16.safetensors", "text_encoders"),
             ("DualCLIPLoader", "clip_l.safetensors", "text_encoders"),
             ("TripleCLIPLoader", "clip_g.safetensors", "text_encoders"),
+            ("QuadrupleCLIPLoader", "llama_8b_3.1_instruct.safetensors", "text_encoders"),
             ("CLIPVisionLoader", "clip_vision_h.safetensors", "clip_vision"),
             ("StyleModelLoader", "style_model.safetensors", "style_models"),
             ("PhotoMakerLoader", "photomaker-v1.bin", "photomaker"),
@@ -245,6 +253,8 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             ("OpticalFlowLoader", "raft_large.pth", "optical_flow"),
             ("AudioEncoderLoader", "whisper_audio_encoder.safetensors", "audio_encoders"),
             ("ModelPatchLoader", "wan_multitalk_patch.safetensors", "model_patches"),
+            ("Load3D", "3d/character.glb", "input_3d", "file"),
+            ("Load3DAdvanced", "3d/scene.stl", "input_3d", "file"),
         ]
 
         with tempfile.TemporaryDirectory() as temp_root:
@@ -263,21 +273,35 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
                 "audio_encoders": [],
                 "background_removal": [],
                 "frame_interpolation": [],
+                "diffusers": [],
+                "gligen": [],
                 "geometry_estimation": [],
                 "optical_flow": [],
                 "detection": [],
                 "input": [],
+                "input_3d": [],
                 "output": [],
             }
 
-            for _node_type, filename, category in cases:
+            for case in cases:
+                _node_type, filename, category, *kind = case
                 category_dir = root / "models" / category
                 category_dir.mkdir(parents=True, exist_ok=True)
-                (category_dir / filename).write_bytes(b"x")
+                if category == "input_3d" and filename.startswith("3d/"):
+                    filename_path = category_dir / filename.removeprefix("3d/")
+                else:
+                    filename_path = category_dir / filename
+                if kind and kind[0] == "dir":
+                    filename_path.mkdir(parents=True, exist_ok=True)
+                    (filename_path / "model_index.json").write_bytes(b"{}")
+                else:
+                    filename_path.parent.mkdir(parents=True, exist_ok=True)
+                    filename_path.write_bytes(b"x")
                 paths[category] = [category_dir]
 
             with patch("services.diagnostics.checks.model_assets._get_comfy_model_paths", return_value=paths):
-                for index, (node_type, filename, _category) in enumerate(cases, start=100):
+                for index, case in enumerate(cases, start=100):
+                    node_type, filename, _category, *_kind = case
                     with self.subTest(node_type=node_type):
                         workflow = {"nodes": [{"id": index, "type": node_type, "widgets_values": [filename]}]}
                         request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
@@ -394,6 +418,45 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(temp_root, evidence_text)
             self.assertNotIn("private", evidence_text)
 
+    async def test_model_assets_old_host_does_not_fallback_new_loaders_to_checkpoints(self):
+        cases = [
+            ("DiffusersLoader", "stable-diffusion-v1-5", "diffusers"),
+            ("GLIGENLoader", "gligen_textbox_model.safetensors", "gligen"),
+            ("Load3D", "3d/character.glb", "input_3d"),
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            checkpoint_dir = root / "private" / "models" / "checkpoints"
+            checkpoint_dir.mkdir(parents=True)
+            (checkpoint_dir / "stable-diffusion-v1-5").mkdir()
+            (checkpoint_dir / "gligen_textbox_model.safetensors").write_bytes(b"x")
+            (checkpoint_dir / "character.glb").write_bytes(b"x")
+
+            with patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value={
+                    "checkpoints": [checkpoint_dir],
+                    "diffusers": [],
+                    "gligen": [],
+                    "input_3d": [],
+                    "input": [],
+                    "output": [],
+                },
+            ):
+                for index, (node_type, filename, category) in enumerate(cases, start=20):
+                    with self.subTest(node_type=node_type):
+                        workflow = {"nodes": [{"id": index, "type": node_type, "widgets_values": [filename]}]}
+                        request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+                        issues = await model_assets.check_model_assets(workflow, request)
+
+                    self.assertEqual(len(issues), 1)
+                    self.assertIn(f"Searched in: {category} folders", issues[0].evidence)
+                    evidence_text = "\n".join([issues[0].summary, *issues[0].evidence])
+                    self.assertIn(Path(filename).name, evidence_text)
+                    self.assertNotIn(temp_root, evidence_text)
+                    self.assertNotIn("private", evidence_text)
+
     def test_model_assets_preserves_existing_category_detection(self):
         cases = [
             ("CheckpointLoaderSimple", "dreamshaper.safetensors", "checkpoints"),
@@ -403,9 +466,12 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             ("CLIPLoader", "clip_l.safetensors", "text_encoders"),
             ("DualCLIPLoader", "clip_l.safetensors", "text_encoders"),
             ("TripleCLIPLoader", "clip_g.safetensors", "text_encoders"),
+            ("QuadrupleCLIPLoader", "llama_8b_3.1_instruct.safetensors", "text_encoders"),
             ("UNETLoader", "flux1-dev.safetensors", "diffusion_models"),
+            ("DiffusersLoader", "stable-diffusion-v1-5", "diffusers"),
             ("CLIPVisionLoader", "clip_vision_h.safetensors", "clip_vision"),
             ("StyleModelLoader", "style_model.safetensors", "style_models"),
+            ("GLIGENLoader", "gligen_textbox_model.safetensors", "gligen"),
             ("PhotoMakerLoader", "photomaker-v1.bin", "photomaker"),
             ("LoadBackgroundRemovalModel", "birefnet.safetensors", "background_removal"),
             ("FrameInterpolationModelLoader", "film_net_fp32.safetensors", "frame_interpolation"),
@@ -415,11 +481,18 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             ("UpscaleModelLoader", "realesrgan.safetensors", "upscale_models"),
             ("EmbeddingLoader", "bad-hands.pt", "embeddings"),
             ("LoadImage", "example.png", "input"),
+            ("Load3D", "3d/character.glb", "input_3d"),
+            ("Load3DAdvanced", "3d/scene.stl", "input_3d"),
         ]
 
         for node_type, filename, expected in cases:
             with self.subTest(node_type=node_type):
                 self.assertEqual(model_assets._determine_asset_category(node_type, filename), expected)
+
+    def test_model_assets_recognizes_current_host_3d_extensions(self):
+        for extension in [".gltf", ".glb", ".obj", ".fbx", ".stl", ".spz", ".splat", ".ply", ".ksplat"]:
+            with self.subTest(extension=extension):
+                self.assertTrue(model_assets._is_path_like(f"3d/example{extension}"))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

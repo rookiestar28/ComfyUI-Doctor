@@ -35,13 +35,14 @@ FILE_LOADING_NODE_TYPES: Set[str] = {
     "VAELoader", "CLIPLoader", "LoraLoader", "LoraLoaderModelOnly",
     "ControlNetLoader", "StyleModelLoader", "CLIPVisionLoader",
     "UpscaleModelLoader", "GLIGENLoader", "HypernetworkLoader",
-    "UNETLoader", "DualCLIPLoader", "TripleCLIPLoader",
+    "UNETLoader", "DiffusersLoader",
+    "DualCLIPLoader", "TripleCLIPLoader", "QuadrupleCLIPLoader",
     "PhotoMakerLoader", "LoadBackgroundRemovalModel",
     "FrameInterpolationModelLoader", "OpticalFlowLoader",
     "AudioEncoderLoader", "ModelPatchLoader",
     "LoadMoGeModel", "LoadMediaPipeFaceLandmarker",
     # Image loaders
-    "LoadImage", "LoadImageMask", "LoadLatent",
+    "LoadImage", "LoadImageMask", "LoadLatent", "Load3D", "Load3DAdvanced",
     # Video loaders (common custom nodes)
     "VHS_LoadVideo", "LoadVideo",
     # IP-Adapter loaders
@@ -52,7 +53,9 @@ FILE_LOADING_NODE_TYPES: Set[str] = {
 PATH_WIDGET_NAMES: Set[str] = {
     "ckpt_name", "vae_name", "clip_name", "lora_name",
     "control_net_name", "style_model_name", "upscale_model_name",
-    "model_name", "image", "video", "latent_file",
+    "model_name", "model_path", "model_file", "gligen_name",
+    "clip_name1", "clip_name2", "clip_name3", "clip_name4",
+    "unet_name", "image", "video", "latent_file",
     "filename", "file", "path", "image_path", "video_path",
 }
 
@@ -67,6 +70,16 @@ MEDIA_EXTENSIONS: Set[str] = {
     ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff",
     ".mp4", ".webm", ".avi", ".mov", ".mkv",
 }
+
+# Host Load3D assets live under input/3d and use these first-party extensions.
+THREE_D_EXTENSIONS: Set[str] = {
+    ".gltf", ".glb", ".obj", ".fbx", ".stl",
+    ".spz", ".splat", ".ply", ".ksplat",
+}
+
+FOLDER_ASSET_CATEGORIES: Set[str] = {"diffusers"}
+
+INPUT_3D_PREFIX = "3d/"
 
 
 # ============================================================================
@@ -98,11 +111,14 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
         "background_removal": [],
         "frame_interpolation": [],
         "upscale_models": [],
+        "diffusers": [],
+        "gligen": [],
         "embeddings": [],
         "geometry_estimation": [],
         "optical_flow": [],
         "detection": [],
         "input": [],
+        "input_3d": [],
         "output": [],
     }
 
@@ -127,6 +143,8 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
             "background_removal": "background_removal",
             "frame_interpolation": "frame_interpolation",
             "upscale_models": "upscale_models",
+            "diffusers": "diffusers",
+            "gligen": "gligen",
             "embeddings": "embeddings",
             "geometry_estimation": "geometry_estimation",
             "optical_flow": "optical_flow",
@@ -145,7 +163,9 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
 
         # Input/output folders
         try:
-            paths["input"] = [Path(folder_paths.get_input_directory())]
+            input_dir = Path(folder_paths.get_input_directory())
+            paths["input"] = [input_dir]
+            paths["input_3d"] = [input_dir / "3d"]
         except Exception:
             pass
 
@@ -180,27 +200,49 @@ def _find_file_in_comfy_paths(
     paths = _get_comfy_model_paths()
     search_paths = paths.get(category, [])
 
+    candidate_names = _candidate_relative_names(filename, category)
+
     # Also search common parent directories
     for search_path in search_paths:
         if not search_path.exists():
             continue
 
         # Direct match
-        full_path = search_path / filename
-        if full_path.exists():
-            return True, full_path
+        for candidate_name in candidate_names:
+            full_path = search_path / candidate_name
+            if full_path.exists():
+                return True, full_path
 
         # Check subdirectories (one level)
         try:
             for subdir in search_path.iterdir():
                 if subdir.is_dir():
-                    full_path = subdir / filename
-                    if full_path.exists():
-                        return True, full_path
+                    for candidate_name in candidate_names:
+                        full_path = subdir / candidate_name
+                        if full_path.exists():
+                            return True, full_path
         except (PermissionError, OSError):
             continue
 
     return False, None
+
+
+def _candidate_relative_names(filename: str, category: str) -> List[str]:
+    """Return relative lookup candidates for host-specific asset categories."""
+    candidates = [filename]
+
+    if category == "input_3d":
+        normalized = filename.replace("\\", "/")
+        if normalized.startswith(INPUT_3D_PREFIX):
+            candidates.append(normalized[len(INPUT_3D_PREFIX):])
+
+    unique_candidates: List[str] = []
+    seen: Set[str] = set()
+    for candidate in candidates:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            unique_candidates.append(candidate)
+    return unique_candidates
 
 
 def _is_path_like(value: str) -> bool:
@@ -211,7 +253,7 @@ def _is_path_like(value: str) -> bool:
     # Check for common path patterns
     # Has extension that looks like a model or media file
     lower = value.lower()
-    for ext in MODEL_EXTENSIONS | MEDIA_EXTENSIONS:
+    for ext in MODEL_EXTENSIONS | MEDIA_EXTENSIONS | THREE_D_EXTENSIONS:
         if lower.endswith(ext):
             return True
 
@@ -291,13 +333,17 @@ async def check_model_assets(
                 continue
 
             # Determine if this looks like a file path
-            if not _is_path_like(value):
+            category = _determine_asset_category(node_type, value)
+            if (
+                value.strip().lower() in {"none", "null"}
+                or (
+                    not _is_path_like(value)
+                    and category not in FOLDER_ASSET_CATEGORIES
+                )
+            ):
                 continue
 
             checked_paths.add(value)
-
-            # Determine category for path lookup
-            category = _determine_asset_category(node_type, value)
 
             # Try to find the file
             found, full_path = _find_file_in_comfy_paths(value, category)
@@ -343,7 +389,7 @@ async def check_model_assets(
                 ))
             else:
                 # File found - check if readable
-                if full_path:
+                if full_path and full_path.is_file():
                     readable_issue = _check_file_readable(
                         full_path, node_id, node_title, node_type, value
                     )
@@ -358,6 +404,12 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
     lower_type = node_type.lower()
     lower_file = filename.lower()
 
+    if "diffusers" in lower_type:
+        return "diffusers"
+    if "gligen" in lower_type:
+        return "gligen"
+    if "load3d" in lower_type or any(lower_file.endswith(ext) for ext in THREE_D_EXTENSIONS):
+        return "input_3d"
     if "checkpoint" in lower_type:
         return "checkpoints"
     if "vae" in lower_type:
