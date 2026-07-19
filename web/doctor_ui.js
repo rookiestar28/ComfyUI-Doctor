@@ -1200,18 +1200,31 @@ export class DoctorUI {
     }
 
     getChildGraphFromNode(node) {
-        if (!node) return null;
-        if (node.subgraph && (typeof node.isSubgraphNode !== 'function' || node.isSubgraphNode())) {
-            return node.subgraph;
+        return this.isHostSubgraphNode(node) ? node.subgraph : null;
+    }
+
+    isHostSubgraphNode(node) {
+        if (!node?.subgraph) return false;
+        try {
+            return typeof node.isSubgraphNode !== 'function'
+                || node.isSubgraphNode() === true;
+        } catch {
+            return false;
         }
-        return null;
     }
 
     isHostGroupNode(node) {
         if (!node) return false;
-        return node.isGroupNode?.() === true
-            || node.isVirtualNode === true
-            || typeof node.getInnerNodes === 'function';
+        // IMPORTANT: real SubgraphNode is virtual and exposes getInnerNodes();
+        // classify its public child graph before applying group heuristics.
+        if (this.isHostSubgraphNode(node)) return false;
+        try {
+            return node.isGroupNode?.() === true
+                || node.isVirtualNode === true
+                || typeof node.getInnerNodes === 'function';
+        } catch {
+            return false;
+        }
     }
 
     getFocusTargetByExecutionId(nodeId) {

@@ -375,7 +375,7 @@ test.describe('Doctor Chat Interface', () => {
     expect(focusState.lastAnimatedBounds).toEqual([80, 90, 420, 260]);
   });
 
-  test('should locate subgraph execution ids via rootGraph traversal (R23)', async ({ page }) => {
+  test('should locate real SubgraphNode execution ids via rootGraph traversal', async ({ page }) => {
     const focusState = await page.evaluate(() => {
       const innerNode = {
         id: 63,
@@ -399,7 +399,11 @@ test.describe('Doctor Chat Interface', () => {
         type: 'Subgraph',
         pos: [0, 0],
         size: [100, 60],
+        isVirtualNode: true,
         isSubgraphNode: () => true,
+        getInnerNodes() {
+          return [innerNode];
+        },
         subgraph,
       };
       hostNode.graph = window.app.rootGraph;
@@ -421,6 +425,145 @@ test.describe('Doctor Chat Interface', () => {
     expect(focusState.subgraphIsTarget).toBe(true);
     expect(focusState.selectedNodeIds).toContain('63');
     expect(focusState.lastAnimatedBounds).toEqual([640, 480, 160, 90]);
+  });
+
+  test('should traverse three-level branded execution ids to the deepest node', async ({ page }) => {
+    const focusState = await page.evaluate(() => {
+      const innerNode = {
+        id: 63,
+        title: 'Deep Inner Node',
+        type: 'KSampler',
+        pos: [720, 520],
+        size: [180, 100],
+        boundingRect: [720, 520, 180, 100],
+      };
+      const deepestGraph = {
+        isRootGraph: false,
+        _nodes: [innerNode],
+        getNodeById(id) {
+          return this._nodes.find((node) => String(node.id) === String(id)) || null;
+        },
+      };
+      innerNode.graph = deepestGraph;
+
+      const nestedHost = {
+        id: 70,
+        title: 'Nested Subgraph Host',
+        type: 'Subgraph',
+        isVirtualNode: true,
+        isSubgraphNode: () => true,
+        getInnerNodes: () => [innerNode],
+        subgraph: deepestGraph,
+      };
+      const firstGraph = {
+        isRootGraph: false,
+        _nodes: [nestedHost],
+        getNodeById(id) {
+          return this._nodes.find((node) => String(node.id) === String(id)) || null;
+        },
+      };
+      nestedHost.graph = firstGraph;
+
+      const rootHost = {
+        id: 65,
+        title: 'Root Subgraph Host',
+        type: 'Subgraph',
+        isVirtualNode: true,
+        isSubgraphNode: () => true,
+        getInnerNodes: () => [nestedHost],
+        subgraph: firstGraph,
+      };
+      rootHost.graph = window.app.rootGraph;
+      window.app.rootGraph._nodes = [rootHost];
+      window.app.canvas.selected_nodes = {};
+      window.app.canvas.lastAnimatedBounds = null;
+
+      window.app.Doctor.locateNodeOnCanvas('65:70:63');
+
+      return {
+        graphIsDeepest: window.app.canvas.graph === deepestGraph,
+        subgraphIsDeepest: window.app.canvas.subgraph === deepestGraph,
+        selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+        lastAnimatedBounds: window.app.canvas.lastAnimatedBounds,
+      };
+    });
+
+    expect(focusState.graphIsDeepest).toBe(true);
+    expect(focusState.subgraphIsDeepest).toBe(true);
+    expect(focusState.selectedNodeIds).toEqual(['63']);
+    expect(focusState.lastAnimatedBounds).toEqual([720, 520, 180, 100]);
+  });
+
+  test('should preserve canvas offset fallback when bounds animation is unavailable', async ({ page }) => {
+    const focusState = await page.evaluate(() => {
+      const node = {
+        id: 42,
+        title: 'Fallback Node',
+        type: 'KSampler',
+        pos: [100, 200],
+        size: [200, 100],
+      };
+      node.graph = window.app.rootGraph;
+      window.app.rootGraph._nodes = [node];
+      window.app.canvas.graph = null;
+      window.app.canvas.selected_nodes = {};
+      window.app.canvas.ds.scale = 1;
+      window.app.canvas.ds.offset = [0, 0];
+      window.app.canvas.animateToBounds = undefined;
+
+      window.app.Doctor.locateNodeOnCanvas('42');
+
+      return {
+        graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
+        selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+        offset: [...window.app.canvas.ds.offset],
+      };
+    });
+
+    expect(focusState.graphIsRoot).toBe(true);
+    expect(focusState.selectedNodeIds).toEqual(['42']);
+    expect(focusState.offset).toEqual([760, 290]);
+  });
+
+  test('should leave canvas state unchanged for an incomplete subgraph path', async ({ page }) => {
+    const focusState = await page.evaluate(() => {
+      const childGraph = {
+        isRootGraph: false,
+        _nodes: [],
+        getNodeById() {
+          return null;
+        },
+      };
+      const rootHost = {
+        id: 65,
+        title: 'Incomplete Subgraph Host',
+        type: 'Subgraph',
+        isVirtualNode: true,
+        isSubgraphNode: () => true,
+        getInnerNodes: () => [],
+        subgraph: childGraph,
+      };
+      rootHost.graph = window.app.rootGraph;
+      window.app.rootGraph._nodes = [rootHost];
+      window.app.canvas.graph = window.app.rootGraph;
+      window.app.canvas.subgraph = undefined;
+      window.app.canvas.selected_nodes = { sentinel: { id: 'sentinel' } };
+      window.app.canvas.lastAnimatedBounds = [1, 2, 3, 4];
+
+      window.app.Doctor.locateNodeOnCanvas('65:70:63');
+
+      return {
+        graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
+        subgraphIsUnset: window.app.canvas.subgraph === undefined,
+        selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+        lastAnimatedBounds: window.app.canvas.lastAnimatedBounds,
+      };
+    });
+
+    expect(focusState.graphIsRoot).toBe(true);
+    expect(focusState.subgraphIsUnset).toBe(true);
+    expect(focusState.selectedNodeIds).toEqual(['sentinel']);
+    expect(focusState.lastAnimatedBounds).toEqual([1, 2, 3, 4]);
   });
 
   test('should display error summary in chat context card', async ({ page }) => {
