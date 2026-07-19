@@ -14,6 +14,13 @@ The static safety check prevents accidental bypass of the outbound sanitization 
 ComfyUI-Doctor sends error context to LLM providers for analysis. To protect user privacy, all outbound payloads MUST go through the sanitization funnel in `outbound.py`.
 Provider-specific LLM request construction is centralized in `services/llm_provider_adapters.py`, but route handlers remain responsible for sanitizing the completed payload immediately before network transmission.
 
+The runtime sanitization boundary always redacts values associated with
+`Authorization` and `X-API-Key`, case-insensitively. This applies to header-like
+text, JSON/dictionary text, nested mappings/lists, request and response header
+objects, recent log-buffer reads, and outbound payloads even when privacy mode
+is `none`. Ordinary prose that merely uses the word "authorization" and
+non-sensitive headers remain intact.
+
 **Sensitive Fields**:
 - `context.traceback` - Raw Python stack trace with user paths
 - `context.workflow_json` - Full workflow with potential paths

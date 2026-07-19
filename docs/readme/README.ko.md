@@ -17,6 +17,10 @@ ComfyUI-Doctor는 ComfyUI용 실시간 진단 및 디버깅 도우미입니다. 
 - 시작 단계부터 ComfyUI console/error 출력을 실시간으로 캡처합니다.
 - 22개의 core pattern과 36개의 community-extension pattern을 포함한 58개의 JSON 기반 오류 패턴 제안을 내장합니다.
 - ComfyUI가 충분한 이벤트 데이터를 제공할 때 최근 workflow 실행 오류의 노드 컨텍스트를 검증하여 추출합니다.
+- 공개 graph 근거가 있으면 적합한 중첩 validation error를 바깥쪽 subgraph에 표시하면서 원본 노드 정보를 유지합니다.
+- 모델 자산 진단은 ComfyUI의 live model registry를 우선 사용하며 중첩 subgraph와 사용자 정의 확장자를 제한된 범위에서 검사합니다.
+- 모델 경로에는 real-path containment를 적용하고 `Authorization` 및 `X-API-Key` 값은 항상 마스킹합니다.
+- Doctor settings는 host setting-change telemetry를 비활성화하며 Desktop runtime identity와 private state storage source를 별도로 판정합니다.
 - Doctor 사이드바는 Chat, Statistics, Settings 탭을 제공합니다.
 - OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, LMStudio를 통한 선택적 LLM 분석을 지원하며 통합 provider request/response 처리를 사용합니다.
 - 외부 LLM 요청을 위해 경로, 키, 이메일, IP sanitization mode를 포함한 privacy controls를 제공합니다.

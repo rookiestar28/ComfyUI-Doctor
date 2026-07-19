@@ -61,15 +61,26 @@ The current zero-dependency encrypted format derives encryption and MAC keys wit
 
 ## Runtime State Location
 
-Doctor stores runtime state under ComfyUI's private system-user directory when the host provides that API. This keeps Doctor's generated state aligned with current ComfyUI and Desktop user-data boundaries.
+Doctor stores runtime state under ComfyUI's private system-user directory when
+the host provides that API. This keeps Doctor's generated state aligned with
+current ComfyUI and Desktop user-data boundaries.
 
 Older `user/ComfyUI-Doctor` layouts remain supported through fallback and best-effort migration. The health endpoint exposes path diagnostics so users can confirm which host directory is active without exposing secret values.
+Runtime identity is independent from storage selection. A managed Desktop
+`.venv` can therefore report Desktop identity while
+`storage_source=folder_paths.get_system_user_directory` keeps state in the
+private host directory. Explicit portable or repository-local `.venv` layouts
+remain non-Desktop.
 
 ## Outbound Safety
 
 Doctor applies outbound safety checks before sending provider-bound data:
 
 - Privacy sanitization for cloud LLM requests.
+- Unconditional case-insensitive redaction of `Authorization` and `X-API-Key`
+  values in text, mappings, lists, request/response headers, outbound payloads,
+  and recent log-buffer reads. This boundary remains active in privacy mode
+  `none`.
 - SSRF-oriented URL validation.
 - Redirect restrictions for sensitive outbound checks.
 - DNS/private-target checks for hostname-based private or metadata targets.
@@ -112,6 +123,11 @@ Optional external enrichment uses a fail-closed provider policy model:
 ## Telemetry
 
 Telemetry is local-only and opt-in. It can be toggled, viewed, cleared, and exported from the Doctor Statistics tab. It is not enabled by default.
+
+This Doctor-local telemetry is separate from ComfyUI frontend setting-change
+telemetry. Every Doctor-owned frontend setting registers
+`telemetry: { trackChanges: false }`, so setting values are not submitted to
+the host setting-change telemetry registry.
 
 ## CSP Compatibility
 

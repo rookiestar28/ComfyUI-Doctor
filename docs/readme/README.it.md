@@ -17,6 +17,10 @@ Gli ultimi aggiornamenti sono mantenuti nel README inglese. Vedi [Latest Updates
 - Cattura in tempo reale dell'output console/error di ComfyUI fin dall'avvio.
 - Suggerimenti integrati da 58 pattern di errore basati su JSON, inclusi 22 core patterns e 36 community-extension patterns.
 - Estrazione validata del contesto del nodo per errori recenti di esecuzione workflow quando ComfyUI fornisce dati evento sufficienti.
+- Le validation errors annidate idonee possono essere mostrate sul subgraph esterno usando dati graph pubblici, mantenendo le informazioni di origine.
+- I model asset diagnostics usano in via prioritaria il live model registry di ComfyUI e analizzano subgraph annidati ed estensioni personalizzate con limiti definiti.
+- I percorsi dei modelli sono protetti da real-path containment; i valori `Authorization` e `X-API-Key` vengono sempre mascherati.
+- Le Doctor settings disattivano la host setting-change telemetry; Desktop runtime identity e private state storage source vengono determinati separatamente.
 - Sidebar Doctor con tab Chat, Statistics e Settings.
 - Analisi LLM opzionale tramite OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama e LMStudio, con gestione unificata di provider request/response.
 - Privacy controls per richieste LLM in uscita, inclusi modi di sanitization per path, chiavi, email e IP.

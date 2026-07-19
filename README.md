@@ -14,6 +14,17 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Host compatibility, diagnostic safety, nested workflows, and Desktop identity aligned</strong></summary>
+
+- Added version-aware host contract coverage for the bundled Desktop frontend, ComfyUI's pinned frontend package, and the current standalone frontend source.
+- Hardened model diagnostics with authoritative registered model roots/extensions, bounded nested-subgraph scanning, and real-path containment before any asset probe.
+- Redacted `Authorization` and `X-API-Key` values unconditionally across text and structured outbound/log data, and disabled host setting-change telemetry for all Doctor-owned settings.
+- Corrected real subgraph focus and public-graph validation-error surfacing while preserving group-node behavior, source provenance, and legacy frontend fallbacks.
+- Aligned Python/PyTorch support guidance and separated Desktop runtime identity from private system-user storage selection.
+
+</details>
+
+<details>
 <summary><strong>Current host contracts, diagnostics, error UX, and tooling policy refreshed</strong></summary>
 
 - Refreshed host compatibility checks for current system statistics metadata, telemetry feature flags, ComfyUI job-cancel routes, and frontend job-cancel adoption.
@@ -237,7 +248,7 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 **Security Hardening:**
 
 - Strengthened SSRF protection with host/port parsing and outbound redirect blocking.
-- Added a single outbound sanitization boundary through `outbound.py`, with `privacy_mode=none` reserved for verified local LLMs.
+- Added a single outbound sanitization boundary through `outbound.py`, with `privacy_mode=none` reserved for verified local LLMs while named sensitive headers remain redacted.
 
 **Plugin Trust System:**
 
@@ -434,20 +445,45 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 </details>
 </details>
 
+## Table of Contents
+
+- [Core Features](#core-features)
+- [Host Compatibility and Diagnostics](#host-compatibility-and-diagnostics)
+- [Screenshots](#screenshots)
+- [Installation](#installation)
+- [Basic Usage](#basic-usage)
+- [Optional LLM Setup](#optional-llm-setup)
+- [Documentation](#documentation)
+- [Supported Error Patterns](#supported-error-patterns)
+- [Validation](#validation)
+- [Requirements](#requirements)
+- [License](#license)
+- [Contributing](#contributing)
+
 ## Core Features
 
 - Real-time ComfyUI console/error capture from startup.
 - Built-in suggestions from 58 JSON-based error patterns, including 22 core patterns and 36 community-extension patterns.
 - Validated node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
-- Stable local display summaries for known prompt-validation and aggregate host errors, with grouping metadata, account-precondition filtering, duplicate suppression, and safe fallback copy for unknown validation types.
+- Stable local display summaries for known prompt-validation and aggregate host errors, including public-graph boundary surfacing, source provenance, grouping metadata, account-precondition filtering, duplicate suppression, and safe fallback copy for unknown validation types.
 - Doctor sidebar with Chat, Statistics, and Settings tabs.
-- Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds.
+- Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds, including distinct group-node and real-subgraph navigation.
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
-- Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes.
+- Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes and unconditional sensitive-header redaction.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
-- Local diagnostics for workflow linting, current ComfyUI model asset folders/loaders including Diffusers, GLIGEN, and 3D input assets, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
+- Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
+
+## Host Compatibility and Diagnostics
+
+- The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
+- Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
+- Workflow diagnostics inspect bounded `definitions.subgraphs` content, including promoted and non-promoted nested model references, while preserving the visible host and concrete source node provenance.
+- Every candidate model path is resolved and contained within an authoritative registered root before Doctor checks it. Traversal, absolute external, cross-drive, null-byte, and symlink escape candidates are rejected.
+- Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Doctor does not depend on private frontend stores for this behavior.
+- Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.5 receive conservative upgrade guidance when a parseable version is available.
+- Desktop runtime identity and storage are reported independently: a managed Desktop `.venv` remains identified as Desktop while Doctor data continues to prefer ComfyUI's private system-user directory.
 
 ## Screenshots
 
@@ -483,6 +519,7 @@ Restart ComfyUI after cloning. Doctor should print its startup diagnostics and r
 
 After installation, Doctor passively records ComfyUI runtime output, detects tracebacks, matches known error patterns, and shows the latest diagnosis in the sidebar and optional right-side report panel.
 Prompt-validation failures from ComfyUI are normalized into local catalog summaries when the host reports structured validation details; unknown validation types use safe fallback text.
+For nested workflows, Doctor can surface eligible input-level validation errors to the visible outer subgraph while retaining the concrete source node and input provenance.
 When optional LLM analysis is used, Doctor builds prompt context from the same structured pipeline that handles sanitization, node context, execution logs, workflow pruning, and system information.
 
 ### Doctor Sidebar
@@ -493,7 +530,7 @@ Open **Doctor** in ComfyUI's left sidebar:
 - **Statistics**: inspect recent error trends, diagnostics, trust/health information, telemetry controls, and feedback tools.
 - **Settings**: choose language, LLM provider, base URL, model, privacy mode, auto-open behavior, and optional server-side credential storage.
 
-When node context is available, locate actions use the host canvas focus APIs when possible, including graph/subgraph switching for nested execution ids.
+When node context is available, locate actions use the host canvas focus APIs when possible, including graph/subgraph switching for nested execution ids while keeping executable group focus on the group host.
 
 ### Smart Debug Node
 
@@ -507,6 +544,7 @@ Doctor normalizes provider-specific request and response formats for OpenAI-comp
 Recommended defaults:
 
 - Use **Privacy Mode: Basic** or **Strict** for cloud providers.
+- Treat `Authorization` and `X-API-Key` values as always-redacted secrets; this protection remains active even for verified-local `none` mode.
 - Use environment variables for shared or production-like environments.
 - Set `DOCTOR_ADMIN_TOKEN` and `DOCTOR_REQUIRE_ADMIN_TOKEN=1` on shared servers.
 - Keep local-only loopback convenience mode for single-user desktop use only.

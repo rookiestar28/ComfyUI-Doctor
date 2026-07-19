@@ -81,6 +81,11 @@ LLM failure responses use the standard JSON error envelope. The chat streaming p
 | `GET` | `/doctor/health` | Return Doctor runtime health and path diagnostics. |
 | `GET` | `/doctor/plugins` | Return scan-only plugin trust information. |
 
+Path diagnostics in `/doctor/health` report runtime identity separately from
+storage evidence. For example, a managed Desktop runtime can report
+`install_mode=desktop` while `storage_source` identifies ComfyUI's private
+system-user API.
+
 ## Telemetry Endpoints
 
 | Method | Path | Purpose |
@@ -112,4 +117,9 @@ LLM failure responses use the standard JSON error envelope. The chat streaming p
 
 Diagnostics reports are produced by concrete local checks such as workflow linting, dependency checks, model asset checks, privacy/security checks, runtime performance checks, and signature-pack checks.
 
-Model asset diagnostics recognize current ComfyUI first-party folder families such as diffusion models, text encoders, CLIP vision, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, and optical flow. Legacy folder aliases remain supported where Doctor can map them unambiguously.
+Model asset diagnostics use the current host's registered model roots and
+extensions when available, including custom folders and `.pt2`/`.sft`
+artifacts. They also inspect bounded nested subgraph definitions while
+preserving source provenance. Older hosts retain bounded legacy folder
+fallbacks, and every filesystem candidate must remain contained within an
+authoritative root before it is probed.

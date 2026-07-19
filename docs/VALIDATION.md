@@ -54,7 +54,18 @@ python scripts/check_host_compatibility.py
 ```
 
 This lane checks the host API surfaces Doctor currently depends on.
-Current checks cover prompt queue source metadata, frontend queue source attribution, execution event payload shape, output asset enrichment tolerance, host package/version anchors, model asset folder/loader names, system statistics metadata, telemetry feature flags, ComfyUI job-cancel routes, and frontend queue/cancel adoption.
+Checks are version-aware and report separate applicability lanes for the
+ComfyUI Desktop bundled frontend, ComfyUI's pinned frontend package, and the
+standalone frontend source. Current contracts cover prompt queue source
+metadata, frontend queue source attribution, execution event payload shape,
+output asset enrichment tolerance, host package/version anchors, the live
+model registry and extensions, nested/promoted subgraph serialization,
+frontend raw/surfaced validation errors, setting-change telemetry controls,
+real subgraph shape, system statistics metadata, Desktop layout, ComfyUI
+job-cancel routes, and frontend queue/cancel adoption.
+
+The compatibility script reads source files only. It does not import, install,
+build, or execute code from the host reference repositories.
 
 ## Supply-Chain Check
 

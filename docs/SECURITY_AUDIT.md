@@ -39,9 +39,17 @@ Each quarterly audit should include public-safe summaries for these scenarios:
 - Redirect-based SSRF bypass attempts.
 - XSS attempts through chat inputs, rendered model responses, settings fields, and diagnostic text.
 - Path traversal attempts through any path-like input or report/history access path.
+- Model-asset traversal, absolute external path, cross-drive, null-byte, and
+  symlink-escape attempts; verify no rejected candidate is opened or returned
+  as evidence.
 - Admin bypass attempts against write-sensitive endpoints.
 - Credential exposure checks for status APIs, server-side key metadata, logs, and browser state.
+- Case-insensitive `Authorization` and `X-API-Key` redaction across text,
+  structured payloads, outbound data, and recent logs, including privacy mode
+  `none`.
 - Telemetry privacy review for opt-in state, export, clear, and local-only behavior.
+- Host setting-change telemetry review confirming every Doctor-owned frontend
+  setting opts out and no credential setting is registered.
 - Plugin trust scanning review without importing third-party plugin code.
 
 Active or passive DAST must only run against targets you own or are explicitly authorized to test.

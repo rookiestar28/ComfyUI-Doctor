@@ -17,6 +17,10 @@ ComfyUI-Doctor 是 ComfyUI 的实时诊断与调试助手。它会捕获运行�
 - 从启动阶段开始实时捕获 ComfyUI console/error 输出。
 - 内置 58 个基于 JSON 的错误模式建议，包含 22 个核心模式与 36 个社区扩展模式。
 - 当 ComfyUI 提供足够事件数据时，可针对近期 workflow 执行错误提取并验证节点上下文。
+- 可根据公开 graph 证据将合适的嵌套 validation error 显示在外层 subgraph，同时保留来源节点信息。
+- 模型资产诊断会优先使用 ComfyUI 的实时 model registry，并以有界方式扫描嵌套 subgraph 与自定义模型扩展名。
+- 模型路径会先经过 real-path containment；`Authorization` 与 `X-API-Key` 值始终会被遮蔽。
+- Doctor settings 会禁用 host setting-change telemetry；Desktop 运行环境身份与私有 state 存储来源会分别判定。
 - Doctor 侧边栏包含 Chat、Statistics、Settings 选项卡。
 - 可选用 OpenAI-compatible services、Anthropic、Gemini、xAI、OpenRouter、Ollama、LMStudio 进行 LLM 分析，并使用统一的 provider request/response 处理。
 - 对外 LLM 请求具备隐私控制，包含路径、密钥、邮箱、IP 的清理模式。

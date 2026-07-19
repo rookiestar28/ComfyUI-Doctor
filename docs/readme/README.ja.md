@@ -17,6 +17,10 @@ ComfyUI-Doctor は、ComfyUI 向けのリアルタイム診断およびデバッ
 - 起動時から ComfyUI の console/error 出力をリアルタイムに取得します。
 - 22 個の core pattern と 36 個の community-extension pattern を含む、58 個の JSON ベースのエラーパターン提案を内蔵しています。
 - ComfyUI が十分なイベントデータを提供している場合、直近の workflow 実行エラーからノードコンテキストを検証付きで抽出します。
+- 公開 graph の根拠がある場合、対象のネストされた validation error を外側の subgraph に表示し、元のノード情報を保持します。
+- モデル資産診断は ComfyUI の live model registry を優先し、ネストされた subgraph とカスタム拡張子を上限付きで検査します。
+- モデルパスには real-path containment を適用し、`Authorization` と `X-API-Key` の値は常にマスクします。
+- Doctor settings は host setting-change telemetry を無効化し、Desktop runtime identity と private state storage source を個別に判定します。
 - Doctor サイドバーには Chat、Statistics、Settings タブがあります。
 - OpenAI-compatible services、Anthropic、Gemini、xAI、OpenRouter、Ollama、LMStudio による任意の LLM 分析に対応し、統一された provider request/response 処理を使います。
 - 外部 LLM リクエスト向けに、パス、キー、メールアドレス、IP のサニタイズモードを含むプライバシー制御を提供します。

@@ -87,10 +87,16 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 
 1. The frontend or caller posts workflow/context data to diagnostics endpoints.
 2. `HealthCheckRequest` is parsed by the diagnostics runner.
-3. Registered checks inspect workflow lint, dependencies, model assets, privacy/security, runtime performance, and signature packs.
+3. Registered checks inspect workflow lint, dependencies, model assets,
+   privacy/security, runtime performance, and signature packs.
 4. Reports are saved by the diagnostics store and exposed through report/history endpoints.
 
-Model asset checks track current ComfyUI first-party folder families such as diffusion models, text encoders, CLIP vision, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, and optical flow while retaining legacy folder fallbacks where needed.
+Model asset checks use ComfyUI's live `folder_names_and_paths` registry as the
+authoritative source when available, including custom roots and registered
+extensions. Older hosts retain a bounded fixed fallback. Workflow traversal
+also inspects bounded `definitions.subgraphs` content and preserves visible
+host plus concrete source provenance for nested assets. Every candidate is
+real-path-contained within a registered root before any filesystem probe.
 
 ### Telemetry
 
@@ -111,21 +117,34 @@ ComfyUI loads frontend assets from `web/`.
 | Resilience | `web/preact-loader.js`, `web/island_registry.js`, `web/ErrorBoundary.js`, `web/global_error_handler.js` | Local Preact loading, island fallback, error boundaries |
 
 Preact islands improve the Chat and Statistics surfaces, but each island has a vanilla fallback so the sidebar remains usable if the island loader fails.
-Validation-error display is normalized in the frontend so known prompt-validation failures use stable local catalog text and grouping metadata, while unknown validation types fall back safely without breaking runtime error reporting.
+Validation-error display is normalized in the frontend so known
+prompt-validation failures use stable local catalog text and grouping
+metadata. Public raw errors and graph links can surface eligible input-level
+errors to a visible subgraph boundary while retaining source provenance;
+unknown or unproven topology falls back safely without private store access or
+breaking runtime error reporting.
 
 ## Security and Storage Boundaries
 
 Security-sensitive behavior is centralized:
 
 - SSRF validation guards provider base URLs.
-- Outbound sanitization prevents raw private context from leaving the process.
+- Outbound sanitization prevents raw private context from leaving the process;
+  `Authorization` and `X-API-Key` values are always redacted in text and
+  structured payloads, regardless of privacy mode.
 - Privacy modes control how much local context can be sent to remote providers.
 - Write-sensitive endpoints use the admin guard.
 - Server-side credentials use the secret store and are never exposed through status APIs.
 - Community plugins are scanned for trust metadata without importing plugin code.
 - Telemetry is local-only and opt-in.
+- Doctor-owned frontend settings opt out of the host frontend's independent
+  setting-change telemetry.
 
-Storage should go through `services/doctor_paths.py` so Desktop, portable, and standard ComfyUI installations resolve Doctor data consistently.
+Storage should go through `services/doctor_paths.py` so Desktop, portable, and
+standard ComfyUI installations resolve Doctor data consistently. Runtime
+identity and storage evidence are separate: a managed Desktop interpreter can
+remain classified as Desktop while the data directory comes from ComfyUI's
+private system-user API.
 
 ## Testing Architecture
 
@@ -143,11 +162,18 @@ Additional focused lanes:
 - `npm run test:integration` runs `@integration` telemetry tests against the harness backend by default, or a live backend when `COMFYUI_URL` is set.
 - `npm run test:stress` runs opt-in `@stress` telemetry burst/state tests against the harness backend.
 - `python scripts/focused_gate.py` runs the supplemental focused security/contract/E2E regression lane. It is not a replacement for the full acceptance gate.
+- `python scripts/check_host_compatibility.py` evaluates source-linked
+  contracts with separate frontend runtime lanes for the Desktop bundle,
+  ComfyUI package pin, and standalone frontend source.
 
 ## Compatibility Principles
 
 - Keep package imports compatible with ComfyUI custom-node loading.
 - Keep frontend registration compatible with current and deprecated host sidebar APIs where support exists.
-- Keep host compatibility checks aligned with prompt queue source metadata, execution event payloads, model asset folder/loader names, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption.
+- Keep host compatibility checks version-aware and aligned with prompt queue
+  source metadata, execution event payloads, model registries, nested workflow
+  serialization, validation-error state, setting telemetry, Desktop layout,
+  system statistics metadata, job-cancel contracts, and frontend queue/cancel
+  adoption.
 - Keep public route changes reflected in `docs/openapi.json`.
 - Keep local harness tests deterministic; live backend tests must be explicit opt-in.

@@ -17,6 +17,10 @@ Captured context can include:
 
 When optional LLM analysis is enabled, Doctor builds the LLM prompt context from the same analysis pipeline. That structured context can include the sanitized traceback, failed-node details, recent execution logs, a pruned workflow subset, and canonical system information.
 Known host validation failures use Doctor's local catalog copy and grouping so repeated validation/runtime reports are easier to scan. Current aggregate validation groups, missing model/media/swap-node states, and duplicate validation/runtime reports are normalized for display; account precondition failures are filtered from the runtime error list. Unknown validation types fall back to generic safe copy while preserving enough detail for local debugging.
+For nested workflows, eligible input-level validation failures can be surfaced
+to the visible outer subgraph when public raw errors and graph links prove the
+boundary. The displayed error retains its concrete source execution ID and
+input provenance, and ambiguous topology stays on the source node.
 
 ## Doctor Sidebar
 
@@ -60,6 +64,9 @@ Use Settings for routine configuration:
 - Optional Advanced Key Store for server-side credential storage.
 
 Doctor also registers compatibility defaults through the current ComfyUI frontend settings API so modern frontend builds retain expected defaults. The sidebar Settings tab remains the recommended surface for normal use.
+All Doctor-owned frontend settings explicitly disable the host frontend's
+setting-change telemetry. This is separate from Doctor's own local, opt-in
+telemetry controls in the Statistics tab.
 
 ## Right-Side Latest Diagnosis Panel
 
@@ -73,7 +80,10 @@ Doctor can show a compact right-side panel when a new error is detected. It disp
 - A locate action when the related node can be found on the canvas.
 
 The auto-open behavior is controlled in **Doctor -> Settings**.
-When host canvas APIs are available, locate actions focus the resolved node bounds and can switch into the relevant graph or subgraph for nested execution ids.
+When host canvas APIs are available, locate actions focus the resolved node
+bounds and can switch into the relevant graph or real subgraph for nested
+execution IDs. Executable group IDs continue to focus their group host rather
+than being treated as subgraphs.
 
 ## Smart Debug Node
 
@@ -104,7 +114,7 @@ Privacy mode controls how much sensitive context is removed before sending an LL
 
 | Mode | Use Case | Behavior |
 | --- | --- | --- |
-| `none` | Verified local LLM only | Sends raw context needed for debugging. |
+| `none` | Verified local LLM only | Preserves debugging context, but always redacts named sensitive headers. |
 | `basic` | Default cloud-provider use | Removes common local paths, credential-looking values, emails, private IPs, and URL credentials. |
 | `strict` | Shared or compliance-sensitive use | Applies stronger masking for additional network and identity-like values. |
 
@@ -115,10 +125,17 @@ Error messages, node names, model names, and workflow structure may remain becau
 Diagnostics can run without an LLM call. Built-in JSON signature packs provide deterministic checks for common workflow and environment problems, including:
 
 - Model path anomalies.
-- Current ComfyUI model asset folder and loader expectations, including diffusion models, Diffusers loaders, text encoders, CLIP vision, GLIGEN, 3D input assets, style models, PhotoMaker, model patches, audio encoders, background removal, frame interpolation, optical flow, and broader CLIP widget naming.
+- Current ComfyUI model asset folder and loader expectations sourced from the
+  live host model registry when available, including custom registered roots
+  and extensions such as `.pt2` and `.sft`.
+- Bounded nested `definitions.subgraphs` scanning for promoted and
+  non-promoted model references with visible-host and source-node provenance.
+- Real-path containment that rejects external, traversal, cross-drive,
+  null-byte, and symlink-escape candidates before any asset probe.
 - Missing assets or placeholder values.
 - Node configuration anti-patterns.
-- Environment mismatch hints.
+- Environment mismatch hints, including Python 3.10+ support and conservative
+  PyTorch-below-2.5 guidance when the version is parseable.
 
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
 The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.
@@ -139,6 +156,12 @@ Submit actions are admin-gated. Preview is intended to help users inspect what w
 
 ## Data Locations
 
-Doctor resolves runtime state paths through ComfyUI's private system-user directory when the host exposes that API. Older `user/ComfyUI-Doctor` layouts remain readable through fallback and migration behavior. The health endpoint exposes path diagnostics for troubleshooting regular ComfyUI installs, portable layouts, and ComfyUI Desktop-style `.venv` installs.
+Doctor resolves runtime state paths through ComfyUI's private system-user
+directory when the host exposes that API. Older `user/ComfyUI-Doctor` layouts
+remain readable through fallback and migration behavior. Runtime identity is
+reported separately from storage selection, so a managed ComfyUI Desktop
+`.venv` remains identified as Desktop while its Doctor state stays in the
+private system-user path. The health endpoint exposes both identity and
+storage-source diagnostics for standard, portable, and Desktop layouts.
 
 Runtime-generated timestamps are serialized as UTC with a trailing `Z`. Older persisted records with naive timestamps remain readable for compatibility.
