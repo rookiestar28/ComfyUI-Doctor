@@ -9,6 +9,7 @@ Analyzes workflow to detect:
 import logging
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Set, Optional, Tuple
 
@@ -80,6 +81,7 @@ THREE_D_EXTENSIONS: Set[str] = {
 FOLDER_ASSET_CATEGORIES: Set[str] = {"diffusers"}
 
 INPUT_3D_PREFIX = "3d/"
+INVALID_ASSET_DISPLAY_NAME = "[invalid asset path]"
 
 
 # ============================================================================
@@ -87,6 +89,14 @@ INPUT_3D_PREFIX = "3d/"
 # ============================================================================
 
 _comfy_paths: Optional[Dict[str, List[Path]]] = None
+
+
+@dataclass(frozen=True)
+class _ContainedAssetPath:
+    """A candidate resolved together with the authoritative root containing it."""
+
+    root: Path
+    candidate: Path
 
 
 def _get_comfy_model_paths() -> Dict[str, List[Path]]:
@@ -187,44 +197,122 @@ def _clear_path_cache():
     _comfy_paths = None
 
 
+def _resolve_contained_asset_path(
+    root: Path,
+    candidate: str | Path,
+) -> Optional[_ContainedAssetPath]:
+    """Resolve a candidate only when its real path remains inside ``root``."""
+    try:
+        root_text = os.fspath(root)
+        candidate_text = os.fspath(candidate)
+        if "\x00" in root_text or "\x00" in candidate_text:
+            return None
+        normalized_candidate = candidate_text.replace("\\", "/")
+        if ".." in normalized_candidate.split("/"):
+            return None
+
+        resolved_root_text = os.path.realpath(root_text)
+        joined_candidate = os.path.join(root_text, candidate_text)
+        resolved_candidate_text = os.path.realpath(joined_candidate)
+        common = os.path.commonpath(
+            (resolved_root_text, resolved_candidate_text)
+        )
+
+        # CRITICAL: no candidate existence/stat/open probe may move before
+        # this realpath containment check; workflow widget paths are untrusted.
+        if os.path.normcase(common) != os.path.normcase(resolved_root_text):
+            return None
+
+        return _ContainedAssetPath(
+            root=Path(resolved_root_text),
+            candidate=Path(resolved_candidate_text),
+        )
+    except (OSError, TypeError, ValueError):
+        # Embedded nulls, Windows cross-drive paths, and resolution failures
+        # are all invalid candidates and must fail closed.
+        return None
+
+
 def _find_file_in_comfy_paths(
     filename: str,
     category: str = "checkpoints",
-) -> Tuple[bool, Optional[Path]]:
+) -> Tuple[bool, Optional[Path], Optional[Path], bool]:
     """
     Try to find a file in ComfyUI's model paths.
 
     Returns:
-        (found, full_path) - found is True if file exists, full_path is the resolved path
+        ``(found, full_path, containing_root, invalid_candidate)``. A found
+        path is always realpath-contained by the returned authoritative root.
     """
     paths = _get_comfy_model_paths()
     search_paths = paths.get(category, [])
 
     candidate_names = _candidate_relative_names(filename, category)
+    candidate_was_contained = False
+    has_forbidden_component = any(
+        "\x00" in candidate_name
+        or ".." in candidate_name.replace("\\", "/").split("/")
+        for candidate_name in candidate_names
+    )
+    if has_forbidden_component:
+        return False, None, None, True
 
     # Also search common parent directories
     for search_path in search_paths:
-        if not search_path.exists():
-            continue
-
         # Direct match
         for candidate_name in candidate_names:
-            full_path = search_path / candidate_name
-            if full_path.exists():
-                return True, full_path
+            contained = _resolve_contained_asset_path(
+                search_path,
+                candidate_name,
+            )
+            candidate_was_contained = (
+                candidate_was_contained or contained is not None
+            )
+            if contained is not None and contained.candidate.exists():
+                return True, contained.candidate, contained.root, False
 
         # Check subdirectories (one level)
         try:
-            for subdir in search_path.iterdir():
-                if subdir.is_dir():
+            contained_root = _resolve_contained_asset_path(search_path, ".")
+            if contained_root is None:
+                continue
+
+            for subdir in contained_root.candidate.iterdir():
+                contained_subdir = _resolve_contained_asset_path(
+                    contained_root.root,
+                    subdir,
+                )
+                if (
+                    contained_subdir is not None
+                    and contained_subdir.candidate.is_dir()
+                ):
                     for candidate_name in candidate_names:
-                        full_path = subdir / candidate_name
-                        if full_path.exists():
-                            return True, full_path
+                        contained = _resolve_contained_asset_path(
+                            contained_root.root,
+                            contained_subdir.candidate / candidate_name,
+                        )
+                        if (
+                            contained is not None
+                            and contained.candidate.exists()
+                        ):
+                            return (
+                                True,
+                                contained.candidate,
+                                contained.root,
+                                False,
+                            )
         except (PermissionError, OSError):
             continue
 
-    return False, None
+    try:
+        is_absolute = Path(filename).is_absolute()
+    except (OSError, ValueError):
+        is_absolute = True
+
+    invalid_candidate = (
+        is_absolute or (bool(search_paths) and not candidate_was_contained)
+    )
+    return False, None, None, invalid_candidate
 
 
 def _candidate_relative_names(filename: str, category: str) -> List[str]:
@@ -346,17 +434,26 @@ async def check_model_assets(
             checked_paths.add(value)
 
             # Try to find the file
-            found, full_path = _find_file_in_comfy_paths(value, category)
+            (
+                found,
+                full_path,
+                containing_root,
+                invalid_candidate,
+            ) = _find_file_in_comfy_paths(value, category)
 
-            # Also check if it's an absolute path that exists
-            if not found:
-                try:
-                    p = Path(value)
-                    if p.is_absolute() and p.exists():
-                        found = True
-                        full_path = p
-                except Exception:
-                    pass
+            if found and full_path is not None and containing_root is not None:
+                final_candidate = _resolve_contained_asset_path(
+                    containing_root,
+                    full_path,
+                )
+                if final_candidate is None:
+                    found = False
+                    full_path = None
+                    containing_root = None
+                    invalid_candidate = True
+                else:
+                    full_path = final_candidate.candidate
+                    containing_root = final_candidate.root
 
             if not found:
                 # File not found - report issue
@@ -365,7 +462,11 @@ async def check_model_assets(
                 # Severity depends on whether this is a known file loader
                 severity = IssueSeverity.WARNING if is_file_loader else IssueSeverity.INFO
 
-                safe_name = _sanitize_path_for_display(value)
+                safe_name = (
+                    INVALID_ASSET_DISPLAY_NAME
+                    if invalid_candidate
+                    else _sanitize_path_for_display(value)
+                )
 
                 issues.append(HealthIssue(
                     issue_id=HealthIssue.generate_issue_id(
@@ -389,9 +490,18 @@ async def check_model_assets(
                 ))
             else:
                 # File found - check if readable
-                if full_path and full_path.is_file():
+                if (
+                    full_path is not None
+                    and containing_root is not None
+                    and full_path.is_file()
+                ):
                     readable_issue = _check_file_readable(
-                        full_path, node_id, node_title, node_type, value
+                        full_path,
+                        containing_root,
+                        node_id,
+                        node_title,
+                        node_type,
+                        value,
                     )
                     if readable_issue:
                         issues.append(readable_issue)
@@ -509,6 +619,7 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
 
 def _check_file_readable(
     path: Path,
+    containing_root: Path,
     node_id: int,
     node_title: str,
     node_type: str,
@@ -516,8 +627,13 @@ def _check_file_readable(
 ) -> Optional[HealthIssue]:
     """Check if a file is readable."""
     try:
-        # Try to open for reading
-        with open(path, "rb") as f:
+        # IMPORTANT: re-resolve immediately before reading so a symlink change
+        # cannot bypass the registered-root decision made during lookup.
+        contained = _resolve_contained_asset_path(containing_root, path)
+        if contained is None:
+            raise OSError("asset path left its registered root")
+
+        with open(contained.candidate, "rb") as f:
             # Read first byte to verify access
             f.read(1)
         return None  # File is readable

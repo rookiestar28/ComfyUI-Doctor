@@ -4,12 +4,13 @@ Tests privacy_security and runtime_performance heuristics.
 Uses unittest.IsolatedAsyncioTestCase for async compatibility.
 """
 
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 from services.diagnostics.checks import model_assets, privacy_security, runtime_performance
 from services.diagnostics.models import (
     HealthCheckRequest,
@@ -17,6 +18,7 @@ from services.diagnostics.models import (
     IssueCategory,
     DiagnosticsScope
 )
+from services.diagnostics.runner import DiagnosticsRunner
 
 class TestPrivacySecurityChecks(unittest.IsolatedAsyncioTestCase):
     
@@ -185,6 +187,293 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         model_assets._clear_path_cache()
+
+    @staticmethod
+    def _asset_workflow(value, node_id=90):
+        return {
+            "nodes": [
+                {
+                    "id": node_id,
+                    "type": "CheckpointLoaderSimple",
+                    "title": "Synthetic Loader",
+                    "widgets_values": [value],
+                }
+            ]
+        }
+
+    @staticmethod
+    def _checkpoint_paths(root):
+        return {
+            "checkpoints": [root],
+            "input": [],
+            "input_3d": [],
+            "output": [],
+        }
+
+    async def test_model_assets_rejects_traversal_before_exists_or_open(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            registered = base / "registered"
+            registered.mkdir()
+            outside = base / "outside.safetensors"
+            outside.write_bytes(b"x")
+            workflow = self._asset_workflow("../outside.safetensors")
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+            original_exists = Path.exists
+            probed_paths = []
+
+            def exists_spy(path):
+                probed_paths.append(os.path.normcase(os.path.abspath(os.fspath(path))))
+                return original_exists(path)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch.object(Path, "exists", autospec=True, side_effect=exists_spy),
+                patch("builtins.open", mock_open(read_data=b"x")) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            issue_text = repr(issues[0].to_dict())
+            self.assertNotIn("outside.safetensors", issue_text)
+            self.assertNotIn(
+                os.path.normcase(os.path.abspath(os.fspath(outside))),
+                probed_paths,
+            )
+            open_mock.assert_not_called()
+
+    async def test_model_assets_rejects_absolute_external_before_exists_or_open(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            registered = base / "registered"
+            registered.mkdir()
+            outside = base / "absolute-external.safetensors"
+            outside.write_bytes(b"x")
+            workflow = self._asset_workflow(str(outside))
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+            original_exists = Path.exists
+            probed_paths = []
+
+            def exists_spy(path):
+                probed_paths.append(os.path.normcase(os.path.abspath(os.fspath(path))))
+                return original_exists(path)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch.object(Path, "exists", autospec=True, side_effect=exists_spy),
+                patch("builtins.open", mock_open(read_data=b"x")) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            issue_text = repr(issues[0].to_dict())
+            self.assertNotIn("absolute-external.safetensors", issue_text)
+            self.assertNotIn(
+                os.path.normcase(os.path.abspath(os.fspath(outside))),
+                probed_paths,
+            )
+            open_mock.assert_not_called()
+
+    async def test_model_assets_rejects_embedded_null_without_probe(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            registered = Path(temp_root) / "registered"
+            registered.mkdir()
+            value = "synthetic\x00escape.safetensors"
+            workflow = self._asset_workflow(value)
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch.object(Path, "exists", autospec=True) as exists_mock,
+                patch("builtins.open", mock_open()) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            self.assertNotIn("escape.safetensors", repr(issues[0].to_dict()))
+            exists_mock.assert_not_called()
+            open_mock.assert_not_called()
+
+    async def test_model_assets_commonpath_value_error_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            registered = Path(temp_root) / "registered"
+            registered.mkdir()
+            (registered / "synthetic.safetensors").write_bytes(b"x")
+            workflow = self._asset_workflow("synthetic.safetensors")
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch(
+                    "services.diagnostics.checks.model_assets.os.path.commonpath",
+                    side_effect=ValueError("synthetic cross-drive mismatch"),
+                ) as commonpath_mock,
+                patch("builtins.open", mock_open()) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            commonpath_mock.assert_called()
+            open_mock.assert_not_called()
+
+    async def test_model_assets_rejects_symlink_escape_before_open(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            registered = base / "registered"
+            registered.mkdir()
+            outside = base / "symlink-target.safetensors"
+            outside.write_bytes(b"x")
+            linked = registered / "linked.safetensors"
+            try:
+                linked.symlink_to(outside)
+            except OSError as exc:
+                self.skipTest(f"symlink creation unavailable: {type(exc).__name__}")
+
+            workflow = self._asset_workflow(linked.name)
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch("builtins.open", mock_open(read_data=b"x")) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            open_mock.assert_not_called()
+
+    async def test_model_assets_rejects_simulated_symlink_realpath_escape(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            registered = base / "registered"
+            registered.mkdir()
+            linked = registered / "simulated-link.safetensors"
+            linked.write_bytes(b"x")
+            outside = base / "simulated-target.safetensors"
+            outside.write_bytes(b"x")
+            workflow = self._asset_workflow(linked.name)
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+            original_realpath = os.path.realpath
+
+            def realpath_spy(path):
+                normalized = os.path.normcase(os.path.abspath(os.fspath(path)))
+                if normalized == os.path.normcase(os.path.abspath(os.fspath(linked))):
+                    return os.fspath(outside)
+                return original_realpath(path)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch(
+                    "services.diagnostics.checks.model_assets.os.path.realpath",
+                    side_effect=realpath_spy,
+                ) as realpath_mock,
+                patch("builtins.open", mock_open(read_data=b"x")) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            realpath_mock.assert_called()
+            open_mock.assert_not_called()
+
+    async def test_model_assets_rejects_parent_component_even_when_result_is_in_root(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            registered = Path(temp_root) / "registered"
+            nested = registered / "nested"
+            nested.mkdir(parents=True)
+            asset = registered / "inside.safetensors"
+            asset.write_bytes(b"x")
+            workflow = self._asset_workflow("nested/../inside.safetensors")
+            request = HealthCheckRequest(workflow=workflow, scope=DiagnosticsScope.MANUAL)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch("builtins.open", mock_open(read_data=b"x")) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(workflow, request)
+
+            self.assertEqual(len(issues), 1)
+            self.assertNotIn("inside.safetensors", repr(issues[0].to_dict()))
+            open_mock.assert_not_called()
+
+    async def test_model_assets_preserves_nested_and_contained_absolute_paths(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            registered = Path(temp_root) / "registered"
+            nested = registered / "nested" / "unicode"
+            nested.mkdir(parents=True)
+            asset = nested / "模型.safetensors"
+            asset.write_bytes(b"x")
+
+            with patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=self._checkpoint_paths(registered),
+            ):
+                for index, value in enumerate(
+                    ("nested/unicode/模型.safetensors", str(asset)),
+                    start=91,
+                ):
+                    with self.subTest(value_kind="absolute" if Path(value).is_absolute() else "relative"):
+                        workflow = self._asset_workflow(value, node_id=index)
+                        request = HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        )
+                        issues = await model_assets.check_model_assets(workflow, request)
+
+                    self.assertEqual(issues, [])
+
+    async def test_health_check_route_flow_does_not_probe_or_disclose_external_path(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            registered = base / "registered"
+            registered.mkdir()
+            outside = base / "route-external.safetensors"
+            outside.write_bytes(b"x")
+            payload = {
+                "workflow": self._asset_workflow("../route-external.safetensors"),
+                "scope": "manual",
+                "options": {"include_intent": False, "max_paths": 50},
+            }
+            check_request = HealthCheckRequest.from_dict(payload)
+            runner = DiagnosticsRunner()
+            runner.register_check("model_assets", model_assets.check_model_assets)
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._checkpoint_paths(registered),
+                ),
+                patch("builtins.open", mock_open(read_data=b"x")) as open_mock,
+            ):
+                report = await runner.run(check_request)
+
+            response = {"success": True, "report": report.to_dict()}
+            serialized = repr(response)
+            self.assertTrue(response["success"])
+            self.assertEqual(response["report"]["scope"], "manual")
+            self.assertEqual(len(response["report"]["issues"]), 1)
+            self.assertNotIn(str(base), serialized)
+            self.assertNotIn("../", serialized)
+            self.assertNotIn("route-external.safetensors", serialized)
+            open_mock.assert_not_called()
 
     def test_model_assets_discovers_current_host_folders(self):
         with tempfile.TemporaryDirectory() as temp_root:
