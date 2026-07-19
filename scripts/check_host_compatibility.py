@@ -19,7 +19,21 @@ class SurfaceCheck:
     file: str
     label: str
     required_patterns: tuple[str, ...]
+    forbidden_patterns: tuple[str, ...] = ()
+    source_revision: str = ""
+    applicable_lanes: tuple[str, ...] = ()
     note: str = ""
+
+
+@dataclass(frozen=True)
+class FrontendRuntimeLane:
+    id: str
+    label: str
+    version: str
+    source_repo: str
+    source_file: str
+    source_revision: str
+    setting_change_telemetry: bool
 
 
 @dataclass(frozen=True)
@@ -28,6 +42,42 @@ class CheckResult:
     ok: bool
     missing_file: bool = False
     missing_patterns: tuple[str, ...] = ()
+    present_forbidden_patterns: tuple[str, ...] = ()
+
+
+COMFYUI_REVISION = "c9602625e445e9ee37d3ac6faf5ea9ec1e0de87e"  # pragma: allowlist secret
+FRONTEND_REVISION = "3f27f570e8b617f1e68af999ef3ce715ff19e6fb"  # pragma: allowlist secret
+DESKTOP_REVISION = "e2d964b7456cea8423c7b9d3371c612313c06baa"  # pragma: allowlist secret
+
+FRONTEND_RUNTIME_LANES: tuple[FrontendRuntimeLane, ...] = (
+    FrontendRuntimeLane(
+        id="desktop-0.9.4",
+        label="Desktop 0.9.4 bundle",
+        version="1.43.18",
+        source_repo="desktop",
+        source_file="package.json",
+        source_revision=DESKTOP_REVISION,
+        setting_change_telemetry=False,
+    ),
+    FrontendRuntimeLane(
+        id="core-pin-1.45.21",
+        label="ComfyUI package pin",
+        version="1.45.21",
+        source_repo="ComfyUI",
+        source_file="requirements.txt",
+        source_revision=COMFYUI_REVISION,
+        setting_change_telemetry=False,
+    ),
+    FrontendRuntimeLane(
+        id="standalone-1.48.3+",
+        label="standalone frontend source",
+        version="1.48.3+",
+        source_repo="ComfyUI_frontend",
+        source_file="package.json",
+        source_revision=FRONTEND_REVISION,
+        setting_change_telemetry=True,
+    ),
+)
 
 
 CHECKS: tuple[SurfaceCheck, ...] = (
@@ -378,6 +428,217 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         label="Desktop settings path",
         required_patterns=("path.join(this.#basePath, 'user', 'default', 'comfy.settings.json')",),
     ),
+    SurfaceCheck(
+        repo="desktop",
+        file="package.json",
+        label="frontend runtime lane: Desktop bundle",
+        required_patterns=('"frontend"', '"version": "1.43.18"'),
+        source_revision=DESKTOP_REVISION,
+        applicable_lanes=("desktop-0.9.4",),
+        note="Setting-change telemetry from frontend v1.47.7 is absent in this bundled lane.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="requirements.txt",
+        label="frontend runtime lane: ComfyUI package pin",
+        required_patterns=("comfyui-frontend-package==1.45.21",),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("core-pin-1.45.21",),
+        note="Setting-change telemetry from frontend v1.47.7 is absent in this pinned lane.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="package.json",
+        label="frontend runtime lane: standalone source",
+        required_patterns=('"version": "1.48.3"',),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+        note="Current standalone source contains the setting-change telemetry contract.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_api/feature_flags.py",
+        label="model type tag feature flag",
+        required_patterns=('"supports_model_type_tags": True', "_CORE_FEATURE_FLAGS"),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("comfyui-core-v0.28.0+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy/cli_args.py",
+        label="models directory CLI override",
+        required_patterns=(
+            'parser.add_argument("--models-directory"',
+            "is_valid_directory",
+            "Overrides the models folder in --base-directory",
+        ),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("comfyui-core-v0.28.0+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/remote/comfyui/jobs/fetchJobs.ts",
+        label="cached history query without client id",
+        required_patterns=(
+            "async function fetchJobsRaw(",
+            "const url = `/jobs?status=${statusParam}&limit=${maxItems}&offset=${offset}`",
+            "export async function fetchHistory(",
+            "export async function fetchHistoryPage(",
+            "['completed', 'failed', 'cancelled']",
+        ),
+        forbidden_patterns=("client_id", "clientId"),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/settings/settingStore.ts",
+        label="setting telemetry defaults",
+        required_patterns=(
+            "const isVisible = setting.type !== 'hidden'",
+            "const trackChanges = telemetry?.trackChanges ?? isVisible",
+            "const includeValues = telemetry?.includeValues ?? isVisible",
+            "if (event) useTelemetry()?.trackSettingChanged(event)",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/settings/types.ts",
+        label="setting telemetry opt-out type",
+        required_patterns=(
+            "type SettingTelemetryOptions",
+            "trackChanges: false",
+            "includeValues?: never",
+            "telemetry?: SettingTelemetryOptions",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/telemetry/initTelemetry.ts",
+        label="cloud telemetry initialization gate",
+        required_patterns=(
+            "const IS_CLOUD_BUILD = __DISTRIBUTION__ === 'cloud'",
+            "if (!IS_CLOUD_BUILD) return",
+            "setTelemetryRegistry(registry)",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/telemetry/initHostTelemetry.ts",
+        label="host telemetry initialization gate",
+        required_patterns=(
+            "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'",
+            "remoteConfig.value.enable_telemetry === true",
+            "if (!isHostTelemetryEnabled()) return",
+            "if (!window.__comfyDesktop2?.Telemetry) return",
+            "setTelemetryRegistry(registry)",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/lib/litegraph/src/subgraph/SubgraphNode.ts",
+        label="real SubgraphNode public shape",
+        required_patterns=(
+            "export class SubgraphNode extends LGraphNode implements BaseLGraph",
+            "override readonly isVirtualNode = true as const",
+            "override isSubgraphNode()",
+            "readonly subgraph: Subgraph",
+            "override getInnerNodes(",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=(
+            "desktop-0.9.4",
+            "core-pin-1.45.21",
+            "standalone-1.48.3+",
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/core/graph/subgraph/liftNodeErrorsToBoundary.ts",
+        label="boundary error source provenance",
+        required_patterns=(
+            "input_name: surface.hostInputName",
+            "source_execution_id: executionId",
+            "source_input_name: inputName",
+            "export function liftNodeErrorsToBoundary(",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/stores/executionErrorStore.ts",
+        label="surfaced error derivation",
+        required_patterns=(
+            "const surfacedNodeErrors = computed(() =>",
+            "lastNodeErrors.value && app.isGraphReady",
+            "liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)",
+            ": lastNodeErrors.value",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+        note="This is private host evidence; Doctor production code may use only public raw error state.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="browser_tests/assets/missing/missing_model_nested_promoted_widget.json",
+        label="nested promoted missing-model serialization",
+        required_patterns=(
+            '"definitions"',
+            '"subgraphs"',
+            '"ckpt_name"',
+            '"widgets_values"',
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.48.3+",),
+        note="The fixture is read as inert text and is never executed.",
+    ),
+    SurfaceCheck(
+        repo="desktop",
+        file="todesktop.json",
+        label="Desktop packaged resource topology",
+        required_patterns=(
+            '"appFiles"',
+            '"assets/ComfyUI/**"',
+            '"extraResources"',
+            '"filesForDistribution"',
+            '"updateUrlBase"',
+        ),
+        source_revision=DESKTOP_REVISION,
+        applicable_lanes=("desktop-0.9.4",),
+    ),
+    SurfaceCheck(
+        repo="desktop",
+        file="src/config/comfyServerConfig.ts",
+        label="Desktop bundled extension topology",
+        required_patterns=(
+            "parsedConfig.comfyui_desktop.base_path = basePath",
+            "path.join(getAppResourcesPath(), 'ComfyUI', 'custom_nodes')",
+            "parsedConfig.desktop_extensions = { custom_nodes: customNodesPath }",
+        ),
+        source_revision=DESKTOP_REVISION,
+        applicable_lanes=("desktop-0.9.4",),
+    ),
+    SurfaceCheck(
+        repo="desktop",
+        file="src/services/cmCli.ts",
+        label="Desktop user custom-node restore topology",
+        required_patterns=(
+            "@trackEvent('migrate_flow:migrate_custom_nodes')",
+            "path.join(this.virtualEnvironment.basePath, 'custom_nodes')",
+            "path.join(this.virtualEnvironment.basePath, 'custom_nodes', 'ComfyUI-Manager')",
+        ),
+        source_revision=DESKTOP_REVISION,
+        applicable_lanes=("desktop-0.9.4",),
+    ),
 )
 
 
@@ -398,12 +659,27 @@ def run_checks(reference_root: Path, checks: Sequence[SurfaceCheck] = CHECKS) ->
             continue
 
         missing = tuple(pattern for pattern in check.required_patterns if pattern not in text)
-        results.append(CheckResult(check=check, ok=not missing, missing_patterns=missing))
+        forbidden = tuple(pattern for pattern in check.forbidden_patterns if pattern in text)
+        results.append(
+            CheckResult(
+                check=check,
+                ok=not missing and not forbidden,
+                missing_patterns=missing,
+                present_forbidden_patterns=forbidden,
+            )
+        )
     return results
 
 
 def format_results(results: Iterable[CheckResult]) -> str:
-    lines = ["Host compatibility smoke check:"]
+    lines = ["Host compatibility smoke check:", "Frontend runtime matrix:"]
+    for lane in FRONTEND_RUNTIME_LANES:
+        telemetry = "present" if lane.setting_change_telemetry else "absent"
+        lines.append(
+            f"- {lane.id}: frontend {lane.version} "
+            f"({lane.label}; setting-change telemetry {telemetry})"
+        )
+    lines.append("Surface checks:")
     for result in results:
         prefix = "PASS" if result.ok else "FAIL"
         location = f"{result.check.repo}/{result.check.file}"
@@ -413,6 +689,13 @@ def format_results(results: Iterable[CheckResult]) -> str:
         elif result.missing_patterns:
             missing = ", ".join(repr(pattern) for pattern in result.missing_patterns)
             lines.append(f"  Missing required pattern(s): {missing}")
+        if result.present_forbidden_patterns:
+            present = ", ".join(repr(pattern) for pattern in result.present_forbidden_patterns)
+            lines.append(f"  Present forbidden pattern(s): {present}")
+        if result.check.source_revision:
+            lines.append(f"  Source revision: {result.check.source_revision}")
+        if result.check.applicable_lanes:
+            lines.append(f"  Applies to: {', '.join(result.check.applicable_lanes)}")
         if result.check.note:
             lines.append(f"  Note: {result.check.note}")
     return "\n".join(lines)

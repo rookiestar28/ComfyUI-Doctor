@@ -18,6 +18,12 @@ def _write(path: Path, text: str) -> None:
 def _create_minimal_reference(root: Path) -> None:
     _write(root / "ComfyUI" / "main.py", "def execute_prestartup_script():\n    return 'prestartup_script.py'\n")
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.45.21\n")
+    _write(
+        root / "ComfyUI" / "comfy" / "cli_args.py",
+        'parser.add_argument("--models-directory", type=is_valid_directory, '
+        'help="Set the ComfyUI models directory. Overrides the models folder in --base-directory.")\n',
+    )
     _write(
         root / "ComfyUI" / "server.py",
         "class PromptServer:\n    def __init__(self):\n        self.routes = []\n"
@@ -101,11 +107,18 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI" / "comfy_api" / "feature_flags.py",
+        "_CORE_FEATURE_FLAGS = {\n"
         '"supports_preview_metadata": True\n'
+        '"supports_model_type_tags": True\n'
         '"extension": {"manager": {"supports_v4": True}}\n'
         '"node_replacements": True\n'
         '"enable_telemetry": {"default": False}\n'
+        "}\n"
         "def get_server_features():\n    return {}\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "package.json",
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.48.3"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -157,8 +170,111 @@ def _create_minimal_reference(root: Path) -> None:
         "}\n",
     )
     _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "remote" / "comfyui" / "jobs" / "fetchJobs.ts",
+        "async function fetchJobsRaw(fetchApi, statuses, maxItems = 200, offset = 0) {\n"
+        "  const statusParam = statuses.join(',')\n"
+        "  const url = `/jobs?status=${statusParam}&limit=${maxItems}&offset=${offset}`\n"
+        "  return fetchApi(url)\n"
+        "}\n"
+        "export async function fetchHistory(fetchApi, maxItems = 200, offset = 0) {\n"
+        "  return fetchHistoryPage(fetchApi, maxItems, offset)\n"
+        "}\n"
+        "export async function fetchHistoryPage(fetchApi, maxItems = 200, offset = 0) {\n"
+        "  return fetchJobsRaw(fetchApi, ['completed', 'failed', 'cancelled'], maxItems, offset)\n"
+        "}\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "settingStore.ts",
+        "const isVisible = setting.type !== 'hidden'\n"
+        "const trackChanges = telemetry?.trackChanges ?? isVisible\n"
+        "if (!trackChanges) return undefined\n"
+        "const includeValues = telemetry?.includeValues ?? isVisible\n"
+        "const event = settingChangedEvent(settingsById.value[key], key, applied)\n"
+        "if (event) useTelemetry()?.trackSettingChanged(event)\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "types.ts",
+        "type SettingTelemetryOptions =\n"
+        "  | { trackChanges: false; includeValues?: never }\n"
+        "  | { trackChanges?: true; includeValues?: boolean }\n"
+        "export interface SettingParams { telemetry?: SettingTelemetryOptions }\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initTelemetry.ts",
+        "const IS_CLOUD_BUILD = __DISTRIBUTION__ === 'cloud'\n"
+        "export async function initTelemetry() {\n"
+        "  if (!IS_CLOUD_BUILD) return\n"
+        "  setTelemetryRegistry(registry)\n"
+        "}\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initHostTelemetry.ts",
+        "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'\n"
+        "return remoteConfig.value.enable_telemetry === true\n"
+        "if (!isHostTelemetryEnabled()) return\n"
+        "if (!window.__comfyDesktop2?.Telemetry) return\n"
+        "setTelemetryRegistry(registry)\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "lib"
+        / "litegraph"
+        / "src"
+        / "subgraph"
+        / "SubgraphNode.ts",
+        "export class SubgraphNode extends LGraphNode implements BaseLGraph {\n"
+        "  override readonly isVirtualNode = true as const\n"
+        "  readonly subgraph: Subgraph\n"
+        "  override isSubgraphNode(): this is SubgraphNode { return true }\n"
+        "  override getInnerNodes(executableNodes) { return executableNodes }\n"
+        "}\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "core"
+        / "graph"
+        / "subgraph"
+        / "liftNodeErrorsToBoundary.ts",
+        "const liftedExtraInfo = {\n"
+        "  input_name: surface.hostInputName,\n"
+        "  source_execution_id: executionId,\n"
+        "  source_input_name: inputName\n"
+        "}\n"
+        "export function liftNodeErrorsToBoundary(rootGraph, nodeErrors) { return nodeErrors }\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "stores" / "executionErrorStore.ts",
+        "const surfacedNodeErrors = computed(() =>\n"
+        "  lastNodeErrors.value && app.isGraphReady\n"
+        "    ? liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)\n"
+        "    : lastNodeErrors.value\n"
+        ")\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "browser_tests"
+        / "assets"
+        / "missing"
+        / "missing_model_nested_promoted_widget.json",
+        '{"definitions":{"subgraphs":[{"id":"synthetic-subgraph","inputs":'
+        '[{"name":"ckpt_name","type":"COMBO"}],"nodes":[{"id":2,'
+        '"widgets_values":["synthetic_model.safetensors"]}]}]}}\n',
+    )
+    _write(
         root / "desktop" / "package.json",
-        '{\n  "version": "0.9.4",\n  "config": {"comfyUI": {"version": "0.22.3"}}\n}\n',
+        '{\n  "version": "0.9.4",\n  "config": {'
+        '"frontend": {"version": "1.43.18"}, '
+        '"comfyUI": {"version": "0.22.3"}}\n}\n',
+    )
+    _write(
+        root / "desktop" / "todesktop.json",
+        '{"appFiles":["assets/ComfyUI/**"],"extraResources":[{"from":"./assets"}],'
+        '"filesForDistribution":["!assets/**"],"updateUrlBase":"https://updater.comfy.org"}\n',
     )
     _write(
         root / "desktop" / "src" / "main-process" / "comfyServer.ts",
@@ -191,6 +307,18 @@ def _create_minimal_reference(root: Path) -> None:
     _write(
         root / "desktop" / "src" / "config" / "comfySettings.ts",
         "path.join(this.#basePath, 'user', 'default', 'comfy.settings.json')\n",
+    )
+    _write(
+        root / "desktop" / "src" / "config" / "comfyServerConfig.ts",
+        "parsedConfig.comfyui_desktop.base_path = basePath\n"
+        "const customNodesPath = path.join(getAppResourcesPath(), 'ComfyUI', 'custom_nodes')\n"
+        "parsedConfig.desktop_extensions = { custom_nodes: customNodesPath }\n",
+    )
+    _write(
+        root / "desktop" / "src" / "services" / "cmCli.ts",
+        "@trackEvent('migrate_flow:migrate_custom_nodes')\n"
+        "path.join(this.virtualEnvironment.basePath, 'custom_nodes')\n"
+        "path.join(this.virtualEnvironment.basePath, 'custom_nodes', 'ComfyUI-Manager')\n",
     )
 
 
@@ -505,3 +633,393 @@ def test_host_compatibility_smoke_reports_missing_frontend_jobs_cancel_api(tmp_p
     assert len(failed) == 1
     assert failed[0].check.label == "frontend jobs cancel API"
     assert "async cancelJobs(" in failed[0].missing_patterns
+
+
+PRE_T28_CHECK_LABELS = {
+    "custom node prestartup loading",
+    "WEB_DIRECTORY registration",
+    "extension static routes",
+    "PromptServer route registry",
+    "host /api route duplication",
+    "feature-flag websocket exchange",
+    "system_stats current multi-device package versions",
+    "system_stats deploy environment",
+    "jobs namespace cancel endpoints",
+    "prompt usage source pass-through",
+    "execution_error websocket payload",
+    "execution usage source hidden input",
+    "executed output asset enrichment tolerance",
+    "prompt queue running job interrupt hook",
+    "jobs cancel classification helpers",
+    "progress_state lineage payload",
+    "current model folder anchors",
+    "current expanded model folder anchors",
+    "server feature flags",
+    "extensionManager execution error state",
+    "frontend queue prompt usage source",
+    "frontend jobs cancel API",
+    "extensionManager settings/sidebar API",
+    "deprecated sidebar wrapper fallback",
+    "current sidebarTab store API",
+    "frontend execution_error schema",
+    "frontend rootGraph API",
+    "Desktop current bundled host baseline",
+    "Desktop base/user/input/output directories",
+    "Desktop managed .venv layout",
+    "Desktop valid basePath shape",
+    "Desktop settings path",
+}
+
+
+def _failed_results(root: Path):
+    return [result for result in host_compat.run_checks(root) if not result.ok]
+
+
+def test_t28_preserves_all_preexisting_surface_checks():
+    labels = {check.label for check in host_compat.CHECKS}
+
+    assert len(PRE_T28_CHECK_LABELS) == 32
+    assert PRE_T28_CHECK_LABELS <= labels
+
+
+def test_t28_records_three_distinct_frontend_runtime_lanes():
+    lanes = getattr(host_compat, "FRONTEND_RUNTIME_LANES", ())
+
+    assert [
+        (lane.id, lane.version, lane.setting_change_telemetry)
+        for lane in lanes
+    ] == [
+        ("desktop-0.9.4", "1.43.18", False),
+        ("core-pin-1.45.21", "1.45.21", False),
+        ("standalone-1.48.3+", "1.48.3+", True),
+    ]
+
+
+def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
+    cases = (
+        (
+            "desktop",
+            Path("desktop/package.json"),
+            '"version": "1.43.18"',
+            '"version": "1.43.17"',
+            "frontend runtime lane: Desktop bundle",
+        ),
+        (
+            "core",
+            Path("ComfyUI/requirements.txt"),
+            "comfyui-frontend-package==1.45.21",
+            "comfyui-frontend-package==1.45.20",
+            "frontend runtime lane: ComfyUI package pin",
+        ),
+        (
+            "standalone",
+            Path("ComfyUI_frontend/package.json"),
+            '"version": "1.48.3"',
+            '"version": "1.48.2"',
+            "frontend runtime lane: standalone source",
+        ),
+    )
+
+    for case_name, relative_path, current, mutated, expected_label in cases:
+        root = tmp_path / case_name
+        _create_minimal_reference(root)
+        path = root / relative_path
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(current, mutated),
+            encoding="utf-8",
+        )
+
+        failed = _failed_results(root)
+
+        assert len(failed) == 1
+        assert failed[0].check.label == expected_label
+        assert current in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_model_type_tag_feature(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI" / "comfy_api" / "feature_flags.py"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            '"supports_model_type_tags": True',
+            '"supports_legacy_model_tags": True',
+        ),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "model type tag feature flag"
+    assert '"supports_model_type_tags": True' in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_models_directory_cli_override(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI" / "comfy" / "cli_args.py"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("--models-directory", "--legacy-models-directory"),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "models directory CLI override"
+    assert 'parser.add_argument("--models-directory"' in failed[0].missing_patterns
+
+
+def test_t28_rejects_client_id_in_cached_history_query_contract(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = (
+        tmp_path
+        / "ComfyUI_frontend"
+        / "src"
+        / "platform"
+        / "remote"
+        / "comfyui"
+        / "jobs"
+        / "fetchJobs.ts"
+    )
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "&offset=${offset}`",
+            "&offset=${offset}&client_id=synthetic`",
+        ),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "cached history query without client id"
+    assert "client_id" in failed[0].present_forbidden_patterns
+
+
+def test_t28_reports_missing_setting_telemetry_defaults(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "settings" / "settingStore.ts"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "const trackChanges = telemetry?.trackChanges ?? isVisible",
+            "const trackChanges = false",
+        ),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "setting telemetry defaults"
+    assert "const trackChanges = telemetry?.trackChanges ?? isVisible" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_setting_telemetry_opt_out_type(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "settings" / "types.ts"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("trackChanges: false", "trackChanges: true"),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "setting telemetry opt-out type"
+    assert "trackChanges: false" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_cloud_telemetry_initialization_gate(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initTelemetry.ts"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("if (!IS_CLOUD_BUILD) return", "if (false) return"),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "cloud telemetry initialization gate"
+    assert "if (!IS_CLOUD_BUILD) return" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_host_telemetry_initialization_gate(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initHostTelemetry.ts"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "remoteConfig.value.enable_telemetry === true",
+            "remoteConfig.value.enable_telemetry !== false",
+        ),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "host telemetry initialization gate"
+    assert "remoteConfig.value.enable_telemetry === true" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_real_subgraph_node_shape(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = (
+        tmp_path
+        / "ComfyUI_frontend"
+        / "src"
+        / "lib"
+        / "litegraph"
+        / "src"
+        / "subgraph"
+        / "SubgraphNode.ts"
+    )
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("override isSubgraphNode()", "override isLegacyNode()"),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "real SubgraphNode public shape"
+    assert "override isSubgraphNode()" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_boundary_error_provenance(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = (
+        tmp_path
+        / "ComfyUI_frontend"
+        / "src"
+        / "core"
+        / "graph"
+        / "subgraph"
+        / "liftNodeErrorsToBoundary.ts"
+    )
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("source_execution_id", "legacy_execution_id"),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "boundary error source provenance"
+    assert "source_execution_id: executionId" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_surfaced_error_derivation(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI_frontend" / "src" / "stores" / "executionErrorStore.ts"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)",
+            "lastNodeErrors.value",
+        ),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "surfaced error derivation"
+    assert "liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)" in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_nested_promoted_model_serialization(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = (
+        tmp_path
+        / "ComfyUI_frontend"
+        / "browser_tests"
+        / "assets"
+        / "missing"
+        / "missing_model_nested_promoted_widget.json"
+    )
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('"subgraphs"', '"legacy_subgraphs"'),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "nested promoted missing-model serialization"
+    assert '"subgraphs"' in failed[0].missing_patterns
+
+
+def test_t28_reports_missing_expanded_desktop_topology(tmp_path):
+    cases = (
+        (
+            "package",
+            Path("desktop/todesktop.json"),
+            '"extraResources"',
+            '"legacyResources"',
+            "Desktop packaged resource topology",
+        ),
+        (
+            "bundled",
+            Path("desktop/src/config/comfyServerConfig.ts"),
+            "parsedConfig.desktop_extensions = { custom_nodes: customNodesPath }",
+            "parsedConfig.legacy_extensions = { custom_nodes: customNodesPath }",
+            "Desktop bundled extension topology",
+        ),
+        (
+            "user",
+            Path("desktop/src/services/cmCli.ts"),
+            "path.join(this.virtualEnvironment.basePath, 'custom_nodes')",
+            "path.join(this.virtualEnvironment.basePath, 'legacy_nodes')",
+            "Desktop user custom-node restore topology",
+        ),
+    )
+
+    for case_name, relative_path, current, mutated, expected_label in cases:
+        root = tmp_path / case_name
+        _create_minimal_reference(root)
+        path = root / relative_path
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(current, mutated),
+            encoding="utf-8",
+        )
+
+        failed = _failed_results(root)
+
+        assert len(failed) == 1
+        assert failed[0].check.label == expected_label
+        assert current in failed[0].missing_patterns
+
+
+def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
+    _create_minimal_reference(tmp_path)
+    new_checks = [check for check in host_compat.CHECKS if check.label not in PRE_T28_CHECK_LABELS]
+
+    assert len(new_checks) >= 16
+    assert all(check.source_revision for check in new_checks)
+    assert all(check.applicable_lanes for check in new_checks)
+
+    formatted = host_compat.format_results(host_compat.run_checks(tmp_path))
+
+    assert "Frontend runtime matrix:" in formatted
+    assert "desktop-0.9.4: frontend 1.43.18" in formatted
+    assert "core-pin-1.45.21: frontend 1.45.21" in formatted
+    assert "standalone-1.48.3+: frontend 1.48.3+" in formatted
+    assert "Source revision:" in formatted
+    assert "Applies to:" in formatted
+
+
+def test_t28_reference_source_is_never_executed(tmp_path):
+    _create_minimal_reference(tmp_path)
+    marker = tmp_path / "reference-side-effect-marker"
+    main_path = tmp_path / "ComfyUI" / "main.py"
+    main_path.write_text(
+        main_path.read_text(encoding="utf-8")
+        + "\nfrom pathlib import Path\n"
+        + f"Path({str(marker)!r}).write_text('executed', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    results = host_compat.run_checks(tmp_path)
+
+    assert all(result.ok for result in results)
+    assert not marker.exists()
