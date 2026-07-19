@@ -697,6 +697,125 @@ test.describe('Doctor Chat Interface', () => {
     expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
   });
 
+  test('should surface nested boundary validation errors on the outer visible host', async ({ page }) => {
+    await page.evaluate(() => {
+      const leaf = {
+        id: 3,
+        title: 'Leaf Node',
+        type: 'LeafNode',
+        inputs: [{ name: 'seed_input', link: 'leaf-boundary' }],
+      };
+      const innerGraph = {
+        isRootGraph: false,
+        _nodes: [leaf],
+        getNodeById(id) {
+          return this._nodes.find((node) => String(node.id) === String(id)) || null;
+        },
+        getLink(id) {
+          if (id !== 'leaf-boundary') return null;
+          return {
+            resolve: () => ({ subgraphInput: { name: 'inner_seed' } }),
+          };
+        },
+      };
+      leaf.graph = innerGraph;
+
+      const middleHost = {
+        id: 2,
+        title: 'Middle Host',
+        type: 'Subgraph',
+        subgraph: innerGraph,
+        isVirtualNode: true,
+        isSubgraphNode: () => true,
+        inputs: [{ name: 'inner_seed', link: 'middle-boundary' }],
+      };
+      const outerGraph = {
+        isRootGraph: false,
+        _nodes: [middleHost],
+        getNodeById(id) {
+          return this._nodes.find((node) => String(node.id) === String(id)) || null;
+        },
+        getLink(id) {
+          if (id !== 'middle-boundary') return null;
+          return {
+            resolve: () => ({ subgraphInput: { name: 'outer_seed' } }),
+          };
+        },
+      };
+      middleHost.graph = outerGraph;
+
+      const outerHost = {
+        id: 1,
+        title: 'Outer Visible Host',
+        type: 'Subgraph',
+        subgraph: outerGraph,
+        isVirtualNode: true,
+        isSubgraphNode: () => true,
+        pos: [240, 120],
+        size: [180, 90],
+        boundingRect: [240, 120, 180, 90],
+      };
+      outerHost.graph = window.app.rootGraph;
+      window.app.rootGraph._nodes = [outerHost];
+      window.app.canvas.selected_nodes = {};
+      window.app.canvas.lastAnimatedBounds = null;
+      window.app.extensionManager.lastNodeErrors = {
+        '1:2:3': {
+          class_type: 'LeafNode',
+          dependent_outputs: [],
+          errors: [{
+            type: 'required_input_missing',
+            message: 'Required input is missing <img src=x onerror=alert(1)>',
+            details: '',
+            extra_info: {
+              input_name: 'seed_input',
+              retained: 'yes',
+            },
+          }],
+        },
+      };
+
+      window.api._triggerEvent('execution_start', { detail: { prompt_id: 'prompt-r43' } });
+    });
+
+    await page.waitForTimeout(150);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    expect(capturedData.node_context).toMatchObject({
+      node_id: '1:2:3',
+      node_class: 'Outer Visible Host',
+      display_node: '1',
+      real_node_id: '1:2:3',
+      preferred_node_id: '1',
+      subgraph_lineage: ['1', '1:2:3'],
+    });
+    expect(capturedData.execution_context.validation_surface_source).toBe('doctor.public_graph');
+    expect(capturedData.execution_context.validation_source_provenance).toEqual([{
+      visible_execution_id: '1',
+      visible_input_name: 'outer_seed',
+      source_execution_id: '1:2:3',
+      source_input_name: 'seed_input',
+    }]);
+    expect(capturedData.last_error).toContain('input "outer_seed"');
+
+    const locateBtn = page.locator('#doctor-latest-log #doctor-locate-btn');
+    await expect(locateBtn).toHaveAttribute('data-node', '1');
+    await locateBtn.click();
+
+    const focusState = await page.evaluate(() => ({
+      selectedNodeIds: Object.keys(window.app.canvas.selected_nodes),
+      lastAnimatedBounds: window.app.canvas.lastAnimatedBounds,
+      rawInputName: window.app.extensionManager.lastNodeErrors['1:2:3'].errors[0].extra_info.input_name,
+    }));
+    expect(focusState.selectedNodeIds).toEqual(['1']);
+    expect(focusState.lastAnimatedBounds).toEqual([240, 120, 180, 90]);
+    expect(focusState.rawInputName).toBe('seed_input');
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    const errorContextHtml = await page.locator('#doctor-error-context').innerHTML();
+    expect(errorContextHtml).not.toContain('<img src=x onerror=alert(1)>');
+  });
+
   test('should resolve known validation errors to catalog-style copy and grouping metadata', async ({ page }) => {
     await page.evaluate(() => {
       window.app.rootGraph._nodes = [

@@ -8,6 +8,7 @@ import {
     getComfyRootGraph,
     getComfyValidationNodeErrors,
     getDoctorRuntimeSettings,
+    surfaceComfyValidationNodeErrors,
 } from "./comfyui_frontend_compat.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { ChatPanel } from "./doctor_chat.js";
@@ -559,8 +560,9 @@ export class DoctorUI {
     }
 
     syncFrontendValidationErrors() {
-        const nodeErrors = getComfyValidationNodeErrors(app);
-        if (!nodeErrors) return;
+        const rawNodeErrors = getComfyValidationNodeErrors(app);
+        if (!rawNodeErrors) return;
+        const nodeErrors = surfaceComfyValidationNodeErrors(rawNodeErrors, app);
 
         const frontendAggregateGroups = this.buildFrontendAggregateGroupsFromNodeErrors(nodeErrors);
 
@@ -590,6 +592,42 @@ export class DoctorUI {
 
         const graphNode = getComfyNodeById(preferredNodeId, app);
         const nodeClass = nodeError.class_type || graphNode?.type || graphNode?.title || 'Unknown';
+        const sourceProvenance = validationErrors
+            .map(error => {
+                const extraInfo = error?.extra_info;
+                if (
+                    typeof extraInfo?.source_execution_id !== 'string'
+                    || typeof extraInfo?.source_input_name !== 'string'
+                    || typeof extraInfo?.input_name !== 'string'
+                ) {
+                    return null;
+                }
+                return {
+                    visible_execution_id: preferredNodeId,
+                    visible_input_name: extraInfo.input_name,
+                    source_execution_id: extraInfo.source_execution_id,
+                    source_input_name: extraInfo.source_input_name,
+                };
+            })
+            .filter(Boolean)
+            .filter((item, index, items) => items.findIndex(candidate =>
+                candidate.visible_execution_id === item.visible_execution_id
+                && candidate.visible_input_name === item.visible_input_name
+                && candidate.source_execution_id === item.source_execution_id
+                && candidate.source_input_name === item.source_input_name
+            ) === index);
+        const fullySurfaced = sourceProvenance.length === validationErrors.length;
+        const primarySourceId = fullySurfaced
+            ? this.normalizeNodeId(sourceProvenance[0]?.source_execution_id)
+            : null;
+        const hasVisibleSourceSplit = Boolean(
+            primarySourceId && primarySourceId !== preferredNodeId,
+        );
+        const sourceExecutionIds = sourceProvenance
+            .map(item => this.normalizeNodeId(item.source_execution_id))
+            .filter(Boolean);
+        const subgraphLineage = [preferredNodeId, ...sourceExecutionIds]
+            .filter((value, index, values) => values.indexOf(value) === index);
         const summary = validationErrors
             .map(error => this.formatFrontendValidationError(error))
             .filter(Boolean)
@@ -636,17 +674,21 @@ export class DoctorUI {
                     ? 'doctor.host_aggregate_overlap'
                     : 'doctor.validation_catalog',
                 validation_error_count: validationErrors.length,
+                validation_surface_source: sourceProvenance.length
+                    ? 'doctor.public_graph'
+                    : 'doctor.raw_fallback',
+                validation_source_provenance: sourceProvenance,
             },
             node_context: {
-                node_id: preferredNodeId,
+                node_id: hasVisibleSourceSplit ? primarySourceId : preferredNodeId,
                 node_name: nodeClass,
                 node_class: nodeClass,
                 custom_node_path: null,
-                display_node: null,
+                display_node: hasVisibleSourceSplit ? preferredNodeId : null,
                 parent_node: null,
-                real_node_id: null,
+                real_node_id: hasVisibleSourceSplit ? primarySourceId : null,
                 preferred_node_id: preferredNodeId,
-                subgraph_lineage: [preferredNodeId],
+                subgraph_lineage: subgraphLineage,
             },
         };
     }

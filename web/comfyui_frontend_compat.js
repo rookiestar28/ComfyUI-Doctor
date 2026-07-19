@@ -218,14 +218,14 @@ function unwrapMaybeRef(value) {
 }
 
 export function getComfyValidationNodeErrors(appInstance = app) {
-    const extensionManager = appInstance?.extensionManager;
-    const candidates = [
-        extensionManager?.lastNodeErrors,
-        appInstance?.lastNodeErrors,
+    const candidateReaders = [
+        () => appInstance?.extensionManager?.lastNodeErrors,
+        () => appInstance?.lastNodeErrors,
     ];
 
-    for (const candidate of candidates) {
+    for (const readCandidate of candidateReaders) {
         try {
+            const candidate = readCandidate();
             const value = unwrapMaybeRef(candidate);
             if (value && typeof value === "object" && !Array.isArray(value)) {
                 return value;
@@ -236,6 +236,262 @@ export function getComfyValidationNodeErrors(appInstance = app) {
     }
 
     return null;
+}
+
+const INPUT_LEVEL_VALIDATION_ERROR_TYPES = new Set([
+    "required_input_missing",
+    "bad_linked_input",
+    "return_type_mismatch",
+    "invalid_input_type",
+    "value_smaller_than_min",
+    "value_bigger_than_max",
+    "value_not_in_list",
+    "custom_validation_failed",
+    "exception_during_inner_validation",
+]);
+
+function getNodeFromGraph(graph, nodeId) {
+    if (!graph || nodeId === null || nodeId === undefined || nodeId === "") {
+        return null;
+    }
+
+    const rawId = String(nodeId);
+    const numericId = Number(rawId);
+    return graph.getNodeById?.(Number.isNaN(numericId) ? rawId : numericId)
+        || graph.getNodeById?.(rawId)
+        || graph._nodes?.find?.((candidate) => String(candidate?.id) === rawId)
+        || null;
+}
+
+function getNodeByExecutionId(rootGraph, executionId) {
+    if (!rootGraph || typeof executionId !== "string" || !executionId) {
+        return null;
+    }
+
+    const parts = executionId.split(":");
+    if (parts.some((part) => !part)) return null;
+
+    let graph = rootGraph;
+    for (let index = 0; index < parts.length; index += 1) {
+        const node = getNodeFromGraph(graph, parts[index]);
+        if (!node) return null;
+        if (index === parts.length - 1) return node;
+
+        try {
+            if (!node.subgraph) return null;
+            if (
+                typeof node.isSubgraphNode === "function"
+                && node.isSubgraphNode() !== true
+            ) {
+                return null;
+            }
+            graph = node.subgraph;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    return null;
+}
+
+function isImageNotLoadedValidationError(error) {
+    if (error?.type !== "custom_validation_failed") return false;
+    const text = [error.message, error.details].filter(Boolean).join("\n");
+    return /invalid image file|\[errno 21\].*is a directory/iu.test(text);
+}
+
+function isInputLevelValidationError(error) {
+    return INPUT_LEVEL_VALIDATION_ERROR_TYPES.has(error?.type)
+        && !isImageNotLoadedValidationError(error);
+}
+
+function resolvePublicBoundaryChain(rootGraph, executionId, inputName) {
+    const chain = [];
+    let currentExecutionId = executionId;
+    let currentInputName = inputName;
+    const maxDepth = executionId.split(":").length - 1;
+
+    for (let depth = 0; depth < maxDepth; depth += 1) {
+        try {
+            const node = getNodeByExecutionId(rootGraph, currentExecutionId);
+            const graph = node?.graph;
+            if (!node || !graph || graph === rootGraph || graph.isRootGraph === true) {
+                break;
+            }
+
+            const slot = Array.isArray(node.inputs)
+                ? node.inputs.find((input) => input?.name === currentInputName)
+                : null;
+            if (slot?.link === null || slot?.link === undefined) break;
+
+            const link = graph.getLink?.(slot.link);
+            const resolved = link?.resolve?.(graph);
+            const hostInputName = resolved?.subgraphInput?.name;
+            if (typeof hostInputName !== "string" || !hostInputName) break;
+
+            const separatorIndex = currentExecutionId.lastIndexOf(":");
+            if (separatorIndex <= 0) break;
+            const hostExecutionId = currentExecutionId.slice(0, separatorIndex);
+            if (!getNodeByExecutionId(rootGraph, hostExecutionId)) break;
+
+            chain.push({
+                hostExecutionId,
+                hostInputName,
+            });
+            currentExecutionId = hostExecutionId;
+            currentInputName = hostInputName;
+        } catch (_) {
+            break;
+        }
+    }
+
+    return chain;
+}
+
+function copyValidationError(error) {
+    if (!error || typeof error !== "object") return error;
+    return {
+        ...error,
+        extra_info: error.extra_info && typeof error.extra_info === "object"
+            ? { ...error.extra_info }
+            : error.extra_info,
+    };
+}
+
+function copyNodeErrorEntry(nodeError) {
+    if (!nodeError || typeof nodeError !== "object") return nodeError;
+    return {
+        ...nodeError,
+        errors: Array.isArray(nodeError.errors)
+            ? nodeError.errors.map(copyValidationError)
+            : nodeError.errors,
+    };
+}
+
+function createEmptyNodeErrorEntry(nodeError) {
+    return {
+        ...copyNodeErrorEntry(nodeError),
+        errors: [],
+    };
+}
+
+function createLiftedHostEntry(rootGraph, executionId) {
+    return {
+        class_type: getNodeByExecutionId(rootGraph, executionId)?.title
+            || executionId,
+        dependent_outputs: [],
+        errors: [],
+    };
+}
+
+function getValidationErrorPlacement(rootGraph, executionId, error) {
+    const copiedError = copyValidationError(error);
+    const inputName = error?.extra_info?.input_name;
+    if (typeof inputName !== "string" || !inputName || !isInputLevelValidationError(error)) {
+        return {
+            kind: "own",
+            targetExecutionId: executionId,
+            error: copiedError,
+        };
+    }
+
+    const surface = resolvePublicBoundaryChain(
+        rootGraph,
+        executionId,
+        inputName,
+    ).at(-1);
+    if (!surface) {
+        return {
+            kind: "own",
+            targetExecutionId: executionId,
+            error: copiedError,
+        };
+    }
+
+    return {
+        kind: "lifted",
+        targetExecutionId: surface.hostExecutionId,
+        error: {
+            ...copiedError,
+            extra_info: {
+                ...copiedError.extra_info,
+                input_name: surface.hostInputName,
+                source_execution_id: executionId,
+                source_input_name: inputName,
+            },
+        },
+    };
+}
+
+export function surfaceComfyValidationNodeErrors(nodeErrors, appInstance = app) {
+    if (!nodeErrors || typeof nodeErrors !== "object" || Array.isArray(nodeErrors)) {
+        return nodeErrors;
+    }
+
+    try {
+        const rootGraph = getComfyRootGraph(appInstance);
+        const entries = Object.entries(nodeErrors);
+        if (!rootGraph) {
+            return Object.fromEntries(
+                entries.map(([executionId, nodeError]) => [
+                    executionId,
+                    copyNodeErrorEntry(nodeError),
+                ]),
+            );
+        }
+
+        const output = {};
+        const placementsByTarget = new Map();
+
+        for (const [executionId, nodeError] of entries) {
+            const errors = Array.isArray(nodeError?.errors) ? nodeError.errors : null;
+            if (!errors) {
+                output[executionId] = copyNodeErrorEntry(nodeError);
+                continue;
+            }
+            if (errors.length === 0) {
+                output[executionId] = createEmptyNodeErrorEntry(nodeError);
+                continue;
+            }
+
+            for (const error of errors) {
+                const placement = getValidationErrorPlacement(
+                    rootGraph,
+                    executionId,
+                    error,
+                );
+                const targetPlacements = placementsByTarget.get(
+                    placement.targetExecutionId,
+                ) || [];
+                targetPlacements.push(placement);
+                placementsByTarget.set(
+                    placement.targetExecutionId,
+                    targetPlacements,
+                );
+            }
+        }
+
+        for (const [targetExecutionId, placements] of placementsByTarget) {
+            const baseEntry = nodeErrors[targetExecutionId]
+                ? createEmptyNodeErrorEntry(nodeErrors[targetExecutionId])
+                : createLiftedHostEntry(rootGraph, targetExecutionId);
+            const ownErrors = placements
+                .filter((placement) => placement.kind === "own")
+                .map((placement) => placement.error);
+            const liftedErrors = placements
+                .filter((placement) => placement.kind === "lifted")
+                .map((placement) => placement.error);
+            output[targetExecutionId] = {
+                ...baseEntry,
+                errors: [...ownErrors, ...liftedErrors],
+            };
+        }
+
+        return output;
+    } catch (_) {
+        // IMPORTANT: malformed/early-init host state must preserve raw placement.
+        return nodeErrors;
+    }
 }
 
 export function isDoctorEnabled(appInstance = app) {
