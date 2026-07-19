@@ -36,9 +36,33 @@ class TestDoctorPaths(unittest.TestCase):
                 diagnostics = doctor_paths.get_path_diagnostics()
 
             self.assertEqual(result, system_user_dir)
+            self.assertEqual(diagnostics["install_mode"], "standard")
             self.assertEqual(diagnostics["folder_system_user_directory"], system_user_dir)
             self.assertEqual(diagnostics["source"], "folder_paths.get_system_user_directory")
+            self.assertEqual(diagnostics["storage_source"], "folder_paths.get_system_user_directory")
             self.assertTrue(os.path.exists(result))
+
+    def test_standard_system_user_non_managed_python(self):
+        """A normal host interpreter keeps standard identity and private storage."""
+        with tempfile.TemporaryDirectory() as temp_user_dir:
+            system_user_dir = os.path.join(temp_user_dir, "__comfyui_doctor")
+            fake_python = os.path.join(temp_user_dir, "runtime", "python.exe")
+            folder_paths = SimpleNamespace(
+                get_system_user_directory=lambda name: system_user_dir,
+                get_user_directory=lambda: temp_user_dir,
+            )
+
+            with (
+                patch("services.doctor_paths.folder_paths", folder_paths),
+                patch.object(doctor_paths.sys, "executable", fake_python),
+            ):
+                result = doctor_paths.get_doctor_data_dir()
+                diagnostics = doctor_paths.get_path_diagnostics()
+
+            self.assertEqual(result, system_user_dir)
+            self.assertEqual(diagnostics["install_mode"], "standard")
+            self.assertEqual(diagnostics["source"], "folder_paths.get_system_user_directory")
+            self.assertEqual(diagnostics["storage_source"], "folder_paths.get_system_user_directory")
 
     def test_get_doctor_data_dir_legacy_user_fallback_without_system_user(self):
         """Older ComfyUI hosts without get_system_user_directory keep the legacy path."""
@@ -51,8 +75,10 @@ class TestDoctorPaths(unittest.TestCase):
 
             expected = os.path.join(temp_user_dir, "ComfyUI-Doctor")
             self.assertEqual(result, expected)
+            self.assertEqual(diagnostics["install_mode"], "standard")
             self.assertEqual(diagnostics["folder_user_directory"], temp_user_dir)
             self.assertEqual(diagnostics["source"], "folder_paths.get_user_directory")
+            self.assertEqual(diagnostics["storage_source"], "folder_paths.get_user_directory")
             self.assertTrue(os.path.exists(result))
 
     def test_get_doctor_data_dir_migrates_legacy_state_without_overwrite(self):
@@ -158,6 +184,7 @@ class TestDoctorPaths(unittest.TestCase):
             self.assertEqual(result, expected)
             self.assertEqual(diagnostics["install_mode"], "desktop")
             self.assertEqual(diagnostics["source"], "python_executable:.venv")
+            self.assertEqual(diagnostics["storage_source"], "python_executable:.venv")
 
     def test_get_doctor_data_dir_desktop_system_user_when_host_exposes_api(self):
         """Desktop user-directory layouts should resolve to the private system-user path on current hosts."""
@@ -182,8 +209,32 @@ class TestDoctorPaths(unittest.TestCase):
                 diagnostics = doctor_paths.get_path_diagnostics()
 
             self.assertEqual(result, system_user_dir)
-            self.assertEqual(diagnostics["install_mode"], "standard")
-            self.assertEqual(diagnostics["source"], "folder_paths.get_system_user_directory")
+            self.assertEqual(diagnostics["install_mode"], "desktop")
+            self.assertEqual(diagnostics["source"], "python_executable:.venv")
+            self.assertEqual(diagnostics["storage_source"], "folder_paths.get_system_user_directory")
+
+    def test_get_path_diagnostics_desktop_posix_system_user(self):
+        """POSIX managed Desktop Python retains Desktop identity with private storage."""
+        with tempfile.TemporaryDirectory() as base_path:
+            user_dir = os.path.join(base_path, "user")
+            system_user_dir = os.path.join(user_dir, "__comfyui_doctor")
+            fake_python = os.path.join(base_path, ".venv", "bin", "python3")
+            os.makedirs(os.path.dirname(fake_python), exist_ok=True)
+
+            folder_paths = SimpleNamespace(
+                get_system_user_directory=lambda name: system_user_dir,
+                get_user_directory=lambda: user_dir,
+            )
+
+            with (
+                patch("services.doctor_paths.folder_paths", folder_paths),
+                patch.object(doctor_paths.sys, "executable", fake_python),
+            ):
+                diagnostics = doctor_paths.get_path_diagnostics()
+
+            self.assertEqual(diagnostics["install_mode"], "desktop")
+            self.assertEqual(diagnostics["source"], "python_executable:.venv")
+            self.assertEqual(diagnostics["storage_source"], "folder_paths.get_system_user_directory")
 
     def test_portable_custom_nodes_beats_repo_venv_heuristic(self):
         """Portable custom_nodes layout should win even when the active Python lives in repo-local `.venv`."""
@@ -213,6 +264,57 @@ class TestDoctorPaths(unittest.TestCase):
             self.assertEqual(result, expected)
             self.assertEqual(diagnostics["install_mode"], "portable_or_git")
             self.assertEqual(diagnostics["source"], "extension_layout:custom_nodes")
+            self.assertEqual(diagnostics["storage_source"], "extension_layout:custom_nodes")
+
+    def test_portable_root_venv_remains_portable(self):
+        """An ambiguous root-level `.venv` must not override explicit portable layout evidence."""
+        with patch("services.doctor_paths.folder_paths", None), tempfile.TemporaryDirectory() as fake_root:
+            comfy_root = os.path.join(fake_root, "ComfyUI")
+            extension_root = os.path.join(comfy_root, "custom_nodes", "ComfyUI-Doctor")
+            fake_python = os.path.join(comfy_root, ".venv", "Scripts", "python.exe")
+            fake_doctor_paths_file = os.path.join(extension_root, "services", "doctor_paths.py")
+            os.makedirs(os.path.dirname(fake_python), exist_ok=True)
+            os.makedirs(os.path.dirname(fake_doctor_paths_file), exist_ok=True)
+
+            with (
+                patch.object(doctor_paths.sys, "executable", fake_python),
+                patch.object(doctor_paths, "__file__", fake_doctor_paths_file),
+            ):
+                result = doctor_paths.get_doctor_data_dir()
+                diagnostics = doctor_paths.get_path_diagnostics()
+
+            self.assertEqual(result, os.path.join(comfy_root, "user", "ComfyUI-Doctor"))
+            self.assertEqual(diagnostics["install_mode"], "portable_or_git")
+            self.assertEqual(diagnostics["source"], "extension_layout:custom_nodes")
+            self.assertEqual(diagnostics["storage_source"], "extension_layout:custom_nodes")
+
+    def test_extension_repository_venv_with_system_storage_stays_standard(self):
+        """A custom-node development repository venv is not a Desktop marker."""
+        with tempfile.TemporaryDirectory() as fake_root:
+            extension_root = os.path.join(fake_root, "ComfyUI-Doctor")
+            fake_python = os.path.join(extension_root, ".venv", "Scripts", "python.exe")
+            fake_doctor_paths_file = os.path.join(extension_root, "services", "doctor_paths.py")
+            user_dir = os.path.join(fake_root, "host-user")
+            system_user_dir = os.path.join(user_dir, "__comfyui_doctor")
+            os.makedirs(os.path.dirname(fake_python), exist_ok=True)
+            os.makedirs(os.path.dirname(fake_doctor_paths_file), exist_ok=True)
+            folder_paths = SimpleNamespace(
+                get_system_user_directory=lambda name: system_user_dir,
+                get_user_directory=lambda: user_dir,
+            )
+
+            with (
+                patch("services.doctor_paths.folder_paths", folder_paths),
+                patch.object(doctor_paths.sys, "executable", fake_python),
+                patch.object(doctor_paths, "__file__", fake_doctor_paths_file),
+            ):
+                result = doctor_paths.get_doctor_data_dir()
+                diagnostics = doctor_paths.get_path_diagnostics()
+
+            self.assertEqual(result, system_user_dir)
+            self.assertEqual(diagnostics["install_mode"], "standard")
+            self.assertEqual(diagnostics["source"], "folder_paths.get_system_user_directory")
+            self.assertEqual(diagnostics["storage_source"], "folder_paths.get_system_user_directory")
 
     def test_fallback_to_temp_if_nothing_works(self):
         with patch("services.doctor_paths.folder_paths", None):

@@ -92,8 +92,39 @@ def _detect_comfy_root_from_extension(module_file: str | None = None) -> str | N
     return os.path.dirname(custom_nodes_dir)
 
 
+def _detect_extension_root(module_file: str | None = None) -> str:
+    """Return the extension repository root containing the services package."""
+    current_file = os.path.abspath(module_file or __file__)
+    return os.path.dirname(os.path.dirname(current_file))
+
+
+def _same_path(left: str | None, right: str | None) -> bool:
+    if not left or not right:
+        return False
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
+
+
+def _is_desktop_runtime_proven(
+    desktop_base_path: str | None,
+    portable_comfy_root: str | None,
+    portable_is_desktop_resources: bool,
+) -> bool:
+    """Reject `.venv`-only Desktop guesses when explicit development evidence conflicts."""
+    if not desktop_base_path:
+        return False
+
+    # IMPORTANT: a repository-local venv has the same suffix as Desktop's
+    # managed interpreter and must not change the runtime identity.
+    if _same_path(desktop_base_path, _detect_extension_root()):
+        return False
+
+    # An ordinary custom_nodes tree outside Desktop Resources is explicit
+    # portable/git evidence. Ambiguous layouts fail open to that identity.
+    return not (portable_comfy_root and not portable_is_desktop_resources)
+
+
 def get_path_diagnostics() -> dict[str, str | None]:
-    """Return best-effort install-mode diagnostics for health/debug output."""
+    """Return independent runtime-identity and storage-source diagnostics."""
     folder_user_directory = None
     folder_system_user_directory = None
     if folder_paths and hasattr(folder_paths, "get_system_user_directory"):
@@ -111,19 +142,21 @@ def get_path_diagnostics() -> dict[str, str | None]:
     desktop_base_path = _detect_desktop_base_path_from_python()
     portable_comfy_root = _detect_comfy_root_from_extension()
     portable_is_desktop_resources = is_desktop_resources_path(portable_comfy_root or "")
+    desktop_runtime_proven = _is_desktop_runtime_proven(
+        desktop_base_path,
+        portable_comfy_root,
+        portable_is_desktop_resources,
+    )
 
-    if folder_system_user_directory:
+    if desktop_runtime_proven:
+        install_mode = "desktop"
+        source = "python_executable:.venv"
+    elif folder_system_user_directory:
         install_mode = "standard"
         source = "folder_paths.get_system_user_directory"
     elif folder_user_directory:
         install_mode = "standard"
         source = "folder_paths.get_user_directory"
-    elif portable_comfy_root and not portable_is_desktop_resources:
-        install_mode = "portable_or_git"
-        source = "extension_layout:custom_nodes"
-    elif desktop_base_path:
-        install_mode = "desktop"
-        source = "python_executable:.venv"
     elif portable_comfy_root:
         install_mode = "portable_or_git"
         source = "extension_layout:custom_nodes"
@@ -131,9 +164,23 @@ def get_path_diagnostics() -> dict[str, str | None]:
         install_mode = "unknown"
         source = "fallback"
 
+    if folder_system_user_directory:
+        storage_source = "folder_paths.get_system_user_directory"
+    elif folder_user_directory:
+        storage_source = "folder_paths.get_user_directory"
+    elif portable_comfy_root and not portable_is_desktop_resources:
+        storage_source = "extension_layout:custom_nodes"
+    elif desktop_runtime_proven:
+        storage_source = "python_executable:.venv"
+    elif portable_comfy_root:
+        storage_source = "extension_layout:custom_nodes"
+    else:
+        storage_source = "fallback"
+
     return {
         "install_mode": install_mode,
         "source": source,
+        "storage_source": storage_source,
         "folder_system_user_directory": folder_system_user_directory,
         "folder_user_directory": folder_user_directory,
         "desktop_base_path": desktop_base_path,
@@ -192,9 +239,9 @@ def get_doctor_data_dir() -> str:
     Priority Order:
     1. ComfyUI system-user directory (`folder_paths.get_system_user_directory()`)
     2. Legacy ComfyUI User Directory (`folder_paths.get_user_directory()/ComfyUI-Doctor`)
-    3. Desktop base path inferred from managed `.venv` (`<basePath>/user/ComfyUI-Doctor`)
-    4. Portable / Git clone sibling (`<ComfyUI root>/user/ComfyUI-Doctor`)
-    5. Legacy portable fallback (`<ComfyUI root>/user_data/ComfyUI-Doctor`)
+    3. Portable / Git clone sibling (`<ComfyUI root>/user/ComfyUI-Doctor`)
+    4. Legacy portable fallback (`<ComfyUI root>/user_data/ComfyUI-Doctor`)
+    5. Desktop base path inferred from managed `.venv` (`<basePath>/user/ComfyUI-Doctor`)
     6. Extension-local logs (only when not inside Desktop resources)
     7. OS Temporary Directory
 
