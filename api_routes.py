@@ -263,7 +263,7 @@ def register_api_routes(context: dict) -> None:
                 "(e.g., 'KSampler', 'VAEDecode', 'CheckpointLoaderSimple', 'CLIPTextEncode') to build image generation pipelines.\n\n"
                 "Common ComfyUI error categories:\n"
                 "- **OOM (Out of Memory)**: Reduce batch_size, lower resolution, use --lowvram or --cpu flags\n"
-                "- **Missing Models**: Check if model file exists in ComfyUI/models/ folder, verify filename spelling\n"
+                "- **Missing Models**: Check if the model exists in a configured or registered model folder, verify filename spelling\n"
                 "- **Type Mismatch**: Ensure connected nodes have compatible data types (MODEL, CLIP, VAE, LATENT, IMAGE)\n"
                 "- **CUDA/cuDNN Errors**: Often driver version issues, try updating GPU drivers or PyTorch\n"
                 "- **Shape Mismatch**: Usually caused by incompatible image sizes or LoRA/model combinations\n"

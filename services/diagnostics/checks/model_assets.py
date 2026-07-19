@@ -62,7 +62,7 @@ PATH_WIDGET_NAMES: Set[str] = {
 
 # Common model file extensions
 MODEL_EXTENSIONS: Set[str] = {
-    ".safetensors", ".ckpt", ".pt", ".pth", ".bin",
+    ".safetensors", ".ckpt", ".pt", ".pt2", ".pth", ".bin", ".sft",
     ".onnx", ".pkl", ".pickle", ".tflite", ".task",
 }
 
@@ -82,6 +82,10 @@ FOLDER_ASSET_CATEGORIES: Set[str] = {"diffusers"}
 
 INPUT_3D_PREFIX = "3d/"
 INVALID_ASSET_DISPLAY_NAME = "[invalid asset path]"
+DEFAULT_MAX_PATHS = 50
+MAX_PATH_BUDGET = 500
+MAX_WORKFLOW_NODES = 1000
+MAX_SUBGRAPH_DEPTH = 8
 
 
 # ============================================================================
@@ -89,6 +93,7 @@ INVALID_ASSET_DISPLAY_NAME = "[invalid asset path]"
 # ============================================================================
 
 _comfy_paths: Optional[Dict[str, List[Path]]] = None
+_comfy_extensions: dict[str, set[str]] | None = None
 
 
 @dataclass(frozen=True)
@@ -100,12 +105,12 @@ class _ContainedAssetPath:
 
 
 def _get_comfy_model_paths() -> Dict[str, List[Path]]:
-    """Get ComfyUI model folder paths."""
-    global _comfy_paths
+    """Get a validated snapshot of ComfyUI's registered asset roots."""
+    global _comfy_paths, _comfy_extensions
     if _comfy_paths is not None:
         return _comfy_paths
 
-    paths: Dict[str, List[Path]] = {
+    fallback_paths: dict[str, list[Path]] = {
         "checkpoints": [],
         "vae": [],
         "loras": [],
@@ -131,56 +136,97 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
         "input_3d": [],
         "output": [],
     }
+    paths = fallback_paths
+    extensions: dict[str, set[str]] = {
+        category: set(MODEL_EXTENSIONS)
+        for category in fallback_paths
+        if category not in {"input", "input_3d", "output"}
+    }
+    extensions["diffusers"] = {"folder"}
+    extensions["input"] = set(MEDIA_EXTENSIONS)
+    extensions["input_3d"] = set(THREE_D_EXTENSIONS)
+    extensions["output"] = set(MEDIA_EXTENSIONS)
 
-    # Try to get paths from ComfyUI's folder_paths
     try:
         import folder_paths
 
-        # Map our categories to folder_paths functions
-        path_mappings = {
-            "checkpoints": "checkpoints",
-            "vae": "vae",
-            "loras": "loras",
-            "controlnet": "controlnet",
-            "clip": "clip",
-            "text_encoders": "text_encoders",
-            "clip_vision": "clip_vision",
-            "style_models": "style_models",
-            "diffusion_models": "diffusion_models",
-            "photomaker": "photomaker",
-            "model_patches": "model_patches",
-            "audio_encoders": "audio_encoders",
-            "background_removal": "background_removal",
-            "frame_interpolation": "frame_interpolation",
-            "upscale_models": "upscale_models",
-            "diffusers": "diffusers",
-            "gligen": "gligen",
-            "embeddings": "embeddings",
-            "geometry_estimation": "geometry_estimation",
-            "optical_flow": "optical_flow",
-            "detection": "detection",
-        }
+        registry = getattr(folder_paths, "folder_names_and_paths", None)
+        if isinstance(registry, dict):
+            # IMPORTANT: the live host registry is authoritative when present;
+            # do not silently mix it with stale fixed model roots.
+            paths = {}
+            extensions = {}
+            for category, entry in registry.items():
+                if (
+                    not isinstance(category, str)
+                    or not isinstance(entry, (tuple, list))
+                    or len(entry) < 2
+                ):
+                    continue
+                raw_roots, raw_extensions = entry[0], entry[1]
+                if (
+                    isinstance(raw_roots, (str, bytes))
+                    or not isinstance(raw_roots, (tuple, list, set))
+                    or isinstance(raw_extensions, (str, bytes))
+                    or not isinstance(
+                        raw_extensions,
+                        (tuple, list, set, frozenset),
+                    )
+                ):
+                    continue
 
-        for key, folder_name in path_mappings.items():
-            try:
-                folder_list = folder_paths.get_folder_paths(folder_name)
-                paths[key] = [Path(p) for p in folder_list if p]
-            except Exception:
-                pass
+                valid_roots: list[Path] = []
+                for raw_root in raw_roots:
+                    try:
+                        if raw_root and "\x00" not in os.fspath(raw_root):
+                            valid_roots.append(Path(raw_root))
+                    except (OSError, TypeError, ValueError):
+                        continue
 
-        if not paths["text_encoders"] and paths["clip"]:
+                valid_extensions: set[str] = set()
+                for raw_extension in raw_extensions:
+                    if not isinstance(raw_extension, str):
+                        continue
+                    extension = raw_extension.strip().lower()
+                    if extension == "folder" or extension == "":
+                        valid_extensions.add(extension)
+                    elif extension.startswith("."):
+                        valid_extensions.add(extension)
+
+                paths[category] = valid_roots
+                extensions[category] = valid_extensions
+        else:
+            path_mappings = {
+                key: key
+                for key in fallback_paths
+                if key not in {"input", "input_3d", "output"}
+            }
+            for key, folder_name in path_mappings.items():
+                try:
+                    folder_list = folder_paths.get_folder_paths(folder_name)
+                    paths[key] = [Path(p) for p in folder_list if p]
+                except Exception:
+                    pass
+
+        if not paths.get("text_encoders") and paths.get("clip"):
             paths["text_encoders"] = list(paths["clip"])
+            extensions["text_encoders"] = set(
+                extensions.get("clip", MODEL_EXTENSIONS)
+            )
 
         # Input/output folders
         try:
             input_dir = Path(folder_paths.get_input_directory())
             paths["input"] = [input_dir]
             paths["input_3d"] = [input_dir / "3d"]
+            extensions["input"] = set(MEDIA_EXTENSIONS)
+            extensions["input_3d"] = set(THREE_D_EXTENSIONS)
         except Exception:
             pass
 
         try:
             paths["output"] = [Path(folder_paths.get_output_directory())]
+            extensions["output"] = set(MEDIA_EXTENSIONS)
         except Exception:
             pass
 
@@ -188,13 +234,29 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
         logger.debug("folder_paths not available, using fallback detection")
 
     _comfy_paths = paths
+    _comfy_extensions = extensions
     return paths
+
+
+def _get_comfy_model_extensions() -> dict[str, set[str]]:
+    """Return the cached host extension registry or deterministic fallback."""
+    global _comfy_extensions
+    if _comfy_extensions is None:
+        _get_comfy_model_paths()
+    if _comfy_extensions is not None:
+        return _comfy_extensions
+    return {
+        "checkpoints": set(MODEL_EXTENSIONS),
+        "input": set(MEDIA_EXTENSIONS),
+        "input_3d": set(THREE_D_EXTENSIONS),
+    }
 
 
 def _clear_path_cache():
     """Clear path cache (for testing)."""
-    global _comfy_paths
+    global _comfy_paths, _comfy_extensions
     _comfy_paths = None
+    _comfy_extensions = None
 
 
 def _resolve_contained_asset_path(
@@ -341,7 +403,17 @@ def _is_path_like(value: str) -> bool:
     # Check for common path patterns
     # Has extension that looks like a model or media file
     lower = value.lower()
-    for ext in MODEL_EXTENSIONS | MEDIA_EXTENSIONS | THREE_D_EXTENSIONS:
+    registered_extensions = {
+        extension
+        for values in _get_comfy_model_extensions().values()
+        for extension in values
+        if extension and extension != "folder"
+    }
+    for ext in (
+        MEDIA_EXTENSIONS
+        | THREE_D_EXTENSIONS
+        | registered_extensions
+    ):
         if lower.endswith(ext):
             return True
 
@@ -354,6 +426,54 @@ def _is_path_like(value: str) -> bool:
         return True
 
     return False
+
+
+def _is_folder_asset_category(category: str) -> bool:
+    """Return whether a host registry category contains folder assets."""
+    return (
+        category in FOLDER_ASSET_CATEGORIES
+        or "folder" in _get_comfy_model_extensions().get(category, set())
+    )
+
+
+def _registered_asset_category(
+    node_type: str,
+    filename: str,
+) -> str | None:
+    """Resolve a custom host category only from deterministic public facts."""
+    paths = _get_comfy_model_paths()
+    extensions = _get_comfy_model_extensions()
+    normalized_type = re.sub(r"[^a-z0-9]", "", node_type.lower())
+
+    name_matches: list[str] = []
+    for category in paths:
+        category_token = re.sub(r"[^a-z0-9]", "", category.lower())
+        singular_token = (
+            category_token[:-1]
+            if category_token.endswith("s")
+            else category_token
+        )
+        if (
+            singular_token
+            and singular_token in normalized_type
+            and extensions.get(category)
+        ):
+            name_matches.append(category)
+    if len(name_matches) == 1:
+        return name_matches[0]
+
+    try:
+        suffix = Path(filename).suffix.lower()
+    except (OSError, TypeError, ValueError):
+        suffix = ""
+    extension_matches = [
+        category
+        for category, registered in extensions.items()
+        if suffix and suffix in registered and paths.get(category)
+    ]
+    if len(extension_matches) == 1:
+        return extension_matches[0]
+    return None
 
 
 def _sanitize_path_for_display(path: str, max_len: int = 50) -> str:
@@ -371,6 +491,300 @@ def _sanitize_path_for_display(path: str, max_len: int = 50) -> str:
         return path
 
 
+@dataclass(frozen=True)
+class _WorkflowAssetNode:
+    """An instantiated workflow node with visible/source provenance."""
+
+    source_node: dict[str, Any]
+    widget_values: tuple[Any, ...]
+    visible_node_id: Any
+    visible_node_title: str
+    source_execution_id: str
+    promoted_widget_indexes: frozenset[int]
+    nested: bool
+
+
+def _normalize_path_budget(value: Any) -> int:
+    """Normalize the request path budget without allowing an unbounded scan."""
+    if value is None:
+        return DEFAULT_MAX_PATHS
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_MAX_PATHS
+    return max(0, min(MAX_PATH_BUDGET, normalized))
+
+
+def _safe_execution_id_component(value: Any) -> str:
+    """Keep provenance identifiers content-free and bounded."""
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+        return value
+    return "unknown"
+
+
+def _widget_index_for_input(
+    node: dict[str, Any],
+    input_index: Any,
+) -> int | None:
+    """Map a serialized input slot to its widgets_values position."""
+    if not isinstance(input_index, int) or input_index < 0:
+        return None
+    inputs = node.get("inputs", [])
+    if not isinstance(inputs, list) or input_index >= len(inputs):
+        return None
+
+    widget_index = 0
+    for current_index, input_slot in enumerate(inputs):
+        if not isinstance(input_slot, dict):
+            continue
+        widget = input_slot.get("widget")
+        if not isinstance(widget, dict) or not isinstance(
+            widget.get("name"),
+            str,
+        ):
+            continue
+        if current_index == input_index:
+            return widget_index
+        widget_index += 1
+    return None
+
+
+def _apply_promoted_widget_values(
+    definition: dict[str, Any],
+    host_values: tuple[Any, ...],
+) -> list[tuple[dict[str, Any], frozenset[int]]]:
+    """Apply host-owned promoted values to direct definition children."""
+    raw_nodes = definition.get("nodes", [])
+    if not isinstance(raw_nodes, list):
+        return []
+
+    effective: dict[Any, tuple[dict[str, Any], list[Any], set[int]]] = {}
+    ordered_ids: list[Any] = []
+    for node in raw_nodes:
+        if not isinstance(node, dict):
+            continue
+        node_id = node.get("id")
+        values = node.get("widgets_values", [])
+        copied_values = list(values) if isinstance(values, list) else []
+        effective[node_id] = (node, copied_values, set())
+        ordered_ids.append(node_id)
+
+    raw_inputs = definition.get("inputs", [])
+    raw_links = definition.get("links", [])
+    if not isinstance(raw_inputs, list) or not isinstance(raw_links, list):
+        raw_inputs = []
+        raw_links = []
+
+    host_widget_index = 0
+    input_node = definition.get("inputNode", {})
+    input_node_id = (
+        input_node.get("id", -10)
+        if isinstance(input_node, dict)
+        else -10
+    )
+    for definition_input_index, definition_input in enumerate(raw_inputs):
+        if not isinstance(definition_input, dict):
+            continue
+        link_ids = definition_input.get("linkIds", [])
+        if not isinstance(link_ids, list):
+            link_ids = []
+        matching_links = [
+            link
+            for link in raw_links
+            if isinstance(link, dict)
+            and (
+                link.get("id") in link_ids
+                or (
+                    link.get("origin_slot") == definition_input_index
+                    and link.get("origin_id") in {
+                        input_node_id,
+                        str(input_node_id),
+                    }
+                )
+            )
+        ]
+
+        widget_targets: list[tuple[Any, int]] = []
+        for link in matching_links:
+            target_id = link.get("target_id")
+            target = effective.get(target_id)
+            if target is None:
+                continue
+            widget_index = _widget_index_for_input(
+                target[0],
+                link.get("target_slot"),
+            )
+            if widget_index is not None:
+                widget_targets.append((target_id, widget_index))
+
+        if not widget_targets:
+            continue
+        if host_widget_index >= len(host_values):
+            break
+        host_value = host_values[host_widget_index]
+        host_widget_index += 1
+        for target_id, widget_index in widget_targets:
+            _source_node, values, promoted_indexes = effective[target_id]
+            while len(values) <= widget_index:
+                values.append(None)
+            values[widget_index] = host_value
+            promoted_indexes.add(widget_index)
+
+    return [
+        (
+            effective[node_id][0]
+            | {"widgets_values": effective[node_id][1]},
+            frozenset(effective[node_id][2]),
+        )
+        for node_id in ordered_ids
+    ]
+
+
+def _collect_workflow_asset_nodes(
+    workflow: dict[str, Any],
+) -> list[_WorkflowAssetNode]:
+    """Instantiate bounded root/subgraph nodes for model asset scanning."""
+    raw_nodes = workflow.get("nodes", [])
+    if not isinstance(raw_nodes, list):
+        return []
+
+    raw_definitions = workflow.get("definitions", {})
+    raw_subgraphs = (
+        raw_definitions.get("subgraphs", [])
+        if isinstance(raw_definitions, dict)
+        else []
+    )
+    if not isinstance(raw_subgraphs, list):
+        raw_subgraphs = []
+    definitions = {
+        definition.get("id"): definition
+        for definition in raw_subgraphs
+        if isinstance(definition, dict)
+        and isinstance(definition.get("id"), str)
+    }
+
+    contexts: list[_WorkflowAssetNode] = []
+    visited_nodes = 0
+
+    def visit(
+        node: dict[str, Any],
+        *,
+        visible_node_id: Any,
+        visible_node_title: str,
+        source_prefix: str,
+        promoted_indexes: frozenset[int],
+        definition_stack: frozenset[str],
+        depth: int,
+        nested: bool,
+    ) -> None:
+        nonlocal visited_nodes
+        if visited_nodes >= MAX_WORKFLOW_NODES:
+            return
+        visited_nodes += 1
+
+        node_id = node.get("id")
+        node_component = _safe_execution_id_component(node_id)
+        source_execution_id = (
+            f"{source_prefix}:{node_component}"
+            if source_prefix
+            else node_component
+        )
+        node_type = node.get("type", "")
+        definition = definitions.get(node_type)
+        if (
+            isinstance(node_type, str)
+            and isinstance(definition, dict)
+            and node_type not in definition_stack
+            and depth < MAX_SUBGRAPH_DEPTH
+        ):
+            values = node.get("widgets_values", [])
+            host_values = tuple(values) if isinstance(values, list) else ()
+            children = _apply_promoted_widget_values(
+                definition,
+                host_values,
+            )
+            next_stack = definition_stack | {node_type}
+            for child, child_promoted_indexes in children:
+                visit(
+                    child,
+                    visible_node_id=visible_node_id,
+                    visible_node_title=visible_node_title,
+                    source_prefix=source_execution_id,
+                    promoted_indexes=child_promoted_indexes,
+                    definition_stack=next_stack,
+                    depth=depth + 1,
+                    nested=True,
+                )
+            return
+
+        values = node.get("widgets_values", [])
+        contexts.append(_WorkflowAssetNode(
+            source_node=node,
+            widget_values=tuple(values) if isinstance(values, list) else (),
+            visible_node_id=visible_node_id,
+            visible_node_title=visible_node_title,
+            source_execution_id=source_execution_id,
+            promoted_widget_indexes=promoted_indexes,
+            nested=nested,
+        ))
+
+    for root_node in raw_nodes:
+        if visited_nodes >= MAX_WORKFLOW_NODES:
+            break
+        if not isinstance(root_node, dict):
+            continue
+        root_id = root_node.get("id")
+        root_type = root_node.get("type", "")
+        root_title = root_node.get("title", root_type)
+        visit(
+            root_node,
+            visible_node_id=root_id,
+            visible_node_title=(
+                root_title if isinstance(root_title, str) else str(root_type)
+            ),
+            source_prefix="",
+            promoted_indexes=frozenset(),
+            definition_stack=frozenset(),
+            depth=0,
+            nested=False,
+        )
+
+    return contexts
+
+
+def _asset_provenance_metadata(
+    context: _WorkflowAssetNode,
+    source_node_type: str,
+    widget_index: int,
+) -> dict[str, Any]:
+    """Build public-safe instance provenance for a nested asset finding."""
+    if not context.nested:
+        return {}
+    source_node_id = context.source_node.get("id")
+    safe_source_node_id: Any = (
+        source_node_id
+        if isinstance(source_node_id, int)
+        else _safe_execution_id_component(source_node_id)
+    )
+    visible_node_id = context.visible_node_id
+    safe_visible_node_id: Any = (
+        visible_node_id
+        if isinstance(visible_node_id, int)
+        else _safe_execution_id_component(visible_node_id)
+    )
+    return {
+        "asset_provenance": {
+            "visible_node_id": safe_visible_node_id,
+            "source_execution_id": context.source_execution_id,
+            "source_node_id": safe_source_node_id,
+            "source_node_type": source_node_type[:128],
+            "promoted": widget_index in context.promoted_widget_indexes,
+        }
+    }
+
+
 # ============================================================================
 # Check Implementation
 # ============================================================================
@@ -386,25 +800,21 @@ async def check_model_assets(
     Returns list of HealthIssues for missing or inaccessible files.
     """
     issues: List[HealthIssue] = []
-
-    nodes = workflow.get("nodes", [])
-    if not isinstance(nodes, list):
-        return issues
+    node_contexts = _collect_workflow_asset_nodes(workflow)
+    path_budget = _normalize_path_budget(request.max_paths)
+    scanned_paths = 0
 
     # Track checked paths to avoid duplicates
-    checked_paths: Set[str] = set()
+    checked_paths: set[tuple[str, Any, str, int]] = set()
 
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-
-        node_id = node.get("id")
+    for context in node_contexts:
+        node = context.source_node
+        node_id = context.visible_node_id
         node_type = node.get("type", "")
-        node_title = node.get("title", node_type)
-        widgets_values = node.get("widgets_values", [])
-
-        if not isinstance(widgets_values, list):
-            continue
+        if not isinstance(node_type, str):
+            node_type = ""
+        node_title = context.visible_node_title
+        widgets_values = context.widget_values
 
         # Determine if this node type is known to load files
         is_file_loader = any(
@@ -416,8 +826,13 @@ async def check_model_assets(
             if not isinstance(value, str):
                 continue
 
-            # Skip if already checked
-            if value in checked_paths:
+            checked_key = (
+                value,
+                context.visible_node_id,
+                context.source_execution_id,
+                idx,
+            )
+            if checked_key in checked_paths:
                 continue
 
             # Determine if this looks like a file path
@@ -426,12 +841,15 @@ async def check_model_assets(
                 value.strip().lower() in {"none", "null"}
                 or (
                     not _is_path_like(value)
-                    and category not in FOLDER_ASSET_CATEGORIES
+                    and not _is_folder_asset_category(category)
                 )
             ):
                 continue
 
-            checked_paths.add(value)
+            if scanned_paths >= path_budget:
+                return issues
+            scanned_paths += 1
+            checked_paths.add(checked_key)
 
             # Try to find the file
             (
@@ -470,7 +888,9 @@ async def check_model_assets(
 
                 issues.append(HealthIssue(
                     issue_id=HealthIssue.generate_issue_id(
-                        "missing_asset", target, value[:32]
+                        "missing_asset",
+                        target,
+                        f"{value[:32]}:{context.source_execution_id}",
                     ),
                     category=IssueCategory.MODEL,
                     severity=severity,
@@ -480,13 +900,26 @@ async def check_model_assets(
                         f"Filename: {safe_name}",
                         f"Node type: {node_type}",
                         f"Searched in: {category} folders",
+                        *(
+                            [
+                                "Nested source execution ID: "
+                                f"{context.source_execution_id}",
+                            ]
+                            if context.nested
+                            else []
+                        ),
                     ],
                     recommendation=[
-                        f"Ensure the file '{safe_name}' exists in the appropriate ComfyUI folder",
+                        f"Ensure the file '{safe_name}' exists in a configured or registered ComfyUI model folder",
                         "Check if the file was moved, renamed, or deleted",
                         "Verify the file name spelling (case-sensitive on some systems)",
                     ],
                     target=target,
+                    metadata=_asset_provenance_metadata(
+                        context,
+                        node_type,
+                        idx,
+                    ),
                 ))
             else:
                 # File found - check if readable
@@ -504,6 +937,11 @@ async def check_model_assets(
                         value,
                     )
                     if readable_issue:
+                        readable_issue.metadata = _asset_provenance_metadata(
+                            context,
+                            node_type,
+                            idx,
+                        )
                         issues.append(readable_issue)
 
     return issues
@@ -511,6 +949,10 @@ async def check_model_assets(
 
 def _determine_asset_category(node_type: str, filename: str) -> str:
     """Determine the asset category based on node type and filename."""
+    if not isinstance(node_type, str):
+        node_type = ""
+    if not isinstance(filename, str):
+        filename = ""
     lower_type = node_type.lower()
     lower_file = filename.lower()
 
@@ -613,8 +1055,12 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
     if "ckpt" in lower_file:
         return "checkpoints"
 
-    # Default to checkpoints for unknown model loaders
-    return "checkpoints"
+    # Preserve known loader hints, then consult validated custom registry
+    # facts without guessing across ambiguous shared model extensions.
+    return (
+        _registered_asset_category(node_type, filename)
+        or "checkpoints"
+    )
 
 
 def _check_file_readable(

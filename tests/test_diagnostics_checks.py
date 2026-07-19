@@ -870,5 +870,580 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             with self.subTest(extension=extension):
                 self.assertTrue(model_assets._is_path_like(f"3d/example{extension}"))
 
+    def test_model_assets_uses_live_registry_paths_and_extensions_authoritatively(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            checkpoint_root = root / "configured" / "checkpoints"
+            custom_root = root / "registered" / "doctor_models"
+            registry = {
+                "checkpoints": (
+                    [str(checkpoint_root)],
+                    {".safetensors", ".pt2", ".sft"},
+                ),
+                "doctor_models": ([str(custom_root)], {".doctor"}),
+                "malformed": "not-a-registry-entry",
+                42: ([str(root / "ignored")], {".bin"}),
+            }
+            folder_paths = SimpleNamespace(
+                folder_names_and_paths=registry,
+                get_folder_paths=MagicMock(
+                    side_effect=AssertionError(
+                        "legacy lookup must not run when the registry exists"
+                    )
+                ),
+                get_input_directory=lambda: str(root / "input"),
+                get_output_directory=lambda: str(root / "output"),
+            )
+
+            with patch.dict(sys.modules, {"folder_paths": folder_paths}):
+                paths = model_assets._get_comfy_model_paths()
+                extensions = model_assets._get_comfy_model_extensions()
+
+            self.assertEqual(paths["checkpoints"], [checkpoint_root])
+            self.assertEqual(paths["doctor_models"], [custom_root])
+            self.assertNotIn("malformed", paths)
+            self.assertNotIn(42, paths)
+            self.assertEqual(
+                extensions["checkpoints"],
+                {".safetensors", ".pt2", ".sft"},
+            )
+            self.assertEqual(extensions["doctor_models"], {".doctor"})
+            self.assertFalse(
+                model_assets._is_path_like("not_registered.ckpt")
+            )
+            folder_paths.get_folder_paths.assert_not_called()
+
+    def test_model_assets_recognizes_current_host_model_extensions(self):
+        for extension in (".pt2", ".sft"):
+            with self.subTest(extension=extension):
+                self.assertTrue(
+                    model_assets._is_path_like(f"synthetic_model{extension}")
+                )
+
+    async def test_model_assets_resolves_custom_registered_category(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            custom_root = Path(temp_root) / "configured" / "doctor_models"
+            custom_root.mkdir(parents=True)
+            (custom_root / "synthetic.doctor").write_bytes(b"x")
+            folder_paths = SimpleNamespace(
+                folder_names_and_paths={
+                    "doctor_models": ([str(custom_root)], {".doctor"}),
+                },
+                get_input_directory=lambda: str(Path(temp_root) / "input"),
+                get_output_directory=lambda: str(Path(temp_root) / "output"),
+            )
+            workflow = {
+                "nodes": [
+                    {
+                        "id": 130,
+                        "type": "DoctorModelLoader",
+                        "widgets_values": ["synthetic.doctor"],
+                    }
+                ]
+            }
+            request = HealthCheckRequest(
+                workflow=workflow,
+                scope=DiagnosticsScope.MANUAL,
+            )
+
+            with patch.dict(sys.modules, {"folder_paths": folder_paths}):
+                issues = await model_assets.check_model_assets(
+                    workflow,
+                    request,
+                )
+
+            self.assertEqual(issues, [])
+            self.assertEqual(
+                model_assets._determine_asset_category(
+                    "DoctorModelLoader",
+                    "synthetic.doctor",
+                ),
+                "doctor_models",
+            )
+
+    async def test_dynamic_registry_root_keeps_s21_containment(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            custom_root = base / "registered" / "doctor_models"
+            custom_root.mkdir(parents=True)
+            outside = base / "external.doctor"
+            outside.write_bytes(b"x")
+            folder_paths = SimpleNamespace(
+                folder_names_and_paths={
+                    "doctor_models": ([str(custom_root)], {".doctor"}),
+                },
+                get_input_directory=lambda: str(base / "input"),
+                get_output_directory=lambda: str(base / "output"),
+            )
+            workflow = {
+                "nodes": [
+                    {
+                        "id": 131,
+                        "type": "DoctorModelLoader",
+                        "title": "Synthetic Custom Loader",
+                        "widgets_values": ["../external.doctor"],
+                    }
+                ]
+            }
+            request = HealthCheckRequest(
+                workflow=workflow,
+                scope=DiagnosticsScope.MANUAL,
+            )
+
+            with (
+                patch.dict(sys.modules, {"folder_paths": folder_paths}),
+                patch("builtins.open", mock_open()) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(
+                    workflow,
+                    request,
+                )
+
+            self.assertEqual(len(issues), 1)
+            serialized = repr(issues[0].to_dict())
+            self.assertNotIn("external.doctor", serialized)
+            self.assertNotIn(temp_root, serialized)
+            open_mock.assert_not_called()
+
+    @staticmethod
+    def _nested_asset_workflow(
+        root_nodes,
+        subgraphs,
+    ):
+        return {
+            "nodes": root_nodes,
+            "definitions": {"subgraphs": subgraphs},
+        }
+
+    @staticmethod
+    def _subgraph_definition(
+        definition_id,
+        nodes,
+        *,
+        inputs=None,
+        links=None,
+    ):
+        return {
+            "id": definition_id,
+            "inputs": inputs or [],
+            "nodes": nodes,
+            "links": links or [],
+        }
+
+    async def test_nested_non_promoted_asset_preserves_visible_and_source_provenance(self):
+        workflow = self._nested_asset_workflow(
+            [
+                {
+                    "id": 140,
+                    "type": "synthetic-subgraph",
+                    "title": "Visible Synthetic Host",
+                    "widgets_values": [],
+                }
+            ],
+            [
+                self._subgraph_definition(
+                    "synthetic-subgraph",
+                    [
+                        {
+                            "id": 7,
+                            "type": "CheckpointLoaderSimple",
+                            "title": "Interior Loader",
+                            "widgets_values": ["nested_missing.pt2"],
+                        }
+                    ],
+                )
+            ],
+        )
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=self._checkpoint_paths(Path("synthetic-empty-root")),
+        ):
+            issues = await model_assets.check_model_assets(workflow, request)
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.node_id, 140)
+        self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
+        self.assertEqual(
+            issues[0].metadata["asset_provenance"],
+            {
+                "visible_node_id": 140,
+                "source_execution_id": "140:7",
+                "source_node_id": 7,
+                "source_node_type": "CheckpointLoaderSimple",
+                "promoted": False,
+            },
+        )
+
+    async def test_nested_promoted_value_uses_host_value_and_source_loader(self):
+        inputs = [
+            {
+                "id": "synthetic-ckpt-input",
+                "name": "ckpt_name",
+                "type": "COMBO",
+                "linkIds": [1],
+            }
+        ]
+        inner_host = {
+            "id": 8,
+            "type": "inner-promoted-subgraph",
+            "title": "Inner Promoted Host",
+            "inputs": [
+                {
+                    "name": "ckpt_name",
+                    "type": "COMBO",
+                    "widget": {"name": "ckpt_name"},
+                    "link": 1,
+                }
+            ],
+            "widgets_values": ["stale_interior.safetensors"],
+        }
+        outer_links = [
+            {
+                "id": 1,
+                "origin_id": -10,
+                "origin_slot": 0,
+                "target_id": 8,
+                "target_slot": 0,
+                "type": "COMBO",
+            }
+        ]
+        inner_inputs = [
+            {
+                "id": "inner-ckpt-input",
+                "name": "ckpt_name",
+                "type": "COMBO",
+                "linkIds": [2],
+            }
+        ]
+        leaf = {
+            "id": 9,
+            "type": "CheckpointLoaderSimple",
+            "title": "Concrete Interior Loader",
+            "inputs": [
+                {
+                    "name": "ckpt_name",
+                    "type": "COMBO",
+                    "widget": {"name": "ckpt_name"},
+                    "link": 2,
+                }
+            ],
+            "widgets_values": ["deep_stale.safetensors"],
+        }
+        inner_links = [
+            {
+                "id": 2,
+                "origin_id": -10,
+                "origin_slot": 0,
+                "target_id": 9,
+                "target_slot": 0,
+                "type": "COMBO",
+            }
+        ]
+        workflow = self._nested_asset_workflow(
+            [
+                {
+                    "id": 141,
+                    "type": "promoted-subgraph",
+                    "title": "Resolved Shared Host",
+                    "widgets_values": ["resolved.safetensors"],
+                },
+                {
+                    "id": 142,
+                    "type": "promoted-subgraph",
+                    "title": "Missing Shared Host",
+                    "widgets_values": ["host_missing.safetensors"],
+                },
+            ],
+            [
+                self._subgraph_definition(
+                    "promoted-subgraph",
+                    [inner_host],
+                    inputs=inputs,
+                    links=outer_links,
+                ),
+                self._subgraph_definition(
+                    "inner-promoted-subgraph",
+                    [leaf],
+                    inputs=inner_inputs,
+                    links=inner_links,
+                ),
+            ],
+        )
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_root:
+            checkpoint_root = Path(temp_root) / "checkpoints"
+            checkpoint_root.mkdir()
+            (checkpoint_root / "resolved.safetensors").write_bytes(b"x")
+            with patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=self._checkpoint_paths(checkpoint_root),
+            ):
+                issues = await model_assets.check_model_assets(
+                    workflow,
+                    request,
+                )
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.node_id, 142)
+        self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
+        serialized = repr(issues[0].to_dict())
+        self.assertIn("host_missing.safetensors", serialized)
+        self.assertNotIn("stale_interior.safetensors", serialized)
+        self.assertNotIn("deep_stale.safetensors", serialized)
+        self.assertEqual(
+            issues[0].metadata["asset_provenance"][
+                "source_execution_id"
+            ],
+            "142:8:9",
+        )
+        self.assertTrue(
+            issues[0].metadata["asset_provenance"]["promoted"]
+        )
+
+    async def test_shared_subgraph_hosts_keep_instance_specific_findings(self):
+        definition = self._subgraph_definition(
+            "shared-subgraph",
+            [
+                {
+                    "id": 9,
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": ["shared_missing.sft"],
+                }
+            ],
+        )
+        workflow = self._nested_asset_workflow(
+            [
+                {"id": 143, "type": "shared-subgraph", "widgets_values": []},
+                {"id": 144, "type": "shared-subgraph", "widgets_values": []},
+            ],
+            [definition],
+        )
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=self._checkpoint_paths(Path("synthetic-empty-root")),
+        ):
+            issues = await model_assets.check_model_assets(workflow, request)
+
+        self.assertEqual(
+            {issue.target.node_id for issue in issues},
+            {143, 144},
+        )
+        self.assertEqual(
+            {
+                issue.metadata["asset_provenance"]["source_execution_id"]
+                for issue in issues
+            },
+            {"143:9", "144:9"},
+        )
+
+    async def test_nested_traversal_is_cycle_safe(self):
+        definition = self._subgraph_definition(
+            "cyclic-subgraph",
+            [
+                {
+                    "id": 10,
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": ["cycle_missing.safetensors"],
+                },
+                {
+                    "id": 11,
+                    "type": "cyclic-subgraph",
+                    "widgets_values": [],
+                },
+            ],
+        )
+        workflow = self._nested_asset_workflow(
+            [{"id": 145, "type": "cyclic-subgraph", "widgets_values": []}],
+            [definition],
+        )
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=self._checkpoint_paths(Path("synthetic-empty-root")),
+        ):
+            issues = await model_assets.check_model_assets(workflow, request)
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(
+            issues[0].metadata["asset_provenance"][
+                "source_execution_id"
+            ],
+            "145:10",
+        )
+
+    async def test_malformed_subgraph_collection_is_ignored_safely(self):
+        workflow = {
+            "nodes": [
+                {
+                    "id": 1451,
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": ["root_missing.safetensors"],
+                }
+            ],
+            "definitions": {"subgraphs": None},
+        }
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=self._checkpoint_paths(Path("synthetic-empty-root")),
+        ):
+            issues = await model_assets.check_model_assets(workflow, request)
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.node_id, 1451)
+
+    async def test_nested_traversal_obeys_depth_and_node_budgets(self):
+        workflow = self._nested_asset_workflow(
+            [{"id": 146, "type": "depth-one", "widgets_values": []}],
+            [
+                self._subgraph_definition(
+                    "depth-one",
+                    [{"id": 12, "type": "depth-two", "widgets_values": []}],
+                ),
+                self._subgraph_definition(
+                    "depth-two",
+                    [
+                        {
+                            "id": 13,
+                            "type": "CheckpointLoaderSimple",
+                            "widgets_values": ["depth_missing.safetensors"],
+                        }
+                    ],
+                ),
+            ],
+        )
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+        empty_paths = self._checkpoint_paths(Path("synthetic-empty-root"))
+
+        with (
+            patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=empty_paths,
+            ),
+            patch.object(model_assets, "MAX_SUBGRAPH_DEPTH", 1),
+        ):
+            depth_limited = await model_assets.check_model_assets(
+                workflow,
+                request,
+            )
+
+        with (
+            patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=empty_paths,
+            ),
+            patch.object(model_assets, "MAX_SUBGRAPH_DEPTH", 2),
+        ):
+            depth_allowed = await model_assets.check_model_assets(
+                workflow,
+                request,
+            )
+
+        many_nodes = {
+            "nodes": [
+                {
+                    "id": index,
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": [f"node_{index}.safetensors"],
+                }
+                for index in range(5)
+            ]
+        }
+        with (
+            patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=empty_paths,
+            ),
+            patch.object(model_assets, "MAX_WORKFLOW_NODES", 2),
+        ):
+            node_limited = await model_assets.check_model_assets(
+                many_nodes,
+                HealthCheckRequest(
+                    workflow=many_nodes,
+                    scope=DiagnosticsScope.MANUAL,
+                    max_paths=10,
+                ),
+            )
+
+        self.assertEqual(depth_limited, [])
+        self.assertEqual(len(depth_allowed), 1)
+        self.assertEqual(len(node_limited), 2)
+
+    async def test_model_asset_scan_obeys_and_normalizes_path_budget(self):
+        workflow = {
+            "nodes": [
+                {
+                    "id": index,
+                    "type": "CheckpointLoaderSimple",
+                    "widgets_values": [f"path_{index}.safetensors"],
+                }
+                for index in range(3)
+            ]
+        }
+        empty_paths = self._checkpoint_paths(Path("synthetic-empty-root"))
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=empty_paths,
+        ):
+            issues = await model_assets.check_model_assets(
+                workflow,
+                HealthCheckRequest(
+                    workflow=workflow,
+                    scope=DiagnosticsScope.MANUAL,
+                    max_paths=1,
+                ),
+            )
+
+        self.assertEqual(len(issues), 1)
+        cases = {
+            -1: 0,
+            0: 0,
+            1: 1,
+            "2": 2,
+            "invalid": model_assets.DEFAULT_MAX_PATHS,
+            None: model_assets.DEFAULT_MAX_PATHS,
+            10_000: model_assets.MAX_PATH_BUDGET,
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(
+                    model_assets._normalize_path_budget(value),
+                    expected,
+                )
+
+    def test_missing_model_prompt_uses_configured_registered_path_guidance(self):
+        source = (
+            Path(__file__).resolve().parents[1] / "api_routes.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("ComfyUI/models/ folder", source)
+        self.assertIn("configured or registered model folder", source)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
