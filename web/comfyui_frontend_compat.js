@@ -32,6 +32,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Enable Doctor (requires restart)",
         type: "boolean",
         defaultValue: DOCTOR_DEFAULTS.ENABLED,
+        telemetry: { trackChanges: false },
         onChange: (newVal, oldVal) => {
             console.log(`[ComfyUI-Doctor] Enable changed: ${oldVal} -> ${newVal}`);
         },
@@ -42,6 +43,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Enable Error Boundaries (requires restart)",
         type: "boolean",
         defaultValue: DOCTOR_DEFAULTS.ERROR_BOUNDARIES,
+        telemetry: { trackChanges: false },
         onChange: (newVal, oldVal) => {
             console.log(`[ComfyUI-Doctor] ErrorBoundaries changed: ${oldVal} -> ${newVal}`);
         },
@@ -52,6 +54,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "ℹ️ Configure Doctor settings in the sidebar (left panel)",
         type: "text",
         defaultValue: "",
+        telemetry: { trackChanges: false },
         attrs: { readonly: true, disabled: true },
     },
     {
@@ -61,6 +64,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         type: "combo",
         options: SUPPORTED_LANGUAGES,
         defaultValue: DOCTOR_DEFAULTS.LANGUAGE,
+        telemetry: { trackChanges: false },
     },
     {
         id: "Doctor.Privacy.Mode",
@@ -73,6 +77,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
             { text: "Strict (No Sensitive Data)", value: "strict" },
         ],
         defaultValue: DOCTOR_DEFAULTS.PRIVACY_MODE,
+        telemetry: { trackChanges: false },
     },
     {
         id: "Doctor.Behavior.PollInterval",
@@ -80,6 +85,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: Error Poll Interval (ms)",
         type: "number",
         defaultValue: DOCTOR_DEFAULTS.POLL_INTERVAL,
+        telemetry: { trackChanges: false },
         attrs: { min: 500, max: 10000, step: 100 },
     },
     {
@@ -88,6 +94,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: Auto-open sidebar on error",
         type: "boolean",
         defaultValue: DOCTOR_DEFAULTS.AUTO_OPEN_ON_ERROR,
+        telemetry: { trackChanges: false },
     },
     {
         id: "Doctor.Behavior.EnableNotifications",
@@ -95,6 +102,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: Enable Browser Notifications",
         type: "boolean",
         defaultValue: DOCTOR_DEFAULTS.ENABLE_NOTIFICATIONS,
+        telemetry: { trackChanges: false },
     },
     {
         id: "Doctor.LLM.Provider",
@@ -102,6 +110,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: AI Provider",
         type: "text",
         defaultValue: DOCTOR_DEFAULTS.LLM_PROVIDER,
+        telemetry: { trackChanges: false },
     },
     {
         id: "Doctor.LLM.BaseUrl",
@@ -109,6 +118,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: LLM Base URL",
         type: "text",
         defaultValue: DOCTOR_DEFAULTS.LLM_BASE_URL,
+        telemetry: { trackChanges: false },
     },
     {
         id: "Doctor.LLM.Model",
@@ -116,6 +126,7 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: Model Name",
         type: "text",
         defaultValue: DOCTOR_DEFAULTS.LLM_MODEL,
+        telemetry: { trackChanges: false },
     },
 ];
 

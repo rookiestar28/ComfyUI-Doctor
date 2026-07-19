@@ -86,6 +86,23 @@ test.describe('Settings Panel', () => {
     expect(settings.autoOpen).toBe(true);
   });
 
+  test('every registered Doctor setting disables host change telemetry', async ({ page }) => {
+    const contract = await page.evaluate(async () => {
+      const { DOCTOR_EXTENSION_SETTINGS } = await import('/web/comfyui_frontend_compat.js');
+      return DOCTOR_EXTENSION_SETTINGS.map((setting) => ({
+        id: setting.id,
+        trackChanges: setting.telemetry?.trackChanges,
+        telemetryKeyCount: Object.keys(setting.telemetry || {}).length,
+      }));
+    });
+
+    expect(contract).toHaveLength(11);
+    expect(contract.map((setting) => setting.id)).not.toContain('Doctor.LLM.ApiKey');
+    expect(contract.every(
+      (setting) => setting.trackChanges === false && setting.telemetryKeyCount === 1
+    )).toBe(true);
+  });
+
   test('host sidebar API mock exposes current and deprecated wrappers', async ({ page }) => {
     const sidebarApi = await page.evaluate(() => {
       const current = window.app.extensionManager.sidebarTab;
