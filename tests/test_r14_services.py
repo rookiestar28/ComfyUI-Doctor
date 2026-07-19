@@ -105,6 +105,25 @@ class TestLogRingBuffer:
         # Result should be a string, not a SanitizationResult object
         assert isinstance(recent[0], str)
 
+    def test_sensitive_header_is_redacted_before_ring_buffer_capture(self):
+        config = RingBufferConfig(
+            sanitize_on_retrieval=False,
+            filter_noise=False,
+        )
+        buffer = LogRingBuffer(config)
+        buffer.add_line("Authorization: Bearer fake-buffer-secret")
+        buffer.add_line("X-API-Key: fake-buffer-key")
+        buffer.add_line("Authorization was denied without a header value")
+
+        recent = buffer.get_recent(3, sanitize=False)
+        serialized = repr(recent)
+
+        assert "fake-buffer-secret" not in serialized
+        assert "fake-buffer-key" not in serialized
+        assert recent[0] == "Authorization: ***"
+        assert recent[1] == "X-API-Key: ***"
+        assert recent[2] == "Authorization was denied without a header value"
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TESTS: PromptComposer

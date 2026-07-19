@@ -37,6 +37,45 @@ def test_sanitize_outbound_payload_recursively_sanitizes_strings():
     assert "<USER_PATH>" in sanitized["extra"]["path"]
 
 
+def test_sensitive_headers_are_redacted_outbound_even_for_local_none_mode():
+    sanitizer, downgraded = get_outbound_sanitizer(
+        "http://localhost:11434",
+        "none",
+    )
+    payload = {
+        "request": {
+            "headers": {
+                "Authorization": "Bearer fake-outbound-secret",
+                "Content-Type": "application/json",
+            }
+        },
+        "responses": [
+            {
+                "headers": {
+                    "x-api-key": "fake-response-secret",
+                    "X-Request-ID": "synthetic-id",
+                }
+            }
+        ],
+        "log": "Authorization: Basic fake-text-secret",
+        "message": "authorization failed without a header value",
+    }
+
+    sanitized = sanitize_outbound_payload(payload, sanitizer)
+    serialized = repr(sanitized)
+
+    assert downgraded is False
+    assert sanitizer.level == SanitizationLevel.NONE
+    assert "fake-outbound-secret" not in serialized
+    assert "fake-response-secret" not in serialized
+    assert "fake-text-secret" not in serialized
+    assert sanitized["request"]["headers"]["Authorization"] == "***"
+    assert sanitized["responses"][0]["headers"]["x-api-key"] == "***"
+    assert sanitized["request"]["headers"]["Content-Type"] == "application/json"
+    assert sanitized["responses"][0]["headers"]["X-Request-ID"] == "synthetic-id"
+    assert sanitized["message"] == "authorization failed without a header value"
+
+
 def test_llm_routes_use_outbound_sanitization_funnel():
     project_root = Path(__file__).resolve().parents[1]
     routes_path = project_root / "api_routes.py"

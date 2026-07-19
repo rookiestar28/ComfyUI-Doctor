@@ -58,6 +58,7 @@ class LogRingBuffer:
         self.config = config or RingBufferConfig()
         self._buffer: deque = deque(maxlen=self.config.max_lines)
         self._sanitizer: Optional[Callable[[str], str]] = None
+        self._header_redactor: Callable[[str], str] | None = None
         
         # Try to load sanitizer lazily
         self._load_sanitizer()
@@ -67,12 +68,19 @@ class LogRingBuffer:
         try:
             # Use the convenience function that returns str, not SanitizationResult
             try:
-                from ..sanitizer import sanitize_for_llm
+                from ..sanitizer import (
+                    redact_sensitive_headers,
+                    sanitize_for_llm,
+                )
             except ImportError as import_error:
                 from import_compat import ensure_absolute_import_fallback_allowed
                 ensure_absolute_import_fallback_allowed(import_error)
-                from sanitizer import sanitize_for_llm
+                from sanitizer import (
+                    redact_sensitive_headers,
+                    sanitize_for_llm,
+                )
             self._sanitizer = sanitize_for_llm
+            self._header_redactor = redact_sensitive_headers
         except ImportError:
             # Sanitizer not available, will return raw lines
             pass
@@ -86,6 +94,11 @@ class LogRingBuffer:
         """
         if not line:
             return
+
+        # CRITICAL: store header-safe lines even when a caller later disables
+        # generic retrieval sanitization; raw credentials must never persist.
+        if self._header_redactor:
+            line = self._header_redactor(line)
         
         # Optional noise filtering
         if self.config.filter_noise:

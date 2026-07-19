@@ -12,6 +12,67 @@ from sanitizer import PIISanitizer, SanitizationLevel, sanitize_for_llm
 class TestPIISanitizerBasic:
     """Tests for basic sanitization level."""
 
+    @pytest.mark.parametrize(
+        ("text", "fake_value"),
+        [
+            (
+                "Authorization: Bearer fake-short-secret",
+                "fake-short-secret",
+            ),
+            (
+                "x-API-key=fake-header-secret",
+                "fake-header-secret",
+            ),
+            (
+                "{'Authorization': 'fake-dict-secret'}",
+                "fake-dict-secret",
+            ),
+            (
+                '{"X-API-Key": "fake-json-secret"}',
+                "fake-json-secret",
+            ),
+            (
+                r'{"Authorization": "Bearer fake-\"quoted\"-secret"}',
+                "quoted",
+            ),
+            (
+                "request headers | AUTHORIZATION: Basic fake-basic-secret",
+                "fake-basic-secret",
+            ),
+        ],
+    )
+    def test_sensitive_header_text_is_redacted_by_name(self, text, fake_value):
+        sanitizer = PIISanitizer(SanitizationLevel.BASIC)
+
+        result = sanitizer.sanitize(text)
+
+        assert fake_value not in result.sanitized_text
+        assert "***" in result.sanitized_text
+        assert result.pii_found is True
+        assert result.replacements["sensitive_header"] >= 1
+
+    def test_sensitive_header_redaction_is_unconditional_in_none_mode(self):
+        sanitizer = PIISanitizer(SanitizationLevel.NONE)
+        text = "Authorization: Bearer fake-none-secret"
+
+        result = sanitizer.sanitize(text)
+
+        assert "fake-none-secret" not in result.sanitized_text
+        assert result.sanitized_text == "Authorization: ***"
+        assert result.replacements == {"sensitive_header": 1}
+
+    def test_authorization_prose_and_non_sensitive_headers_are_preserved(self):
+        sanitizer = PIISanitizer(SanitizationLevel.BASIC)
+        text = (
+            "Authorization was denied by policy. "
+            "Content-Type: application/json | X-Request-ID: synthetic-id"
+        )
+
+        result = sanitizer.sanitize(text)
+
+        assert result.sanitized_text == text
+        assert "sensitive_header" not in result.replacements
+
     def test_windows_user_path_sanitization(self):
         """Test Windows user path removal."""
         sanitizer = PIISanitizer(SanitizationLevel.BASIC)
@@ -338,6 +399,48 @@ class TestPIISanitizerDict:
         assert result["traceback"][1] == "Line 2: <USER_HOME>/script.py"
         assert result["traceback"][2] == "Line 3: No PII"
 
+    @pytest.mark.parametrize(
+        "level",
+        [
+            SanitizationLevel.NONE,
+            SanitizationLevel.BASIC,
+            SanitizationLevel.STRICT,
+        ],
+    )
+    def test_sensitive_header_keys_are_redacted_recursively_at_every_level(self, level):
+        sanitizer = PIISanitizer(level)
+        data = {
+            "request_headers": {
+                "Authorization": "Bearer fake-request-secret",
+                "Content-Type": "application/json",
+            },
+            "response_headers": {
+                "x-ApI-kEy": "fake-response-secret",
+                "X-Request-ID": "synthetic-id",
+            },
+            "nested": [
+                {
+                    "headers": [
+                        {"authorization": "Basic fake-nested-secret"},
+                    ]
+                }
+            ],
+            "message": "authorization failed without a header value",
+        }
+
+        result = sanitizer.sanitize_dict(data)
+        serialized = repr(result)
+
+        assert "fake-request-secret" not in serialized
+        assert "fake-response-secret" not in serialized
+        assert "fake-nested-secret" not in serialized
+        assert result["request_headers"]["Authorization"] == "***"
+        assert result["response_headers"]["x-ApI-kEy"] == "***"
+        assert result["nested"][0]["headers"][0]["authorization"] == "***"
+        assert result["request_headers"]["Content-Type"] == "application/json"
+        assert result["response_headers"]["X-Request-ID"] == "synthetic-id"
+        assert result["message"] == "authorization failed without a header value"
+
 
 class TestPIISanitizerMetadata:
     """Tests for sanitization metadata and preview."""
@@ -377,6 +480,24 @@ class TestPIISanitizerMetadata:
         assert email_preview["replacement"] == "<EMAIL>"
         assert "user@example.com" in email_preview["examples"]
         assert email_preview["total_count"] == 1
+
+    def test_sensitive_header_preview_reports_count_without_value_examples(self):
+        sanitizer = PIISanitizer(SanitizationLevel.BASIC)
+        text = (
+            "Authorization: Bearer fake-preview-secret | "
+            "X-API-Key: fake-preview-key"
+        )
+
+        preview = sanitizer.preview_diff(text)
+
+        header_preview = next(
+            item for item in preview if item["type"] == "sensitive_header"
+        )
+        assert header_preview["replacement"] == "***"
+        assert header_preview["examples"] == []
+        assert header_preview["total_count"] == 2
+        assert "fake-preview-secret" not in repr(preview)
+        assert "fake-preview-key" not in repr(preview)
 
     def test_to_dict_serialization(self):
         """Test SanitizationResult to_dict conversion."""

@@ -13,9 +13,101 @@ Security Level:
 
 import re
 import os
+from collections.abc import Mapping
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+
+SENSITIVE_HEADER_NAMES = frozenset({"authorization", "x-api-key"})
+SENSITIVE_HEADER_REDACTION = "***"
+
+_QUOTED_SENSITIVE_HEADER_PATTERN = re.compile(
+    r"""(?P<prefix>(?P<key_quote>["'])(?:authorization|x-api-key)(?P=key_quote)\s*:\s*)"""
+    r"""(?P<value_quote>["'])(?P<value>(?:\\.|[^\\\r\n])*?)(?P=value_quote)""",
+    re.IGNORECASE,
+)
+_UNQUOTED_SENSITIVE_HEADER_PATTERN = re.compile(
+    r"""(?P<prefix>(?<![\w"'])\b(?:authorization|x-api-key)\b\s*[:=]\s*)"""
+    r"""(?P<value>[^\r\n|,}\]]+)""",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def is_sensitive_header_name(name: Any) -> bool:
+    """Return whether a mapping key is an unconditional sensitive header."""
+    return (
+        isinstance(name, str)
+        and name.strip().casefold() in SENSITIVE_HEADER_NAMES
+    )
+
+
+def _redact_sensitive_header_text(text: str) -> tuple[str, int]:
+    """Redact serialized/header-line values and return replacement count."""
+    if not text:
+        return text, 0
+
+    replacement_count = 0
+
+    def replace_quoted(match: re.Match) -> str:
+        nonlocal replacement_count
+        replacement_count += 1
+        quote = match.group("value_quote")
+        return (
+            f"{match.group('prefix')}{quote}"
+            f"{SENSITIVE_HEADER_REDACTION}{quote}"
+        )
+
+    def replace_unquoted(match: re.Match) -> str:
+        nonlocal replacement_count
+        replacement_count += 1
+        raw_value = match.group("value").strip()
+        if (
+            len(raw_value) >= 2
+            and raw_value[0] in {'"', "'"}
+            and raw_value[-1] == raw_value[0]
+        ):
+            redacted = (
+                f"{raw_value[0]}{SENSITIVE_HEADER_REDACTION}"
+                f"{raw_value[0]}"
+            )
+        else:
+            redacted = SENSITIVE_HEADER_REDACTION
+        return f"{match.group('prefix')}{redacted}"
+
+    redacted = _QUOTED_SENSITIVE_HEADER_PATTERN.sub(
+        replace_quoted,
+        text,
+    )
+    redacted = _UNQUOTED_SENSITIVE_HEADER_PATTERN.sub(
+        replace_unquoted,
+        redacted,
+    )
+    return redacted, replacement_count
+
+
+def redact_sensitive_headers(value: Any) -> Any:
+    """Recursively apply only the unconditional sensitive-header boundary."""
+    if isinstance(value, str):
+        return _redact_sensitive_header_text(value)[0]
+
+    if isinstance(value, Mapping):
+        return {
+            key: (
+                SENSITIVE_HEADER_REDACTION
+                if is_sensitive_header_name(key)
+                else redact_sensitive_headers(item)
+            )
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        return [redact_sensitive_headers(item) for item in value]
+
+    if isinstance(value, tuple):
+        return tuple(redact_sensitive_headers(item) for item in value)
+
+    return value
 
 
 class SanitizationLevel(Enum):
@@ -57,7 +149,8 @@ class PIISanitizer:
     - Private IP addresses: 192.168.1.1 → <PRIVATE_IP>
     - Usernames in paths and URLs
 
-    Zero runtime overhead when level=NONE, GDPR-friendly.
+    Generic PII patterns are skipped when level=NONE. Sensitive header-name
+    redaction remains mandatory at every level.
     """
 
     # Regex patterns for different PII types
@@ -168,7 +261,7 @@ class PIISanitizer:
         Returns:
             SanitizationResult with sanitized text and metadata
         """
-        if self.level == SanitizationLevel.NONE or not text:
+        if not text:
             return SanitizationResult(
                 sanitized_text=text,
                 pii_found=False,
@@ -177,8 +270,21 @@ class PIISanitizer:
                 sanitized_length=len(text) if text else 0
             )
 
-        sanitized = text
+        # CRITICAL: sensitive header-name redaction is unconditional and must
+        # stay ahead of token-shape patterns and privacy-level early returns.
+        sanitized, header_replacements = _redact_sensitive_header_text(text)
         replacements = {}
+        if header_replacements:
+            replacements["sensitive_header"] = header_replacements
+
+        if self.level == SanitizationLevel.NONE:
+            return SanitizationResult(
+                sanitized_text=sanitized,
+                pii_found=bool(replacements),
+                replacements=replacements,
+                original_length=len(text),
+                sanitized_length=len(sanitized),
+            )
 
         # Apply basic patterns
         for name, (pattern, replacement) in self.PATTERNS.items():
@@ -218,30 +324,51 @@ class PIISanitizer:
         Returns:
             New dictionary with sanitized values
         """
-        if self.level == SanitizationLevel.NONE:
-            return data
-
         if keys_to_sanitize is None:
             keys_to_sanitize = []
 
         sanitized_data = {}
         for key, value in data.items():
-            if isinstance(value, str) and (not keys_to_sanitize or key in keys_to_sanitize):
-                result = self.sanitize(value)
-                sanitized_data[key] = result.sanitized_text
+            if is_sensitive_header_name(key):
+                sanitized_data[key] = SENSITIVE_HEADER_REDACTION
+            elif isinstance(value, str):
+                if not keys_to_sanitize or key in keys_to_sanitize:
+                    sanitized_data[key] = self.sanitize(value).sanitized_text
+                else:
+                    sanitized_data[key] = redact_sensitive_headers(value)
             elif isinstance(value, dict):
                 sanitized_data[key] = self.sanitize_dict(value, keys_to_sanitize)
             elif isinstance(value, list):
-                sanitized_data[key] = [
-                    self.sanitize_dict(item, keys_to_sanitize) if isinstance(item, dict)
-                    else self.sanitize(item).sanitized_text if isinstance(item, str)
-                    else item
-                    for item in value
-                ]
+                sanitized_data[key] = self._sanitize_list(
+                    value,
+                    keys_to_sanitize,
+                )
             else:
                 sanitized_data[key] = value
 
         return sanitized_data
+
+    def _sanitize_list(
+        self,
+        values: list,
+        keys_to_sanitize: list,
+    ) -> list:
+        """Recursively sanitize list content while preserving its shape."""
+        sanitized_values = []
+        for item in values:
+            if isinstance(item, dict):
+                sanitized_values.append(
+                    self.sanitize_dict(item, keys_to_sanitize)
+                )
+            elif isinstance(item, list):
+                sanitized_values.append(
+                    self._sanitize_list(item, keys_to_sanitize)
+                )
+            elif isinstance(item, str):
+                sanitized_values.append(self.sanitize(item).sanitized_text)
+            else:
+                sanitized_values.append(item)
+        return sanitized_values
 
     def preview_diff(self, text: str, max_examples: int = 5) -> list:
         """
@@ -254,10 +381,22 @@ class PIISanitizer:
         Returns:
             List of dicts with {type, original, replacement, count}
         """
-        if self.level == SanitizationLevel.NONE or not text:
+        if not text:
             return []
 
         preview = []
+        header_safe_text, header_count = _redact_sensitive_header_text(text)
+        if header_count:
+            preview.append({
+                "type": "sensitive_header",
+                "replacement": SENSITIVE_HEADER_REDACTION,
+                "examples": [],
+                "total_count": header_count,
+            })
+
+        if self.level == SanitizationLevel.NONE:
+            return preview
+
         all_patterns = dict(self.PATTERNS)
         if self.level == SanitizationLevel.STRICT:
             all_patterns.update(self.STRICT_PATTERNS)
@@ -265,7 +404,7 @@ class PIISanitizer:
         for name, (pattern, replacement) in all_patterns.items():
             compiled = self._compiled_patterns.get(name)
             if compiled:
-                matches = compiled.findall(text)
+                matches = compiled.findall(header_safe_text)
                 if matches:
                     # Get unique matches
                     unique_matches = list(set(matches))[:max_examples]
