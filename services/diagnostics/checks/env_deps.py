@@ -8,8 +8,9 @@ Analyzes system environment to detect:
 """
 
 import logging
-import sys
 import platform
+import re
+import sys
 from typing import Dict, Any, List, Optional
 
 from ..models import (
@@ -28,9 +29,10 @@ logger = logging.getLogger("comfyui-doctor.diagnostics.checks.env_deps")
 # Configuration
 # ============================================================================
 
-# Recommended Python versions
+# Host support contracts from the pinned ComfyUI pyproject/README.
+# IMPORTANT: host-supported versions are not a claim about Doctor's CI matrix.
 PYTHON_MIN_VERSION = (3, 10)
-PYTHON_MAX_VERSION = (3, 12)
+TORCH_MIN_VERSION = (2, 5)
 
 # GPU node types that require CUDA
 GPU_REQUIRING_NODES = {
@@ -128,6 +130,25 @@ def _clear_env_cache():
     _env_cache = None
 
 
+def _parse_release_version(value: Any) -> tuple[int, int, int] | None:
+    """Parse a leading numeric release without depending on packaging."""
+    if not isinstance(value, str):
+        return None
+
+    match = re.match(
+        r"^\s*[vV]?(\d+)\.(\d+)(?:\.(\d+))?",
+        value,
+    )
+    if not match:
+        return None
+
+    return (
+        int(match.group(1)),
+        int(match.group(2)),
+        int(match.group(3) or 0),
+    )
+
+
 # ============================================================================
 # Check Implementation
 # ============================================================================
@@ -187,25 +208,6 @@ def _check_python_version(env: Dict[str, Any]) -> List[HealthIssue]:
             target=target,
         ))
 
-    if py_version > PYTHON_MAX_VERSION:
-        target = IssueTarget(setting="python_version")
-        issues.append(HealthIssue(
-            issue_id=HealthIssue.generate_issue_id("python_too_new", target, py_str),
-            category=IssueCategory.ENV,
-            severity=IssueSeverity.INFO,
-            title="Python Version May Be Too New",
-            summary=f"Python {py_str} may have compatibility issues with some dependencies",
-            evidence=[
-                f"Current Python version: {py_str}",
-                f"Tested up to: {'.'.join(map(str, PYTHON_MAX_VERSION))}",
-            ],
-            recommendation=[
-                "Some packages (especially compiled ones) may not have wheels for this Python version",
-                "If you encounter import errors, consider using an older Python version",
-            ],
-            target=target,
-        ))
-
     return issues
 
 
@@ -228,6 +230,39 @@ def _check_torch_availability(env: Dict[str, Any]) -> List[HealthIssue]:
             recommendation=[
                 "Install PyTorch: pip install torch torchvision",
                 "For GPU support, install the CUDA version: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121",
+            ],
+            target=target,
+        ))
+        return issues
+
+    torch_version = env.get("torch_version")
+    parsed_version = _parse_release_version(torch_version)
+    if (
+        parsed_version is not None
+        and parsed_version[:2] < TORCH_MIN_VERSION
+    ):
+        target = IssueTarget(setting="torch")
+        minimum = ".".join(map(str, TORCH_MIN_VERSION))
+        issues.append(HealthIssue(
+            issue_id=HealthIssue.generate_issue_id(
+                "torch_below_host_minimum",
+                target,
+                str(torch_version),
+            ),
+            category=IssueCategory.DEPS,
+            severity=IssueSeverity.WARNING,
+            title="PyTorch Version Below ComfyUI Minimum",
+            summary=(
+                f"PyTorch {torch_version} is below ComfyUI's minimum "
+                f"supported version {minimum}"
+            ),
+            evidence=[
+                f"Detected PyTorch release: {'.'.join(map(str, parsed_version))}",
+                f"ComfyUI minimum supported release: {minimum}",
+            ],
+            recommendation=[
+                f"Upgrade to PyTorch {minimum} or newer",
+                "ComfyUI recommends a newer current PyTorch release when possible",
             ],
             target=target,
         ))

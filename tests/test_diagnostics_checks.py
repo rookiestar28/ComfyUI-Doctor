@@ -11,8 +11,14 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, mock_open
-from services.diagnostics.checks import model_assets, privacy_security, runtime_performance
+from services.diagnostics.checks import (
+    env_deps,
+    model_assets,
+    privacy_security,
+    runtime_performance,
+)
 from services.diagnostics.models import (
+    HealthReport,
     HealthCheckRequest,
     IssueSeverity,
     IssueCategory,
@@ -178,6 +184,87 @@ class TestRuntimePerformanceChecks(unittest.IsolatedAsyncioTestCase):
             
             batch_issues = [i for i in issues if "Batch Size" in i.title]
             self.assertEqual(len(batch_issues), 1)
+
+
+class TestEnvironmentDependencyChecks(unittest.TestCase):
+
+    def test_host_supported_python_versions_do_not_create_score_penalty(self):
+        for version in ((3, 13, 0), (3, 14, 0), (3, 15, 0)):
+            with self.subTest(version=version):
+                issues = env_deps._check_python_version(
+                    {"python_version": version}
+                )
+                self.assertEqual(issues, [])
+                self.assertEqual(HealthReport.compute_health_score(issues), 100)
+
+    def test_python_below_host_minimum_remains_warning(self):
+        issues = env_deps._check_python_version(
+            {"python_version": (3, 9, 18)}
+        )
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
+        self.assertEqual(issues[0].title, "Python Version Too Old")
+
+    def test_torch_below_host_minimum_creates_warning(self):
+        issues = env_deps._check_torch_availability({
+            "torch_available": True,
+            "torch_version": "2.4.1+cu121",
+        })
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
+        self.assertEqual(
+            issues[0].title,
+            "PyTorch Version Below ComfyUI Minimum",
+        )
+
+    def test_torch_minimum_newer_and_unknown_versions_are_safe(self):
+        versions = (
+            "2.5.0",
+            "2.5.0.dev20260719+cu130",
+            "2.6.0a0+gitabcdef",
+            "2.7.1+cu130",
+            "unknown",
+            "",
+            None,
+        )
+
+        for version in versions:
+            with self.subTest(version=version):
+                issues = env_deps._check_torch_availability({
+                    "torch_available": True,
+                    "torch_version": version,
+                })
+                self.assertEqual(issues, [])
+
+    def test_torch_missing_retains_single_critical_issue(self):
+        issues = env_deps._check_torch_availability({
+            "torch_available": False,
+            "torch_version": None,
+        })
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, IssueSeverity.CRITICAL)
+        self.assertEqual(issues[0].title, "PyTorch Not Available")
+
+    def test_torch_release_prefix_parser_handles_suffixes_and_uncertainty(self):
+        cases = {
+            "2.4.1+cu121": (2, 4, 1),
+            "2.5.0.dev20260719+cu130": (2, 5, 0),
+            "2.6.0a0+gitabcdef": (2, 6, 0),
+            "2.7": (2, 7, 0),
+            "unknown": None,
+            "": None,
+            None: None,
+        }
+
+        for version, expected in cases.items():
+            with self.subTest(version=version):
+                self.assertEqual(
+                    env_deps._parse_release_version(version),
+                    expected,
+                )
 
 
 class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
