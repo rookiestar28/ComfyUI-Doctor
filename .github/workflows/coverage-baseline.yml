@@ -8,6 +8,8 @@ on:
     paths:
       - '**/*.py'
       - 'pyproject.toml'
+      - 'package.json'
+      - 'package-lock.json'
       - 'requirements-dev.txt'
       - 'scripts/run_coverage_baseline.py'
       - '.github/workflows/coverage-baseline.yml'
@@ -15,6 +17,8 @@ on:
     paths:
       - '**/*.py'
       - 'pyproject.toml'
+      - 'package.json'
+      - 'package-lock.json'
       - 'requirements-dev.txt'
       - 'scripts/run_coverage_baseline.py'
       - '.github/workflows/coverage-baseline.yml'
