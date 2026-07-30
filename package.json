@@ -32,6 +32,7 @@
   },
   "overrides": {
     "esbuild": "0.28.1",
+    "postcss": "8.5.25",
     "vite": "6.4.3"
   },
   "engines": {
