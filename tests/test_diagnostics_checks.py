@@ -1005,6 +1005,365 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(temp_root, serialized)
             open_mock.assert_not_called()
 
+    async def test_named_widget_root_value_is_diagnosed_without_raw_map_evidence(self):
+        workflow = {
+            "nodes": [
+                {
+                    "id": 132,
+                    "type": "CheckpointLoaderSimple",
+                    "inputs": [
+                        {
+                            "name": "ckpt_name",
+                            "widget": {"name": "ckpt_name"},
+                        }
+                    ],
+                    "widgets_values_named": {
+                        "ckpt_name": "named_root_missing.safetensors",
+                    },
+                }
+            ]
+        }
+        request = HealthCheckRequest(
+            workflow=workflow,
+            scope=DiagnosticsScope.MANUAL,
+        )
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=self._checkpoint_paths(Path("synthetic-empty-root")),
+        ):
+            issues = await model_assets.check_model_assets(workflow, request)
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.node_id, 132)
+        serialized = repr(issues[0].to_dict())
+        self.assertIn("named_root_missing.safetensors", serialized)
+        self.assertNotIn("widgets_values_named", serialized)
+        self.assertNotIn("ckpt_name", serialized)
+
+    async def test_named_widget_dual_and_conflict_keep_positional_precedence(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            checkpoint_root = Path(temp_root) / "checkpoints"
+            checkpoint_root.mkdir()
+            (checkpoint_root / "positional_present.safetensors").write_bytes(
+                b"x"
+            )
+            paths = self._checkpoint_paths(checkpoint_root)
+            node_input = {
+                "name": "ckpt_name",
+                "widget": {"name": "ckpt_name"},
+            }
+            dual_workflow = {
+                "nodes": [
+                    {
+                        "id": 133,
+                        "type": "CheckpointLoaderSimple",
+                        "inputs": [node_input],
+                        "widgets_values": ["dual_missing.safetensors"],
+                        "widgets_values_named": {
+                            "ckpt_name": "dual_missing.safetensors",
+                        },
+                    }
+                ]
+            }
+            conflict_workflow = {
+                "nodes": [
+                    {
+                        "id": 134,
+                        "type": "CheckpointLoaderSimple",
+                        "inputs": [node_input],
+                        "widgets_values": ["positional_present.safetensors"],
+                        "widgets_values_named": {
+                            "ckpt_name": "named_conflict_missing.safetensors",
+                        },
+                    }
+                ]
+            }
+
+            with patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=paths,
+            ):
+                dual_issues = await model_assets.check_model_assets(
+                    dual_workflow,
+                    HealthCheckRequest(
+                        workflow=dual_workflow,
+                        scope=DiagnosticsScope.MANUAL,
+                    ),
+                )
+                conflict_issues = await model_assets.check_model_assets(
+                    conflict_workflow,
+                    HealthCheckRequest(
+                        workflow=conflict_workflow,
+                        scope=DiagnosticsScope.MANUAL,
+                    ),
+                )
+
+        self.assertEqual(len(dual_issues), 1)
+        self.assertIn(
+            "dual_missing.safetensors",
+            repr(dual_issues[0].to_dict()),
+        )
+        self.assertEqual(conflict_issues, [])
+
+    async def test_named_widget_malformed_maps_preserve_positional_behavior(self):
+        malformed_values = (
+            None,
+            [],
+            {"__proto__": "reserved_missing.safetensors"},
+            {"k" * 129: "oversized_key_missing.safetensors"},
+            {"ckpt_name": 42},
+            {
+                f"unknown_{index}": f"ignored_{index}.safetensors"
+                for index in range(300)
+            },
+        )
+        empty_paths = self._checkpoint_paths(Path("synthetic-empty-root"))
+
+        for index, named_values in enumerate(malformed_values, start=1):
+            with self.subTest(index=index):
+                workflow = {
+                    "nodes": [
+                        {
+                            "id": 135 + index,
+                            "type": "CheckpointLoaderSimple",
+                            "widgets_values": [
+                                f"positional_{index}_missing.safetensors"
+                            ],
+                            "widgets_values_named": named_values,
+                        }
+                    ]
+                }
+                with patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=empty_paths,
+                ):
+                    issues = await model_assets.check_model_assets(
+                        workflow,
+                        HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        ),
+                    )
+
+                self.assertEqual(len(issues), 1)
+                serialized = repr(issues[0].to_dict())
+                self.assertIn(
+                    f"positional_{index}_missing.safetensors",
+                    serialized,
+                )
+                self.assertNotIn("reserved_missing", serialized)
+                self.assertNotIn("oversized_key_missing", serialized)
+
+    def test_named_widget_resolution_rejects_ambiguous_and_oversized_shapes(self):
+        self.assertEqual(
+            model_assets._safe_named_widget_values(
+                {
+                    "widgets_values_named": {
+                        "ckpt_name": "bounded_missing.safetensors",
+                    }
+                }
+            ),
+            {"ckpt_name": "bounded_missing.safetensors"},
+        )
+        self.assertEqual(
+            model_assets._safe_named_widget_values(
+                {
+                    "widgets_values_named": {
+                        f"key_{index}": "ignored.safetensors"
+                        for index in range(
+                            model_assets.MAX_NAMED_WIDGET_ENTRIES + 1
+                        )
+                    }
+                }
+            ),
+            {},
+        )
+        self.assertEqual(
+            model_assets._effective_widget_values(
+                {
+                    "inputs": [
+                        {
+                            "name": "first",
+                            "widget": {"name": "ckpt_name"},
+                        },
+                        {
+                            "name": "second",
+                            "widget": {"name": "ckpt_name"},
+                        },
+                    ],
+                    "widgets_values_named": {
+                        "ckpt_name": "ambiguous_missing.safetensors",
+                    },
+                }
+            ),
+            (),
+        )
+        self.assertEqual(
+            model_assets._effective_widget_values(
+                {
+                    "inputs": [
+                        {
+                            "name": "malformed",
+                            "widget": {"name": ["not", "a", "string"]},
+                        },
+                        {
+                            "name": "ckpt_name",
+                            "widget": {"name": "ckpt_name"},
+                        },
+                    ],
+                    "widgets_values": [None],
+                    "widgets_values_named": {
+                        "ckpt_name": "correct_slot_missing.safetensors",
+                    },
+                }
+            ),
+            (None, "correct_slot_missing.safetensors"),
+        )
+        self.assertEqual(
+            model_assets._effective_widget_values(
+                {
+                    "inputs": [
+                        {
+                            "name": "ckpt_name",
+                            "widget": {"name": "ckpt_name"},
+                        }
+                    ],
+                    "widgets_values": [7],
+                    "widgets_values_named": {
+                        "ckpt_name": "must_not_override.safetensors",
+                    },
+                }
+            ),
+            (7,),
+        )
+        self.assertEqual(
+            model_assets._effective_widget_values(
+                {
+                    "inputs": [
+                        {
+                            "name": f"input_{index}",
+                            "widget": {"name": f"widget_{index}"},
+                        }
+                        for index in range(
+                            model_assets.MAX_NAMED_WIDGET_ENTRIES + 1
+                        )
+                    ],
+                    "widgets_values_named": {
+                        "ckpt_name": "must_not_bypass_schema_limit.safetensors",
+                    },
+                }
+            ),
+            (),
+        )
+
+    def test_named_widget_malformed_promoted_input_name_fails_open(self):
+        definition = self._subgraph_definition(
+            "malformed-named-input",
+            [
+                {
+                    "id": 9,
+                    "type": "CheckpointLoaderSimple",
+                    "inputs": [
+                        {
+                            "name": "ckpt_name",
+                            "widget": {"name": "ckpt_name"},
+                        }
+                    ],
+                    "widgets_values": ["interior_positional.safetensors"],
+                }
+            ],
+            inputs=[
+                {
+                    "name": ["not", "hashable"],
+                    "linkIds": [1],
+                }
+            ],
+            links=[
+                {
+                    "id": 1,
+                    "origin_id": -10,
+                    "origin_slot": 0,
+                    "target_id": 9,
+                    "target_slot": 0,
+                }
+            ],
+        )
+        children = model_assets._apply_promoted_widget_values(
+            definition,
+            {
+                "widgets_values_named": {
+                    "ckpt_name": "named_must_not_apply.safetensors",
+                }
+            },
+        )
+
+        self.assertEqual(len(children), 1)
+        child, promoted_indexes = children[0]
+        self.assertEqual(
+            child["widgets_values"],
+            ["interior_positional.safetensors"],
+        )
+        self.assertEqual(promoted_indexes, frozenset())
+
+    async def test_named_widget_traversal_is_rejected_before_file_probes(self):
+        workflow = {
+            "nodes": [
+                {
+                    "id": 1420,
+                    "type": "CheckpointLoaderSimple",
+                    "inputs": [
+                        {
+                            "name": "ckpt_name",
+                            "widget": {"name": "ckpt_name"},
+                        }
+                    ],
+                    "widgets_values_named": {
+                        "ckpt_name": "../external_named.safetensors",
+                    },
+                }
+            ]
+        }
+
+        with (
+            patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=self._checkpoint_paths(
+                    Path("synthetic-contained-root")
+                ),
+            ),
+            patch.object(
+                Path,
+                "exists",
+                side_effect=AssertionError(
+                    "existence probe must not run before containment"
+                ),
+            ) as exists_mock,
+            patch.object(
+                Path,
+                "is_file",
+                side_effect=AssertionError(
+                    "file probe must not run before containment"
+                ),
+            ) as is_file_mock,
+            patch("builtins.open", mock_open()) as open_mock,
+        ):
+            issues = await model_assets.check_model_assets(
+                workflow,
+                HealthCheckRequest(
+                    workflow=workflow,
+                    scope=DiagnosticsScope.MANUAL,
+                ),
+            )
+
+        self.assertEqual(len(issues), 1)
+        serialized = repr(issues[0].to_dict())
+        self.assertIn(model_assets.INVALID_ASSET_DISPLAY_NAME, serialized)
+        self.assertNotIn("external_named.safetensors", serialized)
+        exists_mock.assert_not_called()
+        is_file_mock.assert_not_called()
+        open_mock.assert_not_called()
+
     @staticmethod
     def _nested_asset_workflow(
         root_nodes,
@@ -1208,6 +1567,126 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             issues[0].metadata["asset_provenance"]["promoted"]
         )
+
+    async def test_named_widget_promoted_nested_value_preserves_provenance(self):
+        definition = self._subgraph_definition(
+            "named-promoted-subgraph",
+            [
+                {
+                    "id": 9,
+                    "type": "CheckpointLoaderSimple",
+                    "title": "Interior Named Loader",
+                    "inputs": [
+                        {
+                            "name": "ckpt_name",
+                            "type": "COMBO",
+                            "widget": {"name": "ckpt_name"},
+                            "link": 1,
+                        }
+                    ],
+                    "widgets_values": ["stale_interior.safetensors"],
+                }
+            ],
+            inputs=[
+                {
+                    "id": "named-ckpt-input",
+                    "name": "ckpt_name",
+                    "type": "COMBO",
+                    "linkIds": [1],
+                }
+            ],
+            links=[
+                {
+                    "id": 1,
+                    "origin_id": -10,
+                    "origin_slot": 0,
+                    "target_id": 9,
+                    "target_slot": 0,
+                    "type": "COMBO",
+                }
+            ],
+        )
+        workflow = self._nested_asset_workflow(
+            [
+                {
+                    "id": 142,
+                    "type": "named-promoted-subgraph",
+                    "title": "Visible Named Host",
+                    "widgets_values_named": {
+                        "ckpt_name": "named_promoted_missing.safetensors",
+                    },
+                }
+            ],
+            [definition],
+        )
+
+        with patch(
+            "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+            return_value=self._checkpoint_paths(Path("synthetic-empty-root")),
+        ):
+            issues = await model_assets.check_model_assets(
+                workflow,
+                HealthCheckRequest(
+                    workflow=workflow,
+                    scope=DiagnosticsScope.MANUAL,
+                ),
+            )
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.node_id, 142)
+        serialized = repr(issues[0].to_dict())
+        self.assertIn("named_promoted_missing.safetensors", serialized)
+        self.assertNotIn("stale_interior.safetensors", serialized)
+        self.assertEqual(
+            issues[0].metadata["asset_provenance"],
+            {
+                "visible_node_id": 142,
+                "source_execution_id": "142:9",
+                "source_node_id": 9,
+                "source_node_type": "CheckpointLoaderSimple",
+                "promoted": True,
+            },
+        )
+
+    async def test_named_widget_values_obey_path_and_node_budgets(self):
+        workflow = {
+            "nodes": [
+                {
+                    "id": index,
+                    "type": "CheckpointLoaderSimple",
+                    "inputs": [
+                        {
+                            "name": "ckpt_name",
+                            "widget": {"name": "ckpt_name"},
+                        }
+                    ],
+                    "widgets_values_named": {
+                        "ckpt_name": f"named_budget_{index}.safetensors",
+                    },
+                }
+                for index in range(4)
+            ]
+        }
+        empty_paths = self._checkpoint_paths(Path("synthetic-empty-root"))
+
+        with (
+            patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=empty_paths,
+            ),
+            patch.object(model_assets, "MAX_WORKFLOW_NODES", 2),
+        ):
+            issues = await model_assets.check_model_assets(
+                workflow,
+                HealthCheckRequest(
+                    workflow=workflow,
+                    scope=DiagnosticsScope.MANUAL,
+                    max_paths=1,
+                ),
+            )
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.node_id, 0)
 
     async def test_shared_subgraph_hosts_keep_instance_specific_findings(self):
         definition = self._subgraph_definition(

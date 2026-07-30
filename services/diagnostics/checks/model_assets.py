@@ -86,6 +86,14 @@ DEFAULT_MAX_PATHS = 50
 MAX_PATH_BUDGET = 500
 MAX_WORKFLOW_NODES = 1000
 MAX_SUBGRAPH_DEPTH = 8
+MAX_NAMED_WIDGET_ENTRIES = 256
+MAX_NAMED_WIDGET_KEY_LENGTH = 128
+MAX_NAMED_WIDGET_VALUE_LENGTH = 4096
+RESERVED_NAMED_WIDGET_KEYS = frozenset({
+    "__proto__",
+    "constructor",
+    "prototype",
+})
 
 
 # ============================================================================
@@ -551,9 +559,113 @@ def _widget_index_for_input(
     return None
 
 
+def _safe_named_widget_values(node: dict[str, Any]) -> dict[str, str]:
+    """Return a bounded node-local named widget map with supported values."""
+    raw_values = node.get("widgets_values_named")
+    if (
+        not isinstance(raw_values, dict)
+        or len(raw_values) > MAX_NAMED_WIDGET_ENTRIES
+    ):
+        return {}
+
+    safe_values: dict[str, str] = {}
+    for key, value in raw_values.items():
+        if (
+            not isinstance(key, str)
+            or not key
+            or len(key) > MAX_NAMED_WIDGET_KEY_LENGTH
+            or key.casefold() in RESERVED_NAMED_WIDGET_KEYS
+            or "\x00" in key
+            or not isinstance(value, str)
+            or len(value) > MAX_NAMED_WIDGET_VALUE_LENGTH
+        ):
+            continue
+        safe_values[key] = value
+    return safe_values
+
+
+def _node_widget_names(node: dict[str, Any]) -> tuple[str | None, ...]:
+    """Return widget names in their serialized positional order."""
+    inputs = node.get("inputs", [])
+    if (
+        not isinstance(inputs, list)
+        or len(inputs) > MAX_NAMED_WIDGET_ENTRIES
+    ):
+        return ()
+
+    names: list[str | None] = []
+    for input_slot in inputs:
+        if not isinstance(input_slot, dict):
+            continue
+        widget = input_slot.get("widget")
+        if not isinstance(widget, dict):
+            continue
+        name = widget.get("name")
+        if (
+            isinstance(name, str)
+            and name
+            and len(name) <= MAX_NAMED_WIDGET_KEY_LENGTH
+            and name.casefold() not in RESERVED_NAMED_WIDGET_KEYS
+            and "\x00" not in name
+        ):
+            names.append(name)
+        else:
+            # Preserve the positional slot so malformed schema cannot shift a
+            # later named fallback onto the wrong serialized widget.
+            names.append(None)
+    return tuple(names)
+
+
+def _effective_widget_values(node: dict[str, Any]) -> tuple[Any, ...]:
+    """Resolve one positional-first value per schema-linked widget."""
+    raw_positional = node.get("widgets_values", [])
+    values = list(raw_positional) if isinstance(raw_positional, list) else []
+    named_values = _safe_named_widget_values(node)
+    if not named_values:
+        return tuple(values)
+
+    widget_names = _node_widget_names(node)
+    widget_name_counts: dict[str, int] = {}
+    for widget_name in widget_names:
+        if widget_name is None:
+            continue
+        widget_name_counts[widget_name] = (
+            widget_name_counts.get(widget_name, 0) + 1
+        )
+    for widget_index, widget_name in enumerate(widget_names):
+        if widget_name is None:
+            continue
+        if widget_name_counts[widget_name] != 1:
+            continue
+        named_value = named_values.get(widget_name)
+        if named_value is None:
+            continue
+        while len(values) <= widget_index:
+            values.append(None)
+        # IMPORTANT: current positional serialization stays authoritative;
+        # named workflow data is untrusted fallback-only input.
+        if values[widget_index] is None:
+            values[widget_index] = named_value
+
+    if (
+        not widget_names
+        and ("inputs" not in node or node.get("inputs") == [])
+        and not any(isinstance(value, str) for value in values)
+    ):
+        # Older/minimal nodes may omit input schema. Restrict fallback to the
+        # established path-widget allow-list instead of trusting arbitrary keys.
+        values.extend(
+            named_value
+            for widget_name, named_value in named_values.items()
+            if widget_name in PATH_WIDGET_NAMES
+        )
+
+    return tuple(values)
+
+
 def _apply_promoted_widget_values(
     definition: dict[str, Any],
-    host_values: tuple[Any, ...],
+    host_node: dict[str, Any],
 ) -> list[tuple[dict[str, Any], frozenset[int]]]:
     """Apply host-owned promoted values to direct definition children."""
     raw_nodes = definition.get("nodes", [])
@@ -577,6 +689,13 @@ def _apply_promoted_widget_values(
         raw_inputs = []
         raw_links = []
 
+    raw_host_values = host_node.get("widgets_values", [])
+    host_values = (
+        tuple(raw_host_values)
+        if isinstance(raw_host_values, list)
+        else ()
+    )
+    host_named_values = _safe_named_widget_values(host_node)
     host_widget_index = 0
     input_node = definition.get("inputNode", {})
     input_node_id = (
@@ -621,10 +740,24 @@ def _apply_promoted_widget_values(
 
         if not widget_targets:
             continue
-        if host_widget_index >= len(host_values):
-            break
-        host_value = host_values[host_widget_index]
+        has_positional_value = (
+            host_widget_index < len(host_values)
+            and host_values[host_widget_index] is not None
+        )
+        definition_input_name = definition_input.get("name")
+        named_host_value = (
+            host_named_values.get(definition_input_name)
+            if isinstance(definition_input_name, str)
+            else None
+        )
+        host_value = (
+            host_values[host_widget_index]
+            if has_positional_value
+            else named_host_value
+        )
         host_widget_index += 1
+        if host_value is None:
+            continue
         for target_id, widget_index in widget_targets:
             _source_node, values, promoted_indexes = effective[target_id]
             while len(values) <= widget_index:
@@ -699,11 +832,9 @@ def _collect_workflow_asset_nodes(
             and node_type not in definition_stack
             and depth < MAX_SUBGRAPH_DEPTH
         ):
-            values = node.get("widgets_values", [])
-            host_values = tuple(values) if isinstance(values, list) else ()
             children = _apply_promoted_widget_values(
                 definition,
-                host_values,
+                node,
             )
             next_stack = definition_stack | {node_type}
             for child, child_promoted_indexes in children:
@@ -719,10 +850,9 @@ def _collect_workflow_asset_nodes(
                 )
             return
 
-        values = node.get("widgets_values", [])
         contexts.append(_WorkflowAssetNode(
             source_node=node,
-            widget_values=tuple(values) if isinstance(values, list) else (),
+            widget_values=_effective_widget_values(node),
             visible_node_id=visible_node_id,
             visible_node_title=visible_node_title,
             source_execution_id=source_execution_id,
