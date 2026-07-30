@@ -16,11 +16,20 @@ def _write(path: Path, text: str) -> None:
 
 
 def _create_minimal_reference(root: Path) -> None:
-    _write(root / "ComfyUI" / "main.py", "def execute_prestartup_script():\n    return 'prestartup_script.py'\n")
+    _write(
+        root / "ComfyUI" / "main.py",
+        "file_log_outputs = [('DETAIL', 'comfyui_detail.log'), *get_file_log_outputs(args.verbose)]\n"
+        "setup_logger(log_level=console_log_level, stdout=args.stdout, file_outputs=file_log_outputs)\n"
+        "def execute_prestartup_script():\n    return 'prestartup_script.py'\n",
+    )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.45.21\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.47.10\n")
     _write(
         root / "ComfyUI" / "comfy" / "cli_args.py",
+        "LOG_LEVELS = ('DEBUG', 'DETAIL', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')\n"
+        "class VerboseAction(argparse.Action):\n    pass\n"
+        "def get_console_log_level(outputs):\n    return 'INFO'\n"
+        "def get_file_log_outputs(outputs):\n    return []\n"
         'parser.add_argument("--models-directory", type=is_valid_directory, '
         'help="Set the ComfyUI models directory. Overrides the models folder in --base-directory.")\n',
     )
@@ -102,8 +111,17 @@ def _create_minimal_reference(root: Path) -> None:
         'folder_names_and_paths["geometry_estimation"] = []\n'
         'folder_names_and_paths["optical_flow"] = []\n'
         'folder_names_and_paths["detection"] = []\n'
+        'folder_names_and_paths["datasets"] = ([os.path.join(base_path, "datasets")], set())\n'
         "def get_system_user_directory(name='system'):\n    return name\n"
         "def get_public_user_directory(user_id):\n    return user_id\n",
+    )
+    _write(
+        root / "ComfyUI" / "comfy_extras" / "nodes_dataset.py",
+        'node_id="LoadImageDataSetFromFolder"\n'
+        'node_id="LoadImageTextDataSetFromFolder"\n'
+        'node_id="LoadVideoDataSetFromFolder"\n'
+        'node_id="LoadVideoTextDataSetFromFolder"\n'
+        'node_id="LoadTrainingDataset"\n',
     )
     _write(
         root / "ComfyUI" / "comfy_api" / "feature_flags.py",
@@ -118,7 +136,7 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.48.3"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.49.1"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -150,7 +168,23 @@ def _create_minimal_reference(root: Path) -> None:
         "const zExecutionErrorWsMessage = z.object({ node_id: z.string(), node_type: z.string(), "
         "traceback: z.array(z.string()), current_inputs: z.any(), current_outputs: z.any() })\n",
     )
-    _write(root / "ComfyUI_frontend" / "src" / "scripts" / "app.ts", "rootGraph\nlastExecutionError\n")
+    _write(
+        root / "ComfyUI_frontend" / "src" / "scripts" / "app.ts",
+        "rootGraph\n"
+        "lastExecutionError\n"
+        "const hasPromptNodeErrors = Object.keys(response.node_errors).length > 0\n"
+        "if (error.status === 403 && !hasPromptNodeErrors) {\n"
+        "  showError(error)\n"
+        "}\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "utils" / "executionErrorUtil.ts",
+        "export const NODE_LEVEL_VALIDATION_ERROR_TYPES = new Set([\n"
+        "  'PARTNER_NODE_DISABLED',\n"
+        "  'exception_during_validation',\n"
+        "  'dependency_cycle'\n"
+        "])\n",
+    )
     _write(
         root / "ComfyUI_frontend" / "src" / "scripts" / "api.ts",
         "async queuePrompt(number, { output, workflow }) {\n"
@@ -229,6 +263,17 @@ def _create_minimal_reference(root: Path) -> None:
         "  readonly subgraph: Subgraph\n"
         "  override isSubgraphNode(): this is SubgraphNode { return true }\n"
         "  override getInnerNodes(executableNodes) { return executableNodes }\n"
+        "}\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "lib" / "litegraph" / "src" / "LGraphNode.ts",
+        "if (widgets?.length && this.serialize_widgets) {\n"
+        "  o.widgets_values = []\n"
+        "  o.widgets_values_named = {}\n"
+        "  for (const [i, widget] of widgets.entries()) {\n"
+        "    o.widgets_values[i] = serialisedVal\n"
+        "    o.widgets_values_named[widget.name] = serialisedVal\n"
+        "  }\n"
         "}\n",
     )
     _write(
@@ -690,8 +735,8 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
         for lane in lanes
     ] == [
         ("desktop-0.9.4", "1.43.18", False),
-        ("core-pin-1.45.21", "1.45.21", False),
-        ("standalone-1.48.3+", "1.48.3+", True),
+        ("core-pin-1.47.10", "1.47.10", True),
+        ("standalone-1.49.1+", "1.49.1+", True),
     ]
 
 
@@ -707,15 +752,15 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.45.21",
-            "comfyui-frontend-package==1.45.20",
+            "comfyui-frontend-package==1.47.10",
+            "comfyui-frontend-package==1.47.9",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.48.3"',
-            '"version": "1.48.2"',
+            '"version": "1.49.1"',
+            '"version": "1.49.0"',
             "frontend runtime lane: standalone source",
         ),
     )
@@ -1002,8 +1047,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.45.21: frontend 1.45.21" in formatted
-    assert "standalone-1.48.3+: frontend 1.48.3+" in formatted
+    assert "core-pin-1.47.10: frontend 1.47.10" in formatted
+    assert "standalone-1.49.1+: frontend 1.49.1+" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1023,3 +1068,88 @@ def test_t28_reference_source_is_never_executed(tmp_path):
 
     assert all(result.ok for result in results)
     assert not marker.exists()
+
+
+def test_t29_records_current_revisions_and_new_contract_families():
+    labels = {check.label for check in host_compat.CHECKS}
+
+    assert host_compat.COMFYUI_REVISION == "9cf91339b708a245762fa38ffeec9702b381e0db"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "e0ef062918a47b3b8f4f7b2b26cb1dfb881d4a6d"  # pragma: allowlist secret
+    assert {
+        "dual positional and named widget serialization",
+        "partner node validation classification",
+        "partner policy 403 handling",
+        "datasets folder registration",
+        "first-party dataset node registrations",
+        "DETAIL logging CLI contract",
+        "DETAIL file logging bootstrap",
+    } <= labels
+
+
+def test_t29_new_contract_anchors_fail_in_isolation(tmp_path):
+    cases = (
+        (
+            "named-widgets",
+            Path("ComfyUI_frontend/src/lib/litegraph/src/LGraphNode.ts"),
+            "o.widgets_values_named[widget.name] = serialisedVal",
+            "o.legacy_widget_values[widget.name] = serialisedVal",
+            "dual positional and named widget serialization",
+        ),
+        (
+            "partner-classification",
+            Path("ComfyUI_frontend/src/utils/executionErrorUtil.ts"),
+            "'PARTNER_NODE_DISABLED'",
+            "'LEGACY_PARTNER_DISABLED'",
+            "partner node validation classification",
+        ),
+        (
+            "partner-policy",
+            Path("ComfyUI_frontend/src/scripts/app.ts"),
+            "error.status === 403",
+            "error.status === 400",
+            "partner policy 403 handling",
+        ),
+        (
+            "datasets-folder",
+            Path("ComfyUI/folder_paths.py"),
+            'folder_names_and_paths["datasets"] =',
+            'folder_names_and_paths["legacy_datasets"] =',
+            "datasets folder registration",
+        ),
+        (
+            "dataset-nodes",
+            Path("ComfyUI/comfy_extras/nodes_dataset.py"),
+            'node_id="LoadTrainingDataset"',
+            'node_id="LoadLegacyTrainingDataset"',
+            "first-party dataset node registrations",
+        ),
+        (
+            "detail-cli",
+            Path("ComfyUI/comfy/cli_args.py"),
+            "def get_file_log_outputs",
+            "def get_legacy_log_outputs",
+            "DETAIL logging CLI contract",
+        ),
+        (
+            "detail-bootstrap",
+            Path("ComfyUI/main.py"),
+            "file_log_outputs = [('DETAIL', 'comfyui_detail.log')",
+            "file_log_outputs = [('DETAIL', 'comfyui_legacy.log')",
+            "DETAIL file logging bootstrap",
+        ),
+    )
+
+    for case_name, relative_path, current, mutated, expected_label in cases:
+        root = tmp_path / case_name
+        _create_minimal_reference(root)
+        path = root / relative_path
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(current, mutated),
+            encoding="utf-8",
+        )
+
+        failed = _failed_results(root)
+
+        assert len(failed) == 1
+        assert failed[0].check.label == expected_label
+        assert current in failed[0].missing_patterns
