@@ -1042,6 +1042,14 @@ export class DoctorUI {
                 item_label: 'node',
                 toast_title: 'Invalid workflow',
             },
+            // IMPORTANT: match the exact host type; policy-message regexes can absorb unrelated account/403 failures.
+            PARTNER_NODE_DISABLED: {
+                catalog_id: 'partner_node_disabled',
+                display_title: 'Node disabled by workspace policy',
+                display_message: 'Workspace policy disabled this node. Select an allowed alternative to continue.',
+                item_label: 'node',
+                toast_title: 'Node disabled by workspace policy',
+            },
         };
 
         return rules[error.type] || {
@@ -1104,6 +1112,8 @@ export class DoctorUI {
                     return `${params.nodeName} is part of a circular connection: ${this.formatDependencyCycleDetails(params.rawDetails)}`;
                 }
                 return `${params.nodeName} is part of a circular connection.`;
+            case 'partner_node_disabled':
+                return `${params.nodeName} is disabled by workspace policy. Select an allowed alternative to continue.`;
             case 'image_not_loaded':
                 return `The image for ${params.nodeName} couldn't be loaded. Try adding it again.`;
             case 'unknown_validation_error':

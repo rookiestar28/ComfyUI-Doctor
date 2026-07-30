@@ -938,6 +938,127 @@ test.describe('Doctor Chat Interface', () => {
     expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
   });
 
+  test('should surface partner policy node errors without account routing or unsafe markup', async ({ page }) => {
+    const routing = await page.evaluate(() => {
+      const doctor = window.app.Doctor;
+      window.app.rootGraph._nodes = [
+        { id: 48, type: 'SyntheticPartnerNode', title: 'Partner Tool', pos: [120, 80], size: [180, 80] }
+      ];
+      window.app.extensionManager.lastNodeErrors = {
+        "48": {
+          errors: [
+            {
+              type: "PARTNER_NODE_DISABLED",
+              message: "Workspace policy denied this node <script>alert(1)</script>",
+              details: "Synthetic provider <img src=x onerror=alert(1)> is unavailable",
+              extra_info: {
+                input_name: "policy_target",
+                provider: "synthetic-partner"
+              }
+            }
+          ],
+          class_type: "SyntheticPartnerNode",
+          dependent_outputs: []
+        }
+      };
+
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-partner-policy" } });
+
+      return {
+        partnerPolicy: doctor.resolveDoctorAccountPrecondition(
+          "PermissionError",
+          "Workspace policy denied this node."
+        ),
+        unrelatedForbidden: doctor.resolveDoctorAccountPrecondition(
+          "PermissionError",
+          "Forbidden."
+        ),
+        signIn: doctor.resolveDoctorAccountPrecondition(
+          "PermissionError",
+          "Unauthorized: Please login first to use this node."
+        ),
+        credits: doctor.resolveDoctorAccountPrecondition(
+          "PaymentRequired",
+          "Payment Required: Please add credits to your account to use this node."
+        ),
+      };
+    });
+
+    await page.waitForTimeout(150);
+
+    const capturedData = await page.evaluate(() => window.app.Doctor.lastErrorData);
+    const catalogError = capturedData.execution_context.validation_catalog_errors[0];
+    expect(capturedData.node_context).toMatchObject({
+      node_id: "48",
+      preferred_node_id: "48",
+      node_class: "SyntheticPartnerNode",
+    });
+    expect(catalogError).toMatchObject({
+      error_type: "PARTNER_NODE_DISABLED",
+      catalog_id: "partner_node_disabled",
+      display_title: "Node disabled by workspace policy",
+      display_message: "Workspace policy disabled this node. Select an allowed alternative to continue.",
+      display_details: "SyntheticPartnerNode is disabled by workspace policy. Select an allowed alternative to continue.",
+      display_item_label: "SyntheticPartnerNode",
+      raw_message: "Workspace policy denied this node <script>alert(1)</script>",
+      raw_details: "Synthetic provider <img src=x onerror=alert(1)> is unavailable",
+    });
+    expect(routing).toEqual({
+      partnerPolicy: null,
+      unrelatedForbidden: null,
+      signIn: "sign_in",
+      credits: "credits",
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    const errorContext = page.locator('#doctor-error-context');
+    await expect(errorContext).toBeVisible({ timeout: 5000 });
+    await expect(errorContext).toContainText("Node disabled by workspace policy");
+    await expect(errorContext).toContainText("Select an allowed alternative");
+    await expect(errorContext).not.toContainText("ComfyUI does not recognize");
+
+    const errorContextHtml = await errorContext.innerHTML();
+    expect(errorContextHtml).not.toContain("<script>alert(1)</script>");
+    expect(errorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
+
+    await disablePreact(page);
+    await page.reload();
+    await waitForDoctorReady(page, { timeout: 30000 });
+    await page.evaluate(() => {
+      window.app.rootGraph._nodes = [
+        { id: 48, type: 'SyntheticPartnerNode', title: 'Partner Tool', pos: [120, 80], size: [180, 80] }
+      ];
+      window.app.extensionManager.lastNodeErrors = {
+        "48": {
+          errors: [
+            {
+              type: "PARTNER_NODE_DISABLED",
+              message: "Workspace policy denied this node <script>alert(1)</script>",
+              details: "Synthetic provider <img src=x onerror=alert(1)> is unavailable",
+              extra_info: { provider: "synthetic-partner" }
+            }
+          ],
+          class_type: "SyntheticPartnerNode",
+          dependent_outputs: []
+        }
+      };
+      window.api._triggerEvent("execution_start", { detail: { prompt_id: "prompt-partner-policy-vanilla" } });
+    });
+    await page.waitForTimeout(150);
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+
+    const vanillaErrorContext = page.locator('#doctor-error-context');
+    await expect(vanillaErrorContext).toBeVisible({ timeout: 5000 });
+    await expect(vanillaErrorContext).toContainText("Node disabled by workspace policy");
+    const vanillaErrorContextHtml = await vanillaErrorContext.innerHTML();
+    expect(vanillaErrorContextHtml).not.toContain("<script>alert(1)</script>");
+    expect(vanillaErrorContextHtml).not.toContain("<img src=x onerror=alert(1)>");
+
+    await page.evaluate(() => {
+      localStorage.removeItem('doctor_preact_disabled');
+    });
+  });
+
   test('should expose host aggregate metadata for surfaced missing model media and swap-node states', async ({ page }) => {
     await page.evaluate(() => {
       window.app.rootGraph._nodes = [

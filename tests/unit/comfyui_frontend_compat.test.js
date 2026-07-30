@@ -303,6 +303,62 @@ describe("public validation boundary surfacing", () => {
         ]);
     });
 
+    test("keeps partner policy validation errors at node level with raw context intact", async () => {
+        const { surfaceComfyValidationNodeErrors } =
+            await loadCompatibilityModule();
+        const leaf = {
+            id: 5,
+            type: "SyntheticPartnerNode",
+            inputs: [{ name: "policy_target", link: 7 }],
+        };
+        const subgraph = createGraph([leaf], {
+            7: {
+                resolve: () => ({ subgraphInput: { name: "outer_target" } }),
+            },
+        });
+        const host = {
+            id: 12,
+            title: "Visible Host",
+            type: "Subgraph",
+            subgraph,
+            isSubgraphNode: () => true,
+        };
+        const rootGraph = createGraph([host]);
+        rootGraph.isRootGraph = true;
+        host.graph = rootGraph;
+        const raw = {
+            "12:5": {
+                class_type: "SyntheticPartnerNode",
+                dependent_outputs: [],
+                errors: [{
+                    type: "PARTNER_NODE_DISABLED",
+                    message: "Workspace policy disabled this node.",
+                    details: "Select an allowed alternative.",
+                    extra_info: {
+                        input_name: "policy_target",
+                        provider: "synthetic-partner",
+                    },
+                }],
+            },
+        };
+        const original = structuredClone(raw);
+
+        const surfaced = surfaceComfyValidationNodeErrors(raw, { rootGraph });
+
+        expect(surfaced).toEqual(original);
+        expect(raw).toEqual(original);
+        expect(Object.keys(surfaced)).toEqual(["12:5"]);
+        expect(surfaced["12:5"].errors[0]).toMatchObject({
+            type: "PARTNER_NODE_DISABLED",
+            message: "Workspace policy disabled this node.",
+            details: "Select an allowed alternative.",
+            extra_info: {
+                input_name: "policy_target",
+                provider: "synthetic-partner",
+            },
+        });
+    });
+
     test("fails open for unproven topology and preserves empty entries", async () => {
         const { surfaceComfyValidationNodeErrors } =
             await loadCompatibilityModule();
