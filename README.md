@@ -14,6 +14,17 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Latest host serialization, dataset diagnostics, policy errors, and dependency security aligned</strong></summary>
+
+- Refreshed source-linked host contract coverage for current ComfyUI, standalone frontend, core-pinned frontend, and Desktop runtime lanes.
+- Added bounded positional-first, named-fallback widget value support for root and promoted nested model asset diagnostics.
+- Added contained first-party image, video, caption-pair, and training dataset folder diagnostics using authoritative input and dataset roots.
+- Added accurate node-level guidance for partner nodes disabled by workspace policy while preserving account-precondition routing and escaped error details.
+- Patched the PostCSS development dependency path-traversal advisory and added an offline regression that enforces the safe dependency floor.
+
+</details>
+
+<details>
 <summary><strong>Host compatibility, diagnostic safety, nested workflows, and Desktop identity aligned</strong></summary>
 
 - Added version-aware host contract coverage for the bundled Desktop frontend, ComfyUI's pinned frontend package, and the current standalone frontend source.
@@ -465,13 +476,13 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Real-time ComfyUI console/error capture from startup.
 - Built-in suggestions from 58 JSON-based error patterns, including 22 core patterns and 36 community-extension patterns.
 - Validated node context extraction for recent workflow execution errors when ComfyUI provides enough event data.
-- Stable local display summaries for known prompt-validation and aggregate host errors, including public-graph boundary surfacing, source provenance, grouping metadata, account-precondition filtering, duplicate suppression, and safe fallback copy for unknown validation types.
+- Stable local display summaries for known prompt-validation, aggregate host, and partner workspace-policy errors, including public-graph boundary surfacing, source provenance, grouping metadata, account-precondition filtering, duplicate suppression, and safe fallback copy for unknown validation types.
 - Doctor sidebar with Chat, Statistics, and Settings tabs.
 - Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds, including distinct group-node and real-subgraph navigation.
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes and unconditional sensitive-header redaction.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
-- Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
+- Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, first-party dataset folders, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
 
@@ -479,9 +490,10 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 
 - The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
 - Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
-- Workflow diagnostics inspect bounded `definitions.subgraphs` content, including promoted and non-promoted nested model references, while preserving the visible host and concrete source node provenance.
+- Workflow diagnostics inspect bounded `definitions.subgraphs` content, including promoted and non-promoted nested model references, while preserving the visible host and concrete source node provenance. Positional widget serialization remains authoritative, with bounded schema-linked named values used only when the positional slot is absent.
 - Every candidate model path is resolved and contained within an authoritative registered root before Doctor checks it. Traversal, absolute external, cross-drive, null-byte, and symlink escape candidates are rejected.
-- Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Doctor does not depend on private frontend stores for this behavior.
+- Exact first-party image/video dataset folder widgets resolve only below ComfyUI's input root, while saved training dataset folders resolve only below registered `datasets` roots. Doctor checks the folder itself without enumerating or reading dataset content.
+- Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Recognized partner-node workspace-policy errors stay node-level and remain distinct from account preconditions. Doctor does not depend on private frontend stores for this behavior.
 - Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.5 receive conservative upgrade guidance when a parseable version is available.
 - Desktop runtime identity and storage are reported independently: a managed Desktop `.venv` remains identified as Desktop while Doctor data continues to prefer ComfyUI's private system-user directory.
 
@@ -587,7 +599,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, and frontend Playwright E2E tests. Host compatibility checks also track current prompt queue metadata, execution event payloads, model asset folders/loaders, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, partner-policy validation errors, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 
