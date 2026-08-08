@@ -4,12 +4,10 @@
  * Uses Island Registry for standardized mount/unmount.
  */
 import { app } from "../../../../scripts/app.js";
-import { register, mount } from "../island_registry.js";
-import { renderChatIsland, unmountChatIsland } from "../chat-island.js";
+import { register, mount, unmount } from "../island_registry.js";
+import { activateChatIsland, renderChatIsland, unmountChatIsland } from "../chat-island.js";
 import { isPreactEnabled } from "../preact-loader.js";
 import { applyProviderQuickSwitch, getProviderQuickSwitchState } from "../llm_provider_quick_switch.js";
-
-let isPreactMode = false;
 
 // ═══════════════════════════════════════════════════════════════
 // ISLAND REGISTRATION (5C.1)
@@ -23,7 +21,7 @@ register({
         if (!success) throw new Error('ChatIsland render returned false');
     },
     unmount: (container) => {
-        unmountChatIsland();
+        unmountChatIsland(container);
     },
     fallbackRender: (container, error) => {
         renderVanilla(container);
@@ -41,13 +39,17 @@ export async function render(container) {
     const doctorUI = app.Doctor;
 
     // 5C.1: Use registry for mount - it handles Preact and fallback automatically
-    isPreactMode = false;
-
     // Attempt Preact via Registry
     const success = await mount('chat', container, { uiText: doctorUI.uiText });
 
+    // A destroyed manager can detach the pane while the async island load is pending.
+    if (container.isConnected === false) {
+        if (success) unmount('chat', container);
+        clearOwnedVanillaReferences(doctorUI, container);
+        return () => {};
+    }
+
     if (success) {
-        isPreactMode = true;
         // 5B.1: Set island active flag to gate DoctorUI DOM updates
         doctorUI.chatIslandActive = true;
         // Styles for container
@@ -66,50 +68,73 @@ export async function render(container) {
         doctorUI.chatIslandActive = false;
     }
 
+    const ownedVanillaReferences = success ? null : {
+        errorContext: doctorUI.sidebarErrorContext,
+        sanitizationStatus: doctorUI.sidebarSanitizationStatus,
+        messages: doctorUI.sidebarMessages,
+        input: doctorUI.sidebarInput,
+        sendBtn: doctorUI.sidebarSendBtn,
+        clearBtn: doctorUI.sidebarClearBtn,
+        updateSanitizationStatus: doctorUI.updateSanitizationStatusVanilla,
+    };
+
     return () => {
-        doctorUI.chatIslandActive = false;
-        doctorUI.sidebarErrorContext = null;
-        doctorUI.sidebarSanitizationStatus = null;
-        doctorUI.sidebarMessages = null;
-        doctorUI.sidebarInput = null;
-        doctorUI.sidebarSendBtn = null;
-        doctorUI.sidebarClearBtn = null;
-        doctorUI.updateSanitizationStatusVanilla = null;
-        if (isPreactMode) {
-            unmountChatIsland();
-            isPreactMode = false;
+        if (container.isConnected !== false) {
+            doctorUI.chatIslandActive = false;
+        }
+        clearOwnedVanillaReferences(doctorUI, container, ownedVanillaReferences);
+        if (success) {
+            unmount('chat', container);
         }
     };
 }
 
-export function onActivate() {
-    // Scroll to bottom logic
+export function onActivate(container) {
+    if (!container || container.isConnected === false) return;
+
     const doctorUI = app.Doctor;
 
-    if (isPreactMode) {
-        // ChatIsland handles its own scrolling via Ref/Effects usually, 
-        // but if we need to force it, we might need a handle.
-        // For now assume ChatIsland auto-scrolls on mount/update.
-        // HACK: Select the message container inside island and scroll it
-        const msgContainer = document.querySelector('.chat-messages');
-        if (msgContainer) {
-            msgContainer.scrollTop = msgContainer.scrollHeight;
+    if (activateChatIsland(container)) return;
+
+    const messages = container.querySelector('#doctor-messages');
+    if (messages) {
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    const statusEl = container.querySelector('#doctor-sanitization-status');
+    if (statusEl && doctorUI.updateSanitizationStatusVanilla) {
+        doctorUI.updateSanitizationStatusVanilla(statusEl);
+    }
+}
+
+function clearOwnedVanillaReferences(doctorUI, container, owned = null) {
+    const references = owned || {
+        errorContext: doctorUI.sidebarErrorContext,
+        sanitizationStatus: doctorUI.sidebarSanitizationStatus,
+        messages: doctorUI.sidebarMessages,
+        input: doctorUI.sidebarInput,
+        sendBtn: doctorUI.sidebarSendBtn,
+        clearBtn: doctorUI.sidebarClearBtn,
+        updateSanitizationStatus: doctorUI.updateSanitizationStatusVanilla,
+    };
+    const fields = [
+        ['sidebarErrorContext', 'errorContext'],
+        ['sidebarSanitizationStatus', 'sanitizationStatus'],
+        ['sidebarMessages', 'messages'],
+        ['sidebarInput', 'input'],
+        ['sidebarSendBtn', 'sendBtn'],
+        ['sidebarClearBtn', 'clearBtn'],
+    ];
+
+    for (const [field, key] of fields) {
+        const reference = references[key];
+        if (reference && doctorUI[field] === reference && container.contains(reference)) {
+            doctorUI[field] = null;
         }
-    } else {
-        // Vanilla Logic
-        if (doctorUI.sidebarMessages) {
-            doctorUI.sidebarMessages.scrollTop = doctorUI.sidebarMessages.scrollHeight;
-        }
-        // Refresh sanitization status
-        const statusEl = document.getElementById('doctor-sanitization-status');
-        if (statusEl) {
-            // We need to export updateSanitizationStatus or make it accessible
-            // It's defined locally in chat_tab.js. We need to keep it there for Vanilla.
-            // We'll duplicate the update call logic here or make it a shared helper on doctorUI?
-            if (doctorUI.updateSanitizationStatusVanilla) {
-                doctorUI.updateSanitizationStatusVanilla(statusEl);
-            }
-        }
+    }
+    if (references.updateSanitizationStatus
+        && doctorUI.updateSanitizationStatusVanilla === references.updateSanitizationStatus) {
+        doctorUI.updateSanitizationStatusVanilla = null;
     }
 }
 

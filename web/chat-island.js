@@ -32,8 +32,6 @@ import { isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
 
 // Shared State
 let preactModules = null;
-let islandMounted = false;
-let currentContainer = null;
 let fixHandler = null;
 
 // 5C.3: Local loadAssets, loadScript, sanitizeHtml removed - using shared doctor_rendering.js
@@ -564,7 +562,6 @@ function ChatIsland({ uiText }) {
 
 export async function renderChatIsland(container, props = {}, options = {}) {
     if (!container) return false;
-    currentContainer = container;
 
     if (!isPreactEnabled()) {
         console.warn('Preact is disabled.');
@@ -594,7 +591,6 @@ export async function renderChatIsland(container, props = {}, options = {}) {
             render(html`<${ChatIsland} ...${props} />`, container);
         }
 
-        islandMounted = true;
         return true;
     } catch (e) {
         console.error("ChatIsland render failed:", e);
@@ -602,10 +598,19 @@ export async function renderChatIsland(container, props = {}, options = {}) {
     }
 }
 
-export function unmountChatIsland() {
-    if (islandMounted && currentContainer && preactModules) {
-        preactModules.render(null, currentContainer);
-        islandMounted = false;
-        currentContainer = null;
-    }
+export function activateChatIsland(container) {
+    if (!container || container.isConnected === false) return false;
+
+    const messages = container.querySelector('.chat-island .chat-messages');
+    if (!messages) return false;
+
+    messages.scrollTop = messages.scrollHeight;
+    return true;
+}
+
+export function unmountChatIsland(container) {
+    if (!container || !preactModules) return false;
+
+    preactModules.render(null, container);
+    return true;
 }

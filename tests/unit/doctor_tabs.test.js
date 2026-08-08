@@ -107,6 +107,59 @@ describe('TabManager cleanup', () => {
     expect(tabBar.innerHTML).toBe('');
   });
 
+  it('passes the owned tab pane to the activation hook', () => {
+    const registry = new TabRegistry();
+    const content = createElement('div');
+    const tabBar = createElement('div');
+    let activatedPane;
+
+    registry.register({
+      id: 'chat',
+      label: 'Chat',
+      icon: 'C',
+      order: 10,
+      render: () => undefined,
+      onActivate: (pane) => {
+        activatedPane = pane;
+      },
+    });
+
+    const manager = new TabManager(registry, content, tabBar);
+    manager.init();
+
+    expect(activatedPane).toBe(content.children[0]);
+  });
+
+  it('runs a late async cleanup immediately after manager destruction', async () => {
+    const registry = new TabRegistry();
+    const content = createElement('div');
+    const tabBar = createElement('div');
+    let resolveRender;
+    let cleanupCount = 0;
+
+    registry.register({
+      id: 'chat',
+      label: 'Chat',
+      icon: 'C',
+      order: 10,
+      render: () => new Promise((resolve) => {
+        resolveRender = () => resolve(() => {
+          cleanupCount += 1;
+        });
+      }),
+    });
+
+    const manager = new TabManager(registry, content, tabBar);
+    manager.init();
+    manager.destroy();
+    resolveRender();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(cleanupCount).toBe(1);
+    expect(manager.tabCleanups.size).toBe(0);
+  });
+
   it('renders synchronous tab failures as literal text', () => {
     const payload = '<span id="dynamic-status-unit-sync-marker">sync marker</span>';
     const registry = new TabRegistry();

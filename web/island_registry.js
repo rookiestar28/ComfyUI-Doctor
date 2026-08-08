@@ -153,15 +153,19 @@ export async function mount(id, container, props = {}) {
 /**
  * Unmount an island by id.
  * @param {string} id - Island id
+ * @param {HTMLElement} [expectedContainer] - Exact owned container to release
  */
-export function unmount(id) {
+export function unmount(id, expectedContainer = null) {
     const config = registry.get(id);
-    const container = mountedContainers.get(id);
+    const trackedContainer = mountedContainers.get(id);
+    const container = expectedContainer || trackedContainer;
 
     if (config && container) {
         try {
             config.unmount(container);
-            mountedContainers.delete(id);
+            if (trackedContainer === container) {
+                mountedContainers.delete(id);
+            }
             console.log(`[IslandRegistry] ✅ ${id} unmounted`);
         } catch (error) {
             console.error(`[IslandRegistry] ❌ Error unmounting "${id}":`, error);

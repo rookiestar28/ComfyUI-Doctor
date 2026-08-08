@@ -212,6 +212,59 @@ test.describe('Doctor Chat Interface', () => {
     await expect(page.locator('#doctor-messages')).toBeVisible({ timeout: 5000 });
   });
 
+  test('should scroll only the owned Chat island on activation', async ({ page }) => {
+    await expect.poll(() => page.evaluate(() => window.app?.Doctor?.chatIslandActive)).toBe(true);
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await expect(page.locator('#doctor-settings-panel')).toBeVisible({ timeout: 5000 });
+
+    await page.evaluate(() => {
+      const decoy = document.createElement('div');
+      decoy.id = 'chat-messages-decoy';
+      decoy.className = 'chat-messages';
+      Object.defineProperty(decoy, 'scrollTop', { configurable: true, writable: true, value: 0 });
+      Object.defineProperty(decoy, 'scrollHeight', { configurable: true, value: 733 });
+      document.body.prepend(decoy);
+
+      const owned = document.querySelector('#doctor-tab-chat .chat-messages');
+      if (!owned) throw new Error('Owned Chat message container is unavailable');
+      Object.defineProperty(owned, 'scrollTop', { configurable: true, writable: true, value: 0 });
+      Object.defineProperty(owned, 'scrollHeight', { configurable: true, value: 911 });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+    await expect(page.locator('#doctor-tab-chat')).toBeVisible();
+
+    const positions = await page.evaluate(() => ({
+      decoy: document.querySelector('#chat-messages-decoy')?.scrollTop,
+      owned: document.querySelector('#doctor-tab-chat .chat-messages')?.scrollTop,
+    }));
+
+    expect(positions.decoy).toBe(0);
+    expect(positions.owned).toBe(911);
+
+    const detachedPositions = await page.evaluate(() => {
+      const pane = document.querySelector('#doctor-tab-chat');
+      const owned = pane?.querySelector('.chat-messages');
+      const decoy = document.querySelector('#chat-messages-decoy');
+      const parent = pane?.parentElement;
+      const chatTab = window.app?.Doctor?.tabManager?.registry?.getTab('chat');
+      if (!pane || !owned || !decoy || !parent || !chatTab?.onActivate) {
+        throw new Error('Chat activation lifecycle is unavailable');
+      }
+
+      owned.scrollTop = 0;
+      decoy.scrollTop = 0;
+      pane.remove();
+      chatTab.onActivate(pane);
+      const result = { decoy: decoy.scrollTop, owned: owned.scrollTop };
+      parent.appendChild(pane);
+      return result;
+    });
+
+    expect(detachedPositions.decoy).toBe(0);
+    expect(detachedPositions.owned).toBe(0);
+  });
+
   test('should synchronize provider quick switch with settings', async ({ page }) => {
     const quickSwitch = page.locator('#doctor-provider-quick-switch');
     await expect(quickSwitch).toBeVisible({ timeout: 5000 });
@@ -1335,6 +1388,37 @@ test.describe('Doctor Chat Interface', () => {
     // Use shared helper to assert fallback UI
     await assertChatFallbackUI(page);
     await expect(page.locator('#doctor-provider-quick-switch')).toBeVisible({ timeout: 5000 });
+
+    await page.evaluate(() => {
+      const decoyStatus = document.createElement('div');
+      decoyStatus.id = 'doctor-sanitization-status';
+      decoyStatus.textContent = 'decoy status';
+      document.body.prepend(decoyStatus);
+      window.app.Doctor.lastAnalysisMetadata = {
+        sanitization: { privacy_mode: 'strict', pii_found: true },
+      };
+
+      const ownedMessages = document.querySelector('#doctor-tab-chat #doctor-messages');
+      if (!ownedMessages) throw new Error('Vanilla Chat message container is unavailable');
+      Object.defineProperty(ownedMessages, 'scrollTop', {
+        configurable: true,
+        writable: true,
+        value: 0,
+      });
+      Object.defineProperty(ownedMessages, 'scrollHeight', { configurable: true, value: 421 });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.click('.doctor-tab-button[data-tab-id="chat"]');
+
+    const ownedStatus = page.locator('#doctor-tab-chat #doctor-sanitization-status');
+    await expect(ownedStatus).toBeVisible();
+    await expect(ownedStatus).toContainText('✓');
+    await expect(ownedStatus).toHaveCSS('background-color', 'rgba(76, 175, 80, 0.15)');
+    await expect(page.locator('body > #doctor-sanitization-status')).toHaveText('decoy status');
+    await expect.poll(() => page.evaluate(() => (
+      document.querySelector('#doctor-tab-chat #doctor-messages')?.scrollTop
+    ))).toBe(421);
 
     // Clean up
     await page.evaluate(() => {

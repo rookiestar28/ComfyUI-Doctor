@@ -27,7 +27,7 @@ export class TabRegistry {
      * @param {string} config.label Tab label text
      * @param {number} config.order Sort order (lower = first)
      * @param {Function} config.render Render function (container) => void
-     * @param {Function} [config.onActivate] Lifecycle hook when tab becomes active
+     * @param {Function} [config.onActivate] Lifecycle hook receiving the owned pane when tab becomes active
      * @param {Function} [config.onDeactivate] Lifecycle hook when tab becomes inactive
      */
     register(config) {
@@ -82,6 +82,7 @@ export class TabManager {
         this.tabBarContainer = tabBarContainer;
         this.activeTabId = null;
         this.tabCleanups = new Map();
+        this.lifecycleGeneration = 0;
     }
 
     storeTabCleanup(tabId, cleanup) {
@@ -143,9 +144,29 @@ export class TabManager {
                 console.log(`[ComfyUI-Doctor] Rendering tab: ${tabId}`);
                 const cleanup = tab.render(targetEl);
                 if (cleanup && typeof cleanup.then === 'function') {
+                    const renderGeneration = this.lifecycleGeneration;
                     cleanup
-                        .then((resolvedCleanup) => this.storeTabCleanup(tabId, resolvedCleanup))
+                        .then((resolvedCleanup) => {
+                            if (renderGeneration !== this.lifecycleGeneration) {
+                                const lateCleanup = typeof resolvedCleanup === 'function'
+                                    ? resolvedCleanup
+                                    : resolvedCleanup?.destroy?.bind(resolvedCleanup);
+                                if (lateCleanup) {
+                                    try {
+                                        lateCleanup();
+                                    } catch (error) {
+                                        console.error(`[ComfyUI-Doctor] Late tab cleanup failed: ${tabId}`, error);
+                                    }
+                                }
+                                return;
+                            }
+                            this.storeTabCleanup(tabId, resolvedCleanup);
+                        })
                         .catch((error) => {
+                            if (renderGeneration !== this.lifecycleGeneration) {
+                                console.error(`[ComfyUI-Doctor] Obsolete async tab render failed: ${tabId}`, error);
+                                return;
+                            }
                             console.error(`[ComfyUI-Doctor] Async tab render failed: ${tabId}`, error);
                             renderTabFailure(targetEl, error);
                         });
@@ -174,7 +195,7 @@ export class TabManager {
 
         // 6. Activate Hook
         if (tab.onActivate) {
-            try { tab.onActivate(); } catch (e) { console.error(e); }
+            try { tab.onActivate(targetEl); } catch (e) { console.error(e); }
         }
     }
 
@@ -240,6 +261,9 @@ export class TabManager {
     }
 
     destroy() {
+        // IMPORTANT: invalidate pending renders before running resolved cleanup.
+        this.lifecycleGeneration += 1;
+
         if (this.activeTabId) {
             const currentTab = this.registry.getTab(this.activeTabId);
             if (currentTab?.onDeactivate) {
