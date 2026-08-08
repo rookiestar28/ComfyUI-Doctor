@@ -18,12 +18,16 @@ def _write(path: Path, text: str) -> None:
 def _create_minimal_reference(root: Path) -> None:
     _write(
         root / "ComfyUI" / "main.py",
-        "file_log_outputs = [('DETAIL', 'comfyui_detail.log'), *get_file_log_outputs(args.verbose)]\n"
-        "setup_logger(log_level=console_log_level, stdout=args.stdout, file_outputs=file_log_outputs)\n"
+        "file_log_outputs = get_file_log_outputs(args.verbose)\n"
+        "setup_logger(log_level=console_log_level, file_outputs=file_log_outputs, use_stdout=args.log_stdout)\n"
         "def execute_prestartup_script():\n    return 'prestartup_script.py'\n",
     )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.47.10\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.48.7\n")
+    _write(
+        root / "ComfyUI" / "README.md",
+        "torch 2.7 is minimally supported but using a newer version is extremely recommended.\n",
+    )
     _write(
         root / "ComfyUI" / "comfy" / "cli_args.py",
         "LOG_LEVELS = ('DEBUG', 'DETAIL', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')\n"
@@ -136,7 +140,7 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.49.1"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.50.3"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -267,6 +271,12 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "lib" / "litegraph" / "src" / "LGraphNode.ts",
+        "const namedValues = getNamedValues()\n"
+        "if (namedValues && LiteGraph.namedValuesRestore) {\n"
+        "  restoreNamedValues(namedValues)\n"
+        "} else if (info.widgets_values) {\n"
+        "  restorePositionalValues(info.widgets_values)\n"
+        "}\n"
         "if (widgets?.length && this.serialize_widgets) {\n"
         "  o.widgets_values = []\n"
         "  o.widgets_values_named = {}\n"
@@ -274,6 +284,63 @@ def _create_minimal_reference(root: Path) -> None:
         "    o.widgets_values[i] = serialisedVal\n"
         "    o.widgets_values_named[widget.name] = serialisedVal\n"
         "  }\n"
+        "}\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "lib"
+        / "litegraph"
+        / "src"
+        / "LiteGraphGlobal.ts",
+        "namedValuesRestore: boolean = false\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "platform"
+        / "settings"
+        / "constants"
+        / "coreSettings.ts",
+        "id: 'Comfy.Workflow.NamedValuesRestore',\n"
+        "    name: 'Restore widget values by name',\n"
+        "    type: 'boolean',\n"
+        "    defaultValue: false,\n"
+        "    experimental: true\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "core"
+        / "graph"
+        / "subgraph"
+        / "resolveConcretePromotedWidget.ts",
+        "export function resolveConcretePromotedWidget(\n"
+        "  hostNode: LGraphNode, rawNodeId: SerializedNodeId, widgetName: string\n"
+        ") {\n"
+        "  const sourceWidget = sourceNode.widgets.find((entry) => entry.name === widgetName)\n"
+        "  return { status: 'resolved', resolved: { node: sourceNode, nodePath, widget: sourceWidget } }\n"
+        "}\n"
+        "export function buildPromotedSourceExecutionId(hostExecutionId, nodePath) {\n"
+        "  return createNodeExecutionId([...hostNodeIds, ...nodePath])\n"
+        "}\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "platform"
+        / "missingMedia"
+        / "missingMediaScan.ts",
+        "function mediaTypeFromSpec(spec: InputSpecV2 | undefined) {\n"
+        "  if (!spec || !isComboInputSpec(spec)) return undefined\n"
+        "  if (spec.video_upload) return 'video'\n"
+        "  if (spec.image_upload || spec.animated_image_upload) return 'image'\n"
+        "  if (spec.audio_upload) return 'audio'\n"
+        "  return undefined\n"
         "}\n",
     )
     _write(
@@ -735,8 +802,8 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
         for lane in lanes
     ] == [
         ("desktop-0.9.4", "1.43.18", False),
-        ("core-pin-1.47.10", "1.47.10", True),
-        ("standalone-1.49.1+", "1.49.1+", True),
+        ("core-pin-1.48.7", "1.48.7", True),
+        ("standalone-1.50.3+", "1.50.3+", True),
     ]
 
 
@@ -752,15 +819,15 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.47.10",
-            "comfyui-frontend-package==1.47.9",
+            "comfyui-frontend-package==1.48.7",
+            "comfyui-frontend-package==1.48.6",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.49.1"',
-            '"version": "1.49.0"',
+            '"version": "1.50.3"',
+            '"version": "1.50.2"',
             "frontend runtime lane: standalone source",
         ),
     )
@@ -1047,8 +1114,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.47.10: frontend 1.47.10" in formatted
-    assert "standalone-1.49.1+: frontend 1.49.1+" in formatted
+    assert "core-pin-1.48.7: frontend 1.48.7" in formatted
+    assert "standalone-1.50.3+: frontend 1.50.3+" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1070,11 +1137,11 @@ def test_t28_reference_source_is_never_executed(tmp_path):
     assert not marker.exists()
 
 
-def test_t29_records_current_revisions_and_new_contract_families():
+def test_t30_records_current_revisions_and_contract_families():
     labels = {check.label for check in host_compat.CHECKS}
 
-    assert host_compat.COMFYUI_REVISION == "9cf91339b708a245762fa38ffeec9702b381e0db"  # pragma: allowlist secret
-    assert host_compat.FRONTEND_REVISION == "e0ef062918a47b3b8f4f7b2b26cb1dfb881d4a6d"  # pragma: allowlist secret
+    assert host_compat.COMFYUI_REVISION == "dd79c643a95402136a75a28f6187d843bcf457ed"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "bdc0345da4610f16b4102f7e4628905b09b165ac"  # pragma: allowlist secret
     assert {
         "dual positional and named widget serialization",
         "partner node validation classification",
@@ -1083,6 +1150,12 @@ def test_t29_records_current_revisions_and_new_contract_families():
         "first-party dataset node registrations",
         "DETAIL logging CLI contract",
         "DETAIL file logging bootstrap",
+        "minimum supported PyTorch version",
+        "named widget restore global default",
+        "named widget restore setting boundary",
+        "named widget restore authority branch",
+        "promoted widget concrete source resolution",
+        "missing media upload spec classification",
     } <= labels
 
 
@@ -1133,8 +1206,8 @@ def test_t29_new_contract_anchors_fail_in_isolation(tmp_path):
         (
             "detail-bootstrap",
             Path("ComfyUI/main.py"),
-            "file_log_outputs = [('DETAIL', 'comfyui_detail.log')",
-            "file_log_outputs = [('DETAIL', 'comfyui_legacy.log')",
+            "file_log_outputs = get_file_log_outputs(args.verbose)",
+            "file_log_outputs = get_legacy_log_outputs(args.verbose)",
             "DETAIL file logging bootstrap",
         ),
     )
@@ -1153,3 +1226,90 @@ def test_t29_new_contract_anchors_fail_in_isolation(tmp_path):
         assert len(failed) == 1
         assert failed[0].check.label == expected_label
         assert current in failed[0].missing_patterns
+
+
+def test_t30_current_contract_anchors_fail_in_isolation(tmp_path):
+    cases = (
+        (
+            "pytorch-minimum",
+            Path("ComfyUI/README.md"),
+            "torch 2.7 is minimally supported",
+            "torch 2.5 is minimally supported",
+            "minimum supported PyTorch version",
+        ),
+        (
+            "named-global-default",
+            Path("ComfyUI_frontend/src/lib/litegraph/src/LiteGraphGlobal.ts"),
+            "namedValuesRestore: boolean = false",
+            "namedValuesRestore: boolean = true",
+            "named widget restore global default",
+        ),
+        (
+            "named-setting",
+            Path("ComfyUI_frontend/src/platform/settings/constants/coreSettings.ts"),
+            "    defaultValue: false,\n    experimental: true",
+            "    defaultValue: true,\n    experimental: false",
+            "named widget restore setting boundary",
+        ),
+        (
+            "named-authority",
+            Path("ComfyUI_frontend/src/lib/litegraph/src/LGraphNode.ts"),
+            "if (namedValues && LiteGraph.namedValuesRestore)",
+            "if (namedValues)",
+            "named widget restore authority branch",
+        ),
+        (
+            "promoted-resolution",
+            Path("ComfyUI_frontend/src/core/graph/subgraph/resolveConcretePromotedWidget.ts"),
+            "resolved: { node: sourceNode, nodePath, widget: sourceWidget }",
+            "resolved: { node: hostNode, nodePath, widget: sourceWidget }",
+            "promoted widget concrete source resolution",
+        ),
+        (
+            "promoted-execution-id",
+            Path("ComfyUI_frontend/src/core/graph/subgraph/resolveConcretePromotedWidget.ts"),
+            "createNodeExecutionId([...hostNodeIds, ...nodePath])",
+            "createNodeExecutionId(hostNodeIds)",
+            "promoted widget concrete source resolution",
+        ),
+        (
+            "media-upload-flags",
+            Path("ComfyUI_frontend/src/platform/missingMedia/missingMediaScan.ts"),
+            "if (spec.audio_upload) return 'audio'",
+            "if (spec.legacy_audio_upload) return 'audio'",
+            "missing media upload spec classification",
+        ),
+    )
+
+    for case_name, relative_path, current, mutated, expected_label in cases:
+        root = tmp_path / case_name
+        _create_minimal_reference(root)
+        path = root / relative_path
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(current, mutated),
+            encoding="utf-8",
+        )
+
+        failed = _failed_results(root)
+
+        assert len(failed) == 1
+        assert failed[0].check.label == expected_label
+        assert any(current in missing for missing in failed[0].missing_patterns)
+
+
+def test_t30_rejects_unconditional_default_detail_file(tmp_path):
+    _create_minimal_reference(tmp_path)
+    path = tmp_path / "ComfyUI" / "main.py"
+    path.write_text(
+        "file_log_outputs = [('DETAIL', 'comfyui_detail.log')]\n"
+        + path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    failed = _failed_results(tmp_path)
+
+    assert len(failed) == 1
+    assert failed[0].check.label == "DETAIL file logging bootstrap"
+    assert "file_log_outputs = [('DETAIL', 'comfyui_detail.log')" in (
+        failed[0].present_forbidden_patterns
+    )

@@ -4,8 +4,8 @@ import { describe, expect, test } from "vitest";
 
 const FRONTEND_LANES = [
     { id: "desktop-0.9.4", version: "1.43.18", settingChangeTelemetry: false },
-    { id: "core-pin-1.47.10", version: "1.47.10", settingChangeTelemetry: true },
-    { id: "standalone-current", version: "1.49.1+", settingChangeTelemetry: true },
+    { id: "core-pin-1.48.7", version: "1.48.7", settingChangeTelemetry: true },
+    { id: "standalone-current", version: "1.50.3+", settingChangeTelemetry: true },
 ];
 
 async function loadCompatibilityModule() {
