@@ -2,6 +2,8 @@
 
 Playwright-based end-to-end tests for the ComfyUI Doctor UI.
 
+Requires Node.js `>=18 <26`.
+
 ## Setup
 
 ### 1. Install Dependencies
@@ -60,6 +62,7 @@ tests/e2e/
 - Playwright setup and configuration
 - Test harness with ComfyUI mocks
 - Sidebar and chat-context tests
+- Owned-pane Chat activation, detached cleanup, and decoy-container regressions
 - Settings panel tests
 - Statistics, diagnostics, telemetry, and feedback tests
 - Preact loader and vanilla fallback tests

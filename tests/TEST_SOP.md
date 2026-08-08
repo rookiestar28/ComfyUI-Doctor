@@ -158,7 +158,7 @@ Treat local gate success as "safe to attempt push", not as proof that the remote
 
 ### Optional: One-Command Full Test Scripts (Fastest)
 
-Use these if you want a single command that runs **all required steps** (detect-secrets, pre-commit, host-like package/startup validation, unit tests, E2E). These scripts also handle the most common environment issues (Windows cache locks, Black cache, Node >=18 <26).
+Use these if you want a single command that runs **all required steps** (supply-chain scan, detect-secrets, pre-commit, host-like package/startup validation, unit tests, E2E). These scripts also handle the most common environment issues (Windows cache locks, Black cache, Node >=18 <26).
 Scripts enforce a project-local venv and will bootstrap missing test tooling (`pre-commit`, and `aiohttp` where needed for imports).
 On WSL, scripts prefer `.venv-wsl`; on Windows they use `.venv`.
 If the selected venv exists but is invalid for the current OS/interpreter, rerun via the script so it can recreate that venv.
@@ -183,16 +183,18 @@ Then every `git push` will run:
 bash scripts/pre_push_checks.sh
 ```
 
-`scripts/pre_push_checks.sh` is the CI-parity guard and must include all 5 stages:
-1) `detect-secrets`
-2) all `pre-commit` hooks
-3) host-like package/startup validation (`python scripts/validate_host_load.py`)
-4) backend unit tests (`scripts/run_unittests.py --pattern "test_*.py"` or pytest fallback)
-5) frontend E2E (`npm test`)
+`scripts/pre_push_checks.sh` is the CI-parity guard and must include all 6 stages:
+1) supply-chain dependency and workflow risk scan (`python scripts/check_supply_chain.py --skip-install-trees`)
+2) `detect-secrets`
+3) all `pre-commit` hooks
+4) host-like package/startup validation (`python scripts/validate_host_load.py`)
+5) backend unit tests (`scripts/run_unittests.py --pattern "test_*.py"` or pytest fallback)
+6) frontend E2E (`npm test`)
 
 IMPORTANT:
-- Do not remove stage (3). If pre-push skips host-like validation, package-load regressions can slip past local pytest.
-- Do not remove stage (4). If pre-push skips backend unit tests, local pushes can pass while GitHub CI fails later.
+- Do not remove stage (1). If pre-push skips the supply-chain scan, dependency/workflow risk drift can reach installation stages.
+- Do not remove stage (4). If pre-push skips host-like validation, package-load regressions can slip past local pytest.
+- Do not remove stage (5). If pre-push skips backend unit tests, local pushes can pass while GitHub CI fails later.
 - Keep dependency bootstrap in this script aligned with `.github/workflows/ci.yml` unit-test dependencies.
 
 1) Detect Secrets (baseline-based)

@@ -34,7 +34,7 @@ The backend is organized around a small entry point and focused service modules:
 | LLM | `llm_client.py`, `session_manager.py`, `services/llm_provider_adapters.py`, `services/llm/` | Provider requests, retry, proxy policy, rate/concurrency limits |
 | Security | `security.py`, `outbound.py`, `sanitizer.py`, `services/security/` | SSRF checks, outbound sanitization, admin guard, error envelopes |
 | Storage | `services/doctor_paths.py`, `logger.py`, `history_store.py`, `services/secret_store.py` | Canonical data paths, logs, history, encrypted credential storage |
-| Diagnostics | `services/diagnostics/`, `services/intent/` | Workflow, dependency, current host model asset folders/loaders, privacy, performance, and signature-pack checks |
+| Diagnostics | `services/diagnostics/`, `services/intent/` | Workflow, dependency, current host model/media/dataset asset folders and loaders, privacy, performance, and signature-pack checks |
 | Community | `services/community_feedback.py`, `pipeline/plugins/` | Feedback preview/submission and scan-only plugin trust reporting |
 | Telemetry | `telemetry.py`, `web/doctor_telemetry.js` | Local-only opt-in event buffer and UI controls |
 
@@ -95,8 +95,13 @@ Model asset checks use ComfyUI's live `folder_names_and_paths` registry as the
 authoritative source when available, including custom roots and registered
 extensions. Older hosts retain a bounded fixed fallback. Workflow traversal
 also inspects bounded `definitions.subgraphs` content and preserves visible
-host plus concrete source provenance for nested assets. Every candidate is
-real-path-contained within a registered root before any filesystem probe.
+host plus concrete source provenance for nested assets. Positional widget
+values remain authoritative and uniquely matched named values are fallback
+only. First-party promoted image/video/output/audio loaders retain concrete
+source provenance; arbitrary custom upload-loader behavior is not inferred
+without authoritative node definitions. Input/dataset folders and every file
+candidate are real-path-contained within registered roots before any
+filesystem probe, read, or enumeration.
 
 ### Telemetry
 
@@ -117,6 +122,10 @@ ComfyUI loads frontend assets from `web/`.
 | Resilience | `web/preact-loader.js`, `web/island_registry.js`, `web/ErrorBoundary.js`, `web/global_error_handler.js` | Local Preact loading, island fallback, error boundaries |
 
 Preact islands improve the Chat and Statistics surfaces, but each island has a vanilla fallback so the sidebar remains usable if the island loader fails.
+Tab activation receives the exact owned pane. Chat island activation and
+unmount operate on that concrete container, while late async render cleanup is
+discarded safely after tab-manager destruction rather than acting on detached
+DOM or an unrelated matching element.
 Validation-error display is normalized in the frontend so known
 prompt-validation failures use stable local catalog text and grouping
 metadata. Public raw errors and graph links can surface eligible input-level
@@ -139,6 +148,8 @@ Security-sensitive behavior is centralized:
 - Telemetry is local-only and opt-in.
 - Doctor-owned frontend settings opt out of the host frontend's independent
   setting-change telemetry.
+- Plain backend and exception status strings are inserted as literal text;
+  intentional rich chat rendering stays on its separate sanitized path.
 
 Storage should go through `services/doctor_paths.py` so Desktop, portable, and
 standard ComfyUI installations resolve Doctor data consistently. Runtime
@@ -156,6 +167,10 @@ The full local acceptance gate is `scripts/run_full_tests_windows.ps1` on Window
 4. host-like package/startup validation
 5. backend unit tests
 6. default Playwright E2E
+
+Backend test collection leaves the canonical production `__init__.py`
+byte-stable. Host-shaped package loading is validated separately rather than
+renaming the entry point or substituting a backup during pytest collection.
 
 Additional focused lanes:
 

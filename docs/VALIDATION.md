@@ -27,6 +27,10 @@ The full gate runs:
 5. Backend unit tests.
 6. Frontend Playwright E2E tests.
 
+Backend collection keeps the canonical production `__init__.py` in place. The
+host-like stage separately validates ComfyUI-shaped package loading; test
+tooling must not rename, remove, or substitute a backup package entry point.
+
 ## Explicit Staged Commands
 
 Use this flow when debugging one validation stage at a time.
@@ -60,9 +64,11 @@ standalone frontend source. Current contracts cover prompt queue source
 metadata, frontend queue source attribution, execution event payload shape,
 output asset enrichment tolerance, host package/version anchors, the live
 model registry and extensions, nested/promoted subgraph serialization,
-frontend raw/surfaced validation errors, setting-change telemetry controls,
-real subgraph shape, system statistics metadata, Desktop layout, ComfyUI
-job-cancel routes, and frontend queue/cancel adoption.
+positional/named widget restore policy, first-party promoted media ownership,
+the current PyTorch minimum, frontend raw/surfaced validation errors,
+setting-change telemetry controls, real subgraph shape, system statistics
+metadata, Desktop layout, ComfyUI job-cancel routes, and frontend queue/cancel
+adoption.
 
 The compatibility script reads source files only. It does not import, install,
 build, or execute code from the host reference repositories.

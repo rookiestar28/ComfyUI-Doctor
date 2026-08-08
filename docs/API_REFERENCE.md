@@ -120,6 +120,11 @@ Diagnostics reports are produced by concrete local checks such as workflow linti
 Model asset diagnostics use the current host's registered model roots and
 extensions when available, including custom folders and `.pt2`/`.sft`
 artifacts. They also inspect bounded nested subgraph definitions while
-preserving source provenance. Older hosts retain bounded legacy folder
-fallbacks, and every filesystem candidate must remain contained within an
-authoritative root before it is probed.
+preserving visible-host and concrete source-loader provenance for promoted
+first-party model, image, video, output-image, and audio values. Positional
+widget values remain authoritative and uniquely matched named values are
+fallback only. Input media/caption-pair and registered dataset folders are
+contained without content enumeration. Unknown custom upload-loader semantics
+are not guessed without authoritative node-definition flags. Older hosts
+retain bounded legacy folder fallbacks, and every filesystem candidate must
+remain contained within an authoritative root before it is probed.

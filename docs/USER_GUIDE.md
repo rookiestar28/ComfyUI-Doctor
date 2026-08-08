@@ -130,6 +130,13 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
   and extensions such as `.pt2` and `.sft`.
 - Bounded nested `definitions.subgraphs` scanning for promoted and
   non-promoted model references with visible-host and source-node provenance.
+- First-party promoted image, video, output-image, and audio checks that keep
+  the visible host as the user-facing target while retaining the concrete
+  source loader. Unknown custom upload loaders are not guessed from filename
+  extensions when authoritative node-definition flags are unavailable.
+- Contained first-party input media/caption-pair folders and registered
+  training dataset folders. Doctor checks the folder itself without reading
+  or enumerating dataset content.
 - Real-path containment that rejects external, traversal, cross-drive,
   null-byte, and symlink-escape candidates before any asset probe.
 - Missing assets or placeholder values.
@@ -139,6 +146,9 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
 The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.
+
+Frontend error and credential-store status messages are displayed as literal
+text. Backend or exception strings are not treated as trusted markup.
 
 ## Quick Community Feedback
 

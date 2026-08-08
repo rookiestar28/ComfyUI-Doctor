@@ -37,7 +37,9 @@ Each quarterly audit should include public-safe summaries for these scenarios:
 
 - SSRF attempts against metadata endpoints and private/internal IP ranges.
 - Redirect-based SSRF bypass attempts.
-- XSS attempts through chat inputs, rendered model responses, settings fields, and diagnostic text.
+- XSS attempts through chat inputs, rendered model responses, settings fields,
+  tab-render failures, credential-store/backend status strings, exception
+  messages, and diagnostic text. Plain status data must remain literal text.
 - Path traversal attempts through any path-like input or report/history access path.
 - Model-asset traversal, absolute external path, cross-drive, null-byte, and
   symlink-escape attempts; verify no rejected candidate is opened or returned

@@ -7,7 +7,7 @@ Thanks for helping improve ComfyUI-Doctor. This project is a ComfyUI custom node
 Required local tools:
 
 - Python 3.10 or newer
-- Node.js 18 or newer
+- Node.js `>=18 <26`
 - npm 9 or newer
 - Git
 

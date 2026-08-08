@@ -14,6 +14,18 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Current host baseline, diagnostics, frontend safety, and lifecycle reliability aligned</strong></summary>
+
+- Refreshed source-linked compatibility coverage for the current ComfyUI and frontend baselines, including opt-in detail logging, named-widget restore policy, promoted media contracts, and the current PyTorch minimum.
+- Made backend test collection preserve the canonical package entry point while retaining host-like ComfyUI package-load validation.
+- Updated environment diagnostics and public guidance so parseable PyTorch versions below 2.7 receive conservative upgrade guidance.
+- Expanded promoted missing-asset diagnostics across first-party image, video, output-image, and audio loaders while preserving visible-host and concrete source-loader provenance.
+- Hardened dynamic tab and credential-store status rendering so backend and exception text remains literal rather than being parsed as markup.
+- Scoped Chat island activation and cleanup to the owned tab pane, preventing decoy or detached containers from receiving lifecycle actions.
+
+</details>
+
+<details>
 <summary><strong>Latest host serialization, dataset diagnostics, policy errors, and dependency security aligned</strong></summary>
 
 - Refreshed source-linked host contract coverage for current ComfyUI, standalone frontend, core-pinned frontend, and Desktop runtime lanes.
@@ -491,6 +503,7 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
 - Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
 - Workflow diagnostics inspect bounded `definitions.subgraphs` content, including promoted and non-promoted nested model references, while preserving the visible host and concrete source node provenance. Positional widget serialization remains authoritative, with bounded schema-linked named values used only when the positional slot is absent.
+- Promoted first-party image, video, output-image, and audio references keep the visible host as the user-facing target while retaining concrete source-loader provenance. Unknown custom upload-capable nodes are not inferred from a filename alone when authoritative node-definition flags are unavailable.
 - Every candidate model path is resolved and contained within an authoritative registered root before Doctor checks it. Traversal, absolute external, cross-drive, null-byte, and symlink escape candidates are rejected.
 - Exact first-party image/video dataset folder widgets resolve only below ComfyUI's input root, while saved training dataset folders resolve only below registered `datasets` roots. Doctor checks the folder itself without enumerating or reading dataset content.
 - Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Recognized partner-node workspace-policy errors stay node-level and remain distinct from account preconditions. Doctor does not depend on private frontend stores for this behavior.
@@ -599,7 +612,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, backend unit tests, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, partner-policy validation errors, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, promoted media provenance, partner-policy validation errors, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 

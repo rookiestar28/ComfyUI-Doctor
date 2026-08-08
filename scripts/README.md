@@ -8,11 +8,12 @@ This directory contains development and maintenance scripts for ComfyUI-Doctor.
 
 Runs the required end-to-end validation sequence in one command on Windows:
 
-1. `detect-secrets`
-2. all `pre-commit` hooks
-3. host-like package/startup validation
-4. backend unit tests
-5. frontend E2E
+1. supply-chain dependency and workflow risk checks
+2. `detect-secrets`
+3. all `pre-commit` hooks
+4. host-like package/startup validation
+5. backend unit tests
+6. frontend E2E
 
 The script always uses the project-local `.venv` interpreter for Python tooling and tests (Windows track).
 
