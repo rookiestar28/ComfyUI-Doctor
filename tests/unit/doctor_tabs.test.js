@@ -22,6 +22,7 @@ function createElement(tagName = 'div') {
     id: '',
     className: '',
     title: '',
+    textContent: '',
     dataset: {},
     innerHTML: '',
     children: [],
@@ -30,6 +31,10 @@ function createElement(tagName = 'div') {
     appendChild(child) {
       this.children.push(child);
       return child;
+    },
+    replaceChildren(...children) {
+      this.children = children;
+      this.innerHTML = '';
     },
     querySelector(selector) {
       if (!selector.startsWith('#')) return null;
@@ -100,5 +105,57 @@ describe('TabManager cleanup', () => {
     expect(cleaned).toBe(true);
     expect(content.innerHTML).toBe('');
     expect(tabBar.innerHTML).toBe('');
+  });
+
+  it('renders synchronous tab failures as literal text', () => {
+    const payload = '<span id="dynamic-status-unit-sync-marker">sync marker</span>';
+    const registry = new TabRegistry();
+    const content = createElement('div');
+    const tabBar = createElement('div');
+
+    registry.register({
+      id: 'sync-failure',
+      label: 'Sync failure',
+      icon: 'S',
+      order: 10,
+      render: () => {
+        throw new Error(payload);
+      },
+    });
+
+    const manager = new TabManager(registry, content, tabBar);
+    manager.init();
+
+    const pane = content.children[0];
+    expect(pane.innerHTML).toBe('');
+    expect(pane.children).toHaveLength(1);
+    expect(pane.children[0].textContent).toContain(payload);
+  });
+
+  it('renders asynchronous tab failures as literal text', async () => {
+    const payload = '<span id="dynamic-status-unit-async-marker">async marker</span>';
+    const registry = new TabRegistry();
+    const content = createElement('div');
+    const tabBar = createElement('div');
+
+    registry.register({
+      id: 'async-failure',
+      label: 'Async failure',
+      icon: 'A',
+      order: 10,
+      render: async () => {
+        throw new Error(payload);
+      },
+    });
+
+    const manager = new TabManager(registry, content, tabBar);
+    manager.init();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const pane = content.children[0];
+    expect(pane.innerHTML).toBe('');
+    expect(pane.children).toHaveLength(1);
+    expect(pane.children[0].textContent).toContain(payload);
   });
 });

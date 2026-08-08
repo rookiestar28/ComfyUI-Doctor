@@ -54,6 +54,17 @@ export class TabRegistry {
 // Global registry instance
 export const tabRegistry = new TabRegistry();
 
+function renderTabFailure(targetEl, error) {
+    const errorState = document.createElement('div');
+    errorState.className = 'error-state';
+    errorState.style.padding = '20px';
+    errorState.style.color = '#ff5555';
+    const message = String(error?.message ?? error ?? 'Unknown error');
+    // SECURITY: exception messages are dynamic data and must never enter an HTML parser.
+    errorState.textContent = `Failed to render tab: ${message}`;
+    targetEl.replaceChildren(errorState);
+}
+
 export class TabManager {
     /**
      * Create TabManager with direct DOM element references
@@ -136,14 +147,14 @@ export class TabManager {
                         .then((resolvedCleanup) => this.storeTabCleanup(tabId, resolvedCleanup))
                         .catch((error) => {
                             console.error(`[ComfyUI-Doctor] Async tab render failed: ${tabId}`, error);
-                            targetEl.innerHTML = `<div class="error-state" style="padding: 20px; color: #ff5555;">Failed to render tab: ${error.message}</div>`;
+                            renderTabFailure(targetEl, error);
                         });
                 } else {
                     this.storeTabCleanup(tabId, cleanup);
                 }
             } catch (e) {
                 console.error(`[ComfyUI-Doctor] Error rendering tab ${tabId}:`, e);
-                targetEl.innerHTML = `<div class="error-state" style="padding: 20px; color: #ff5555;">Failed to render tab: ${e.message}</div>`;
+                renderTabFailure(targetEl, e);
             }
         }
 

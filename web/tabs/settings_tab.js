@@ -409,24 +409,67 @@ export function render(container) {
         none: { label: 'None', color: '#888', bg: 'rgba(136,136,136,0.1)' },
     };
 
+    const replaceWithPlainText = (container, text, { tagName = 'span', color, fontSize } = {}) => {
+        if (!container) return null;
+        const element = document.createElement(tagName);
+        if (color) element.style.color = color;
+        if (fontSize) element.style.fontSize = fontSize;
+        // SECURITY: backend, exception, provider, and localized status values stay text-only.
+        element.textContent = String(text ?? '');
+        container.replaceChildren(element);
+        return element;
+    };
+
+    const renderKeystoreStatus = (text, color) => {
+        replaceWithPlainText(keystoreStatus, text, { color });
+    };
+
     const renderProvidersGrid = (providers) => {
         if (!keystoreGrid || !providers) return;
         const entries = Object.entries(providers);
         if (!entries.length) {
-            keystoreGrid.innerHTML = `<div style="font-size: 11px; color: #666;">${doctorUI.getUIText('keystore_no_providers') || 'No providers configured.'}</div>`;
+            replaceWithPlainText(
+                keystoreGrid,
+                doctorUI.getUIText('keystore_no_providers') || 'No providers configured.',
+                { tagName: 'div', color: '#666', fontSize: '11px' }
+            );
             return;
         }
-        keystoreGrid.innerHTML = `
-            <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">${doctorUI.getUIText('keystore_provider_status') || 'Provider Status:'}</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                ${entries.map(([id, info]) => {
-            const badge = SOURCE_BADGES[info.source] || SOURCE_BADGES.none;
-            return `<div style="display: flex; align-items: center; gap: 4px; padding: 3px 6px; background: ${badge.bg}; border-radius: 3px; font-size: 11px;">
-                        <span style="color: #ccc;">${id}</span>
-                        <span style="color: ${badge.color}; font-weight: 600;">${badge.label}</span>
-                    </div>`;
-        }).join('')}
-            </div>`;
+
+        const title = document.createElement('div');
+        title.style.fontSize = '11px';
+        title.style.color = '#aaa';
+        title.style.marginBottom = '4px';
+        title.textContent = String(doctorUI.getUIText('keystore_provider_status') || 'Provider Status:');
+
+        const grid = document.createElement('div');
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = '1fr 1fr';
+        grid.style.gap = '4px';
+        for (const [id, info] of entries) {
+            const badge = SOURCE_BADGES[info?.source] || SOURCE_BADGES.none;
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '4px';
+            row.style.padding = '3px 6px';
+            row.style.background = badge.bg;
+            row.style.borderRadius = '3px';
+            row.style.fontSize = '11px';
+
+            const providerName = document.createElement('span');
+            providerName.style.color = '#ccc';
+            providerName.textContent = String(id);
+
+            const sourceBadge = document.createElement('span');
+            sourceBadge.style.color = badge.color;
+            sourceBadge.style.fontWeight = '600';
+            sourceBadge.textContent = badge.label;
+
+            row.append(providerName, sourceBadge);
+            grid.appendChild(row);
+        }
+        keystoreGrid.replaceChildren(title, grid);
     };
 
     const loadKeystoreStatus = async () => {
@@ -436,10 +479,18 @@ export function render(container) {
             if (result.success) {
                 renderProvidersGrid(result.providers);
             } else {
-                keystoreGrid.innerHTML = `<div style="font-size: 11px; color: #e53935;">Failed: ${result.error || result.message || 'unknown'}</div>`;
+                replaceWithPlainText(
+                    keystoreGrid,
+                    `Failed: ${result.error || result.message || 'unknown'}`,
+                    { tagName: 'div', color: '#e53935', fontSize: '11px' }
+                );
             }
         } catch (e) {
-            keystoreGrid.innerHTML = `<div style="font-size: 11px; color: #e53935;">Error: ${e.message}</div>`;
+            replaceWithPlainText(
+                keystoreGrid,
+                `Error: ${e?.message ?? e}`,
+                { tagName: 'div', color: '#e53935', fontSize: '11px' }
+            );
         }
     };
 
@@ -456,7 +507,10 @@ export function render(container) {
             const key = keystoreKeyInput?.value?.trim();
             const adminToken = keystoreAdminInput?.value?.trim() || '';
             if (!provider || !key) {
-                keystoreStatus.innerHTML = `<span style="color: #f0ad4e;">${doctorUI.getUIText('keystore_status_required') || 'Provider and API Key are required.'}</span>`;
+                renderKeystoreStatus(
+                    doctorUI.getUIText('keystore_status_required') || 'Provider and API Key are required.',
+                    '#f0ad4e'
+                );
                 return;
             }
             keystoreSaveBtn.disabled = true;
@@ -465,14 +519,17 @@ export function render(container) {
                 const result = await DoctorAPI.saveSecret(provider, key, adminToken);
                 if (result.success) {
                     const successText = doctorUI.getUIText('keystore_save_success') || '✅ Saved {0} key to server.';
-                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">${successText.replace('{0}', provider)}</span>`;
+                    renderKeystoreStatus(successText.replace('{0}', provider), '#4caf50');
                     keystoreKeyInput.value = '';
                     await loadKeystoreStatus();
                 } else {
-                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || doctorUI.getUIText('keystore_save_failed') || 'Save failed'}</span>`;
+                    renderKeystoreStatus(
+                        `❌ ${result.error || result.message || doctorUI.getUIText('keystore_save_failed') || 'Save failed'}`,
+                        '#e53935'
+                    );
                 }
             } catch (e) {
-                keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${e.message}</span>`;
+                renderKeystoreStatus(`❌ ${e?.message ?? e}`, '#e53935');
             }
             keystoreSaveBtn.disabled = false;
             keystoreSaveBtn.textContent = doctorUI.getUIText('keystore_save_btn') || '💾 Save to Server';
@@ -492,13 +549,16 @@ export function render(container) {
                 const result = await DoctorAPI.clearSecret(provider, adminToken);
                 if (result.success) {
                     const successText = doctorUI.getUIText('keystore_delete_success') || '✅ Deleted {0} key.';
-                    keystoreStatus.innerHTML = `<span style="color: #4caf50;">${successText.replace('{0}', provider)}</span>`;
+                    renderKeystoreStatus(successText.replace('{0}', provider), '#4caf50');
                     await loadKeystoreStatus();
                 } else {
-                    keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${result.error || result.message || doctorUI.getUIText('keystore_delete_failed') || 'Delete failed'}</span>`;
+                    renderKeystoreStatus(
+                        `❌ ${result.error || result.message || doctorUI.getUIText('keystore_delete_failed') || 'Delete failed'}`,
+                        '#e53935'
+                    );
                 }
             } catch (e) {
-                keystoreStatus.innerHTML = `<span style="color: #e53935;">❌ ${e.message}</span>`;
+                renderKeystoreStatus(`❌ ${e?.message ?? e}`, '#e53935');
             }
             keystoreDeleteBtn.disabled = false;
             keystoreDeleteBtn.textContent = doctorUI.getUIText('keystore_delete_btn') || '🗑️ Delete';

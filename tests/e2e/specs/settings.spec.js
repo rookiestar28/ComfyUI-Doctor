@@ -508,4 +508,219 @@ test.describe('Settings Panel', () => {
     await page.waitForTimeout(500); // Give time for any async updates
     await expect(panelBefore).not.toHaveClass(/visible/);
   });
+
+  test('plain dynamic status keeps synchronous and asynchronous tab errors literal', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const payload = '<span id="dynamic-status-tab-marker">tab marker</span>';
+      const { TabManager, TabRegistry } = await import('/web/doctor_tabs.js');
+
+      const renderFailure = async (id, render) => {
+        const registry = new TabRegistry();
+        const content = document.createElement('div');
+        const tabBar = document.createElement('div');
+        registry.register({ id, label: id, icon: '!', order: 10, render });
+        const manager = new TabManager(registry, content, tabBar);
+        manager.init();
+        await Promise.resolve();
+        await Promise.resolve();
+        const pane = content.querySelector(`#doctor-tab-${id}`);
+        return {
+          text: pane.textContent,
+          parsedMarker: pane.querySelector('#dynamic-status-tab-marker') !== null,
+        };
+      };
+
+      return {
+        payload,
+        sync: await renderFailure('dynamic-status-sync', () => { throw new Error(payload); }),
+        async: await renderFailure('dynamic-status-async', async () => { throw new Error(payload); }),
+      };
+    });
+
+    expect(result.sync.text).toContain(result.payload);
+    expect(result.sync.parsedMarker).toBe(false);
+    expect(result.async.text).toContain(result.payload);
+    expect(result.async.parsedMarker).toBe(false);
+  });
+
+  test('plain dynamic status keeps key-store load errors and provider IDs literal', async ({ page }) => {
+    const errorPayload = '<span id="dynamic-status-load-marker">load marker</span>';
+    const providerPayload = '<span id="dynamic-status-provider-marker">provider marker</span>';
+    let requestCount = 0;
+    await page.route('**/doctor/secrets/status', route => {
+      requestCount += 1;
+      const body = requestCount === 1
+        ? { success: false, error: errorPayload }
+        : { success: true, providers: { [providerPayload]: { source: 'none' } } };
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.locator('#doctor-key-store-section summary').click();
+    const grid = page.locator('#doctor-keystore-providers-grid');
+    await expect(grid).toContainText(errorPayload);
+    await expect(grid.locator('#dynamic-status-load-marker')).toHaveCount(0);
+
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.locator('#doctor-key-store-section summary').click();
+    await expect(grid).toContainText(providerPayload);
+    await expect(grid.locator('#dynamic-status-provider-marker')).toHaveCount(0);
+  });
+
+  test('plain dynamic status keeps caught key-store load exceptions literal', async ({ page }) => {
+    const payload = '<span id="dynamic-status-load-catch-marker">load catch marker</span>';
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.evaluate(async errorText => {
+      const { DoctorAPI } = await import('/web/doctor_api.js');
+      DoctorAPI.getSecretsStatus = async () => { throw new Error(errorText); };
+    }, payload);
+
+    await page.locator('#doctor-key-store-section summary').click();
+    const grid = page.locator('#doctor-keystore-providers-grid');
+    await expect(grid).toContainText(payload);
+    await expect(grid.locator('#dynamic-status-load-catch-marker')).toHaveCount(0);
+  });
+
+  test('plain dynamic status keeps key-store save result errors literal', async ({ page }) => {
+    const payload = '<span id="dynamic-status-save-marker">save marker</span>';
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, providers: {} }),
+    }));
+    await page.route('**/doctor/secrets', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: false, error: payload }),
+    }));
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.locator('#doctor-keystore-key').fill('fixture-value');
+    await page.locator('#doctor-keystore-save-btn').click();
+
+    const status = page.locator('#doctor-keystore-status');
+    await expect(status).toContainText(payload);
+    await expect(status.locator('#dynamic-status-save-marker')).toHaveCount(0);
+    await expect(page.locator('#doctor-keystore-save-btn')).toBeEnabled();
+  });
+
+  test('plain dynamic status keeps caught key-store save exceptions literal', async ({ page }) => {
+    const payload = '<span id="dynamic-status-save-catch-marker">save catch marker</span>';
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, providers: {} }),
+    }));
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.evaluate(async errorText => {
+      const { DoctorAPI } = await import('/web/doctor_api.js');
+      DoctorAPI.saveSecret = async () => { throw new Error(errorText); };
+    }, payload);
+    await page.locator('#doctor-keystore-key').fill('fixture-value');
+    await page.locator('#doctor-keystore-save-btn').click();
+
+    const status = page.locator('#doctor-keystore-status');
+    await expect(status).toContainText(payload);
+    await expect(status.locator('#dynamic-status-save-catch-marker')).toHaveCount(0);
+    await expect(page.locator('#doctor-keystore-save-btn')).toBeEnabled();
+  });
+
+  test('plain dynamic status keeps key-store delete result errors literal', async ({ page }) => {
+    const payload = '<span id="dynamic-status-delete-marker">delete marker</span>';
+    await page.route('**/doctor/secrets/*', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: false, error: payload }),
+    }));
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, providers: {} }),
+    }));
+    page.on('dialog', dialog => dialog.accept());
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.locator('#doctor-keystore-delete-btn').click();
+
+    const status = page.locator('#doctor-keystore-status');
+    await expect(status).toContainText(payload);
+    await expect(status.locator('#dynamic-status-delete-marker')).toHaveCount(0);
+    await expect(page.locator('#doctor-keystore-delete-btn')).toBeEnabled();
+  });
+
+  test('plain dynamic status keeps caught key-store delete exceptions literal', async ({ page }) => {
+    const payload = '<span id="dynamic-status-delete-catch-marker">delete catch marker</span>';
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, providers: {} }),
+    }));
+    page.on('dialog', dialog => dialog.accept());
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.evaluate(async errorText => {
+      const { DoctorAPI } = await import('/web/doctor_api.js');
+      DoctorAPI.clearSecret = async () => { throw new Error(errorText); };
+    }, payload);
+    await page.locator('#doctor-keystore-delete-btn').click();
+
+    const status = page.locator('#doctor-keystore-status');
+    await expect(status).toContainText(payload);
+    await expect(status.locator('#dynamic-status-delete-catch-marker')).toHaveCount(0);
+    await expect(page.locator('#doctor-keystore-delete-btn')).toBeEnabled();
+  });
+
+  test('plain dynamic status preserves key-store validation and success feedback', async ({ page }) => {
+    await page.route('**/doctor/secrets/*', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    }));
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, providers: { openai: { source: 'env' } } }),
+    }));
+    await page.route('**/doctor/secrets', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
+    }));
+    page.on('dialog', dialog => dialog.accept());
+
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.evaluate(() => {
+      const doctorUI = window.app.Doctor;
+      const originalGetUIText = doctorUI.getUIText.bind(doctorUI);
+      const keyStoreText = {
+        keystore_status_required: 'Provider and API Key are required.',
+        keystore_save_success: 'Saved {0} key to server.',
+        keystore_delete_success: 'Deleted {0} key.',
+      };
+      doctorUI.getUIText = key => keyStoreText[key] || originalGetUIText(key);
+    });
+    await page.locator('#doctor-key-store-section summary').click();
+    const status = page.locator('#doctor-keystore-status');
+    const grid = page.locator('#doctor-keystore-providers-grid');
+    await expect(grid).toContainText('openai');
+    await expect(grid).toContainText('ENV');
+
+    await page.locator('#doctor-keystore-save-btn').click();
+    await expect(status).toContainText('required');
+    await expect(status.locator('span')).toHaveCSS('color', 'rgb(240, 173, 78)');
+
+    await page.locator('#doctor-keystore-key').fill('fixture-value');
+    await page.locator('#doctor-keystore-save-btn').click();
+    await expect(status).toContainText('openai');
+    await expect(status.locator('span')).toHaveCSS('color', 'rgb(76, 175, 80)');
+    await expect(page.locator('#doctor-keystore-save-btn')).toBeEnabled();
+
+    await page.locator('#doctor-keystore-delete-btn').click();
+    await expect(status).toContainText('openai');
+    await expect(status.locator('span')).toHaveCSS('color', 'rgb(76, 175, 80)');
+    await expect(page.locator('#doctor-keystore-delete-btn')).toBeEnabled();
+  });
 });
