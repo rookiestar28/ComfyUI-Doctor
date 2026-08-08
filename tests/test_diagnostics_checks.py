@@ -1946,6 +1946,187 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
             "links": links or [],
         }
 
+    @classmethod
+    def _promoted_media_workflow(
+        cls,
+        source_type,
+        source_widget,
+        *,
+        host_positional=None,
+        host_named=None,
+        source_value="stale-source-value",
+    ):
+        definition_input_name = "promoted_media"
+        host = {
+            "id": 240,
+            "type": "synthetic-media-subgraph",
+            "title": "Visible Media Host",
+        }
+        if host_positional is not None:
+            host["widgets_values"] = [host_positional]
+        if host_named is not None:
+            host["widgets_values_named"] = {
+                definition_input_name: host_named,
+            }
+        leaf = {
+            "id": 9,
+            "type": source_type,
+            "title": "Concrete Media Loader",
+            "inputs": [
+                {
+                    "name": source_widget,
+                    "type": "COMBO",
+                    "widget": {"name": source_widget},
+                    "link": 1,
+                }
+            ],
+            "widgets_values": [source_value],
+        }
+        definition = cls._subgraph_definition(
+            "synthetic-media-subgraph",
+            [leaf],
+            inputs=[
+                {
+                    "id": "synthetic-media-input",
+                    "name": definition_input_name,
+                    "type": "COMBO",
+                    "linkIds": [1],
+                }
+            ],
+            links=[
+                {
+                    "id": 1,
+                    "origin_id": -10,
+                    "origin_slot": 0,
+                    "target_id": 9,
+                    "target_slot": 0,
+                    "type": "COMBO",
+                }
+            ],
+        )
+        return cls._nested_asset_workflow([host], [definition])
+
+    async def test_promoted_media_preserves_visible_host_and_source_loader(self):
+        cases = [
+            ("LoadImage", "image", "missing-image.png", "input"),
+            ("LoadVideo", "file", "missing-video.mp4", "input"),
+            ("LoadAudio", "audio", "missing-audio.wav", "input"),
+            (
+                "LoadImageOutput",
+                "image",
+                "generated-image.png [output]",
+                "output",
+            ),
+        ]
+
+        for source_type, source_widget, missing_name, category in cases:
+            with self.subTest(source_type=source_type):
+                workflow = self._promoted_media_workflow(
+                    source_type,
+                    source_widget,
+                    host_positional=missing_name,
+                )
+                with patch(
+                    "services.diagnostics.checks.model_assets._find_file_in_comfy_paths",
+                    return_value=(False, None, None, False),
+                ) as find_mock:
+                    issues = await model_assets.check_model_assets(
+                        workflow,
+                        HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        ),
+                    )
+
+                self.assertEqual(len(issues), 1)
+                self.assertEqual(issues[0].target.node_id, 240)
+                self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
+                self.assertEqual(
+                    issues[0].metadata["asset_provenance"],
+                    {
+                        "visible_node_id": 240,
+                        "source_execution_id": "240:9",
+                        "source_node_id": 9,
+                        "source_node_type": source_type,
+                        "promoted": True,
+                    },
+                )
+                find_mock.assert_called_once_with(missing_name, category)
+
+    async def test_promoted_media_named_fallback_and_positional_precedence(self):
+        cases = [
+            {
+                "host_positional": None,
+                "host_named": "named-fallback.mp4",
+                "expected": "named-fallback.mp4",
+                "forbidden": "stale-source.mp4",
+            },
+            {
+                "host_positional": "positional-authority.png",
+                "host_named": "named-conflict.png",
+                "expected": "positional-authority.png",
+                "forbidden": "named-conflict.png",
+            },
+        ]
+
+        for case in cases:
+            with self.subTest(expected=case["expected"]):
+                workflow = self._promoted_media_workflow(
+                    "LoadVideo" if case["expected"].endswith(".mp4") else "LoadImage",
+                    "file" if case["expected"].endswith(".mp4") else "image",
+                    host_positional=case["host_positional"],
+                    host_named=case["host_named"],
+                    source_value=case["forbidden"],
+                )
+                with patch(
+                    "services.diagnostics.checks.model_assets._find_file_in_comfy_paths",
+                    return_value=(False, None, None, False),
+                ):
+                    issues = await model_assets.check_model_assets(
+                        workflow,
+                        HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        ),
+                    )
+
+                self.assertEqual(len(issues), 1)
+                serialized = repr(issues[0].to_dict())
+                self.assertIn(case["expected"], serialized)
+                self.assertNotIn(case["forbidden"], serialized)
+                self.assertTrue(
+                    issues[0].metadata["asset_provenance"]["promoted"]
+                )
+
+    async def test_custom_upload_loader_is_not_inferred_from_media_suffix(self):
+        for missing_name in ["unknown-image.png", "unknown-audio.wav"]:
+            with self.subTest(missing_name=missing_name):
+                workflow = {
+                    "nodes": [
+                        {
+                            "id": 241,
+                            "type": "SyntheticCustomNode",
+                            "title": "Unknown Custom Node",
+                            "widgets_values": [missing_name],
+                        }
+                    ]
+                }
+                with patch(
+                    "services.diagnostics.checks.model_assets._find_file_in_comfy_paths",
+                    side_effect=AssertionError(
+                        "unknown media suffix must not imply upload-loader support"
+                    ),
+                ):
+                    issues = await model_assets.check_model_assets(
+                        workflow,
+                        HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        ),
+                    )
+
+                self.assertEqual(issues, [])
+
     async def test_nested_non_promoted_asset_preserves_visible_and_source_provenance(self):
         workflow = self._nested_asset_workflow(
             [

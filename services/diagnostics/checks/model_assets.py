@@ -43,7 +43,8 @@ FILE_LOADING_NODE_TYPES: Set[str] = {
     "AudioEncoderLoader", "ModelPatchLoader",
     "LoadMoGeModel", "LoadMediaPipeFaceLandmarker",
     # Image loaders
-    "LoadImage", "LoadImageMask", "LoadLatent", "Load3D", "Load3DAdvanced",
+    "LoadImage", "LoadImageMask", "LoadImageOutput", "LoadAudio",
+    "LoadLatent", "Load3D", "Load3DAdvanced",
     # Video loaders (common custom nodes)
     "VHS_LoadVideo", "LoadVideo",
     # IP-Adapter loaders
@@ -71,6 +72,22 @@ MEDIA_EXTENSIONS: Set[str] = {
     ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff",
     ".mp4", ".webm", ".avi", ".mov", ".mkv",
 }
+
+AUDIO_EXTENSIONS: Set[str] = {
+    ".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma",
+}
+
+MEDIA_LOADING_NODE_TYPES = frozenset({
+    "LoadImage",
+    "LoadImageMask",
+    "LoadImageOutput",
+    "LoadAudio",
+    "LoadVideo",
+    "VHS_LoadVideo",
+})
+
+INPUT_MEDIA_EXTENSIONS = MEDIA_EXTENSIONS | AUDIO_EXTENSIONS
+MEDIA_ANNOTATION_RE = re.compile(r"\s+\[(?:input|output)\]$", re.IGNORECASE)
 
 # Host Load3D assets live under input/3d and use these first-party extensions.
 THREE_D_EXTENSIONS: Set[str] = {
@@ -159,9 +176,9 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
         if category not in {"input", "input_3d", "output"}
     }
     extensions["diffusers"] = {"folder"}
-    extensions["input"] = set(MEDIA_EXTENSIONS)
+    extensions["input"] = set(INPUT_MEDIA_EXTENSIONS)
     extensions["input_3d"] = set(THREE_D_EXTENSIONS)
-    extensions["output"] = set(MEDIA_EXTENSIONS)
+    extensions["output"] = set(INPUT_MEDIA_EXTENSIONS)
 
     try:
         import folder_paths
@@ -235,14 +252,14 @@ def _get_comfy_model_paths() -> Dict[str, List[Path]]:
             input_dir = Path(folder_paths.get_input_directory())
             paths["input"] = [input_dir]
             paths["input_3d"] = [input_dir / "3d"]
-            extensions["input"] = set(MEDIA_EXTENSIONS)
+            extensions["input"] = set(INPUT_MEDIA_EXTENSIONS)
             extensions["input_3d"] = set(THREE_D_EXTENSIONS)
         except Exception:
             pass
 
         try:
             paths["output"] = [Path(folder_paths.get_output_directory())]
-            extensions["output"] = set(MEDIA_EXTENSIONS)
+            extensions["output"] = set(INPUT_MEDIA_EXTENSIONS)
         except Exception:
             pass
 
@@ -263,7 +280,7 @@ def _get_comfy_model_extensions() -> dict[str, set[str]]:
         return _comfy_extensions
     return {
         "checkpoints": set(MODEL_EXTENSIONS),
-        "input": set(MEDIA_EXTENSIONS),
+        "input": set(INPUT_MEDIA_EXTENSIONS),
         "input_3d": set(THREE_D_EXTENSIONS),
     }
 
@@ -421,13 +438,13 @@ def _is_path_like(value: str) -> bool:
     lower = value.lower()
     registered_extensions = {
         extension
-        for values in _get_comfy_model_extensions().values()
+        for category, values in _get_comfy_model_extensions().items()
+        if category not in {"input", "input_3d", "output"}
         for extension in values
         if extension and extension != "folder"
     }
     for ext in (
-        MEDIA_EXTENSIONS
-        | THREE_D_EXTENSIONS
+        THREE_D_EXTENSIONS
         | registered_extensions
     ):
         if lower.endswith(ext):
@@ -442,6 +459,22 @@ def _is_path_like(value: str) -> bool:
         return True
 
     return False
+
+
+def _normalized_media_value(value: str) -> str:
+    """Strip the current host's spaced input/output media annotation."""
+    return MEDIA_ANNOTATION_RE.sub("", value).strip()
+
+
+def _is_supported_media_loader_value(node_type: str, value: str) -> bool:
+    """Recognize media only for explicit loaders without node-def metadata."""
+    if node_type not in MEDIA_LOADING_NODE_TYPES:
+        return False
+    normalized = _normalized_media_value(value).lower()
+    return any(
+        normalized.endswith(extension)
+        for extension in INPUT_MEDIA_EXTENSIONS
+    )
 
 
 def _is_folder_asset_category(category: str) -> bool:
@@ -1099,10 +1132,15 @@ async def check_model_assets(
                 dataset_category
                 or _determine_asset_category(node_type, value)
             )
+            supported_media_value = _is_supported_media_loader_value(
+                node_type,
+                value,
+            )
             if (
                 value.strip().lower() in {"none", "null"}
                 or (
                     not _is_path_like(value)
+                    and not supported_media_value
                     and not _is_folder_asset_category(category)
                     and dataset_category is None
                 )
@@ -1273,6 +1311,13 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
         filename = ""
     lower_type = node_type.lower()
     lower_file = filename.lower()
+    normalized_media_file = _normalized_media_value(filename).lower()
+
+    if (
+        node_type == "LoadImageOutput"
+        or lower_file.endswith(" [output]")
+    ) and _is_supported_media_loader_value(node_type, filename):
+        return "output"
 
     if "diffusers" in lower_type:
         return "diffusers"
@@ -1334,7 +1379,13 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
         or "blazeface" in lower_file
     ):
         return "detection"
-    if "loadimage" in lower_type or any(lower_file.endswith(ext) for ext in MEDIA_EXTENSIONS):
+    if (
+        _is_supported_media_loader_value(node_type, filename)
+        or any(
+            normalized_media_file.endswith(ext)
+            for ext in INPUT_MEDIA_EXTENSIONS
+        )
+    ):
         return "input"
     if (
         "clip_vision" in lower_file
