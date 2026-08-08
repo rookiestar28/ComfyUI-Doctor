@@ -135,7 +135,7 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 - Missing assets or placeholder values.
 - Node configuration anti-patterns.
 - Environment mismatch hints, including Python 3.10+ support and conservative
-  PyTorch-below-2.5 guidance when the version is parseable.
+  PyTorch-below-2.7 guidance when the version is parseable.
 
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
 The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.

@@ -207,27 +207,53 @@ class TestEnvironmentDependencyChecks(unittest.TestCase):
         self.assertEqual(issues[0].title, "Python Version Too Old")
 
     def test_torch_below_host_minimum_creates_warning(self):
-        issues = env_deps._check_torch_availability({
-            "torch_available": True,
-            "torch_version": "2.4.1+cu121",
-        })
-
-        self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
-        self.assertEqual(
-            issues[0].title,
-            "PyTorch Version Below ComfyUI Minimum",
-        )
-
-    def test_torch_minimum_newer_and_unknown_versions_are_safe(self):
         versions = (
+            "2.4.1+cu121",
             "2.5.0",
             "2.5.0.dev20260719+cu130",
             "2.6.0a0+gitabcdef",
+            "v2.6.1+cu130",
+        )
+
+        for version in versions:
+            with self.subTest(version=version):
+                issues = env_deps._check_torch_availability({
+                    "torch_available": True,
+                    "torch_version": version,
+                })
+
+                self.assertEqual(len(issues), 1)
+                self.assertEqual(issues[0].category, IssueCategory.DEPS)
+                self.assertEqual(issues[0].severity, IssueSeverity.WARNING)
+                self.assertEqual(
+                    issues[0].title,
+                    "PyTorch Version Below ComfyUI Minimum",
+                )
+                self.assertEqual(issues[0].target.setting, "torch")
+                self.assertIn(
+                    "minimum supported version 2.7",
+                    issues[0].summary,
+                )
+                self.assertIn(
+                    "ComfyUI minimum supported release: 2.7",
+                    issues[0].evidence,
+                )
+                self.assertIn(
+                    "Upgrade to PyTorch 2.7 or newer",
+                    issues[0].recommendation,
+                )
+
+    def test_torch_minimum_newer_and_unknown_versions_are_safe(self):
+        versions = (
+            "2.7",
+            "2.7.0.dev20260719+cu130",
             "2.7.1+cu130",
+            "2.8.0a0+gitabcdef",
+            "3.0.0",
             "unknown",
             "",
             None,
+            2.7,
         )
 
         for version in versions:
@@ -237,6 +263,16 @@ class TestEnvironmentDependencyChecks(unittest.TestCase):
                     "torch_version": version,
                 })
                 self.assertEqual(issues, [])
+
+    def test_public_guidance_uses_host_pytorch_27_minimum(self):
+        root = Path(__file__).resolve().parent.parent
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        user_guide = (root / "docs" / "USER_GUIDE.md").read_text(encoding="utf-8")
+
+        self.assertIn("PyTorch versions below 2.7", readme)
+        self.assertNotIn("PyTorch versions below 2.5", readme)
+        self.assertIn("PyTorch-below-2.7 guidance", user_guide)
+        self.assertNotIn("PyTorch-below-2.5 guidance", user_guide)
 
     def test_torch_missing_retains_single_critical_issue(self):
         issues = env_deps._check_torch_availability({

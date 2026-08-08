@@ -494,7 +494,7 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Every candidate model path is resolved and contained within an authoritative registered root before Doctor checks it. Traversal, absolute external, cross-drive, null-byte, and symlink escape candidates are rejected.
 - Exact first-party image/video dataset folder widgets resolve only below ComfyUI's input root, while saved training dataset folders resolve only below registered `datasets` roots. Doctor checks the folder itself without enumerating or reading dataset content.
 - Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Recognized partner-node workspace-policy errors stay node-level and remain distinct from account preconditions. Doctor does not depend on private frontend stores for this behavior.
-- Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.5 receive conservative upgrade guidance when a parseable version is available.
+- Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.7 receive conservative upgrade guidance when a parseable version is available.
 - Desktop runtime identity and storage are reported independently: a managed Desktop `.venv` remains identified as Desktop while Doctor data continues to prefer ComfyUI's private system-user directory.
 
 ## Screenshots

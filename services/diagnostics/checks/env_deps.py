@@ -32,7 +32,7 @@ logger = logging.getLogger("comfyui-doctor.diagnostics.checks.env_deps")
 # Host support contracts from the pinned ComfyUI pyproject/README.
 # IMPORTANT: host-supported versions are not a claim about Doctor's CI matrix.
 PYTHON_MIN_VERSION = (3, 10)
-TORCH_MIN_VERSION = (2, 5)
+TORCH_MIN_VERSION = (2, 7)
 
 # GPU node types that require CUDA
 GPU_REQUIRING_NODES = {
