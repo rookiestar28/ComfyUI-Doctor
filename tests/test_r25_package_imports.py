@@ -10,6 +10,7 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INTERNAL_TOP_LEVELS = {
+    "terminal_output",
     "analyzer",
     "config",
     "history_store",
@@ -24,6 +25,7 @@ INTERNAL_TOP_LEVELS = {
     "pipeline",
 }
 PACKAGE_MODULES = [
+    "terminal_output",
     "config",
     "history_store",
     "logger",

@@ -68,6 +68,12 @@ from .services.api_response import admin_denied_response, error_response
 from .services.llm_provider_adapters import get_llm_provider_adapter
 from .services.audit import ActionAudit
 from .services.community_feedback import build_feedback_preview, submit_feedback, GitHubFeedbackConfig, FeedbackValidationError
+from .terminal_output import (
+    DoctorLogFormatter,
+    emit_doctor_banner,
+    emit_doctor_log,
+    stream_supports_color,
+)
 
 # Global R12 Service
 TOKEN_BUDGET_SERVICE = TokenBudgetService()
@@ -106,12 +112,8 @@ def _error_response(message: str, status: int, code: str | None = None, extra: d
     return error_response(web, message, status, code=code, extra=extra)
 
 
-def _startup_print(message: str = "") -> None:
-    safe_message = str(message).encode("ascii", "backslashreplace").decode("ascii")
-    try:
-        print(safe_message)
-    except (OSError, AttributeError, UnicodeError, ValueError):
-        pass
+def _startup_print(message: str = "", level: str = "INFO") -> None:
+    emit_doctor_log(message, level, stream=sys.stdout)
 
 # --- LLM Environment Variable Fallbacks ---
 # These can be set in system environment to provide default values
@@ -133,7 +135,7 @@ if not os.path.exists(log_dir):
     try:
         os.makedirs(log_dir, exist_ok=True)
     except OSError as e:
-        print(f"[ComfyUI-Doctor] Warning: Could not create log directory: {e}")
+        _startup_print(f"Could not create log directory: {e}", "WARNING")
 
 
 # --- 2. Log File Cleanup ---
@@ -166,15 +168,15 @@ prestartup_log_path = os.environ.get("COMFYUI_DOCTOR_LOG_PATH")
 if prestartup_log_path and os.path.exists(prestartup_log_path):
     # Prestartup logger was installed - use the same log file
     log_path = prestartup_log_path
-    _startup_print(f"\n[ComfyUI-Doctor] Upgrading from prestartup logger...")
-    _startup_print(f"[ComfyUI-Doctor] Using existing log: {log_path}")
+    _startup_print("Upgrading from prestartup logger...")
+    _startup_print(f"Using existing log: {log_path}")
 else:
     # No prestartup logger - generate new log filename
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_filename = f"comfyui_debug_{timestamp}.log"
     log_path = os.path.join(log_dir, log_filename)
-    _startup_print(f"\n[ComfyUI-Doctor] Initializing smart debugger...")
-    _startup_print(f"[ComfyUI-Doctor] Log file: {log_path}")
+    _startup_print("Initializing smart debugger...")
+    _startup_print(f"Log file: {log_path}")
 
 
 # --- 4. Install/Upgrade to Full Smart Logger ---
@@ -193,9 +195,9 @@ def _handoff_prestartup_logger():
             if pre_logger and hasattr(pre_logger, "uninstall"):
                 try:
                     pre_logger.uninstall()
-                    logging.info("[Doctor] Prestartup logger handoff complete")
+                    _startup_print("Prestartup logger handoff complete")
                 except Exception as handoff_error:
-                    logging.warning(f"[Doctor] Prestartup logger handoff failed: {handoff_error}")
+                    _startup_print(f"Prestartup logger handoff failed: {handoff_error}", "WARNING")
             break
 
 _handoff_prestartup_logger()
@@ -225,18 +227,16 @@ def setup_api_logger():
         encoding='utf-8'
     )
 
-    # Formatter with timestamp and level
-    formatter = logging.Formatter(
-        '[%(asctime)s] [%(levelname)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    # Doctor-owned files stay canonical and ANSI-free.
+    formatter = DoctorLogFormatter(include_timestamp=True, color_enabled=False)
     file_handler.setFormatter(formatter)
     api_logger.addHandler(file_handler)
 
     # Console handler for terminal output (user requested visibility)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter(
-        '[Doctor-API] [%(levelname)s] %(message)s'
+    console_formatter = DoctorLogFormatter(
+        include_timestamp=False,
+        color_enabled=stream_supports_color(sys.stdout),
     )
     console_handler.setFormatter(console_formatter)
     console_handler.setLevel(logging.INFO)
@@ -249,19 +249,17 @@ def setup_api_logger():
 
 # Initialize logger
 logger = setup_api_logger()
-_startup_print(f"[ComfyUI-Doctor] API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
+_startup_print(f"API logger initialized: {os.path.join(log_dir, 'api_operations.log')}")
 
 admin_guard_warning = get_admin_guard_startup_warning()
 if admin_guard_warning:
     logger.warning(admin_guard_warning)
-    _startup_print(f"[ComfyUI-Doctor] WARNING: {admin_guard_warning}")
 
 
 # --- 5. Log System Information (Hardware Snapshot) ---
 def log_system_info() -> None:
     """Log system and hardware information at startup."""
-    _startup_print("\n")
-    _startup_print("=== COMFYUI DOCTOR ===")
+    emit_doctor_banner(stream=sys.stdout)
     _startup_print(f"{'='*20} SYSTEM SNAPSHOT {'='*20}")
     _startup_print(f"OS: {platform.system()} {platform.release()} ({platform.version()})")
     _startup_print(f"Python: {sys.version.split()[0]}")
@@ -297,9 +295,9 @@ try:
 
     register_api_routes({**globals(), "server": server, "aiohttp": aiohttp, "web": web})
 except ImportError:
-    _startup_print("[ComfyUI-Doctor] WARNING: server module not found (running in standalone mode?)")
+    _startup_print("Server module not found (running in standalone mode?)", "WARNING")
 except Exception as e:
-    _startup_print(f"[ComfyUI-Doctor] WARNING: failed to register API: {e}")
+    _startup_print(f"Failed to register API: {e}", "WARNING")
 
 
 # Web directory for frontend assets (required by ComfyUI)

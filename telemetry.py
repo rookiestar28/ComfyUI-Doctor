@@ -39,6 +39,13 @@ except ImportError as import_error:
     ensure_absolute_import_fallback_allowed(import_error)
     from services.time_utils import parse_utc_timestamp, utc_filename_timestamp, utc_isoformat, utc_now
 
+try:
+    from .terminal_output import emit_doctor_log
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
+    from terminal_output import emit_doctor_log
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -384,7 +391,7 @@ class TelemetryStore:
                             if isinstance(e, dict)
                         ]
         except (json.JSONDecodeError, OSError) as e:
-            print(f"[ComfyUI-Doctor] Telemetry load warning: {e}")
+            emit_doctor_log(f"Telemetry load warning: {e}", "WARNING")
             self._buffer = []
         
         self._loaded = True
@@ -410,7 +417,7 @@ class TelemetryStore:
             # Atomic rename
             os.replace(temp_path, self._filepath)
         except OSError as e:
-            print(f"[ComfyUI-Doctor] Telemetry save warning: {e}")
+            emit_doctor_log(f"Telemetry save warning: {e}", "WARNING")
     
     def _purge_old_events(self) -> None:
         """Remove events older than TTL."""

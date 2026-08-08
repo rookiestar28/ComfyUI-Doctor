@@ -20,6 +20,7 @@ from typing import Iterable
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_MODULES = [
+    "terminal_output",
     "config",
     "history_store",
     "logger",

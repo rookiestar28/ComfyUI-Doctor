@@ -15,6 +15,25 @@ DOCTOR_DIR = os.path.dirname(os.path.abspath(__file__))
 _FALLBACK_LOG_DIR = os.path.join(tempfile.gettempdir(), "ComfyUI-Doctor", "logs")
 
 
+def _load_terminal_output():
+    """Load the shared formatter without assuming a package import root."""
+    terminal_output_file = os.path.join(DOCTOR_DIR, "terminal_output.py")
+    if not os.path.exists(terminal_output_file):
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "comfyui_doctor_prestartup_terminal_output",
+            terminal_output_file,
+        )
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
 def _load_doctor_data_dir():
     """Resolve doctor_paths without assuming the extension root is on sys.path."""
     doctor_paths_file = os.path.join(DOCTOR_DIR, "services", "doctor_paths.py")
@@ -39,6 +58,9 @@ def _load_doctor_data_dir():
 # R26: keep prestartup bootstrap file-path-based. ComfyUI may execute this
 # before the extension root is available as a top-level import root.
 _get_doctor_data_dir = _load_doctor_data_dir()
+_terminal_output = _load_terminal_output()
+_emit_doctor_log = getattr(_terminal_output, "emit_doctor_log", None)
+_strip_ansi = getattr(_terminal_output, "strip_ansi", lambda value: str(value))
 
 def _resolve_log_dir() -> str:
     """
@@ -150,7 +172,8 @@ class PrestartupLogger:
             pass  # Stream may be unavailable during early startup
         try:
             if PrestartupLogger._log_file:
-                PrestartupLogger._log_file.write(message)
+                # CRITICAL: terminal highlighting must never enter persisted logs.
+                PrestartupLogger._log_file.write(_strip_ansi(message))
                 PrestartupLogger._log_file.flush()
         except (OSError, AttributeError, UnicodeError, ValueError):
             pass  # Log file may be unavailable
@@ -181,19 +204,25 @@ class PrestartupLogger:
 PrestartupLogger.install(LOG_PATH)
 
 
-def _emit_startup_line(message: str) -> None:
+def _emit_startup_line(message: str, level: str = "INFO") -> None:
+    if _emit_doctor_log is not None:
+        _emit_doctor_log(message, level, stream=sys.stdout)
+        return
     safe_message = str(message).encode("ascii", "backslashreplace").decode("ascii")
+    safe_level = str(level or "INFO").upper()
+    if safe_level not in {"DEBUG", "DETAIL", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+        safe_level = "INFO"
     try:
-        print(safe_message)
+        print(f"[ComfyUI-Doctor {safe_level}] {safe_message}")
     except (OSError, AttributeError, UnicodeError, ValueError):
         pass
 
 
-_emit_startup_line("\n[ComfyUI-Doctor] Prestartup hook activated (early capture)")
+_emit_startup_line("Prestartup hook activated (early capture)")
 if LOG_PATH:
-    _emit_startup_line(f"[ComfyUI-Doctor] Log file: {LOG_PATH}")
+    _emit_startup_line(f"Log file: {LOG_PATH}")
 else:
-    _emit_startup_line("[ComfyUI-Doctor] WARNING: log file unavailable (fallback disabled)")
+    _emit_startup_line("Log file unavailable (fallback disabled)", "WARNING")
 
 # Store log path for __init__.py to retrieve
 if LOG_PATH:

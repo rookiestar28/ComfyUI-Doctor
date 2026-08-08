@@ -19,6 +19,7 @@ from .services.prompt_helpers import (
     parse_language_code,
     validate_fix_schema,
 )
+from .terminal_output import emit_doctor_log
 
 logger = logging.getLogger("ComfyUI-Doctor-API")
 
@@ -62,10 +63,9 @@ REGISTERED_ROUTE_DESCRIPTIONS = [
 
 
 def _print_registered_routes(startup_print) -> None:
-    startup_print("[ComfyUI-Doctor] API hooks registered:")
+    startup_print("API hooks registered:")
     for route_description in REGISTERED_ROUTE_DESCRIPTIONS:
         startup_print(route_description)
-    startup_print("\n")
     startup_print("Questions, updates, suggestions, and contributions are welcome.")
     startup_print("GitHub: https://github.com/rookiestar28/ComfyUI-Doctor")
     startup_print("")
@@ -938,10 +938,10 @@ def register_api_routes(context: dict) -> None:
             return response
 
         except aiohttp.ClientError as e:
-            print(f"[ComfyUI-Doctor] Chat Network Error: {e}")
+            emit_doctor_log(f"Chat network error: {e}", "ERROR")
             return _error_response(f"Network Error: {str(e)}", status=503, code="network_error")
         except Exception as e:
-            print(f"[ComfyUI-Doctor] Chat Failed: {e}")
+            emit_doctor_log(f"Chat failed: {e}", "ERROR")
             return _error_response(str(e), status=500)
 
     @server.PromptServer.instance.routes.get("/debugger/history")

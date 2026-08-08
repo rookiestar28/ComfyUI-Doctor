@@ -33,6 +33,13 @@ except ImportError as import_error:
     ensure_absolute_import_fallback_allowed(import_error)
     from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp, utc_isoformat
 
+try:
+    from .terminal_output import DoctorLogFormatter, emit_doctor_log, stream_supports_color
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
+    from terminal_output import DoctorLogFormatter, emit_doctor_log, stream_supports_color
+
 # ==============================================================================
 # R22: Asyncio transport GC exclusion patterns
 # ==============================================================================
@@ -205,7 +212,7 @@ def _migrate_legacy_data():
                 # If rename fails (permissions/locks), leave legacy in place; migration is best-effort.
                 pass
         except Exception as e:
-            logging.error(f"[ComfyUI-Doctor] Migration failed: {e}")
+            emit_doctor_log(f"Migration failed: {e}", "ERROR", stream=sys.stderr)
 
 def _get_history_store() -> HistoryStore:
     """Lazy initialization of history store."""
@@ -552,7 +559,10 @@ class FlushSafeProxy:
 if not _doctor_internal_logger.handlers:
     _internal_handler = logging.StreamHandler(FlushSafeProxy(sys.__stderr__))
     _internal_handler.setFormatter(
-        logging.Formatter("%(asctime)s [Doctor-Internal] %(message)s")
+        DoctorLogFormatter(
+            include_timestamp=False,
+            color_enabled=stream_supports_color(sys.__stderr__),
+        )
     )
     _doctor_internal_logger.addHandler(_internal_handler)
     _doctor_internal_logger.setLevel(logging.DEBUG)
@@ -613,7 +623,7 @@ class DoctorLogProcessor(threading.Thread):
 
             except Exception as e:
                 # Log error but don't crash the thread
-                logging.error(f"[Doctor] LogProcessor error: {e}", exc_info=True)
+                _doctor_internal_logger.error("LogProcessor error: %s", e, exc_info=True)
 
     def _process_message(self, message):
         with self._buffer_lock:
@@ -645,6 +655,7 @@ class DoctorLogProcessor(threading.Thread):
         # See: .planning/260106-BUGFIX_DUPLICATE_LOG_CAPTURE.md
         # ═══════════════════════════════════════════════════════════════
         doctor_markers = [
+            "[ComfyUI-Doctor ",  # Canonical severity-aware output prefix
             "[Doctor]",       # Internal logging prefix
             "[Doctor-API]",   # API logging prefix
             "----------------------------------------",  # Divider line
@@ -670,7 +681,7 @@ class DoctorLogProcessor(threading.Thread):
             fatal_marker = detect_fatal_pattern(message)
             if fatal_marker:
                 is_urgent = True
-                logging.debug(f"[Doctor] R14 fatal pattern detected: {fatal_marker}")
+                _doctor_internal_logger.debug("R14 fatal pattern detected: %s", fatal_marker)
         
         if is_urgent and not self.in_traceback:
             result = ErrorAnalyzer.analyze(message)
@@ -841,7 +852,7 @@ class DoctorLogProcessor(threading.Thread):
         ]
         for normal_msg in normal_messages:
             if normal_msg in full_traceback and "Error" not in full_traceback and "Exception" not in full_traceback:
-                logging.debug(f"[Doctor] Skipping normal message: {full_traceback[:100]}")
+                _doctor_internal_logger.debug("Skipping normal message: %s", full_traceback[:100])
                 return
         
         # Require at least one error indicator
@@ -861,7 +872,10 @@ class DoctorLogProcessor(threading.Thread):
         
         # Also accept if we have a valid suggestion (pattern matched)
         if not has_error_indicator and not suggestion:
-            logging.debug(f"[Doctor] Skipping non-error message (no indicators): {full_traceback[:100]}")
+            _doctor_internal_logger.debug(
+                "Skipping non-error message (no indicators): %s",
+                full_traceback[:100],
+            )
             return
         
         analysis_metadata = metadata if isinstance(metadata, dict) else {}
@@ -1058,9 +1072,9 @@ def install(log_path: str):
     except Exception:
         pass
 
-    logging.info("[Doctor] Logger installed (SafeStreamWrapper mode)")
-    logging.info(f"[Doctor] Original stdout type: {type(_original_stdout).__name__}")
-    logging.info(f"[Doctor] Original stderr type: {type(_original_stderr).__name__}")
+    emit_doctor_log("Logger installed (SafeStreamWrapper mode)", "INFO", stream=sys.stdout)
+    emit_doctor_log(f"Original stdout type: {type(_original_stdout).__name__}", "INFO", stream=sys.stdout)
+    emit_doctor_log(f"Original stderr type: {type(_original_stderr).__name__}", "INFO", stream=sys.stdout)
 
 
 def uninstall():
@@ -1086,7 +1100,7 @@ def uninstall():
     _original_stdout = None
     _original_stderr = None
 
-    logging.info("[Doctor] Logger uninstalled")
+    emit_doctor_log("Logger uninstalled", "INFO", stream=sys.stdout)
 
 
 def get_logger_metrics() -> Dict[str, Any]:

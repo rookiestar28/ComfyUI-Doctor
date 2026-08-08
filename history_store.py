@@ -21,6 +21,13 @@ except ImportError as import_error:
     ensure_absolute_import_fallback_allowed(import_error)
     from services.time_utils import UTC_MIN, parse_utc_timestamp, utc_filename_timestamp
 
+try:
+    from .terminal_output import emit_doctor_log
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
+    from terminal_output import emit_doctor_log
+
 
 @dataclass
 class HistoryEntry:
@@ -152,7 +159,7 @@ class HistoryStore:
                         if self._maxlen > 0 and len(self._history) > self._maxlen:
                             self._history = self._history[-self._maxlen:]
         except (json.JSONDecodeError, OSError, TypeError) as e:
-            print(f"[ComfyUI-Doctor] Warning: Could not load history file: {e}")
+            emit_doctor_log(f"Could not load history file: {e}", "WARNING")
             # If the history file is corrupted (common when the process is interrupted
             # while writing), move it aside so new errors can be recorded normally.
             try:
@@ -160,7 +167,7 @@ class HistoryStore:
                     ts = utc_filename_timestamp()
                     backup_path = f"{self._filepath}.corrupt-{ts}"
                     shutil.move(self._filepath, backup_path)
-                    print(f"[ComfyUI-Doctor] Warning: Corrupted history moved to: {backup_path}")
+                    emit_doctor_log(f"Corrupted history moved to: {backup_path}", "WARNING")
             except Exception:
                 pass
             self._history = []
@@ -220,7 +227,7 @@ class HistoryStore:
                     pass
             os.replace(tmp_path, self._filepath)
         except OSError as e:
-            print(f"[ComfyUI-Doctor] Warning: Could not save history file: {e}")
+            emit_doctor_log(f"Could not save history file: {e}", "WARNING")
             try:
                 tmp_path = f"{self._filepath}.tmp"
                 if os.path.exists(tmp_path):

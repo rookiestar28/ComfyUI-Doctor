@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import os
 import sys
 from pathlib import Path
@@ -86,6 +87,11 @@ class AsciiOnlyStream:
         raise OSError("no file descriptor")
 
 
+class TtyAsciiOnlyStream(AsciiOnlyStream):
+    def isatty(self):
+        return True
+
+
 def test_prestartup_import_is_safe_without_repo_root_on_syspath():
     old_stdout = sys.stdout
     old_stderr = sys.stderr
@@ -111,7 +117,8 @@ def test_prestartup_import_is_safe_without_repo_root_on_syspath():
         assert module.PrestartupLogger.is_installed() is True
         combined_output = "".join(stdout_stream.messages + stderr_stream.messages)
         assert "Prestartup hook activated" in combined_output
-        assert "Log file:" in combined_output or "WARNING: log file unavailable" in combined_output
+        assert "Log file:" in combined_output or "[ComfyUI-Doctor WARNING] Log file unavailable" in combined_output
+        assert "[ComfyUI-Doctor INFO] Prestartup hook activated" in combined_output
     finally:
         if module is not None:
             try:
@@ -140,6 +147,34 @@ def test_prestartup_logger_swallows_unicode_console_failures():
         wrapper.flush()
     finally:
         module.PrestartupLogger.uninstall()
+
+
+def test_prestartup_color_reaches_tty_but_persisted_copy_stays_plain():
+    spec = importlib.util.spec_from_file_location("doctor_r51_prestartup_color", PRESTARTUP_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    terminal = TtyAsciiOnlyStream()
+    persisted = io.StringIO()
+    try:
+        module.PrestartupLogger.uninstall()
+        module.PrestartupLogger._log_file = persisted
+        wrapper = module.PrestartupLogger(terminal)
+        module._emit_doctor_log(
+            "color split",
+            "WARNING",
+            stream=wrapper,
+            color_enabled=True,
+        )
+    finally:
+        module.PrestartupLogger._log_file = None
+        module.PrestartupLogger.uninstall()
+
+    terminal_text = "".join(terminal.messages)
+    assert "\x1b[33m" in terminal_text
+    assert "\x1b[" not in persisted.getvalue()
+    assert persisted.getvalue() == "[ComfyUI-Doctor WARNING] color split\n"
 
 
 def test_non_ui_files_do_not_contain_forbidden_emoji():

@@ -121,6 +121,21 @@ def test_install_uninstall_idempotent():
     assert sys.stderr is original_stderr
 
 
+def test_install_lifecycle_messages_use_canonical_doctor_identity(capsys):
+    """R51: Doctor owns one combined identity/level token without root prefixing."""
+    from logger import install, uninstall
+
+    install("test.log")
+    uninstall()
+
+    captured = capsys.readouterr()
+    assert "[ComfyUI-Doctor INFO] Logger installed (SafeStreamWrapper mode)" in captured.out
+    assert "[ComfyUI-Doctor INFO] Original stdout type:" in captured.out
+    assert "[ComfyUI-Doctor INFO] Original stderr type:" in captured.out
+    assert "[ComfyUI-Doctor INFO] Logger uninstalled" in captured.out
+    assert "[INFO] [Doctor]" not in captured.out
+
+
 def test_install_recovers_from_stale_wrapper_state():
     """R22 follow-up: install() should recover if wrappers remain from interrupted teardown."""
     import sys
