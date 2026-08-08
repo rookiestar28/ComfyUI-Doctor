@@ -12,10 +12,6 @@ def _load_source(relative_path: str) -> str:
     candidate = root / relative_path
     if candidate.exists():
         return candidate.read_text(encoding="utf-8")
-    if relative_path == "__init__.py":
-        backup = root / "__init__.py.bak"
-        if backup.exists():
-            return backup.read_text(encoding="utf-8")
     raise FileNotFoundError(f"Cannot find {relative_path}")
 
 

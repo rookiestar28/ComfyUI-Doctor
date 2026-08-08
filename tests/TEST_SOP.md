@@ -235,8 +235,14 @@ This stage exists because repo-root pytest imports can hide real ComfyUI custom-
 1) Backend unit tests (recommended; CI enforces)
 
 ```bash
-DOCTOR_STATE_DIR="$(pwd)/doctor_state/_local_unit" python scripts/run_unittests.py --start-dir tests --pattern "test_*.py"
+if [ -f scripts/run_unittests.py ]; then
+  DOCTOR_STATE_DIR="$(pwd)/doctor_state/_local_unit" python scripts/run_unittests.py --start-dir tests --pattern "test_*.py"
+else
+  DOCTOR_STATE_DIR="$(pwd)/doctor_state/_local_unit" python -m pytest tests -q
+fi
 ```
+
+The current repository has no `scripts/run_unittests.py`, so the pytest fallback is the active backend lane. The full-test scripts select the same fallback automatically.
 
 1) Frontend E2E (Playwright; CI enforces)
 

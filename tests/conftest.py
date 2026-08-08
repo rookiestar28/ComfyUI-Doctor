@@ -1,7 +1,7 @@
 """
 Pytest configuration for ComfyUI-Doctor tests.
 
-CRITICAL: This conftest.py prevents pytest from treating the project root as a Python package.
+CRITICAL: This conftest.py prevents pytest from collecting the project entrypoint.
 
 Problem:
   - ComfyUI-Doctor/__init__.py uses relative imports (from .logger import ...)
@@ -9,19 +9,49 @@ Problem:
   - Pytest tries to import __init__.py directly, causing "no known parent package" errors
 
 Solution:
-  - Tell pytest to NOT treat the root directory as a package
-  - Rename root __init__.py temporarily during test collection
+  - Tell pytest to NOT collect the root __init__.py
+  - Keep collection isolated to tests without mutating production source
 
-Last Modified: 2026-01-03 (Fixed CI import errors)
+Last Modified: 2026-08-08 (Removed production-entrypoint mutation)
 """
 
 import sys
+import types
 from pathlib import Path
 
 # Add project root to sys.path for absolute imports
 project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+_root_collection_sentinel = None
+
+
+def pytest_sessionstart(session):
+    """Keep pytest Package.setup from executing the production entrypoint."""
+    global _root_collection_sentinel
+    module_name = "__init__"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        existing_file = getattr(existing, "__file__", None)
+        if existing_file != str(project_root / "__init__.py"):
+            raise RuntimeError(f"Unexpected preloaded test module: {module_name}")
+        _root_collection_sentinel = existing
+        return
+
+    # CRITICAL: pytest's importlib fallback names this invalid-directory package
+    # `__init__`; the inert process-local sentinel prevents production startup.
+    sentinel = types.ModuleType(module_name)
+    sentinel.__file__ = str(project_root / "__init__.py")
+    sentinel.__package__ = ""
+    sys.modules[module_name] = sentinel
+    _root_collection_sentinel = sentinel
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if sys.modules.get("__init__") is _root_collection_sentinel:
+        sys.modules.pop("__init__", None)
+
 
 def pytest_ignore_collect(collection_path, config):
     """
@@ -30,29 +60,3 @@ def pytest_ignore_collect(collection_path, config):
     if collection_path.name == "__init__.py" and collection_path.parent == project_root:
         return True
     return False
-
-def pytest_configure(config):
-    """
-    Rename root __init__.py before test collection to prevent pytest from treating root as package.
-    """
-    root_init = project_root / "__init__.py"
-    backup_init = project_root / "__init__.py.bak"
-
-    if root_init.exists() and not backup_init.exists():
-        root_init.rename(backup_init)
-        config._comfyui_doctor_init_renamed = True
-    else:
-        config._comfyui_doctor_init_renamed = False
-
-def pytest_unconfigure(config):
-    """
-    Restore root __init__.py after tests complete.
-    """
-    if getattr(config, '_comfyui_doctor_init_renamed', False):
-        root_init = project_root / "__init__.py"
-        backup_init = project_root / "__init__.py.bak"
-
-        if backup_init.exists():
-            backup_init.rename(root_init)
-
-

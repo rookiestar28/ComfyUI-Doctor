@@ -72,7 +72,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `107 passed` (default local harness run, integration and stress telemetry suites excluded).
+Expected result: the required default local harness lane has a successful exit status, with integration and stress telemetry suites excluded. The observed pass count is informational and may increase as coverage grows.
 
 ### 3.2 WSL2 (bash)
 
@@ -89,7 +89,7 @@ npx playwright install chromium
 npm test
 ```
 
-Expected result: `107 passed` (default local harness run, integration and stress telemetry suites excluded).
+Expected result: the required default local harness lane has a successful exit status, with integration and stress telemetry suites excluded. The observed pass count is informational and may increase as coverage grows.
 
 ---
 

@@ -19,17 +19,16 @@ DO NOT change to absolute imports (from logger import ...) as this will:
   - Cause "ModuleNotFoundError" when ComfyUI tries to load this extension
 
 IMPORTANT FOR TESTING:
-  - pytest CANNOT directly import this file due to relative imports
-  - See tests/conftest.py for the workaround (temporary __init__.py renaming)
-  - See pytest.ini for import-mode configuration
-  - See .planning/260103-ci_pytest_fix.md for detailed explanation
+  - pytest collection is isolated to tests and must not move or rename this file
+  - See tests/conftest.py for root-entrypoint collection exclusion
+  - See pytest.ini for importlib-mode configuration
 
 If pytest fails with "attempted relative import with no known parent package":
   1. Check that pytest.ini has "addopts = --import-mode=importlib"
-  2. Check that tests/conftest.py has pytest_configure/unconfigure hooks
+  2. Check that tests/conftest.py excludes the root entrypoint from collection
   3. Do NOT modify these imports - the issue is in test configuration
 
-Last Modified: 2026-01-03 (Added CI testing compatibility notes)
+Last Modified: 2026-08-08 (Removed entrypoint-mutation workaround)
 ===========================================================================
 """
 

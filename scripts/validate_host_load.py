@@ -81,11 +81,8 @@ class AsciiOnlyStream(io.StringIO):
 
 def _project_init_path(project_root: Path) -> Path:
     init_path = project_root / "__init__.py"
-    if init_path.exists():
-        return init_path
-    backup_path = project_root / "__init__.py.bak"
-    if backup_path.exists():
-        return backup_path
+    if not init_path.is_file():
+        raise FileNotFoundError(f"Missing canonical package entrypoint: {init_path}")
     return init_path
 
 

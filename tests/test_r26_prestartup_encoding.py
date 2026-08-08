@@ -31,12 +31,6 @@ ASCII_ONLY_FILES = [
 
 def _resolve_repo_file(rel_path: str) -> Path:
     candidate = REPO_ROOT / rel_path
-    if candidate.exists():
-        return candidate
-    if rel_path == "__init__.py":
-        backup = REPO_ROOT / "__init__.py.bak"
-        if backup.exists():
-            return backup
     return candidate
 
 FORBIDDEN_NON_UI_EMOJI = [

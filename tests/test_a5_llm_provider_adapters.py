@@ -4,8 +4,6 @@ from pathlib import Path
 def _package_entrypoint_text() -> str:
     project_root = Path(__file__).resolve().parent.parent
     entrypoint = project_root / "__init__.py"
-    if not entrypoint.exists():
-        entrypoint = project_root / "__init__.py.bak"
     return entrypoint.read_text(encoding="utf-8")
 
 
