@@ -16,6 +16,7 @@ import { formatPatternName, calculateCategoryBreakdown, getCategoryColor } from 
 import { t } from './utils/i18n_fallback.js';
 import { getComfyRootGraph, getDoctorSetting, isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
 import { getDominantIntents, hasNoMatchedIntent } from './utils/intent_logic.js';
+import { formatHealthSummary } from './utils/health_summary.js';
 
 let preactModules = null;
 let islandMounted = false;
@@ -915,11 +916,10 @@ function TrustHealthSection({ uiText }) {
         return html`<span style="display:inline-block; padding:2px 6px; border-radius:999px; font-size:11px; border:1px solid ${c.border}; background:${c.bg}; color:${c.fg};">${trust || 'unknown'}</span>`;
     };
 
-    const healthText = healthData?.error
-        ? `Health: ${healthData.error}`
-        : healthData
-            ? `Health: pipeline_status=${healthData.last_analysis?.pipeline_status || 'unknown'}, ssrf_blocked=${healthData.ssrf?.blocked_total ?? 0}, dropped_logs=${healthData.logger?.dropped_messages ?? 0}`
-            : uiText?.trust_health_hint || 'Fetch /doctor/health and plugin trust report (scan-only).';
+    const healthText = formatHealthSummary(
+        healthData,
+        uiText?.trust_health_hint || 'Fetch /doctor/health and plugin trust report (scan-only).',
+    );
 
     return html`
         <div id="doctor-trust-health-panel" style="border-top: 1px solid #444; padding-top: 15px; margin-top: 20px;">

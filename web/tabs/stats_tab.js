@@ -8,6 +8,7 @@ import { register, mount } from "../island_registry.js";
 import { renderStatisticsIsland, unmountStatisticsIsland } from "../statistics-island.js";
 import { isPreactEnabled } from "../preact-loader.js";
 import { DoctorAPI } from "../doctor_api.js";
+import { formatHealthSummary } from "../utils/health_summary.js";
 
 let isPreactMode = false;
 
@@ -472,14 +473,10 @@ function setupTrustHealthHandlers(container, doctorUI) {
             // Health
             const healthRes = await DoctorAPI.getHealth();
             if (healthRes?.success && healthRes.health) {
-                const h = healthRes.health;
-                const pipelineStatus = h.last_analysis?.pipeline_status || 'unknown';
-                const ssrfBlocked = h.ssrf?.blocked_total ?? h.ssrf?.blocked ?? 0;
-                const dropped = h.logger?.dropped_messages ?? 0;
-                healthOutput.textContent = `Health: pipeline_status=${pipelineStatus}, ssrf_blocked=${ssrfBlocked}, dropped_logs=${dropped}`;
+                healthOutput.textContent = formatHealthSummary(healthRes.health);
             } else {
                 const msg = healthRes?.error || 'Failed to load /doctor/health';
-                healthOutput.textContent = `Health: ${msg}`;
+                healthOutput.textContent = formatHealthSummary({ error: msg });
             }
 
             // Plugins

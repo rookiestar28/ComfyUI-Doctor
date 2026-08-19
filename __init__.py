@@ -48,6 +48,10 @@ from pathlib import Path
 # These MUST be relative imports for ComfyUI compatibility
 # ============================================================================
 from .logger import SmartLogger, get_last_analysis, get_analysis_history, clear_analysis_history, get_logger_metrics
+from .services.dynamic_vram_advisory import (
+    clear_dynamic_vram_advisory,
+    get_dynamic_vram_advisory,
+)
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .i18n import set_language, get_language, get_ui_text, SUPPORTED_LANGUAGES, UI_TEXT
 from .config import CONFIG

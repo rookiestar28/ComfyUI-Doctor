@@ -121,6 +121,11 @@ try:
     from .services.log_ring_buffer import get_ring_buffer
     from .services.context_extractor import detect_fatal_pattern
     from .services import doctor_paths
+    from .services.dynamic_vram_advisory import (
+        clear_dynamic_vram_advisory,
+        record_dynamic_vram_warning,
+        replay_host_dynamic_vram_advisory,
+    )
 except ImportError as import_error:
     # Fallback for direct execution (tests)
     from import_compat import ensure_absolute_import_fallback_allowed
@@ -140,6 +145,11 @@ except ImportError as import_error:
         from services import doctor_paths
     except ImportError:
         doctor_paths = None
+    from services.dynamic_vram_advisory import (
+        clear_dynamic_vram_advisory,
+        record_dynamic_vram_warning,
+        replay_host_dynamic_vram_advisory,
+    )
 
 
 # ==============================================================================
@@ -672,6 +682,11 @@ class DoctorLogProcessor(threading.Thread):
         if _is_asyncio_gc_noise(message):
             return
 
+        # CRITICAL: DynamicVRAM startup fallback is a nonfatal health advisory.
+        # Never send it through ErrorAnalyzer or runtime error/history state.
+        if record_dynamic_vram_warning(message):
+            return
+
         # P3: Urgent single-line warnings (immediate analysis)
         # R14: Enhanced with detect_fatal_pattern for non-traceback errors
         is_urgent = _contains_tensor_alert(message)
@@ -1044,9 +1059,13 @@ def install(log_path: str):
             pass
         uninstall()
 
-    # Create queue and background processor
+    clear_dynamic_vram_advisory()
+
+    # Create the existing queue/processor, replay the bounded startup snapshot
+    # directly into advisory state, then start the sole worker.
     _message_queue = DroppingQueue(maxsize=CONFIG.log_queue_maxsize)
     _log_processor = DoctorLogProcessor(_message_queue)
+    replay_host_dynamic_vram_advisory()
     _log_processor.start()
 
     # Save original streams (may already be ComfyUI's LogInterceptor)
@@ -1097,6 +1116,7 @@ def uninstall():
     if _message_queue:
         _message_queue.clear()
     _message_queue = None
+    clear_dynamic_vram_advisory()
     _original_stdout = None
     _original_stderr = None
 

@@ -1481,6 +1481,7 @@ def register_api_routes(context: dict) -> None:
             analysis_meta = last_analysis.get("analysis_metadata") or {}
             payload = {
                 "logger": get_logger_metrics(),
+                "dynamic_vram_advisory": get_dynamic_vram_advisory(),
                 "ssrf": get_ssrf_metrics(),
                 "storage": {
                     "data_dir": get_doctor_data_dir(),
