@@ -1,11 +1,26 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 const FRONTEND_LANES = [
-    { id: "desktop-0.9.4", version: "1.43.18", settingChangeTelemetry: false },
-    { id: "core-pin-1.48.7", version: "1.48.7", settingChangeTelemetry: true },
-    { id: "standalone-current", version: "1.50.3+", settingChangeTelemetry: true },
+    {
+        id: "desktop-0.9.4",
+        version: "1.43.18",
+        settingChangeTelemetry: false,
+        asyncSettingOnChange: false,
+    },
+    {
+        id: "core-pin-1.49.6",
+        version: "1.49.6",
+        settingChangeTelemetry: true,
+        asyncSettingOnChange: false,
+    },
+    {
+        id: "standalone-1.52.1+",
+        version: "1.52.1+",
+        settingChangeTelemetry: true,
+        asyncSettingOnChange: true,
+    },
 ];
 
 async function loadCompatibilityModule() {
@@ -23,6 +38,15 @@ async function loadCompatibilityModule() {
         "utf8",
     ).toString("base64")}`;
     return import(moduleUrl);
+}
+
+async function invokeWithLaneSettingContract(lane, handler) {
+    if (!lane.asyncSettingOnChange) return handler();
+    try {
+        return await handler();
+    } catch {
+        return undefined;
+    }
 }
 
 function createGraph(nodes = [], links = {}) {
@@ -131,6 +155,65 @@ describe("Doctor setting telemetry contract", () => {
                 ),
             ).toBe(true);
             expect(emittedSettingIds).toEqual([]);
+        },
+    );
+
+    test("only standalone 1.52.1+ claims the asynchronous setting contract", () => {
+        expect(
+            FRONTEND_LANES
+                .filter((lane) => lane.asyncSettingOnChange)
+                .map((lane) => lane.id),
+        ).toEqual(["standalone-1.52.1+"]);
+    });
+
+    test.each(FRONTEND_LANES)(
+        "$id frontend $version accepts Doctor's synchronous callbacks directly and when awaited",
+        async () => {
+            const { DOCTOR_EXTENSION_SETTINGS } = await loadCompatibilityModule();
+            const callbacks = DOCTOR_EXTENSION_SETTINGS
+                .map((setting) => setting.onChange)
+                .filter((callback) => typeof callback === "function");
+            const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+            try {
+                expect(callbacks).toHaveLength(2);
+                for (const callback of callbacks) {
+                    expect(callback(true, false)).toBeUndefined();
+                    await expect(
+                        Promise.resolve(callback(false, true)),
+                    ).resolves.toBeUndefined();
+                }
+            } finally {
+                logSpy.mockRestore();
+            }
+        },
+    );
+
+    test.each(FRONTEND_LANES)(
+        "$id frontend $version applies callback failure containment only where sourced",
+        async (lane) => {
+            const syncFailure = () => {
+                throw new Error("synthetic synchronous callback failure");
+            };
+            const asyncFailure = () => Promise.reject(
+                new Error("synthetic asynchronous callback failure"),
+            );
+
+            if (lane.asyncSettingOnChange) {
+                await expect(
+                    invokeWithLaneSettingContract(lane, syncFailure),
+                ).resolves.toBeUndefined();
+                await expect(
+                    invokeWithLaneSettingContract(lane, asyncFailure),
+                ).resolves.toBeUndefined();
+            } else {
+                await expect(
+                    invokeWithLaneSettingContract(lane, syncFailure),
+                ).rejects.toThrow("synthetic synchronous callback failure");
+                await expect(
+                    invokeWithLaneSettingContract(lane, asyncFailure),
+                ).rejects.toThrow("synthetic asynchronous callback failure");
+            }
         },
     );
 });

@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_host_compatibility.py"
@@ -20,10 +21,22 @@ def _create_minimal_reference(root: Path) -> None:
         root / "ComfyUI" / "main.py",
         "file_log_outputs = get_file_log_outputs(args.verbose)\n"
         "setup_logger(log_level=console_log_level, file_outputs=file_log_outputs, use_stdout=args.log_stdout)\n"
-        "def execute_prestartup_script():\n    return 'prestartup_script.py'\n",
+        "def execute_prestartup_script():\n    return 'prestartup_script.py'\n"
+        "def dynamic_vram_supported():\n"
+        "    if comfy.model_management.is_nvidia():\n"
+        "        return True\n"
+        "    if comfy.model_management.is_amd():\n"
+        "        if comfy.model_management.rocm_version >= (7, 14):\n"
+        "            return True\n"
+        "    return False\n"
+        "if args.enable_dynamic_vram or (enables_dynamic_vram() and dynamic_vram_supported()):\n"
+        "    if (not args.enable_dynamic_vram) and "
+        "(comfy.model_management.torch_version_numeric < (2, 8)):\n"
+        "        logging.warning('DynamicVRAM support requires Pytorch version 2.8 or later. "
+        "Falling back to legacy ModelPatcher.')\n",
     )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.48.7\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.49.6\n")
     _write(
         root / "ComfyUI" / "README.md",
         "torch 2.7 is minimally supported but using a newer version is extremely recommended.\n",
@@ -140,7 +153,7 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.50.3"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.52.1"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -223,6 +236,15 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "settingStore.ts",
+        "async function callHandler(setting, newValue, oldValue) {\n"
+        "  try {\n"
+        "    await setting?.onChange?.(newValue, oldValue)\n"
+        "  } catch (error) {\n"
+        "    console.warn(`[settings] onChange handler for ${setting?.id} failed`, error)\n"
+        "  }\n"
+        "}\n"
+        "const handled = callHandler(setting, newValue, oldValue)\n"
+        "await handled\n"
         "const isVisible = setting.type !== 'hidden'\n"
         "const trackChanges = telemetry?.trackChanges ?? isVisible\n"
         "if (!trackChanges) return undefined\n"
@@ -235,7 +257,10 @@ def _create_minimal_reference(root: Path) -> None:
         "type SettingTelemetryOptions =\n"
         "  | { trackChanges: false; includeValues?: never }\n"
         "  | { trackChanges?: true; includeValues?: boolean }\n"
-        "export interface SettingParams { telemetry?: SettingTelemetryOptions }\n",
+        "export interface SettingParams<TValue = unknown> {\n"
+        "  onChange?(newValue: TValue, oldValue?: TValue): void | Promise<void>\n"
+        "  telemetry?: SettingTelemetryOptions\n"
+        "}\n",
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initTelemetry.ts",
@@ -782,9 +807,88 @@ PRE_T28_CHECK_LABELS = {
     "Desktop settings path",
 }
 
+PRE_T32_CHECK_LABELS = PRE_T28_CHECK_LABELS | {
+    "frontend runtime lane: Desktop bundle",
+    "frontend runtime lane: ComfyUI package pin",
+    "frontend runtime lane: standalone source",
+    "minimum supported PyTorch version",
+    "named widget restore global default",
+    "named widget restore setting boundary",
+    "named widget restore authority branch",
+    "promoted widget concrete source resolution",
+    "missing media upload spec classification",
+    "model type tag feature flag",
+    "models directory CLI override",
+    "cached history query without client id",
+    "setting telemetry defaults",
+    "setting telemetry opt-out type",
+    "cloud telemetry initialization gate",
+    "host telemetry initialization gate",
+    "real SubgraphNode public shape",
+    "boundary error source provenance",
+    "surfaced error derivation",
+    "nested promoted missing-model serialization",
+    "dual positional and named widget serialization",
+    "partner node validation classification",
+    "partner policy 403 handling",
+    "datasets folder registration",
+    "first-party dataset node registrations",
+    "DETAIL logging CLI contract",
+    "DETAIL file logging bootstrap",
+    "Desktop packaged resource topology",
+    "Desktop bundled extension topology",
+    "Desktop user custom-node restore topology",
+}
+
+T32_NEW_CHECK_LABELS = {
+    "DynamicVRAM device applicability",
+    "DynamicVRAM PyTorch threshold",
+    "standalone settings onChange return type",
+    "standalone settings awaited handler containment",
+}
+
+EXPECTED_T32_REVISIONS = {
+    "ComfyUI": "c67885b14556cf3e4e061862925282d403d09862",  # pragma: allowlist secret
+    "ComfyUI_frontend": "569e65b30fbfe96743c7996e201a32bcf029a310",  # pragma: allowlist secret
+    "desktop": "e2d964b7456cea8423c7b9d3371c612313c06baa",  # pragma: allowlist secret
+}
+
 
 def _failed_results(root: Path):
     return [result for result in host_compat.run_checks(root) if not result.ok]
+
+
+def _revision_metadata_failures(
+    *,
+    comfyui_revision=None,
+    frontend_revision=None,
+    lanes=None,
+    checks=None,
+):
+    comfyui_revision = comfyui_revision or host_compat.COMFYUI_REVISION
+    frontend_revision = frontend_revision or host_compat.FRONTEND_REVISION
+    lanes = host_compat.FRONTEND_RUNTIME_LANES if lanes is None else lanes
+    checks = host_compat.CHECKS if checks is None else checks
+    failures = []
+
+    if comfyui_revision != EXPECTED_T32_REVISIONS["ComfyUI"]:
+        failures.append("constant:ComfyUI")
+    if frontend_revision != EXPECTED_T32_REVISIONS["ComfyUI_frontend"]:
+        failures.append("constant:ComfyUI_frontend")
+
+    for lane in lanes:
+        expected = EXPECTED_T32_REVISIONS[lane.source_repo]
+        if lane.source_revision != expected:
+            failures.append(f"lane:{lane.id}")
+
+    for check in checks:
+        if not check.source_revision:
+            continue
+        expected = EXPECTED_T32_REVISIONS[check.repo]
+        if check.source_revision != expected:
+            failures.append(f"check:{check.label}")
+
+    return failures
 
 
 def test_t28_preserves_all_preexisting_surface_checks():
@@ -798,12 +902,17 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
     lanes = getattr(host_compat, "FRONTEND_RUNTIME_LANES", ())
 
     assert [
-        (lane.id, lane.version, lane.setting_change_telemetry)
+        (
+            lane.id,
+            lane.version,
+            lane.setting_change_telemetry,
+            lane.async_setting_on_change,
+        )
         for lane in lanes
     ] == [
-        ("desktop-0.9.4", "1.43.18", False),
-        ("core-pin-1.48.7", "1.48.7", True),
-        ("standalone-1.50.3+", "1.50.3+", True),
+        ("desktop-0.9.4", "1.43.18", False, False),
+        ("core-pin-1.49.6", "1.49.6", True, False),
+        ("standalone-1.52.1+", "1.52.1+", True, True),
     ]
 
 
@@ -819,15 +928,15 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.48.7",
-            "comfyui-frontend-package==1.48.6",
+            "comfyui-frontend-package==1.49.6",
+            "comfyui-frontend-package==1.49.5",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.50.3"',
-            '"version": "1.50.2"',
+            '"version": "1.52.1"',
+            '"version": "1.52.0"',
             "frontend runtime lane: standalone source",
         ),
     )
@@ -1114,8 +1223,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.48.7: frontend 1.48.7" in formatted
-    assert "standalone-1.50.3+: frontend 1.50.3+" in formatted
+    assert "core-pin-1.49.6: frontend 1.49.6" in formatted
+    assert "standalone-1.52.1+: frontend 1.52.1+" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1140,8 +1249,8 @@ def test_t28_reference_source_is_never_executed(tmp_path):
 def test_t30_records_current_revisions_and_contract_families():
     labels = {check.label for check in host_compat.CHECKS}
 
-    assert host_compat.COMFYUI_REVISION == "dd79c643a95402136a75a28f6187d843bcf457ed"  # pragma: allowlist secret
-    assert host_compat.FRONTEND_REVISION == "bdc0345da4610f16b4102f7e4628905b09b165ac"  # pragma: allowlist secret
+    assert host_compat.COMFYUI_REVISION == "c67885b14556cf3e4e061862925282d403d09862"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "569e65b30fbfe96743c7996e201a32bcf029a310"  # pragma: allowlist secret
     assert {
         "dual positional and named widget serialization",
         "partner node validation classification",
@@ -1157,6 +1266,128 @@ def test_t30_records_current_revisions_and_contract_families():
         "promoted widget concrete source resolution",
         "missing media upload spec classification",
     } <= labels
+
+
+def test_t32_preserves_62_prior_checks_and_adds_exactly_four_named_checks():
+    labels = {check.label for check in host_compat.CHECKS}
+
+    assert len(PRE_T32_CHECK_LABELS) == 62
+    assert labels >= PRE_T32_CHECK_LABELS
+    assert labels - PRE_T32_CHECK_LABELS == T32_NEW_CHECK_LABELS
+    assert len(host_compat.CHECKS) == 66
+
+
+def test_t32_revision_metadata_is_exact_and_stale_constants_fail_independently():
+    assert _revision_metadata_failures() == []
+
+    cases = (
+        (
+            {"comfyui_revision": "dd79c643a95402136a75a28f6187d843bcf457ed"},  # pragma: allowlist secret
+            ["constant:ComfyUI"],
+        ),
+        (
+            {"frontend_revision": "bdc0345da4610f16b4102f7e4628905b09b165ac"},  # pragma: allowlist secret
+            ["constant:ComfyUI_frontend"],
+        ),
+    )
+
+    for overrides, expected in cases:
+        assert _revision_metadata_failures(**overrides) == expected
+
+
+def test_t32_stale_lane_and_surface_revision_metadata_fail_independently():
+    lanes = host_compat.FRONTEND_RUNTIME_LANES
+    core_index = next(index for index, lane in enumerate(lanes) if lane.source_repo == "ComfyUI")
+    mutated_lanes = list(lanes)
+    mutated_lanes[core_index] = replace(
+        lanes[core_index],
+        source_revision="dd79c643a95402136a75a28f6187d843bcf457ed",  # pragma: allowlist secret
+    )
+
+    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.49.6"]
+
+    checks = host_compat.CHECKS
+    check_index = next(
+        index for index, check in enumerate(checks) if check.label == "frontend runtime lane: standalone source"
+    )
+    mutated_checks = list(checks)
+    mutated_checks[check_index] = replace(
+        checks[check_index],
+        source_revision="bdc0345da4610f16b4102f7e4628905b09b165ac",  # pragma: allowlist secret
+    )
+
+    assert _revision_metadata_failures(checks=tuple(mutated_checks)) == [
+        "check:frontend runtime lane: standalone source"
+    ]
+
+
+def test_t32_new_contract_anchors_fail_in_isolation(tmp_path):
+    cases = (
+        (
+            "dynamic-vram-nvidia-wsl",
+            Path("ComfyUI/main.py"),
+            "if comfy.model_management.is_nvidia():",
+            "if comfy.model_management.is_nvidia() and not comfy.model_management.is_wsl():",
+            "DynamicVRAM device applicability",
+        ),
+        (
+            "dynamic-vram-amd-rocm",
+            Path("ComfyUI/main.py"),
+            "if comfy.model_management.rocm_version >= (7, 14):",
+            "if comfy.model_management.rocm_version >= (7, 15):",
+            "DynamicVRAM device applicability",
+        ),
+        (
+            "dynamic-vram-torch-threshold",
+            Path("ComfyUI/main.py"),
+            "comfy.model_management.torch_version_numeric < (2, 8)",
+            "comfy.model_management.torch_version_numeric < (2, 9)",
+            "DynamicVRAM PyTorch threshold",
+        ),
+        (
+            "base-torch-minimum",
+            Path("ComfyUI/README.md"),
+            "torch 2.7 is minimally supported",
+            "torch 2.8 is minimally supported",
+            "minimum supported PyTorch version",
+        ),
+        (
+            "async-setting-type",
+            Path("ComfyUI_frontend/src/platform/settings/types.ts"),
+            "onChange?(newValue: TValue, oldValue?: TValue): void | Promise<void>",
+            "onChange?(newValue: TValue, oldValue?: TValue): void",
+            "standalone settings onChange return type",
+        ),
+        (
+            "async-setting-handler-await",
+            Path("ComfyUI_frontend/src/platform/settings/settingStore.ts"),
+            "await setting?.onChange?.(newValue, oldValue)",
+            "setting?.onChange?.(newValue, oldValue)",
+            "standalone settings awaited handler containment",
+        ),
+        (
+            "async-setting-write-order-await",
+            Path("ComfyUI_frontend/src/platform/settings/settingStore.ts"),
+            "await handled",
+            "void handled",
+            "standalone settings awaited handler containment",
+        ),
+    )
+
+    for case_name, relative_path, current, mutated, expected_label in cases:
+        root = tmp_path / case_name
+        _create_minimal_reference(root)
+        path = root / relative_path
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(current, mutated),
+            encoding="utf-8",
+        )
+
+        failed = _failed_results(root)
+
+        assert len(failed) == 1
+        assert failed[0].check.label == expected_label
+        assert current in failed[0].missing_patterns
 
 
 def test_t29_new_contract_anchors_fail_in_isolation(tmp_path):

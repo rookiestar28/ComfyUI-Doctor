@@ -34,6 +34,7 @@ class FrontendRuntimeLane:
     source_file: str
     source_revision: str
     setting_change_telemetry: bool
+    async_setting_on_change: bool
 
 
 @dataclass(frozen=True)
@@ -45,8 +46,8 @@ class CheckResult:
     present_forbidden_patterns: tuple[str, ...] = ()
 
 
-COMFYUI_REVISION = "dd79c643a95402136a75a28f6187d843bcf457ed"  # pragma: allowlist secret
-FRONTEND_REVISION = "bdc0345da4610f16b4102f7e4628905b09b165ac"  # pragma: allowlist secret
+COMFYUI_REVISION = "c67885b14556cf3e4e061862925282d403d09862"  # pragma: allowlist secret
+FRONTEND_REVISION = "569e65b30fbfe96743c7996e201a32bcf029a310"  # pragma: allowlist secret
 DESKTOP_REVISION = "e2d964b7456cea8423c7b9d3371c612313c06baa"  # pragma: allowlist secret
 
 FRONTEND_RUNTIME_LANES: tuple[FrontendRuntimeLane, ...] = (
@@ -58,24 +59,27 @@ FRONTEND_RUNTIME_LANES: tuple[FrontendRuntimeLane, ...] = (
         source_file="package.json",
         source_revision=DESKTOP_REVISION,
         setting_change_telemetry=False,
+        async_setting_on_change=False,
     ),
     FrontendRuntimeLane(
-        id="core-pin-1.48.7",
+        id="core-pin-1.49.6",
         label="ComfyUI package pin",
-        version="1.48.7",
+        version="1.49.6",
         source_repo="ComfyUI",
         source_file="requirements.txt",
         source_revision=COMFYUI_REVISION,
         setting_change_telemetry=True,
+        async_setting_on_change=False,
     ),
     FrontendRuntimeLane(
-        id="standalone-1.50.3+",
+        id="standalone-1.52.1+",
         label="standalone frontend source",
-        version="1.50.3+",
+        version="1.52.1+",
         source_repo="ComfyUI_frontend",
         source_file="package.json",
         source_revision=FRONTEND_REVISION,
         setting_change_telemetry=True,
+        async_setting_on_change=True,
     ),
 )
 
@@ -441,19 +445,54 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         repo="ComfyUI",
         file="requirements.txt",
         label="frontend runtime lane: ComfyUI package pin",
-        required_patterns=("comfyui-frontend-package==1.48.7",),
+        required_patterns=("comfyui-frontend-package==1.49.6",),
         source_revision=COMFYUI_REVISION,
-        applicable_lanes=("core-pin-1.48.7",),
-        note="The package pin includes the setting-change telemetry contract; host activation remains separately gated.",
+        applicable_lanes=("core-pin-1.49.6",),
+        note=(
+            "The package pin includes setting-change telemetry but predates the "
+            "standalone asynchronous onChange contract."
+        ),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
         file="package.json",
         label="frontend runtime lane: standalone source",
-        required_patterns=('"version": "1.50.3"',),
+        required_patterns=('"version": "1.52.1"',),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
-        note="Current standalone source contains the setting-change telemetry contract.",
+        applicable_lanes=("standalone-1.52.1+",),
+        note="Current standalone source contains telemetry and asynchronous onChange contracts.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="main.py",
+        label="DynamicVRAM device applicability",
+        required_patterns=(
+            "def dynamic_vram_supported():",
+            "if comfy.model_management.is_nvidia():",
+            "if comfy.model_management.is_amd():",
+            "if comfy.model_management.rocm_version >= (7, 14):",
+            "enables_dynamic_vram() and dynamic_vram_supported()",
+        ),
+        forbidden_patterns=("comfy.model_management.is_nvidia() and not comfy.model_management.is_wsl()",),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("comfyui-core-v0.33.0+",),
+        note=(
+            "Source applicability only: NVIDIA includes WSL by omitting the old "
+            "is_wsl exclusion; AMD requires ROCm 7.14 or later."
+        ),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="main.py",
+        label="DynamicVRAM PyTorch threshold",
+        required_patterns=(
+            "comfy.model_management.torch_version_numeric < (2, 8)",
+            "DynamicVRAM support requires Pytorch version 2.8 or later.",
+            "Falling back to legacy ModelPatcher.",
+        ),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("comfyui-core-v0.33.0+",),
+        note="Feature threshold only; the independent base PyTorch minimum remains 2.7.",
     ),
     SurfaceCheck(
         repo="ComfyUI",
@@ -466,11 +505,36 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
+        file="src/platform/settings/types.ts",
+        label="standalone settings onChange return type",
+        required_patterns=("onChange?(newValue: TValue, oldValue?: TValue): void | Promise<void>",),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.52.1+",),
+        note="Standalone-only source contract; core 1.49.6 and Desktop 1.43.18 remain synchronous.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/settings/settingStore.ts",
+        label="standalone settings awaited handler containment",
+        required_patterns=(
+            "async function callHandler(",
+            "await setting?.onChange?.(newValue, oldValue)",
+            "} catch (error) {",
+            "console.warn(`[settings] onChange handler for ${setting?.id} failed`, error)",
+            "const handled = callHandler(setting, newValue, oldValue)",
+            "await handled",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.52.1+",),
+        note="Standalone host contains synchronous throws and rejected handler promises.",
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
         file="src/lib/litegraph/src/LiteGraphGlobal.ts",
         label="named widget restore global default",
         required_patterns=("namedValuesRestore: boolean = false",),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="Doctor retains positional-first diagnostics while the host default remains false.",
     ),
     SurfaceCheck(
@@ -485,7 +549,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "    experimental: true",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -496,7 +560,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "} else if (info.widgets_values) {",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="A future default/authority change requires an explicit Doctor precedence review.",
     ),
     SurfaceCheck(
@@ -510,7 +574,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "createNodeExecutionId([...hostNodeIds, ...nodePath])",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="Public source evidence for R49; Doctor production code must not import frontend internals.",
     ),
     SurfaceCheck(
@@ -524,7 +588,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "if (spec.audio_upload) return 'audio'",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="Private host behavior is observed as source evidence only; R49 remains public-contract bounded.",
     ),
     SurfaceCheck(
@@ -560,7 +624,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         ),
         forbidden_patterns=("client_id", "clientId"),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -573,7 +637,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "if (event) useTelemetry()?.trackSettingChanged(event)",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -586,7 +650,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "telemetry?: SettingTelemetryOptions",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -598,7 +662,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "setTelemetryRegistry(registry)",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -612,7 +676,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "setTelemetryRegistry(registry)",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -628,8 +692,8 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         source_revision=FRONTEND_REVISION,
         applicable_lanes=(
             "desktop-0.9.4",
-            "core-pin-1.48.7",
-            "standalone-1.50.3+",
+            "core-pin-1.49.6",
+            "standalone-1.52.1+",
         ),
     ),
     SurfaceCheck(
@@ -643,7 +707,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "export function liftNodeErrorsToBoundary(",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -656,7 +720,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             ": lastNodeErrors.value",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="This is private host evidence; Doctor production code may use only public raw error state.",
     ),
     SurfaceCheck(
@@ -670,7 +734,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             '"widgets_values"',
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="The fixture is read as inert text and is never executed.",
     ),
     SurfaceCheck(
@@ -684,7 +748,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "o.widgets_values_named[widget.name] = serialisedVal",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
         note="Current workflows may carry both positional and widget-name keyed values.",
     ),
     SurfaceCheck(
@@ -696,7 +760,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "'PARTNER_NODE_DISABLED'",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -708,7 +772,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "!hasPromptNodeErrors",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.50.3+",),
+        applicable_lanes=("standalone-1.52.1+",),
     ),
     SurfaceCheck(
         repo="ComfyUI",
@@ -834,9 +898,11 @@ def format_results(results: Iterable[CheckResult]) -> str:
     lines = ["Host compatibility smoke check:", "Frontend runtime matrix:"]
     for lane in FRONTEND_RUNTIME_LANES:
         telemetry = "present" if lane.setting_change_telemetry else "absent"
+        async_setting = "present" if lane.async_setting_on_change else "absent"
         lines.append(
             f"- {lane.id}: frontend {lane.version} "
-            f"({lane.label}; setting-change telemetry {telemetry})"
+            f"({lane.label}; setting-change telemetry {telemetry}; "
+            f"async setting onChange {async_setting})"
         )
     lines.append("Surface checks:")
     for result in results:
