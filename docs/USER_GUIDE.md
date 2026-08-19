@@ -47,9 +47,15 @@ The Statistics tab groups operational views:
 - Top matched patterns and category breakdown.
 - Resolution status controls for the latest error.
 - Local diagnostics and intent signature checks.
-- Trust and health report for Doctor runtime and plugin state.
+- Trust and health report for Doctor runtime, plugin state, and supported nonfatal host fallback guidance.
 - Optional local telemetry controls.
 - Quick Community Feedback preview and submit tools.
+
+When current ComfyUI reports that automatic DynamicVRAM fell back to the
+legacy model patcher, Trust & Health can show fixed local guidance. Automatic
+DynamicVRAM requires PyTorch 2.8 or later and working `comfy-aimdo`; this does
+not change ComfyUI's base PyTorch 2.7 support. Doctor does not turn this warning
+into a runtime error or send the raw host message to an LLM/provider.
 
 ### Settings Tab
 

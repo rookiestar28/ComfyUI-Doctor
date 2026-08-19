@@ -65,10 +65,11 @@ metadata, frontend queue source attribution, execution event payload shape,
 output asset enrichment tolerance, host package/version anchors, the live
 model registry and extensions, nested/promoted subgraph serialization,
 positional/named widget restore policy, first-party promoted media ownership,
-the current PyTorch minimum, frontend raw/surfaced validation errors,
-setting-change telemetry controls, real subgraph shape, system statistics
-metadata, Desktop layout, ComfyUI job-cancel routes, and frontend queue/cancel
-adoption.
+DynamicVRAM device applicability and its feature-specific PyTorch threshold,
+the independent base PyTorch minimum, standalone asynchronous settings-handler
+typing/containment, frontend raw/surfaced validation errors, setting-change
+telemetry controls, real subgraph shape, system statistics metadata, Desktop
+layout, ComfyUI job-cancel routes, and frontend queue/cancel adoption.
 
 The compatibility script reads source files only. It does not import, install,
 build, or execute code from the host reference repositories.

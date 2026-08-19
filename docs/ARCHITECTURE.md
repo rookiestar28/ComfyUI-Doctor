@@ -20,7 +20,7 @@ ComfyUI loads the package entry point from `__init__.py`. That file keeps host-f
 - register PromptServer routes through `api_routes.py`
 - expose node mappings and `WEB_DIRECTORY`
 
-`prestartup_script.py` runs earlier in the ComfyUI startup lifecycle. It captures early terminal output before the full package import is available. The main package then hands off that logger so startup logs and runtime logs share one path.
+`prestartup_script.py` runs earlier in the ComfyUI startup lifecycle. It captures early terminal output before the full package import is available. The main package then hands off that logger so startup logs and runtime logs share one path. Doctor-owned terminal output uses one severity-aware identity, strips ANSI styling from persisted/plain sinks, and selects the full Unicode startup banner only when the effective stream can encode it; otherwise it emits the ASCII fallback.
 
 ## Backend Layout
 
@@ -33,7 +33,8 @@ The backend is organized around a small entry point and focused service modules:
 | Analysis | `analyzer.py`, `pattern_loader.py`, `pipeline/`, `services/prompt_helpers.py` | Error categorization, pattern matching, prompt construction |
 | LLM | `llm_client.py`, `session_manager.py`, `services/llm_provider_adapters.py`, `services/llm/` | Provider requests, retry, proxy policy, rate/concurrency limits |
 | Security | `security.py`, `outbound.py`, `sanitizer.py`, `services/security/` | SSRF checks, outbound sanitization, admin guard, error envelopes |
-| Storage | `services/doctor_paths.py`, `logger.py`, `history_store.py`, `services/secret_store.py` | Canonical data paths, logs, history, encrypted credential storage |
+| Logging and health | `terminal_output.py`, `logger.py`, `services/dynamic_vram_advisory.py` | Canonical terminal output, bounded runtime capture, and isolated nonfatal host advisories |
+| Storage | `services/doctor_paths.py`, `history_store.py`, `services/secret_store.py` | Canonical data paths, history, encrypted credential storage |
 | Diagnostics | `services/diagnostics/`, `services/intent/` | Workflow, dependency, current host model/media/dataset asset folders and loaders, privacy, performance, and signature-pack checks |
 | Community | `services/community_feedback.py`, `pipeline/plugins/` | Feedback preview/submission and scan-only plugin trust reporting |
 | Telemetry | `telemetry.py`, `web/doctor_telemetry.js` | Local-only opt-in event buffer and UI controls |
@@ -63,9 +64,10 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 
 1. `prestartup_script.py` captures early output.
 2. `__init__.py` imports the package with ComfyUI-relative imports.
-3. `SmartLogger.install()` takes over logging.
-4. The API logger writes operational events to the Doctor data directory.
-5. Route registration runs after ComfyUI `server` and `aiohttp` imports are available.
+3. Canonical terminal formatting and the encoding-safe startup banner are handed off to the full package.
+4. `SmartLogger.install()` clears stale advisory state, replays one bounded public host-log snapshot, and then starts the normal runtime processor.
+5. The API logger writes ANSI-free operational events to the Doctor data directory.
+6. Route registration runs after ComfyUI `server` and `aiohttp` imports are available.
 
 ### Error Analysis
 
@@ -75,6 +77,19 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 4. Prompt helpers build a provider-neutral request payload.
 5. LLM calls go through adapter, retry, rate-limit, proxy, SSRF, and outbound-sanitization layers.
 6. Results are stored in history and exposed to the frontend.
+
+### Nonfatal Host Advisory
+
+1. Startup replay reads at most 300 entries from the already-loaded public
+   `app.logger.get_logs()` buffer without importing host code.
+2. Only the two exact current DynamicVRAM fallback warnings update the single
+   bounded advisory slot; ordinary warnings and near matches continue through
+   their existing behavior.
+3. The advisory remains outside `ErrorAnalyzer`, traceback/history, and latest
+   runtime-error state and is exposed only as an allowlisted projection in
+   `/doctor/health`.
+4. The legacy and Preact Statistics paths use the same pure text formatter to
+   show fixed Trust & Health guidance without rendering the raw host message.
 
 ### Chat
 
@@ -117,7 +132,7 @@ ComfyUI loads frontend assets from `web/`.
 | State and API | `web/doctor_state.js`, `web/doctor_api.js`, `web/doctor_actions.js` | UI state, backend requests, user actions |
 | Shell UI | `web/doctor_ui.js`, `web/doctor_right_panel.js`, `web/doctor_rendering.js`, `web/doctor_selectors.js` | Sidebar shell, right panel, rendering helpers, selectors |
 | Chat | `web/doctor_chat.js`, `web/chat-island.js`, `web/tabs/chat_tab.js`, `web/llm_provider_quick_switch.js` | Chat UI, Preact island, vanilla fallback, provider switch |
-| Statistics and diagnostics | `web/statistics-island.js`, `web/tabs/stats_tab.js`, `web/doctor_telemetry.js` | Stats dashboard, health/trust, feedback, telemetry |
+| Statistics and diagnostics | `web/statistics-island.js`, `web/tabs/stats_tab.js`, `web/utils/health_summary.js`, `web/doctor_telemetry.js` | Stats dashboard, shared health/trust formatting, feedback, telemetry |
 | Settings | `web/tabs/settings_tab.js`, `web/llm_key_store.js`, `web/privacy_utils.js` | Provider settings, credential handling, privacy mode |
 | Resilience | `web/preact-loader.js`, `web/island_registry.js`, `web/ErrorBoundary.js`, `web/global_error_handler.js` | Local Preact loading, island fallback, error boundaries |
 
@@ -150,6 +165,8 @@ Security-sensitive behavior is centralized:
   setting-change telemetry.
 - Plain backend and exception status strings are inserted as literal text;
   intentional rich chat rendering stays on its separate sanitized path.
+- DynamicVRAM health output exposes fixed allowlisted guidance rather than raw
+  host log text, device names, command lines, paths, prompts, or provider data.
 
 Storage should go through `services/doctor_paths.py` so Desktop, portable, and
 standard ComfyUI installations resolve Doctor data consistently. Runtime
@@ -188,7 +205,8 @@ Additional focused lanes:
 - Keep host compatibility checks version-aware and aligned with prompt queue
   source metadata, execution event payloads, model registries, nested workflow
   serialization, validation-error state, setting telemetry, Desktop layout,
-  system statistics metadata, job-cancel contracts, and frontend queue/cancel
-  adoption.
+  DynamicVRAM applicability/feature threshold, standalone asynchronous setting
+  handlers, system statistics metadata, job-cancel contracts, and frontend
+  queue/cancel adoption.
 - Keep public route changes reflected in `docs/openapi.json`.
 - Keep local harness tests deterministic; live backend tests must be explicit opt-in.

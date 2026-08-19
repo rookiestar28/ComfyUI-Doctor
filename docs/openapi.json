@@ -554,7 +554,8 @@
           "Health"
         ],
         "operationId": "getRuntimeHealth",
-        "summary": "Return Doctor runtime health and path diagnostics.",
+        "summary": "Return Doctor runtime health, path diagnostics, and bounded nonfatal host advisories.",
+        "description": "The optional dynamic_vram_advisory member is inactive by default. When exact current ComfyUI fallback warnings are observed, it exposes only fixed nonfatal guidance, allowlisted reasons, a bounded repeat count, and UTC timestamps; it never includes the raw host log line or replaces runtime-error state.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/JsonObject"

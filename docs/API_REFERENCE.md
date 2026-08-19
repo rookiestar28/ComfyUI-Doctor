@@ -78,13 +78,20 @@ LLM failure responses use the standard JSON error envelope. The chat streaming p
 | `POST` | `/doctor/mark_resolved` | Mark the latest matching error as resolved, unresolved, or ignored. |
 | `POST` | `/doctor/feedback/preview` | Build and sanitize a community feedback preview. |
 | `POST` | `/doctor/feedback/submit` | Submit sanitized feedback through the configured GitHub flow. |
-| `GET` | `/doctor/health` | Return Doctor runtime health and path diagnostics. |
+| `GET` | `/doctor/health` | Return Doctor runtime health, path diagnostics, and bounded nonfatal host advisories. |
 | `GET` | `/doctor/plugins` | Return scan-only plugin trust information. |
 
 Path diagnostics in `/doctor/health` report runtime identity separately from
 storage evidence. For example, a managed Desktop runtime can report
 `install_mode=desktop` while `storage_source` identifies ComfyUI's private
 system-user API.
+
+The optional `dynamic_vram_advisory` member is `{"active": false}` when no
+supported fallback warning has been observed. When active, it contains only
+allowlisted reason codes, fixed nonfatal guidance, a bounded repeat count, and
+UTC timestamps. It is triggered only by exact current ComfyUI DynamicVRAM
+fallback warnings; it does not expose the raw host log line, infer activation
+from a version or device name alone, or replace `/debugger/last_analysis`.
 
 ## Telemetry Endpoints
 

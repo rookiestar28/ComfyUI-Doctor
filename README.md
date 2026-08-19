@@ -14,6 +14,16 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Current host runtime lanes, DynamicVRAM guidance, and startup output refreshed</strong></summary>
+
+- Refreshed version-aware compatibility coverage for the Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.49.6`, and standalone frontend `1.52.1+`, including standalone asynchronous settings-handler behavior.
+- Added a bounded, nonfatal Trust & Health advisory when current ComfyUI reports that automatic DynamicVRAM fell back because its PyTorch 2.8 or `comfy-aimdo` requirement was not met; ComfyUI base support remains PyTorch 2.7.
+- Unified Doctor-owned terminal messages under one severity-aware identity while keeping persisted logs and plain sinks free of ANSI styling.
+- Restored the full startup banner on compatible Unicode streams with an encoding-safe ASCII fallback and tightly packed one-block output.
+
+</details>
+
+<details>
 <summary><strong>Current host baseline, diagnostics, frontend safety, and lifecycle reliability aligned</strong></summary>
 
 - Refreshed source-linked compatibility coverage for the current ComfyUI and frontend baselines, including opt-in detail logging, named-widget restore policy, promoted media contracts, and the current PyTorch minimum.
@@ -494,7 +504,7 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes and unconditional sensitive-header redaction.
 - Optional server-side credential store with admin guarding and encryption-at-rest support.
-- Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, first-party dataset folders, privacy, performance, signature packs, statistics, plugin trust, telemetry controls, and community feedback preview/submit tools.
+- Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, first-party dataset folders, privacy, performance, signature packs, statistics, plugin trust, bounded host fallback advisories, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
 
@@ -508,6 +518,7 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Exact first-party image/video dataset folder widgets resolve only below ComfyUI's input root, while saved training dataset folders resolve only below registered `datasets` roots. Doctor checks the folder itself without enumerating or reading dataset content.
 - Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Recognized partner-node workspace-policy errors stay node-level and remain distinct from account preconditions. Doctor does not depend on private frontend stores for this behavior.
 - Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.7 receive conservative upgrade guidance when a parseable version is available.
+- Exact current DynamicVRAM fallback warnings can produce one bounded, nonfatal Trust & Health advisory. Automatic DynamicVRAM requires PyTorch 2.8 and working `comfy-aimdo`, but this feature-specific requirement does not change ComfyUI's base PyTorch 2.7 support or Doctor's runtime-error state.
 - Desktop runtime identity and storage are reported independently: a managed Desktop `.venv` remains identified as Desktop while Doctor data continues to prefer ComfyUI's private system-user directory.
 
 ## Screenshots
@@ -612,7 +623,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, promoted media provenance, partner-policy validation errors, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, promoted media provenance, partner-policy validation errors, DynamicVRAM applicability and feature threshold, standalone asynchronous settings handlers, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 
