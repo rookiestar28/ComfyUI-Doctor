@@ -1,4 +1,17 @@
 All tests must follow `tests/TEST_SOP.md` first.
+
+<!-- CURRENT-TEST-GOVERNANCE:START -->
+## Current Governance Scope
+
+A change limited to pure text/documentation files, a version-field-only `pyproject.toml` update, or
+both does not enter this E2E workflow and requires no planning, roadmap item, record/log,
+independent review, documentation test contract, browser installation, or full gate.
+Behavior-bearing metadata changes do not qualify. For non-exempt work, applicable E2E runs
+through the authoritative Windows Full Gate. Hosted CI repetitions are optional diagnostics and
+are not acceptance prerequisites or pushed-commit evidence. Explicit item-scoped live/supported-host checks
+remain separate when required.
+<!-- CURRENT-TEST-GOVERNANCE:END -->
+
 E2E is the final stage of the repo-local acceptance gate; do not treat it as a substitute for detect-secrets, pre-commit, host-like package/startup validation, or backend unit tests.
 When you reach the E2E stage, use the standard procedure defined in `tests/E2E_TESTING_SOP.md`.
 
