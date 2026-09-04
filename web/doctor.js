@@ -8,6 +8,9 @@ import { DoctorUI } from "./doctor_ui.js";
 import { DoctorAPI } from "./doctor_api.js";
 import { isPreactEnabled, loadPreact, getLoadError } from "./preact-loader.js";
 import { tabRegistry, TabManager } from "./doctor_tabs.js";
+import {
+    enforceDoctorSidebarMinWidth,
+} from "./doctor_sidebar_layout.js";
 import * as ChatTab from "./tabs/chat_tab.js";
 import * as StatsTab from "./tabs/stats_tab.js";
 import * as SettingsTab from "./tabs/settings_tab.js";
@@ -152,19 +155,99 @@ app.registerExtension({
                 destroy: () => destroyDoctorSidebarMount(doctorUI),
                 render: (container) => {
                     destroyDoctorSidebarMount(doctorUI);
+                    let restoreLayout = () => {};
+                    let manager = null;
+                    let doctorRoot = null;
+                    let ownershipObserver = null;
+                    let sidebarDestroyed = false;
+                    // CRITICAL: install this cleanup before the first registry, mount, or layout
+                    // mutation. Moving it below geometry/render setup makes early exceptions leak
+                    // Doctor markers or PrimeVue widths; the outer catch must invoke it and rethrow.
+                    const cleanup = ({ hostTakeover = false } = {}) => {
+                        if (sidebarDestroyed) return;
+                        sidebarDestroyed = true;
+                        let cleanupError = null;
+                        const runCleanupStep = (step) => {
+                            try {
+                                step();
+                            } catch (error) {
+                                cleanupError ??= error;
+                            }
+                        };
+                        runCleanupStep(() => ownershipObserver?.disconnect());
+                        runCleanupStep(() => manager?.destroy());
+                        runCleanupStep(() => tabRegistry.clear());
+                        if (!hostTakeover) {
+                            runCleanupStep(() => container.replaceChildren());
+                        }
+                        runCleanupStep(() => restoreLayout({
+                            preserveExternalChanges: hostTakeover,
+                        }));
+                        doctorRoot = null;
+                        doctorUI.sidebarTabContainer = null;
+                        doctorUI.tabManager = null;
+                        if (doctorUI.sidebarCleanup === cleanup) {
+                            doctorUI.sidebarCleanup = null;
+                        }
+                        if (cleanupError) throw cleanupError;
+                    };
+                    doctorUI.sidebarCleanup = cleanup;
+
+                    try {
                     tabRegistry.clear();
+                    container.replaceChildren();
+                    doctorRoot = document.createElement('div');
+                    doctorRoot.className = 'doctor-sidebar-content';
+                    doctorRoot.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--bg-color, #1a1a2e);';
+                    container.appendChild(doctorRoot);
+                    restoreLayout = enforceDoctorSidebarMinWidth(container);
+
+                    // CRITICAL: current ExtensionSlot reuses one custom mount when its extension
+                    // prop changes and only calls destroy on component unmount. Keep Doctor in an
+                    // owned root and observe its removal; clearing the shared mount during takeover
+                    // deletes the incoming extension, while unconditional restoration overwrites it.
+                    if (typeof MutationObserver === 'function') {
+                        ownershipObserver = new MutationObserver(() => {
+                            if (
+                                !sidebarDestroyed
+                                && doctorRoot
+                                && !container.contains(doctorRoot)
+                            ) {
+                                cleanup({ hostTakeover: true });
+                            }
+                        });
+                        ownershipObserver.observe(container, { childList: true });
+                    }
+
                     // Add styles for the sidebar content if not already added
                     if (!document.getElementById('doctor-sidebar-styles')) {
                         const style = document.createElement('style');
                         style.id = 'doctor-sidebar-styles';
                         style.textContent = `
                             .doctor-sidebar-content {
+                                box-sizing: border-box;
                                 padding: 15px;
                                 height: 100%;
+                                min-height: 0;
+                                min-width: 560px;
                                 overflow-y: auto;
                                 background: var(--bg-color, #1a1a2e);
                                 color: var(--fg-color, #eee);
                                 font-family: system-ui, -apple-system, sans-serif;
+                                display: flex;
+                                flex-direction: column;
+                            }
+                            .sidebar-content-container :has(> .doctor-sidebar-content) {
+                                height: 100%;
+                                min-height: 0;
+                            }
+                            /* CRITICAL: keep this selector and 560px aligned with doctor_sidebar_layout.js.
+                               The host splitter and content wrapper must share the active Doctor minimum;
+                               an inner-only rule overflows into a narrower, clipped SplitterPanel. */
+                            .side-bar-panel:has(.doctor-sidebar-content),
+                            .p-splitterpanel:has(.doctor-sidebar-content),
+                            .sidebar-content-container:has(.doctor-sidebar-content) {
+                                min-width: 560px !important;
                             }
                             .doctor-sidebar-content h3 {
                                 margin: 0 0 15px 0;
@@ -434,9 +517,6 @@ app.registerExtension({
                     // ═══════════════════════════════════════════════════════════════
 
                     // Create sidebar content - TAB BASED STRUCTURE (F13)
-                    container.innerHTML = '';
-                    container.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--bg-color, #1a1a2e);';
-
                     // 1. Header
                     const header = document.createElement('div');
                     header.style.cssText = 'padding: 12px 15px; border-bottom: 1px solid var(--border-color, #444); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;';
@@ -450,7 +530,7 @@ app.registerExtension({
                             <a id="doctor-sidebar-github-link" href="https://github.com/rookiestar28/ComfyUI-Doctor" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 4px 10px; border: 1px solid var(--border-color, #4a4f5a); border-radius: 999px; font-size: 12px; font-weight: 600; text-decoration: none; color: var(--fg-color, #f1f5f9); background: rgba(255,255,255,0.03);">View on GitHub</a>
                         </div>
                     `;
-                    container.appendChild(header);
+                    doctorRoot.appendChild(header);
 
                     const applySidebarMeta = (meta) => {
                         const versionEl = header.querySelector('#doctor-sidebar-version');
@@ -492,14 +572,14 @@ app.registerExtension({
                     const tabBar = document.createElement('div');
                     tabBar.id = 'doctor-tab-bar';
                     tabBar.className = 'doctor-tab-bar';
-                    container.appendChild(tabBar);
+                    doctorRoot.appendChild(tabBar);
 
                     // 3. Tab Content
                     const content = document.createElement('div');
                     content.id = 'doctor-tab-content';
                     // ⚠️ CRITICAL: min-height: 0 required for nested flex scrolling
                     content.style.cssText = 'flex: 1 1 0; overflow: hidden; position: relative; min-height: 0;';
-                    container.appendChild(content);
+                    doctorRoot.appendChild(content);
 
                     // Register Tabs
                     const getTxt = (k, f) => app.Doctor.getUIText(k) || f;
@@ -537,20 +617,13 @@ app.registerExtension({
                         console.log("[ComfyUI-Doctor] Initializing TabManager...");
                         // Init Manager - pass DOM elements directly (not IDs)
                         // ⚠️ CRITICAL: document.getElementById() fails in ComfyUI's Vue context
-                        const manager = new TabManager(tabRegistry, content, tabBar);
+                        manager = new TabManager(tabRegistry, content, tabBar);
                         manager.init();
                         console.log("[ComfyUI-Doctor] ✅ TabManager initialized successfully");
 
                         // Store references
                         doctorUI.sidebarTabContainer = content;
                         doctorUI.tabManager = manager;
-                        doctorUI.sidebarCleanup = () => {
-                            manager.destroy();
-                            tabRegistry.clear();
-                            doctorUI.sidebarTabContainer = null;
-                            doctorUI.tabManager = null;
-                        };
-
                         // Update status dot if error exists
                         if (doctorUI.lastErrorData) {
                             const statusDot = header.querySelector('#doctor-tab-status');
@@ -565,6 +638,10 @@ app.registerExtension({
                                 <p style="font-size: 10px; color: #888;">Check browser console for details</p>
                             </div>
                         `;
+                    }
+                    } catch (mountError) {
+                        destroyDoctorSidebarMount(doctorUI);
+                        throw mountError;
                     }
                 }
             });

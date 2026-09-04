@@ -37,8 +37,12 @@
 </head>
 <body>
   <div id="test-status">Loading...</div>
-  <div id="mock-sidebar-tabs" style="width: 300px; height: 100vh; background: #1a1a2e; border-right: 1px solid #444; float: left;"></div>
-  <div id="comfy-root" style="margin-left: 300px;"></div>
+  <div class="p-splitterpanel side-bar-panel" style="min-width: 233px; width: 300px; flex-basis: 17px; height: 100vh; float: left;">
+    <div class="sidebar-content-container" style="min-width: 211px; width: 300px; flex-basis: 13px; height: 100%;">
+      <div id="mock-sidebar-tabs" style="width: 300px; height: 100vh; background: #1a1a2e; border-right: 1px solid #444;"></div>
+    </div>
+  </div>
+  <div id="comfy-root" style="margin-left: 560px;"></div>
 
   <script type="module">
     // ═══════════════════════════════════════════════════════════════════════════

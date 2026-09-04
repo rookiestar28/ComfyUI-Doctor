@@ -55,6 +55,7 @@ export function createMockComfyUIApp(options = {}) {
       const tabElement = document.createElement('div');
       tabElement.id = `sidebar-tab-${config.id}`;
       tabElement.className = 'mock-sidebar-tab';
+      tabElement.style.cssText = 'min-width: 19px; width: 29px; flex-basis: 31px;';
       tabContainer.appendChild(tabElement);
 
       // Render the tab content

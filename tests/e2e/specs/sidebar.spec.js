@@ -212,6 +212,152 @@ test.describe('Doctor Chat Interface', () => {
     await expect(page.locator('#doctor-messages')).toBeVisible({ timeout: 5000 });
   });
 
+  test('should enforce and restore the Doctor sidebar minimum width lifecycle', async ({ page }) => {
+    const panel = page.locator('.side-bar-panel');
+    const content = page.locator('.sidebar-content-container');
+    const mount = page.locator('#sidebar-tab-comfyui-doctor');
+
+    await expect(panel).toHaveCSS('min-width', '560px');
+    await expect(panel).toHaveCSS('width', '560px');
+    await expect(panel).toHaveCSS('flex-basis', '560px');
+    await expect(content).toHaveCSS('min-width', '560px');
+    await expect(content).toHaveCSS('width', '560px');
+    await expect(mount).toHaveCSS('min-width', '560px');
+    await expect(mount).toHaveClass('mock-sidebar-tab');
+    await expect(mount.locator(':scope > .doctor-sidebar-content')).toHaveCount(1);
+    await expect(page.locator('#doctor-tab-chat')).toBeVisible();
+
+    const activeWidths = await page.evaluate(() => ({
+      panel: document.querySelector('.side-bar-panel')?.getBoundingClientRect().width,
+      content: document.querySelector('.sidebar-content-container')?.getBoundingClientRect().width,
+      mount: document.querySelector('#sidebar-tab-comfyui-doctor')?.getBoundingClientRect().width,
+    }));
+    expect(activeWidths.panel).toBeGreaterThanOrEqual(560);
+    expect(activeWidths.content).toBeGreaterThanOrEqual(560);
+    expect(activeWidths.mount).toBeGreaterThanOrEqual(560);
+
+    await page.evaluate(() => {
+      const tab = window.app.extensionManager.sidebarTab.sidebarTabs
+        .find((candidate) => candidate.id === 'comfyui-doctor');
+      tab.destroy();
+      tab.destroy();
+    });
+
+    await expect(panel).toHaveCSS('min-width', '233px');
+    await expect(panel).toHaveCSS('width', '300px');
+    await expect(panel).toHaveCSS('flex-basis', '17px');
+    await expect(content).toHaveCSS('min-width', '211px');
+    await expect(content).toHaveCSS('width', '300px');
+    await expect(content).toHaveCSS('flex-basis', '13px');
+    await expect(mount).toHaveClass('mock-sidebar-tab');
+    await expect(mount).toHaveCSS('min-width', '19px');
+    await expect(mount).toHaveCSS('width', '29px');
+    await expect(mount).toHaveCSS('flex-basis', '31px');
+    await expect(mount).toBeEmpty();
+
+    const initializationFailure = await page.evaluate(() => {
+      const tab = window.app.extensionManager.sidebarTab.sidebarTabs
+        .find((candidate) => candidate.id === 'comfyui-doctor');
+      const mountElement = document.getElementById('sidebar-tab-comfyui-doctor');
+      const originalRequestAnimationFrame = window.requestAnimationFrame;
+      let message = '';
+      window.requestAnimationFrame = () => {
+        throw new Error('synthetic layout scheduling failure');
+      };
+      try {
+        tab.render(mountElement);
+      } catch (error) {
+        message = error.message;
+      } finally {
+        window.requestAnimationFrame = originalRequestAnimationFrame;
+      }
+      return {
+        message,
+        cleanupStillInstalled: typeof window.app.Doctor.sidebarCleanup === 'function',
+      };
+    });
+
+    expect(initializationFailure).toEqual({
+      message: 'synthetic layout scheduling failure',
+      cleanupStillInstalled: false,
+    });
+    await expect(panel).toHaveCSS('min-width', '233px');
+    await expect(panel).toHaveCSS('width', '300px');
+    await expect(panel).toHaveCSS('flex-basis', '17px');
+    await expect(content).toHaveCSS('min-width', '211px');
+    await expect(content).toHaveCSS('width', '300px');
+    await expect(mount).toHaveClass('mock-sidebar-tab');
+    await expect(mount).toHaveCSS('min-width', '19px');
+    await expect(mount).toBeEmpty();
+
+    await page.evaluate(() => {
+      const tab = window.app.extensionManager.sidebarTab.sidebarTabs
+        .find((candidate) => candidate.id === 'comfyui-doctor');
+      tab.render(document.getElementById('sidebar-tab-comfyui-doctor'));
+    });
+
+    await expect(panel).toHaveCSS('min-width', '560px');
+    await expect(panel).toHaveCSS('width', '560px');
+    await expect(content).toHaveCSS('min-width', '560px');
+    await expect(mount).toHaveClass('mock-sidebar-tab');
+    await expect(mount.locator(':scope > .doctor-sidebar-content')).toHaveCount(1);
+    await expect(page.locator('#doctor-tab-bar')).toBeVisible();
+  });
+
+  test('should release Doctor ownership when the host reuses its mount without destroy', async ({ page }) => {
+    const takeoverState = await page.evaluate(async () => {
+      const panel = document.querySelector('.side-bar-panel');
+      const content = document.querySelector('.sidebar-content-container');
+      const mount = document.querySelector('#sidebar-tab-comfyui-doctor');
+      const incoming = document.createElement('div');
+      incoming.id = 'incoming-extension-content';
+      incoming.textContent = 'Incoming extension remains mounted';
+
+      mount.replaceChildren(incoming);
+      mount.classList.add('incoming-extension-mount');
+      // Use the same 560px minimum another extension may independently choose while
+      // changing its actual width. Value comparison alone cannot prove ownership here;
+      // the post-Doctor style mutation must make the incoming style authoritative.
+      mount.style.cssText = 'display: flex; min-width: 560px; width: 704px; flex-basis: 704px;';
+      content.style.cssText = 'min-width: 560px; width: 704px; flex-basis: 704px; height: 100%;';
+      panel.style.cssText = 'min-width: 560px; width: 704px; flex-basis: 704px; height: 100vh; float: left;';
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      return {
+        incomingStillMounted: mount.firstElementChild === incoming,
+        mountClassName: mount.className,
+        panelMinWidth: panel.style.minWidth,
+        panelWidth: panel.style.width,
+        panelFlexBasis: panel.style.flexBasis,
+        contentMinWidth: content.style.minWidth,
+        contentWidth: content.style.width,
+        contentFlexBasis: content.style.flexBasis,
+        mountMinWidth: mount.style.minWidth,
+        mountWidth: mount.style.width,
+        mountFlexBasis: mount.style.flexBasis,
+        cleanupInstalled: typeof window.app.Doctor.sidebarCleanup === 'function',
+        hasTabManager: Boolean(window.app.Doctor.tabManager),
+      };
+    });
+
+    expect(takeoverState).toEqual({
+      incomingStillMounted: true,
+      mountClassName: 'mock-sidebar-tab incoming-extension-mount',
+      panelMinWidth: '560px',
+      panelWidth: '704px',
+      panelFlexBasis: '704px',
+      contentMinWidth: '560px',
+      contentWidth: '704px',
+      contentFlexBasis: '704px',
+      mountMinWidth: '560px',
+      mountWidth: '704px',
+      mountFlexBasis: '704px',
+      cleanupInstalled: false,
+      hasTabManager: false,
+    });
+  });
+
   test('should scroll only the owned Chat island on activation', async ({ page }) => {
     await expect.poll(() => page.evaluate(() => window.app?.Doctor?.chatIslandActive)).toBe(true);
     await page.click('.doctor-tab-button[data-tab-id="settings"]');
