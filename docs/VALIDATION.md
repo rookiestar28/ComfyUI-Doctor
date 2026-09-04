@@ -65,8 +65,9 @@ metadata, frontend queue source attribution, execution event payload shape,
 output asset enrichment tolerance, host package/version anchors, the live
 model registry and extensions, nested/promoted subgraph serialization,
 positional/named widget restore policy, first-party promoted media ownership,
-DynamicVRAM device applicability and its feature-specific PyTorch threshold,
-the independent base PyTorch minimum, standalone asynchronous settings-handler
+the first-party SAM3D Body detection-root contract, DynamicVRAM device
+applicability and its feature-specific PyTorch threshold, the independent
+base PyTorch minimum, standalone asynchronous settings-handler
 typing/containment, frontend raw/surfaced validation errors, setting-change
 telemetry controls, real subgraph shape, system statistics metadata, Desktop
 layout, ComfyUI job-cancel routes, and frontend queue/cancel adoption.

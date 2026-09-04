@@ -54,7 +54,8 @@ The Statistics tab groups operational views:
 When current ComfyUI reports that automatic DynamicVRAM fell back to the
 legacy model patcher, Trust & Health can show fixed local guidance. Automatic
 DynamicVRAM requires PyTorch 2.8 or later and working `comfy-aimdo`; this does
-not change ComfyUI's base PyTorch 2.7 support. Doctor does not turn this warning
+not change ComfyUI's base PyTorch 2.7 support. ComfyUI recommends PyTorch 2.12
+or later for DynamicVRAM. Doctor does not turn these exact fallback warnings
 into a runtime error or send the raw host message to an LLM/provider.
 
 ### Settings Tab
@@ -134,6 +135,9 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 - Current ComfyUI model asset folder and loader expectations sourced from the
   live host model registry when available, including custom registered roots
   and extensions such as `.pt2` and `.sft`.
+- Exact `SAM3DBody_Loader` model-file resolution against the registered
+  `detection` root, without accepting a checkpoints copy when detection is
+  unavailable.
 - Bounded nested `definitions.subgraphs` scanning for promoted and
   non-promoted model references with visible-host and source-node provenance.
 - First-party promoted image, video, output-image, and audio checks that keep

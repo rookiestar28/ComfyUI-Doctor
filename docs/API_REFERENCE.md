@@ -89,9 +89,11 @@ system-user API.
 The optional `dynamic_vram_advisory` member is `{"active": false}` when no
 supported fallback warning has been observed. When active, it contains only
 allowlisted reason codes, fixed nonfatal guidance, a bounded repeat count, and
-UTC timestamps. It is triggered only by exact current ComfyUI DynamicVRAM
-fallback warnings; it does not expose the raw host log line, infer activation
-from a version or device name alone, or replace `/debugger/last_analysis`.
+UTC timestamps. It is triggered only by three exact supported ComfyUI
+DynamicVRAM source messages: the prior/current PyTorch fallback forms and the
+`comfy-aimdo` fallback. It does not expose the raw host log line, infer
+activation from a version or device name alone, or replace
+`/debugger/last_analysis`.
 
 ## Telemetry Endpoints
 
@@ -135,3 +137,6 @@ contained without content enumeration. Unknown custom upload-loader semantics
 are not guessed without authoritative node-definition flags. Older hosts
 retain bounded legacy folder fallbacks, and every filesystem candidate must
 remain contained within an authoritative root before it is probed.
+The exact first-party `SAM3DBody_Loader` resolves `model_file` through the
+registered `detection` category and never substitutes checkpoints when that
+category is unavailable.

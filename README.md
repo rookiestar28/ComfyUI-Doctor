@@ -14,10 +14,11 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
-<summary><strong>Current host runtime lanes, DynamicVRAM guidance, and startup output refreshed</strong></summary>
+<summary><strong>Current host runtime lanes, DynamicVRAM guidance, and SAM3D diagnostics refreshed</strong></summary>
 
-- Refreshed version-aware compatibility coverage for the Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.49.6`, and standalone frontend `1.52.1+`, including standalone asynchronous settings-handler behavior.
-- Added a bounded, nonfatal Trust & Health advisory when current ComfyUI reports that automatic DynamicVRAM fell back because its PyTorch 2.8 or `comfy-aimdo` requirement was not met; ComfyUI base support remains PyTorch 2.7.
+- Refreshed version-aware compatibility coverage for the Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.51.9`, and standalone frontend `1.54.3+`, including current named-widget restoration and standalone asynchronous settings-handler behavior.
+- Updated the bounded, nonfatal Trust & Health advisory for both supported PyTorch fallback messages and the `comfy-aimdo` fallback; DynamicVRAM requires PyTorch 2.8 or later, ComfyUI recommends 2.12 or later for this feature, and base support remains PyTorch 2.7.
+- Added exact `SAM3DBody_Loader` model diagnostics against ComfyUI's registered `detection` root without falling back to checkpoints.
 - Unified Doctor-owned terminal messages under one severity-aware identity while keeping persisted logs and plain sinks free of ANSI styling.
 - Restored the full startup banner on compatible Unicode streams with an encoding-safe ASCII fallback and tightly packed one-block output.
 
@@ -512,13 +513,14 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 
 - The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
 - Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
+- The exact first-party `SAM3DBody_Loader` resolves `model_file` only against registered `detection` roots. If that category is unavailable, Doctor reports the unresolved asset rather than accepting a same-named checkpoints file.
 - Workflow diagnostics inspect bounded `definitions.subgraphs` content, including promoted and non-promoted nested model references, while preserving the visible host and concrete source node provenance. Positional widget serialization remains authoritative, with bounded schema-linked named values used only when the positional slot is absent.
 - Promoted first-party image, video, output-image, and audio references keep the visible host as the user-facing target while retaining concrete source-loader provenance. Unknown custom upload-capable nodes are not inferred from a filename alone when authoritative node-definition flags are unavailable.
 - Every candidate model path is resolved and contained within an authoritative registered root before Doctor checks it. Traversal, absolute external, cross-drive, null-byte, and symlink escape candidates are rejected.
 - Exact first-party image/video dataset folder widgets resolve only below ComfyUI's input root, while saved training dataset folders resolve only below registered `datasets` roots. Doctor checks the folder itself without enumerating or reading dataset content.
 - Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Recognized partner-node workspace-policy errors stay node-level and remain distinct from account preconditions. Doctor does not depend on private frontend stores for this behavior.
 - Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.7 receive conservative upgrade guidance when a parseable version is available.
-- Exact current DynamicVRAM fallback warnings can produce one bounded, nonfatal Trust & Health advisory. Automatic DynamicVRAM requires PyTorch 2.8 and working `comfy-aimdo`, but this feature-specific requirement does not change ComfyUI's base PyTorch 2.7 support or Doctor's runtime-error state.
+- Exact allowlisted DynamicVRAM fallback warnings can produce one bounded, nonfatal Trust & Health advisory. Automatic DynamicVRAM requires PyTorch 2.8 and working `comfy-aimdo`, ComfyUI recommends PyTorch 2.12 or later for this feature, and the feature-specific requirement does not change ComfyUI's base PyTorch 2.7 support or Doctor's runtime-error state.
 - Desktop runtime identity and storage are reported independently: a managed Desktop `.venv` remains identified as Desktop while Doctor data continues to prefer ComfyUI's private system-user directory.
 
 ## Screenshots
@@ -623,7 +625,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, promoted media provenance, partner-policy validation errors, DynamicVRAM applicability and feature threshold, standalone asynchronous settings handlers, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, the SAM3D Body detection-root contract, promoted media provenance, partner-policy validation errors, DynamicVRAM applicability and feature threshold, standalone asynchronous settings handlers, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 

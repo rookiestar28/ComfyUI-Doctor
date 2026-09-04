@@ -82,9 +82,10 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 
 1. Startup replay reads at most 300 entries from the already-loaded public
    `app.logger.get_logs()` buffer without importing host code.
-2. Only the two exact current DynamicVRAM fallback warnings update the single
-   bounded advisory slot; ordinary warnings and near matches continue through
-   their existing behavior.
+2. Only the three exact supported DynamicVRAM source messages update the
+   single bounded advisory slot: the prior and current PyTorch fallback forms
+   plus the `comfy-aimdo` fallback. Ordinary warnings and near matches continue
+   through their existing behavior.
 3. The advisory remains outside `ErrorAnalyzer`, traceback/history, and latest
    runtime-error state and is exposed only as an allowlisted projection in
    `/doctor/health`.
@@ -117,6 +118,9 @@ source provenance; arbitrary custom upload-loader behavior is not inferred
 without authoritative node definitions. Input/dataset folders and every file
 candidate are real-path-contained within registered roots before any
 filesystem probe, read, or enumeration.
+The exact first-party `SAM3DBody_Loader` maps its `model_file` to the
+registered `detection` category before shared-extension inference. An absent
+or empty detection category never authorizes a checkpoints fallback.
 
 ### Telemetry
 
@@ -205,8 +209,8 @@ Additional focused lanes:
 - Keep host compatibility checks version-aware and aligned with prompt queue
   source metadata, execution event payloads, model registries, nested workflow
   serialization, validation-error state, setting telemetry, Desktop layout,
-  DynamicVRAM applicability/feature threshold, standalone asynchronous setting
-  handlers, system statistics metadata, job-cancel contracts, and frontend
-  queue/cancel adoption.
+  DynamicVRAM applicability/feature threshold, the SAM3D Body detection-root
+  contract, standalone asynchronous setting handlers, system statistics
+  metadata, job-cancel contracts, and frontend queue/cancel adoption.
 - Keep public route changes reflected in `docs/openapi.json`.
 - Keep local harness tests deterministic; live backend tests must be explicit opt-in.
