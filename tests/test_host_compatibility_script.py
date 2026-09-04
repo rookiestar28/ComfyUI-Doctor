@@ -32,11 +32,12 @@ def _create_minimal_reference(root: Path) -> None:
         "if args.enable_dynamic_vram or (enables_dynamic_vram() and dynamic_vram_supported()):\n"
         "    if (not args.enable_dynamic_vram) and "
         "(comfy.model_management.torch_version_numeric < (2, 8)):\n"
-        "        logging.warning('DynamicVRAM support requires Pytorch version 2.8 or later. "
-        "Falling back to legacy ModelPatcher.')\n",
+        "        logging.warning('Unsupported Pytorch detected. DynamicVRAM support requires "
+        "Pytorch version 2.8 or later (2.12+ is recommended). Falling back to legacy "
+        "ModelPatcher. VRAM estimates may be unreliable especially on Windows')\n",
     )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.49.6\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.51.9\n")
     _write(
         root / "ComfyUI" / "README.md",
         "torch 2.7 is minimally supported but using a newer version is extremely recommended.\n",
@@ -148,12 +149,26 @@ def _create_minimal_reference(root: Path) -> None:
         '"extension": {"manager": {"supports_v4": True}}\n'
         '"node_replacements": True\n'
         '"enable_telemetry": {"default": False}\n'
+        '"partner_run_gate_enabled": {\n'
+        '        "type": "bool",\n'
+        '        "default": True,\n'
+        '}\n'
         "}\n"
         "def get_server_features():\n    return {}\n",
     )
     _write(
+        root / "ComfyUI" / "comfy_extras" / "nodes_sam3d_body.py",
+        "class SAM3DBody_Loader(io.ComfyNode):\n"
+        "  node_id=\"SAM3DBody_Loader\"\n"
+        "  model_file = io.Combo.Input(\n"
+        "    \"model_file\",\n"
+        "    options=folder_paths.get_filename_list(\"detection\"),\n"
+        "  )\n"
+        "  path = folder_paths.get_full_path_or_raise(\"detection\", model_file)\n",
+    )
+    _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.52.1"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.54.3"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -296,19 +311,52 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "lib" / "litegraph" / "src" / "LGraphNode.ts",
-        "const namedValues = getNamedValues()\n"
-        "if (namedValues && LiteGraph.namedValuesRestore) {\n"
-        "  restoreNamedValues(namedValues)\n"
-        "} else if (info.widgets_values) {\n"
-        "  restorePositionalValues(info.widgets_values)\n"
+        "function serialiseWidgetValues(widgets: IBaseWidget[]) {\n"
+        "  const positional = []\n"
+        "  const named = {}\n"
+        "  return { widgets_values: positional, widgets_values_named: named }\n"
         "}\n"
-        "if (widgets?.length && this.serialize_widgets) {\n"
-        "  o.widgets_values = []\n"
-        "  o.widgets_values_named = {}\n"
-        "  for (const [i, widget] of widgets.entries()) {\n"
-        "    o.widgets_values[i] = serialisedVal\n"
-        "    o.widgets_values_named[widget.name] = serialisedVal\n"
+        "export function createWidgetRestorationState(info, fallbackNames) {\n"
+        "  const named = info.widgets_values_named\n"
+        "  return { restoreNamed: Boolean(\n"
+        "    named && (LiteGraph.namedValuesRestore || fallbackNames)\n"
+        "  ) }\n"
+        "}\n"
+        "const restoration = createWidgetRestorationState(\n"
+        "  info,\n"
+        "  this.constructor.nodeData?.fallbackWidgetsValuesNames\n"
+        ")\n"
+        "Object.assign(o, serialiseWidgetValues(widgets))\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "stores" / "widgetValueStore.ts",
+        "function getRestoredWidgetValue(graphId, nodeId, name, positionalIndex) {\n"
+        "  const restoration = graphWidgetRestorations.get(graphId)?.get(nodeId)\n"
+        "  if (restoration.restoreNamed && restoration.named) {\n"
+        "    return Object.hasOwn(restoration.named, name)\n"
+        "      ? { value: restoration.named[name] }\n"
+        "      : undefined\n"
         "  }\n"
+        "  return positionalIndex < restoration.positional.length\n"
+        "    ? { value: restoration.positional[positionalIndex] }\n"
+        "    : undefined\n"
+        "}\n",
+    )
+    _write(
+        root
+        / "ComfyUI_frontend"
+        / "src"
+        / "composables"
+        / "billing"
+        / "usePartnerNodesRunGate.ts",
+        "export function partnerRunGateBlocksAutoQueue(): boolean {\n"
+        "  if (isCloud) return false\n"
+        "  if (!useFeatureFlags().flags.partnerRunGateEnabled) return false\n"
+        "  if (!useAuthStore().isInitialized) return false\n"
+        "  const partnerNodes = scanPartnerNodesInGraph()\n"
+        "  if (partnerNodes.length === 0) return false\n"
+        "  reportGateBlocked('auto-queue', partnerNodes, isLoggedIn.value)\n"
+        "  return true\n"
         "}\n",
     )
     _write(
@@ -847,9 +895,17 @@ T32_NEW_CHECK_LABELS = {
     "standalone settings awaited handler containment",
 }
 
-EXPECTED_T32_REVISIONS = {
-    "ComfyUI": "c67885b14556cf3e4e061862925282d403d09862",  # pragma: allowlist secret
-    "ComfyUI_frontend": "569e65b30fbfe96743c7996e201a32bcf029a310",  # pragma: allowlist secret
+PRE_T33_CHECK_LABELS = PRE_T32_CHECK_LABELS | T32_NEW_CHECK_LABELS
+
+T33_NEW_CHECK_LABELS = {
+    "named widget restoration store precedence",
+    "SAM3D Body detection model root",
+    "frontend partner run gate ownership",
+}
+
+EXPECTED_T33_REVISIONS = {
+    "ComfyUI": "e80c1570b6b44a2557d5d8e341e05782d18c9bbb",  # pragma: allowlist secret
+    "ComfyUI_frontend": "9ff3fd7f0e36b810a621288ceaf6e74e3846bedd",  # pragma: allowlist secret
     "desktop": "e2d964b7456cea8423c7b9d3371c612313c06baa",  # pragma: allowlist secret
 }
 
@@ -871,20 +927,20 @@ def _revision_metadata_failures(
     checks = host_compat.CHECKS if checks is None else checks
     failures = []
 
-    if comfyui_revision != EXPECTED_T32_REVISIONS["ComfyUI"]:
+    if comfyui_revision != EXPECTED_T33_REVISIONS["ComfyUI"]:
         failures.append("constant:ComfyUI")
-    if frontend_revision != EXPECTED_T32_REVISIONS["ComfyUI_frontend"]:
+    if frontend_revision != EXPECTED_T33_REVISIONS["ComfyUI_frontend"]:
         failures.append("constant:ComfyUI_frontend")
 
     for lane in lanes:
-        expected = EXPECTED_T32_REVISIONS[lane.source_repo]
+        expected = EXPECTED_T33_REVISIONS[lane.source_repo]
         if lane.source_revision != expected:
             failures.append(f"lane:{lane.id}")
 
     for check in checks:
         if not check.source_revision:
             continue
-        expected = EXPECTED_T32_REVISIONS[check.repo]
+        expected = EXPECTED_T33_REVISIONS[check.repo]
         if check.source_revision != expected:
             failures.append(f"check:{check.label}")
 
@@ -911,8 +967,8 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
         for lane in lanes
     ] == [
         ("desktop-0.9.4", "1.43.18", False, False),
-        ("core-pin-1.49.6", "1.49.6", True, False),
-        ("standalone-1.52.1+", "1.52.1+", True, True),
+        ("core-pin-1.51.9", "1.51.9", True, False),
+        ("standalone-1.54.3+", "1.54.3+", True, True),
     ]
 
 
@@ -928,14 +984,14 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.49.6",
+            "comfyui-frontend-package==1.51.9",
             "comfyui-frontend-package==1.49.5",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.52.1"',
+            '"version": "1.54.3"',
             '"version": "1.52.0"',
             "frontend runtime lane: standalone source",
         ),
@@ -1223,8 +1279,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.49.6: frontend 1.49.6" in formatted
-    assert "standalone-1.52.1+: frontend 1.52.1+" in formatted
+    assert "core-pin-1.51.9: frontend 1.51.9" in formatted
+    assert "standalone-1.54.3+: frontend 1.54.3+" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1249,8 +1305,8 @@ def test_t28_reference_source_is_never_executed(tmp_path):
 def test_t30_records_current_revisions_and_contract_families():
     labels = {check.label for check in host_compat.CHECKS}
 
-    assert host_compat.COMFYUI_REVISION == "c67885b14556cf3e4e061862925282d403d09862"  # pragma: allowlist secret
-    assert host_compat.FRONTEND_REVISION == "569e65b30fbfe96743c7996e201a32bcf029a310"  # pragma: allowlist secret
+    assert host_compat.COMFYUI_REVISION == "e80c1570b6b44a2557d5d8e341e05782d18c9bbb"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "9ff3fd7f0e36b810a621288ceaf6e74e3846bedd"  # pragma: allowlist secret
     assert {
         "dual positional and named widget serialization",
         "partner node validation classification",
@@ -1273,8 +1329,16 @@ def test_t32_preserves_62_prior_checks_and_adds_exactly_four_named_checks():
 
     assert len(PRE_T32_CHECK_LABELS) == 62
     assert labels >= PRE_T32_CHECK_LABELS
-    assert labels - PRE_T32_CHECK_LABELS == T32_NEW_CHECK_LABELS
-    assert len(host_compat.CHECKS) == 66
+    assert PRE_T33_CHECK_LABELS - PRE_T32_CHECK_LABELS == T32_NEW_CHECK_LABELS
+
+
+def test_t33_preserves_66_prior_checks_and_adds_exactly_three_named_checks():
+    labels = {check.label for check in host_compat.CHECKS}
+
+    assert len(PRE_T33_CHECK_LABELS) == 66
+    assert labels >= PRE_T33_CHECK_LABELS
+    assert labels - PRE_T33_CHECK_LABELS == T33_NEW_CHECK_LABELS
+    assert len(host_compat.CHECKS) == 69
 
 
 def test_t32_revision_metadata_is_exact_and_stale_constants_fail_independently():
@@ -1304,7 +1368,7 @@ def test_t32_stale_lane_and_surface_revision_metadata_fail_independently():
         source_revision="dd79c643a95402136a75a28f6187d843bcf457ed",  # pragma: allowlist secret
     )
 
-    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.49.6"]
+    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.51.9"]
 
     checks = host_compat.CHECKS
     check_index = next(
@@ -1395,8 +1459,8 @@ def test_t29_new_contract_anchors_fail_in_isolation(tmp_path):
         (
             "named-widgets",
             Path("ComfyUI_frontend/src/lib/litegraph/src/LGraphNode.ts"),
-            "o.widgets_values_named[widget.name] = serialisedVal",
-            "o.legacy_widget_values[widget.name] = serialisedVal",
+            "return { widgets_values: positional, widgets_values_named: named }",
+            "return { widgets_values: positional, legacy_widget_values: named }",
             "dual positional and named widget serialization",
         ),
         (
@@ -1485,8 +1549,8 @@ def test_t30_current_contract_anchors_fail_in_isolation(tmp_path):
         (
             "named-authority",
             Path("ComfyUI_frontend/src/lib/litegraph/src/LGraphNode.ts"),
-            "if (namedValues && LiteGraph.namedValuesRestore)",
-            "if (namedValues)",
+            "named && (LiteGraph.namedValuesRestore || fallbackNames)",
+            "named && LiteGraph.namedValuesRestore",
             "named widget restore authority branch",
         ),
         (
@@ -1509,6 +1573,65 @@ def test_t30_current_contract_anchors_fail_in_isolation(tmp_path):
             "if (spec.audio_upload) return 'audio'",
             "if (spec.legacy_audio_upload) return 'audio'",
             "missing media upload spec classification",
+        ),
+    )
+
+    for case_name, relative_path, current, mutated, expected_label in cases:
+        root = tmp_path / case_name
+        _create_minimal_reference(root)
+        path = root / relative_path
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(current, mutated),
+            encoding="utf-8",
+        )
+
+        failed = _failed_results(root)
+
+        assert len(failed) == 1
+        assert failed[0].check.label == expected_label
+        assert any(current in missing for missing in failed[0].missing_patterns)
+
+
+def test_t33_current_contract_anchors_fail_in_isolation(tmp_path):
+    cases = (
+        (
+            "dynamic-vram-recommendation",
+            Path("ComfyUI/main.py"),
+            "version 2.8 or later (2.12+ is recommended)",
+            "version 2.8 or later",
+            "DynamicVRAM PyTorch threshold",
+        ),
+        (
+            "partner-feature-default",
+            Path("ComfyUI/comfy_api/feature_flags.py"),
+            '"partner_run_gate_enabled": {\n'
+            '        "type": "bool",\n'
+            '        "default": True,',
+            '"partner_run_gate_enabled": {\n'
+            '        "type": "bool",\n'
+            '        "default": False,',
+            "server feature flags",
+        ),
+        (
+            "named-widget-store-precedence",
+            Path("ComfyUI_frontend/src/stores/widgetValueStore.ts"),
+            "if (restoration.restoreNamed && restoration.named) {",
+            "if (restoration.named) {",
+            "named widget restoration store precedence",
+        ),
+        (
+            "sam3d-detection-root",
+            Path("ComfyUI/comfy_extras/nodes_sam3d_body.py"),
+            'options=folder_paths.get_filename_list("detection")',
+            'options=folder_paths.get_filename_list("checkpoints")',
+            "SAM3D Body detection model root",
+        ),
+        (
+            "partner-auto-queue-gate",
+            Path("ComfyUI_frontend/src/composables/billing/usePartnerNodesRunGate.ts"),
+            "export function partnerRunGateBlocksAutoQueue(): boolean {",
+            "export function partnerRunGateBlocksAfterQueue(): boolean {",
+            "frontend partner run gate ownership",
         ),
     )
 

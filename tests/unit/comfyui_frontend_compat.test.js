@@ -10,14 +10,14 @@ const FRONTEND_LANES = [
         asyncSettingOnChange: false,
     },
     {
-        id: "core-pin-1.49.6",
-        version: "1.49.6",
+        id: "core-pin-1.51.9",
+        version: "1.51.9",
         settingChangeTelemetry: true,
         asyncSettingOnChange: false,
     },
     {
-        id: "standalone-1.52.1+",
-        version: "1.52.1+",
+        id: "standalone-1.54.3+",
+        version: "1.54.3+",
         settingChangeTelemetry: true,
         asyncSettingOnChange: true,
     },
@@ -158,12 +158,12 @@ describe("Doctor setting telemetry contract", () => {
         },
     );
 
-    test("only standalone 1.52.1+ claims the asynchronous setting contract", () => {
+    test("only standalone 1.54.3+ claims the asynchronous setting contract", () => {
         expect(
             FRONTEND_LANES
                 .filter((lane) => lane.asyncSettingOnChange)
                 .map((lane) => lane.id),
-        ).toEqual(["standalone-1.52.1+"]);
+        ).toEqual(["standalone-1.54.3+"]);
     });
 
     test.each(FRONTEND_LANES)(
@@ -494,6 +494,22 @@ describe("public validation boundary surfacing", () => {
         for (const source of sources) {
             expect(source).not.toMatch(
                 /executionErrorStore|surfacedNodeErrors|missingModelStore|pinia/iu,
+            );
+        }
+    });
+
+    test("runtime compatibility remains observational and does not own host queue or authentication", async () => {
+        const files = [
+            "web/comfyui_frontend_compat.js",
+            "web/doctor_ui.js",
+        ];
+        const sources = await Promise.all(
+            files.map((file) => readFile(path.resolve(process.cwd(), file), "utf8")),
+        );
+
+        for (const source of sources) {
+            expect(source).not.toMatch(
+                /queuePrompt|partnerRunGate|useAuthStore|\/prompt\b/iu,
             );
         }
     });
