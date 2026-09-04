@@ -51,6 +51,13 @@ FILE_LOADING_NODE_TYPES: Set[str] = {
     "IPAdapterModelLoader", "IPAdapterFaceIDLoader",
 }
 
+# Exact first-party contracts that must not spread to similarly named custom
+# nodes through the legacy substring loader heuristic.
+EXACT_NODE_ASSET_CATEGORIES: Dict[str, str] = {
+    "SAM3DBody_Loader": "detection",
+}
+EXACT_FILE_LOADING_NODE_TYPES = frozenset(EXACT_NODE_ASSET_CATEGORIES)
+
 # Widget names that typically contain file paths
 PATH_WIDGET_NAMES: Set[str] = {
     "ckpt_name", "vae_name", "clip_name", "lora_name",
@@ -1104,8 +1111,9 @@ async def check_model_assets(
         widgets_values = context.widget_values
 
         # Determine if this node type is known to load files
-        is_file_loader = any(
-            loader in node_type for loader in FILE_LOADING_NODE_TYPES
+        is_file_loader = (
+            node_type in EXACT_FILE_LOADING_NODE_TYPES
+            or any(loader in node_type for loader in FILE_LOADING_NODE_TYPES)
         )
 
         # Check each widget value
@@ -1312,6 +1320,12 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
     lower_type = node_type.lower()
     lower_file = filename.lower()
     normalized_media_file = _normalized_media_value(filename).lower()
+
+    # IMPORTANT: keep exact first-party overrides before substring/extension
+    # heuristics; shared .safetensors roots otherwise misclassify SAM3D as checkpoints.
+    exact_category = EXACT_NODE_ASSET_CATEGORIES.get(node_type)
+    if exact_category is not None:
+        return exact_category
 
     if (
         node_type == "LoadImageOutput"

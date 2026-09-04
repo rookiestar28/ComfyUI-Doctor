@@ -334,6 +334,35 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
         }
 
     @staticmethod
+    def _sam3d_workflow(value, *, node_id=1550, named=False):
+        node = {
+            "id": node_id,
+            "type": "SAM3DBody_Loader",
+            "title": "Synthetic SAM3D Body Loader",
+            "inputs": [
+                {
+                    "name": "model_file",
+                    "widget": {"name": "model_file"},
+                }
+            ],
+        }
+        if named:
+            node["widgets_values_named"] = {"model_file": value}
+        else:
+            node["widgets_values"] = [value]
+        return {"nodes": [node]}
+
+    @staticmethod
+    def _sam3d_paths(*, checkpoints=(), detection=()):
+        return {
+            "checkpoints": list(checkpoints),
+            "detection": list(detection),
+            "input": [],
+            "input_3d": [],
+            "output": [],
+        }
+
+    @staticmethod
     def _dataset_paths(input_root, dataset_roots=()):
         return {
             "checkpoints": [],
@@ -1295,6 +1324,162 @@ class TestModelAssetsChecks(unittest.IsolatedAsyncioTestCase):
                 issues = await model_assets.check_model_assets(workflow, request)
 
             self.assertEqual(issues, [])
+
+    def test_model_assets_sam3d_body_uses_exact_detection_contract(self):
+        self.assertIn(
+            "SAM3DBody_Loader",
+            model_assets.EXACT_FILE_LOADING_NODE_TYPES,
+        )
+        self.assertEqual(
+            model_assets._determine_asset_category(
+                "SAM3DBody_Loader",
+                "sam3d_body.safetensors",
+            ),
+            "detection",
+        )
+
+        for unrelated_type in (
+            "CustomSAM3DBody_Loader",
+            "SAMBodyLoader",
+            "UnrelatedModelLoader",
+        ):
+            with self.subTest(unrelated_type=unrelated_type):
+                self.assertEqual(
+                    model_assets._determine_asset_category(
+                        unrelated_type,
+                        "shared.safetensors",
+                    ),
+                    "checkpoints",
+                )
+
+    async def test_model_assets_sam3d_body_resolves_registered_detection_asset(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            checkpoint_root = base / "checkpoints"
+            detection_root = base / "detection"
+            checkpoint_root.mkdir()
+            detection_root.mkdir()
+            (detection_root / "sam3d_body.safetensors").write_bytes(b"x")
+            paths = self._sam3d_paths(
+                checkpoints=[checkpoint_root],
+                detection=[detection_root],
+            )
+
+            for named in (False, True):
+                with self.subTest(named=named), patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=paths,
+                ):
+                    workflow = self._sam3d_workflow(
+                        "sam3d_body.safetensors",
+                        named=named,
+                    )
+                    issues = await model_assets.check_model_assets(
+                        workflow,
+                        HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        ),
+                    )
+
+                self.assertEqual(issues, [])
+
+    async def test_model_assets_sam3d_body_missing_uses_sanitized_detection_issue(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            checkpoint_root = base / "private" / "checkpoints"
+            detection_root = base / "private" / "detection"
+            checkpoint_root.mkdir(parents=True)
+            detection_root.mkdir(parents=True)
+            workflow = self._sam3d_workflow("missing_sam3d_body.safetensors")
+            paths = self._sam3d_paths(
+                checkpoints=[checkpoint_root],
+                detection=[detection_root],
+            )
+
+            with patch(
+                "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                return_value=paths,
+            ):
+                issues = await model_assets.check_model_assets(
+                    workflow,
+                    HealthCheckRequest(
+                        workflow=workflow,
+                        scope=DiagnosticsScope.MANUAL,
+                    ),
+                )
+
+            self.assertEqual(len(issues), 1)
+            self.assertEqual(issues[0].severity.value, "warning")
+            self.assertIn("Searched in: detection folders", issues[0].evidence)
+            serialized = repr(issues[0].to_dict())
+            self.assertIn("missing_sam3d_body.safetensors", serialized)
+            self.assertNotIn(temp_root, serialized)
+            self.assertNotIn("private", serialized)
+
+    async def test_model_assets_sam3d_body_does_not_fallback_to_checkpoints(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            checkpoint_root = Path(temp_root) / "checkpoints"
+            checkpoint_root.mkdir()
+            (checkpoint_root / "sam3d_body.safetensors").write_bytes(b"x")
+            workflow = self._sam3d_workflow("sam3d_body.safetensors")
+
+            for detection_roots in ([], [Path(temp_root) / "missing-detection"]):
+                with self.subTest(detection_roots=detection_roots), patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._sam3d_paths(
+                        checkpoints=[checkpoint_root],
+                        detection=detection_roots,
+                    ),
+                ):
+                    issues = await model_assets.check_model_assets(
+                        workflow,
+                        HealthCheckRequest(
+                            workflow=workflow,
+                            scope=DiagnosticsScope.MANUAL,
+                        ),
+                    )
+
+                self.assertEqual(len(issues), 1)
+                self.assertIn(
+                    "Searched in: detection folders",
+                    issues[0].evidence,
+                )
+
+    async def test_model_assets_sam3d_body_traversal_never_probes_or_discloses(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            base = Path(temp_root)
+            checkpoint_root = base / "checkpoints"
+            detection_root = base / "detection"
+            checkpoint_root.mkdir()
+            detection_root.mkdir()
+            workflow = self._sam3d_workflow("../external.safetensors")
+
+            with (
+                patch(
+                    "services.diagnostics.checks.model_assets._get_comfy_model_paths",
+                    return_value=self._sam3d_paths(
+                        checkpoints=[checkpoint_root],
+                        detection=[detection_root],
+                    ),
+                ),
+                patch.object(Path, "exists", autospec=True) as exists_mock,
+                patch("builtins.open", mock_open()) as open_mock,
+            ):
+                issues = await model_assets.check_model_assets(
+                    workflow,
+                    HealthCheckRequest(
+                        workflow=workflow,
+                        scope=DiagnosticsScope.MANUAL,
+                    ),
+                )
+
+            self.assertEqual(len(issues), 1)
+            serialized = repr(issues[0].to_dict())
+            self.assertNotIn("external.safetensors", serialized)
+            self.assertNotIn(temp_root, serialized)
+            exists_mock.assert_not_called()
+            open_mock.assert_not_called()
 
     async def test_model_assets_old_host_does_not_fallback_geometry_to_checkpoints(self):
         with tempfile.TemporaryDirectory() as temp_root:
