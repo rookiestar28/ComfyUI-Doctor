@@ -24,6 +24,11 @@ PYTORCH_FALLBACK_WARNING = (
     "2.8 or later. Falling back to legacy ModelPatcher. VRAM estimates may be "
     "unreliable especially on Windows"
 )
+PYTORCH_FALLBACK_WARNING_CURRENT = (
+    "Unsupported Pytorch detected. DynamicVRAM support requires Pytorch version "
+    "2.8 or later (2.12+ is recommended). Falling back to legacy ModelPatcher. "
+    "VRAM estimates may be unreliable especially on Windows"
+)
 COMFY_AIMDO_FALLBACK_WARNING = (
     "No working comfy-aimdo install detected. DynamicVRAM support disabled. "
     "Falling back to legacy ModelPatcher. VRAM estimates may be unreliable "
@@ -31,7 +36,8 @@ COMFY_AIMDO_FALLBACK_WARNING = (
 )
 DYNAMIC_VRAM_RECOMMENDATION = (
     "Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; "
-    "ComfyUI base support remains PyTorch 2.7."
+    "ComfyUI recommends PyTorch 2.12 or later for DynamicVRAM; base ComfyUI support "
+    "remains PyTorch 2.7."
 )
 
 MAX_HOST_LOG_ENTRIES = 300
@@ -41,7 +47,10 @@ MAX_REASON_CODES = 2
 _WARNING_PREFIX = "[WARNING] "
 _REASON_ORDER = ("pytorch_threshold", "comfy_aimdo_unavailable")
 _WARNING_REASONS = {
+    # IMPORTANT: retain both exact host generations. Removing the current
+    # recommendation parenthetical produces the accepted prior warning.
     PYTORCH_FALLBACK_WARNING: "pytorch_threshold",
+    PYTORCH_FALLBACK_WARNING_CURRENT: "pytorch_threshold",
     COMFY_AIMDO_FALLBACK_WARNING: "comfy_aimdo_unavailable",
 }
 

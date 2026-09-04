@@ -24,6 +24,12 @@ const activeAdvisory = {
 
 
 describe('DynamicVRAM health advisory formatting', () => {
+    it('keeps the base, feature requirement, and upstream recommendation distinct', () => {
+        expect(DYNAMIC_VRAM_RECOMMENDATION).toBe(
+            'Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI recommends PyTorch 2.12 or later for DynamicVRAM; base ComfyUI support remains PyTorch 2.7.',
+        );
+    });
+
     it('returns only the fixed recommendation for the exact active projection', () => {
         expect(formatDynamicVramAdvisory(activeAdvisory)).toBe(DYNAMIC_VRAM_RECOMMENDATION);
     });

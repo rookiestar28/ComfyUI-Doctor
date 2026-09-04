@@ -1,5 +1,5 @@
 export const DYNAMIC_VRAM_RECOMMENDATION =
-    'Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI base support remains PyTorch 2.7.';
+    'Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI recommends PyTorch 2.12 or later for DynamicVRAM; base ComfyUI support remains PyTorch 2.7.';
 
 const DYNAMIC_VRAM_REASONS = ['pytorch_threshold', 'comfy_aimdo_unavailable'];
 const DYNAMIC_VRAM_TITLE = 'DynamicVRAM fallback';

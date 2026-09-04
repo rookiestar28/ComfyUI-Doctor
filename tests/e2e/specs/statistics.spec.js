@@ -214,7 +214,7 @@ async function setupMocks(page, options = {}) {
             reasons: ['pytorch_threshold'],
             title: 'DynamicVRAM fallback',
             message: 'Automatic DynamicVRAM fell back to legacy ModelPatcher.',
-            recommendation: 'Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI base support remains PyTorch 2.7.',
+            recommendation: 'Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI recommends PyTorch 2.12 or later for DynamicVRAM; base ComfyUI support remains PyTorch 2.7.',
             repeat_count: 1,
             first_seen: '2026-08-19T00:00:00Z',
             last_seen: '2026-08-19T00:00:00Z'
@@ -728,7 +728,7 @@ test.describe('Statistics Dashboard', () => {
     await expect(page.locator('#doctor-health-output')).toContainText('pipeline_status=ok');
     await expect(page.locator('#doctor-health-output')).toContainText('ssrf_blocked=1');
     await expect(page.locator('#doctor-health-output')).toContainText('dropped_logs=2');
-    await expect(page.locator('#doctor-health-output')).toContainText('Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI base support remains PyTorch 2.7.');
+    await expect(page.locator('#doctor-health-output')).toContainText('Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; ComfyUI recommends PyTorch 2.12 or later for DynamicVRAM; base ComfyUI support remains PyTorch 2.7.');
     await expect(page.locator('#doctor-health-output')).not.toContainText('Unsupported Pytorch detected');
     await expect(page.locator('#doctor-health-output')).not.toContainText('No working comfy-aimdo install detected');
 

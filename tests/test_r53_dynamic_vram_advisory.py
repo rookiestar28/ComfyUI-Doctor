@@ -41,6 +41,16 @@ ACTIVE_KEYS = {
     "first_seen",
     "last_seen",
 }
+CURRENT_PYTORCH_FALLBACK_WARNING = (
+    "Unsupported Pytorch detected. DynamicVRAM support requires Pytorch version "
+    "2.8 or later (2.12+ is recommended). Falling back to legacy ModelPatcher. "
+    "VRAM estimates may be unreliable especially on Windows"
+)
+CURRENT_DYNAMIC_VRAM_RECOMMENDATION = (
+    "Automatic DynamicVRAM requires PyTorch 2.8 or later and working comfy-aimdo; "
+    "ComfyUI recommends PyTorch 2.12 or later for DynamicVRAM; base ComfyUI support "
+    "remains PyTorch 2.7."
+)
 
 
 @pytest.fixture(autouse=True)
@@ -73,8 +83,10 @@ def test_contract_constants_and_inactive_projection_are_exact():
     ("message", "reason"),
     (
         (PYTORCH_FALLBACK_WARNING, "pytorch_threshold"),
+        (CURRENT_PYTORCH_FALLBACK_WARNING, "pytorch_threshold"),
         (COMFY_AIMDO_FALLBACK_WARNING, "comfy_aimdo_unavailable"),
         (f"[WARNING] {PYTORCH_FALLBACK_WARNING}\n", "pytorch_threshold"),
+        (f"[WARNING] {CURRENT_PYTORCH_FALLBACK_WARNING}\n", "pytorch_threshold"),
         (
             f"\x1b[1m\x1b[33m[WARNING]\x1b[0m {COMFY_AIMDO_FALLBACK_WARNING}\n",
             "comfy_aimdo_unavailable",
@@ -97,6 +109,13 @@ def test_exact_source_messages_and_narrow_host_wrapper_are_classified(message, r
         f"[INFO] {PYTORCH_FALLBACK_WARNING}",
         f"{PYTORCH_FALLBACK_WARNING} extra",
         PYTORCH_FALLBACK_WARNING.replace("2.8", "2.9"),
+        CURRENT_PYTORCH_FALLBACK_WARNING.replace("2.12+", "2.13+"),
+        CURRENT_PYTORCH_FALLBACK_WARNING.replace("is recommended", "is preferred"),
+        CURRENT_PYTORCH_FALLBACK_WARNING.replace("recommended).", "recommended)"),
+        CURRENT_PYTORCH_FALLBACK_WARNING.replace(
+            "legacy ModelPatcher", "dynamic ModelPatcher"
+        ),
+        f"{CURRENT_PYTORCH_FALLBACK_WARNING} extra",
         (
             "Dynamic vram disabled with argument. If you have any issues with "
             "dynamic vram enabled please give us a detailed reports."
@@ -130,6 +149,20 @@ def test_both_reasons_share_one_bounded_deterministic_advisory(monkeypatch):
     assert result["repeat_count"] == 2
     assert result["first_seen"].endswith("Z")
     assert result["last_seen"].endswith("Z")
+
+
+def test_current_warning_and_recommendation_are_frozen_to_source_contract():
+    assert (
+        getattr(advisory, "PYTORCH_FALLBACK_WARNING_CURRENT", None)
+        == CURRENT_PYTORCH_FALLBACK_WARNING
+    )
+    assert DYNAMIC_VRAM_RECOMMENDATION == CURRENT_DYNAMIC_VRAM_RECOMMENDATION
+    assert "requires PyTorch 2.8 or later" in DYNAMIC_VRAM_RECOMMENDATION
+    assert (
+        "recommends PyTorch 2.12 or later for DynamicVRAM"
+        in DYNAMIC_VRAM_RECOMMENDATION
+    )
+    assert "base ComfyUI support remains PyTorch 2.7" in DYNAMIC_VRAM_RECOMMENDATION
 
 
 def test_getter_returns_an_independent_safe_projection():
