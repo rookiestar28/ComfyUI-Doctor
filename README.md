@@ -14,6 +14,14 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Doctor sidebar minimum width and host-switch lifecycle corrected</strong></summary>
+
+- Enforced a `560px` Doctor sidebar minimum across the host splitter, content wrapper, and Doctor mount while preserving wider user layouts.
+- Isolated Doctor presentation state in an owned content root and added takeover-safe cleanup so switching to another custom sidebar releases Doctor resources without clipping, marker leakage, or overwriting the incoming extension.
+
+</details>
+
+<details>
 <summary><strong>Current host runtime lanes, DynamicVRAM guidance, and SAM3D diagnostics refreshed</strong></summary>
 
 - Refreshed version-aware compatibility coverage for the Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.51.9`, and standalone frontend `1.54.3+`, including current named-widget restoration and standalone asynchronous settings-handler behavior.
