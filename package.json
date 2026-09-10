@@ -28,7 +28,7 @@
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "acorn": "^8.15.0",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.0"
   },
   "overrides": {
     "esbuild": "0.28.1",
