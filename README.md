@@ -14,6 +14,14 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Optional xFormers diagnostic false positive removed</strong></summary>
+
+- Stopped treating a missing optional xFormers package as a health problem or recommending a generic installation when ComfyUI can use another attention backend.
+- Preserved xFormers runtime-error context and the independent Triton advisory.
+
+</details>
+
+<details>
 <summary><strong>Doctor sidebar minimum width and host-switch lifecycle corrected</strong></summary>
 
 - Enforced a `560px` Doctor sidebar minimum across the host splitter, content wrapper, and Doctor mount while preserving wider user layouts.
@@ -527,7 +535,7 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Every candidate model path is resolved and contained within an authoritative registered root before Doctor checks it. Traversal, absolute external, cross-drive, null-byte, and symlink escape candidates are rejected.
 - Exact first-party image/video dataset folder widgets resolve only below ComfyUI's input root, while saved training dataset folders resolve only below registered `datasets` roots. Doctor checks the folder itself without enumerating or reading dataset content.
 - Validation errors can be surfaced to a visible outer subgraph host when public raw errors and graph links prove the boundary mapping. Recognized partner-node workspace-policy errors stay node-level and remain distinct from account preconditions. Doctor does not depend on private frontend stores for this behavior.
-- Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.7 receive conservative upgrade guidance when a parseable version is available.
+- Environment diagnostics support Python 3.10 and newer without a stale upper-version penalty. PyTorch versions below 2.7 receive conservative upgrade guidance when a parseable version is available. Missing optional xFormers alone is not reported as a health problem or generic installation recommendation; explicit xFormers runtime errors remain available to the normal error-diagnostics path.
 - Exact allowlisted DynamicVRAM fallback warnings can produce one bounded, nonfatal Trust & Health advisory. Automatic DynamicVRAM requires PyTorch 2.8 and working `comfy-aimdo`, ComfyUI recommends PyTorch 2.12 or later for this feature, and the feature-specific requirement does not change ComfyUI's base PyTorch 2.7 support or Doctor's runtime-error state.
 - Desktop runtime identity and storage are reported independently: a managed Desktop `.venv` remains identified as Desktop while Doctor data continues to prefer ComfyUI's private system-user directory.
 

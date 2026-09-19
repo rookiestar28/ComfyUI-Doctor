@@ -153,6 +153,10 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 - Node configuration anti-patterns.
 - Environment mismatch hints, including Python 3.10+ support and conservative
   PyTorch-below-2.7 guidance when the version is parseable.
+- Missing optional xFormers alone does not create a health issue or generic
+  installation recommendation. Explicit xFormers runtime failures remain
+  available to the normal error-diagnostics path, and the independent Triton
+  advisory is unchanged.
 
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
 The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.
