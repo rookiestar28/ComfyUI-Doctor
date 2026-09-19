@@ -4,7 +4,7 @@ F14 Proactive Diagnostics - Environment & Dependencies Check
 Analyzes system environment to detect:
 1. Python version constraints (soft warning)
 2. torch/cuda mismatch and "GPU expected but not available"
-3. Missing optional accelerators (xformers/triton)
+3. Evidence-backed optional accelerator advisories
 """
 
 import logging
@@ -341,34 +341,16 @@ def _check_gpu_availability(
 
 
 def _check_accelerators(env: Dict[str, Any]) -> List[HealthIssue]:
-    """Check for optional accelerators (xformers, triton)."""
+    """Check for evidence-backed optional accelerator advisories."""
     issues: List[HealthIssue] = []
 
     # Only suggest accelerators if CUDA is available
     if not env["cuda_available"]:
         return issues
 
-    # Check xformers
-    if not env["xformers_available"]:
-        target = IssueTarget(setting="xformers")
-        issues.append(HealthIssue(
-            issue_id=HealthIssue.generate_issue_id("no_xformers", target, ""),
-            category=IssueCategory.PERFORMANCE,
-            severity=IssueSeverity.INFO,
-            title="xformers Not Installed",
-            summary="xformers can significantly improve memory efficiency and speed",
-            evidence=[
-                "xformers provides memory-efficient attention implementations",
-                f"GPU: {env['gpu_name'] or 'Unknown'}",
-                f"GPU VRAM: {env['gpu_memory_gb'] or 'Unknown'} GB",
-            ],
-            recommendation=[
-                "Install xformers: pip install xformers",
-                "Enables memory-efficient attention, reducing VRAM usage by 20-50%",
-                "Particularly helpful for high-resolution generation",
-            ],
-            target=target,
-        ))
+    # IMPORTANT: xFormers is an optional host-selected backend; absence alone
+    # must not become install advice, or valid alternative attention setups are
+    # misdiagnosed and users may mutate a compatible host environment.
 
     # Check triton (Windows support is limited)
     if not env["triton_available"] and env["platform"] != "Windows":

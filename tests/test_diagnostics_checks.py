@@ -197,6 +197,54 @@ class TestEnvironmentDependencyChecks(unittest.TestCase):
                 self.assertEqual(issues, [])
                 self.assertEqual(HealthReport.compute_health_score(issues), 100)
 
+    def test_optional_xformers_absence_is_not_a_health_issue(self):
+        base_env = {
+            "cuda_available": True,
+            "xformers_available": False,
+            "triton_available": True,
+            "platform": "Windows",
+            "gpu_name": "Synthetic GPU",
+            "gpu_memory_gb": 24,
+        }
+
+        for version in ((3, 12, 10), (3, 13, 9), (3, 14, 0), (3, 15, 0)):
+            with self.subTest(version=version):
+                issues = env_deps._check_accelerators({
+                    **base_env,
+                    "python_version": version,
+                })
+
+                self.assertEqual(issues, [])
+                self.assertEqual(HealthReport.compute_health_score(issues), 100)
+
+    def test_triton_advisory_remains_independent_of_xformers_absence(self):
+        issues = env_deps._check_accelerators({
+            "python_version": (3, 13, 9),
+            "cuda_available": True,
+            "xformers_available": False,
+            "triton_available": False,
+            "platform": "Linux",
+            "gpu_name": "Synthetic GPU",
+            "gpu_memory_gb": 24,
+        })
+
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].target.setting, "triton")
+        self.assertEqual(issues[0].title, "Triton Not Installed")
+
+    def test_accelerator_advisories_require_cuda(self):
+        issues = env_deps._check_accelerators({
+            "python_version": (3, 13, 9),
+            "cuda_available": False,
+            "xformers_available": False,
+            "triton_available": False,
+            "platform": "Linux",
+            "gpu_name": None,
+            "gpu_memory_gb": None,
+        })
+
+        self.assertEqual(issues, [])
+
     def test_python_below_host_minimum_remains_warning(self):
         issues = env_deps._check_python_version(
             {"python_version": (3, 9, 18)}
