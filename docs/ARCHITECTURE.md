@@ -210,7 +210,8 @@ Additional focused lanes:
   source metadata, execution event payloads, model registries, nested workflow
   serialization, validation-error state, setting telemetry, Desktop layout,
   DynamicVRAM applicability/feature threshold, the SAM3D Body detection-root
-  contract, standalone asynchronous setting handlers, system statistics
-  metadata, job-cancel contracts, and frontend queue/cancel adoption.
+  contract, core-pinned and standalone asynchronous setting handlers,
+  system statistics metadata, job-cancel contracts, and frontend queue/cancel
+  adoption.
 - Keep public route changes reflected in `docs/openapi.json`.
 - Keep local harness tests deterministic; live backend tests must be explicit opt-in.

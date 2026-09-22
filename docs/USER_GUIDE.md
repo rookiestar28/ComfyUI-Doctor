@@ -91,6 +91,9 @@ When host canvas APIs are available, locate actions focus the resolved node
 bounds and can switch into the relevant graph or real subgraph for nested
 execution IDs. Executable group IDs continue to focus their group host rather
 than being treated as subgraphs.
+After navigation, Doctor checks that the canvas, workflow, and target still
+match the request before focusing. A newer locate request or closing the
+sidebar cancels pending focus.
 
 ## Smart Debug Node
 
@@ -150,6 +153,8 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 - Real-path containment that rejects external, traversal, cross-drive,
   null-byte, and symlink-escape candidates before any asset probe.
 - Missing assets or placeholder values.
+- First-party Switch nodes may leave either optional branch disconnected;
+  Doctor still reports broken links and missing required inputs.
 - Node configuration anti-patterns.
 - Environment mismatch hints, including Python 3.10+ support and conservative
   PyTorch-below-2.7 guidance when the version is parseable.
