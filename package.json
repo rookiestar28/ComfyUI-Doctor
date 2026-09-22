@@ -1,6 +1,6 @@
 {
   "name": "comfyui-doctor",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": "A real-time runtime diagnostics suite for ComfyUI",
   "private": true,
   "scripts": {
