@@ -509,8 +509,290 @@ test.describe('Doctor Chat Interface', () => {
     expect(nodeContext.subgraph_lineage).toEqual(['11', '42', '99']);
   });
 
+
+  for (const scenario of [
+    'positive', 'replaced canvas', 'removed node', 'redirected graph', 'replaced workflow',
+    'same id replacement', 'authoritative membership', 'navigation throws',
+    'sidebar destroy', 'host takeover',
+  ]) {
+    test('focus lifecycle: ' + scenario, async ({ page }) => {
+      const errors = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      const state = await page.evaluate(async (scenario) => {
+        const app = window.app;
+        const root = app.rootGraph;
+        const node = { id: 42, graph: root, pos: [20, 30], size: [40, 50],
+          boundingRect: [20, 30, 40, 50] };
+        root._nodes = [node];
+        const canvas = app.canvas;
+        canvas.graph = null;
+        canvas.selected_nodes = {};
+        let selected = 0;
+        let framed = 0;
+        canvas.selectNodes = (nodes) => {
+          selected++;
+          canvas.selected_nodes = Object.fromEntries(nodes.map((n) => [n.id, n]));
+        };
+        canvas.animateToBounds = () => framed++;
+        canvas.setGraph = (graph) => {
+          canvas.graph = graph;
+          if (scenario === 'replaced canvas') app.canvas = { graph, selected_nodes: {} };
+          if (scenario === 'removed node') root._nodes = [];
+          if (scenario === 'redirected graph') canvas.graph = { _nodes: [] };
+          if (scenario === 'replaced workflow') app.rootGraph = { _nodes: [] };
+          if (scenario === 'same id replacement') root._nodes = [{ ...node }];
+          if (scenario === 'authoritative membership') root.nodes = [];
+          if (scenario === 'navigation throws') throw new Error('synthetic navigation failure');
+          if (scenario === 'sidebar destroy') queueMicrotask(() => {
+            app.extensionManager.sidebarTab.sidebarTabs
+              .find((tab) => tab.id === 'comfyui-doctor').destroy();
+          });
+          if (scenario === 'host takeover') queueMicrotask(() => {
+            document.getElementById('sidebar-tab-comfyui-doctor').replaceChildren();
+          });
+        };
+        const result = await app.Doctor.locateNodeOnCanvas('42');
+        return { result, selected, framed, ids: Object.keys(canvas.selected_nodes) };
+      }, scenario);
+      if (scenario === 'positive') {
+        expect(state.selected).toBe(1);
+        expect(state.framed).toBe(1);
+        expect(state.ids).toEqual(['42']);
+      } else {
+        expect(state.selected).toBe(0);
+        expect(state.framed).toBe(0);
+        expect(state.ids).toEqual([]);
+      }
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('focus lifecycle: a newer request supersedes pending navigation', async ({ page }) => {
+    const state = await page.evaluate(async () => {
+      const { app } = window;
+      const root = app.rootGraph;
+      const nodes = [42, 43].map((id) => ({
+        id, graph: root, pos: [id, 0], size: [10, 10], boundingRect: [id, 0, 10, 10],
+      }));
+      root._nodes = nodes;
+      app.canvas.graph = null;
+      const frames = [];
+      app.canvas.animateToBounds = (bounds) => frames.push(bounds[0]);
+      const first = app.Doctor.locateNodeOnCanvas('42');
+      const second = app.Doctor.locateNodeOnCanvas('43');
+      await Promise.all([first, second]);
+      return { frames, ids: Object.keys(app.canvas.selected_nodes) };
+    });
+    expect(state.frames).toEqual([43]);
+    expect(state.ids).toEqual(['43']);
+  });
+
+  test('focus lifecycle: removed nested host cannot leave a live stale child target', async ({ page }) => {
+    const state = await page.evaluate(async () => {
+      const { app } = window;
+      const root = app.rootGraph;
+      const child = { _nodes: [], isRootGraph: false };
+      const node = { id: 42, graph: child, pos: [1, 2], size: [3, 4] };
+      child._nodes = [node];
+      root._nodes = [{ id: 65, graph: root, subgraph: child, isSubgraphNode: () => true }];
+      app.canvas.selected_nodes = {};
+      app.canvas.lastAnimatedBounds = null;
+      app.canvas.setGraph = (graph) => {
+        app.canvas.graph = graph;
+        queueMicrotask(() => { root._nodes = []; });
+      };
+      await app.Doctor.locateNodeOnCanvas('65:42');
+      return { ids: Object.keys(app.canvas.selected_nodes), bounds: app.canvas.lastAnimatedBounds };
+    });
+    expect(state).toEqual({ ids: [], bounds: null });
+  });
+
+  test('focus lifecycle: same graph does not schedule a rendering wait', async ({ page }) => {
+    const state = await page.evaluate(async () => {
+      const { app } = window;
+      const root = app.rootGraph;
+      const node = { id: 42, graph: root, pos: [1, 2], size: [3, 4] };
+      root._nodes = [node];
+      app.canvas.graph = root;
+      const original = window.requestAnimationFrame;
+      let requests = 0;
+      window.requestAnimationFrame = () => { requests++; return 0; };
+      try {
+        await app.Doctor.locateNodeOnCanvas('42');
+        return { requests, ids: Object.keys(app.canvas.selected_nodes) };
+      } finally { window.requestAnimationFrame = original; }
+    });
+    expect(state).toEqual({ requests: 0, ids: ['42'] });
+  });
+
+  test('focus lifecycle: background frames have a bound and release frame handles', async ({ page }) => {
+    const state = await page.evaluate(async () => {
+      const { app } = window;
+      const root = app.rootGraph;
+      const node = { id: 42, graph: root, pos: [1, 2], size: [3, 4] };
+      root._nodes = [node];
+      app.canvas.graph = null;
+      const originalRaf = window.requestAnimationFrame;
+      const originalCancel = window.cancelAnimationFrame;
+      let handle = 0;
+      const pending = new Set();
+      window.requestAnimationFrame = () => { pending.add(++handle); return handle; };
+      window.cancelAnimationFrame = (id) => pending.delete(id);
+      try {
+        await app.Doctor.locateNodeOnCanvas('42');
+        return { requested: handle, pending: pending.size, ids: Object.keys(app.canvas.selected_nodes) };
+      } finally {
+        window.requestAnimationFrame = originalRaf;
+        window.cancelAnimationFrame = originalCancel;
+      }
+    });
+    expect(state).toEqual({ requested: 2, pending: 0, ids: ['42'] });
+  });
+
+  for (const mode of ['root', 'group', 'subgraph', 'nested', 'legacy']) {
+    test('focus lifecycle: Locate button reaches the live ' + mode + ' target', async ({ page }) => {
+      await page.evaluate((mode) => {
+        const { app } = window;
+        const root = app.rootGraph;
+        const node = { id: 42, graph: root, pos: [100, 200], size: [200, 100],
+          boundingRect: [100, 200, 200, 100] };
+        let graph = root;
+        let executionId = '42';
+        if (mode === 'group') {
+          node.getInnerNodes = () => [{ id: 7 }];
+          executionId = '42:7';
+        }
+        if (mode === 'subgraph' || mode === 'nested') {
+          graph = { _nodes: [node], isRootGraph: false };
+          node.graph = graph;
+          let host = { id: 65, graph: root, subgraph: graph, isSubgraphNode: () => true };
+          executionId = '65:42';
+          if (mode === 'nested') {
+            const middle = { _nodes: [host], isRootGraph: false };
+            host.graph = middle;
+            host = { id: 66, graph: root, subgraph: middle, isSubgraphNode: () => true };
+            executionId = '66:65:42';
+          }
+          root._nodes = [host];
+        } else root._nodes = [node];
+        app.canvas.graph = null;
+        app.canvas.selected_nodes = {};
+        if (mode === 'legacy') {
+          app.canvas.setGraph = undefined;
+          app.canvas.selectNodes = undefined;
+          app.canvas.animateToBounds = undefined;
+          // Legacy getter-only membership is an observed supported surface.
+          root.getNodeById = (id) => String(id) === '42' ? node : null;
+          delete root._nodes;
+        }
+        window.__focusTarget = { graph, node };
+        app.Doctor.handleNewError({
+          last_error: 'Synthetic focus test error', timestamp: new Date().toISOString(),
+          node_context: { node_id: executionId, node_name: 'SyntheticNode', node_class: 'KSampler' },
+        });
+      }, mode);
+      await page.locator('#doctor-latest-log #doctor-locate-btn').click();
+      await expect.poll(() => page.evaluate(() => {
+        const { canvas } = window.app;
+        const { graph, node } = window.__focusTarget;
+        return canvas.graph === graph && canvas.selected_nodes?.[42] === node;
+      })).toBe(true);
+      if (mode === 'legacy') {
+        expect(await page.evaluate(() => [...window.app.canvas.ds.offset])).toEqual([760, 290]);
+      } else {
+        expect(await page.evaluate(() => window.app.canvas.lastAnimatedBounds)).toEqual([100, 200, 200, 100]);
+      }
+    });
+  }
+
+
+  for (const cancellation of ['destroy', 'supersede']) {
+    test('focus lifecycle: cancels an allocated frame on ' + cancellation, async ({ page }) => {
+      const state = await page.evaluate(async (cancellation) => {
+        const { app } = window;
+        const root = app.rootGraph;
+        root._nodes = [42, 43].map((id) => ({
+          id, graph: root, pos: [id, 0], size: [10, 10], boundingRect: [id, 0, 10, 10],
+        }));
+        app.canvas.graph = null;
+        app.canvas.selected_nodes = {};
+        const frames = [];
+        app.canvas.animateToBounds = (bounds) => frames.push(bounds[0]);
+        const originalRaf = window.requestAnimationFrame;
+        const originalCancel = window.cancelAnimationFrame;
+        const pending = new Set();
+        window.requestAnimationFrame = () => { pending.add(12345); return 12345; };
+        window.cancelAnimationFrame = (id) => pending.delete(id);
+        try {
+          const first = app.Doctor.locateNodeOnCanvas('42');
+          await Promise.resolve();
+          const allocated = pending.size;
+          if (cancellation === 'destroy') {
+            app.extensionManager.sidebarTab.sidebarTabs
+              .find((tab) => tab.id === 'comfyui-doctor').destroy();
+          } else await app.Doctor.locateNodeOnCanvas('43');
+          const result = await first;
+          return { allocated, pending: pending.size, result, frames,
+            ids: Object.keys(app.canvas.selected_nodes), idle: app.Doctor.pendingNodeFocus === null };
+        } finally {
+          window.requestAnimationFrame = originalRaf;
+          window.cancelAnimationFrame = originalCancel;
+        }
+      }, cancellation);
+      expect(state.allocated).toBe(1);
+      expect(state.pending).toBe(0);
+      expect(state.result).toBe(false);
+      expect(state.idle).toBe(true);
+      expect(state.frames).toEqual(cancellation === 'destroy' ? [] : [43]);
+      expect(state.ids).toEqual(cancellation === 'destroy' ? [] : ['43']);
+    });
+  }
+
+  for (const callback of ['selection', 'bounds']) {
+    test('focus lifecycle: rechecks after host ' + callback + ' callback', async ({ page }) => {
+      const state = await page.evaluate(async (callback) => {
+        const { app } = window;
+        const root = app.rootGraph;
+        const node = { id: 42, graph: root, pos: [1, 2], size: [3, 4] };
+        root._nodes = [node];
+        app.canvas.graph = root;
+        let framed = 0;
+        if (callback === 'selection') {
+          app.canvas.selectNodes = () => { app.canvas.graph = { _nodes: [] }; };
+        } else Object.defineProperty(node, 'boundingRect', {
+          get() { app.canvas.graph = { _nodes: [] }; return [1, 2, 3, 4]; },
+        });
+        app.canvas.animateToBounds = () => framed++;
+        const result = await app.Doctor.locateNodeOnCanvas('42');
+        return { result, framed };
+      }, callback);
+      expect(state).toEqual({ result: false, framed: 0 });
+    });
+  }
+
+  test('focus lifecycle: a host subgraph setter does not trigger duplicate navigation', async ({ page }) => {
+    const state = await page.evaluate(async () => {
+      const { app } = window;
+      const root = app.rootGraph;
+      const child = { _nodes: [] };
+      const node = { id: 42, graph: child, pos: [1, 2], size: [3, 4] };
+      child._nodes = [node];
+      root._nodes = [{ id: 65, graph: root, subgraph: child, isSubgraphNode: () => true }];
+      let events = 0;
+      let currentSubgraph;
+      Object.defineProperty(app.canvas, 'subgraph', {
+        get() { return currentSubgraph; },
+        set(value) { events++; currentSubgraph = value; app.canvas.graph = value; },
+      });
+      app.canvas.setGraph = () => events++;
+      const result = await app.Doctor.locateNodeOnCanvas('65:42');
+      return { result, events, ids: Object.keys(app.canvas.selected_nodes) };
+    });
+    expect(state).toEqual({ result: true, events: 1, ids: ['42'] });
+  });
+
   test('should focus root graph nodes with host canvas bounds API', async ({ page }) => {
-    const focusState = await page.evaluate(() => {
+    const focusState = await page.evaluate(async () => {
       const rootNode = {
         id: 42,
         title: 'Root KSampler',
@@ -526,7 +808,7 @@ test.describe('Doctor Chat Interface', () => {
       window.app.canvas.selected_nodes = {};
       window.app.canvas.lastAnimatedBounds = null;
 
-      window.app.Doctor.locateNodeOnCanvas('42');
+      await window.app.Doctor.locateNodeOnCanvas('42');
 
       return {
         graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
@@ -543,7 +825,7 @@ test.describe('Doctor Chat Interface', () => {
   });
 
   test('should focus group node parent for grouped execution ids', async ({ page }) => {
-    const focusState = await page.evaluate(() => {
+    const focusState = await page.evaluate(async () => {
       const groupNode = {
         id: 65,
         title: 'Executable Group',
@@ -560,7 +842,7 @@ test.describe('Doctor Chat Interface', () => {
       window.app.canvas.selected_nodes = {};
       window.app.canvas.lastAnimatedBounds = null;
 
-      window.app.Doctor.locateNodeOnCanvas('65:63');
+      await window.app.Doctor.locateNodeOnCanvas('65:63');
 
       return {
         graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
@@ -575,7 +857,7 @@ test.describe('Doctor Chat Interface', () => {
   });
 
   test('should locate real SubgraphNode execution ids via rootGraph traversal', async ({ page }) => {
-    const focusState = await page.evaluate(() => {
+    const focusState = await page.evaluate(async () => {
       const innerNode = {
         id: 63,
         title: 'Inner KSampler',
@@ -610,7 +892,7 @@ test.describe('Doctor Chat Interface', () => {
       window.app.canvas.selected_nodes = {};
       window.app.canvas.ds.offset = [0, 0];
       window.app.canvas.lastAnimatedBounds = null;
-      window.app.Doctor.locateNodeOnCanvas('65:63');
+      await window.app.Doctor.locateNodeOnCanvas('65:63');
 
       return {
         graphIsSubgraph: window.app.canvas.graph === subgraph,
@@ -627,7 +909,7 @@ test.describe('Doctor Chat Interface', () => {
   });
 
   test('should traverse three-level branded execution ids to the deepest node', async ({ page }) => {
-    const focusState = await page.evaluate(() => {
+    const focusState = await page.evaluate(async () => {
       const innerNode = {
         id: 63,
         title: 'Deep Inner Node',
@@ -677,7 +959,7 @@ test.describe('Doctor Chat Interface', () => {
       window.app.canvas.selected_nodes = {};
       window.app.canvas.lastAnimatedBounds = null;
 
-      window.app.Doctor.locateNodeOnCanvas('65:70:63');
+      await window.app.Doctor.locateNodeOnCanvas('65:70:63');
 
       return {
         graphIsDeepest: window.app.canvas.graph === deepestGraph,
@@ -694,7 +976,7 @@ test.describe('Doctor Chat Interface', () => {
   });
 
   test('should preserve canvas offset fallback when bounds animation is unavailable', async ({ page }) => {
-    const focusState = await page.evaluate(() => {
+    const focusState = await page.evaluate(async () => {
       const node = {
         id: 42,
         title: 'Fallback Node',
@@ -710,7 +992,7 @@ test.describe('Doctor Chat Interface', () => {
       window.app.canvas.ds.offset = [0, 0];
       window.app.canvas.animateToBounds = undefined;
 
-      window.app.Doctor.locateNodeOnCanvas('42');
+      await window.app.Doctor.locateNodeOnCanvas('42');
 
       return {
         graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
@@ -725,7 +1007,7 @@ test.describe('Doctor Chat Interface', () => {
   });
 
   test('should leave canvas state unchanged for an incomplete subgraph path', async ({ page }) => {
-    const focusState = await page.evaluate(() => {
+    const focusState = await page.evaluate(async () => {
       const childGraph = {
         isRootGraph: false,
         _nodes: [],
@@ -749,7 +1031,7 @@ test.describe('Doctor Chat Interface', () => {
       window.app.canvas.selected_nodes = { sentinel: { id: 'sentinel' } };
       window.app.canvas.lastAnimatedBounds = [1, 2, 3, 4];
 
-      window.app.Doctor.locateNodeOnCanvas('65:70:63');
+      await window.app.Doctor.locateNodeOnCanvas('65:70:63');
 
       return {
         graphIsRoot: window.app.canvas.graph === window.app.rootGraph,
@@ -1471,6 +1753,30 @@ test.describe('Doctor Chat Interface', () => {
     expect(nodeContext.real_node_id).toBe("63");
     expect(nodeContext.preferred_node_id).toBe("65:70:63");
     expect(nodeContext.subgraph_lineage).toEqual(["65:70", "65:70:63", "63"]);
+  });
+
+  test('preserves additive executed assets while retaining execution lineage', async ({ page }) => {
+    const observed = await page.evaluate(() => {
+      const detail = {
+        prompt_id: 'synthetic-asset-prompt', node: '63', display_node: '65:63',
+        parent_node: '65', real_node_id: '63',
+        output: { images: [{ filename: 'synthetic.png', type: 'output',
+          subfolder: '', asset_id: 'synthetic-asset', future_field: { retained: true } }] },
+        future_event_field: true,
+      };
+      const before = JSON.stringify(detail);
+      window.api._triggerEvent('executed', { detail });
+      return {
+        unchanged: JSON.stringify(detail) === before,
+        lineage: window.app.Doctor.lookupExecutionLineage({
+          prompt_id: detail.prompt_id, node_id: '63',
+        }),
+      };
+    });
+    expect(observed.unchanged).toBe(true);
+    expect(observed.lineage).toMatchObject({
+      node_id: '63', display_node: '65:63', parent_node: '65', real_node_id: '63',
+    });
   });
 
   test('should have Doctor title in header', async ({ page }) => {

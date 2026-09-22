@@ -627,6 +627,7 @@ export function registerDoctorSidebarTab(appInstance = app, tabConfig) {
 }
 
 export function destroyDoctorSidebarMount(doctorUI) {
+    doctorUI?.cancelPendingNodeFocus?.();
     if (typeof doctorUI?.sidebarCleanup === "function") {
         try {
             doctorUI.sidebarCleanup();

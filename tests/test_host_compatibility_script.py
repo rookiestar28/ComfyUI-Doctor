@@ -17,6 +17,8 @@ def _write(path: Path, text: str) -> None:
 
 
 def _create_minimal_reference(root: Path) -> None:
+    for relative, text in CURRENT_CONTRACT_FIXTURES.items():
+        _write(root / relative, text)
     _write(
         root / "ComfyUI" / "main.py",
         "file_log_outputs = get_file_log_outputs(args.verbose)\n"
@@ -37,7 +39,7 @@ def _create_minimal_reference(root: Path) -> None:
         "ModelPatcher. VRAM estimates may be unreliable especially on Windows')\n",
     )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.51.9\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.53.6\n")
     _write(
         root / "ComfyUI" / "README.md",
         "torch 2.7 is minimally supported but using a newer version is extremely recommended.\n",
@@ -93,7 +95,7 @@ def _create_minimal_reference(root: Path) -> None:
         'if io.Hidden.comfy_usage_source.name in hidden:\n'
         '    hidden_inputs_v3[io.Hidden.comfy_usage_source] = extra_data.get("comfy_usage_source", None)\n'
         'input_data_all[x] = [extra_data.get("comfy_usage_source", None)]\n'
-        "output_ui = enrich_output_with_assets(output_ui)\n"
+        "output_ui = register_executed_outputs(output_ui, prompt_id, asset_manager)\n"
         '"executed" "output": output_ui\n'
         "def interrupt_if_running(self, prompt_id):\n"
         "    if self.currently_running == prompt_id:\n"
@@ -168,12 +170,12 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.54.3"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.55.12"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
         "registerSidebarTab(tab)\nsetting: {\nget: <T = unknown>(id: string) => undefined\n"
-        "set: <T = unknown>(id: string, value: T) => void\n}\n"
+        "set: (id: string, value: unknown) => void\n}\n"
         "lastNodeErrors: Record<NodeId, NodeError> | null\n"
         "lastExecutionError: ExecutionErrorWsMessage | null\n",
     )
@@ -196,9 +198,11 @@ def _create_minimal_reference(root: Path) -> None:
         "toggleSidebarTab\n",
     )
     _write(
-        root / "ComfyUI_frontend" / "src" / "schemas" / "apiSchema.ts",
-        "const zExecutionErrorWsMessage = z.object({ node_id: z.string(), node_type: z.string(), "
-        "traceback: z.array(z.string()), current_inputs: z.any(), current_outputs: z.any() })\n",
+        root / "ComfyUI_frontend" / "src" / "platform" / "remote" / "comfyui" / "execution" / "types.ts",
+        "export interface ExecutionErrorWsMessage extends ExecutionWsMessageBase {\n"
+        "  node_id?: NodeId | null\n  node_type: string\n  traceback: string[]\n"
+        "  exception_message: string\n  exception_type: string\n"
+        "  current_inputs?: unknown\n  current_outputs?: unknown\n}\n",
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "scripts" / "app.ts",
@@ -287,8 +291,7 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initHostTelemetry.ts",
-        "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'\n"
-        "return remoteConfig.value.enable_telemetry === true\n"
+        "import { isHostTelemetryEnabled } from './hostTelemetryEnabled'\n"
         "if (!isHostTelemetryEnabled()) return\n"
         "if (!window.__comfyDesktop2?.Telemetry) return\n"
         "setTelemetryRegistry(registry)\n",
@@ -434,8 +437,9 @@ def _create_minimal_reference(root: Path) -> None:
     _write(
         root / "ComfyUI_frontend" / "src" / "stores" / "executionErrorStore.ts",
         "const surfacedNodeErrors = computed(() =>\n"
-        "  lastNodeErrors.value && app.isGraphReady\n"
-        "    ? liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)\n"
+        "  const rootGraph = app.rootGraphOrUndefined\n"
+        "  lastNodeErrors.value && rootGraph\n"
+        "    ? liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)\n"
         "    : lastNodeErrors.value\n"
         ")\n",
     )
@@ -711,7 +715,7 @@ def test_host_compatibility_smoke_reports_missing_executed_asset_enrichment_anch
     _create_minimal_reference(tmp_path)
     execution_path = tmp_path / "ComfyUI" / "execution.py"
     execution_path.write_text(
-        execution_path.read_text(encoding="utf-8").replace("enrich_output_with_assets(output_ui)", "output_ui"),
+        execution_path.read_text(encoding="utf-8").replace("register_executed_outputs(output_ui, prompt_id, asset_manager)", "output_ui"),
         encoding="utf-8",
     )
 
@@ -720,7 +724,7 @@ def test_host_compatibility_smoke_reports_missing_executed_asset_enrichment_anch
 
     assert len(failed) == 1
     assert failed[0].check.label == "executed output asset enrichment tolerance"
-    assert "enrich_output_with_assets(output_ui)" in failed[0].missing_patterns
+    assert "register_executed_outputs(output_ui, prompt_id, asset_manager)" in failed[0].missing_patterns
 
 
 def test_host_compatibility_smoke_reports_missing_system_stats_deploy_environment(tmp_path):
@@ -903,9 +907,9 @@ T33_NEW_CHECK_LABELS = {
     "frontend partner run gate ownership",
 }
 
-EXPECTED_T33_REVISIONS = {
-    "ComfyUI": "e80c1570b6b44a2557d5d8e341e05782d18c9bbb",  # pragma: allowlist secret
-    "ComfyUI_frontend": "9ff3fd7f0e36b810a621288ceaf6e74e3846bedd",  # pragma: allowlist secret
+EXPECTED_HOST_REVISIONS = {
+    "ComfyUI": "e638023d54497dbe0579565e5de4bb7076899592",  # pragma: allowlist secret
+    "ComfyUI_frontend": "07c337679d250b5a7af810adb73e26449fc6e676",  # pragma: allowlist secret
     "desktop": "e2d964b7456cea8423c7b9d3371c612313c06baa",  # pragma: allowlist secret
 }
 
@@ -927,20 +931,20 @@ def _revision_metadata_failures(
     checks = host_compat.CHECKS if checks is None else checks
     failures = []
 
-    if comfyui_revision != EXPECTED_T33_REVISIONS["ComfyUI"]:
+    if comfyui_revision != EXPECTED_HOST_REVISIONS["ComfyUI"]:
         failures.append("constant:ComfyUI")
-    if frontend_revision != EXPECTED_T33_REVISIONS["ComfyUI_frontend"]:
+    if frontend_revision != EXPECTED_HOST_REVISIONS["ComfyUI_frontend"]:
         failures.append("constant:ComfyUI_frontend")
 
     for lane in lanes:
-        expected = EXPECTED_T33_REVISIONS[lane.source_repo]
+        expected = EXPECTED_HOST_REVISIONS[lane.source_repo]
         if lane.source_revision != expected:
             failures.append(f"lane:{lane.id}")
 
     for check in checks:
         if not check.source_revision:
             continue
-        expected = EXPECTED_T33_REVISIONS[check.repo]
+        expected = EXPECTED_HOST_REVISIONS[check.repo]
         if check.source_revision != expected:
             failures.append(f"check:{check.label}")
 
@@ -967,8 +971,8 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
         for lane in lanes
     ] == [
         ("desktop-0.9.4", "1.43.18", False, False),
-        ("core-pin-1.51.9", "1.51.9", True, False),
-        ("standalone-1.54.3+", "1.54.3+", True, True),
+        ("core-pin-1.53.6", "1.53.6", True, True),
+        ("standalone-1.55.12", "1.55.12", True, True),
     ]
 
 
@@ -984,14 +988,14 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.51.9",
+            "comfyui-frontend-package==1.53.6",
             "comfyui-frontend-package==1.49.5",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.54.3"',
+            '"version": "1.55.12"',
             '"version": "1.52.0"',
             "frontend runtime lane: standalone source",
         ),
@@ -1126,8 +1130,8 @@ def test_t28_reports_missing_host_telemetry_initialization_gate(tmp_path):
     path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "telemetry" / "initHostTelemetry.ts"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            "remoteConfig.value.enable_telemetry === true",
-            "remoteConfig.value.enable_telemetry !== false",
+            "if (!isHostTelemetryEnabled()) return",
+            "if (false) return",
         ),
         encoding="utf-8",
     )
@@ -1136,7 +1140,7 @@ def test_t28_reports_missing_host_telemetry_initialization_gate(tmp_path):
 
     assert len(failed) == 1
     assert failed[0].check.label == "host telemetry initialization gate"
-    assert "remoteConfig.value.enable_telemetry === true" in failed[0].missing_patterns
+    assert "if (!isHostTelemetryEnabled()) return" in failed[0].missing_patterns
 
 
 def test_t28_reports_missing_real_subgraph_node_shape(tmp_path):
@@ -1191,7 +1195,7 @@ def test_t28_reports_missing_surfaced_error_derivation(tmp_path):
     path = tmp_path / "ComfyUI_frontend" / "src" / "stores" / "executionErrorStore.ts"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            "liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)",
+            "liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)",
             "lastNodeErrors.value",
         ),
         encoding="utf-8",
@@ -1201,7 +1205,7 @@ def test_t28_reports_missing_surfaced_error_derivation(tmp_path):
 
     assert len(failed) == 1
     assert failed[0].check.label == "surfaced error derivation"
-    assert "liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)" in failed[0].missing_patterns
+    assert "liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)" in failed[0].missing_patterns
 
 
 def test_t28_reports_missing_nested_promoted_model_serialization(tmp_path):
@@ -1279,8 +1283,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.51.9: frontend 1.51.9" in formatted
-    assert "standalone-1.54.3+: frontend 1.54.3+" in formatted
+    assert "core-pin-1.53.6: frontend 1.53.6" in formatted
+    assert "standalone-1.55.12: frontend 1.55.12" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1305,8 +1309,8 @@ def test_t28_reference_source_is_never_executed(tmp_path):
 def test_t30_records_current_revisions_and_contract_families():
     labels = {check.label for check in host_compat.CHECKS}
 
-    assert host_compat.COMFYUI_REVISION == "e80c1570b6b44a2557d5d8e341e05782d18c9bbb"  # pragma: allowlist secret
-    assert host_compat.FRONTEND_REVISION == "9ff3fd7f0e36b810a621288ceaf6e74e3846bedd"  # pragma: allowlist secret
+    assert host_compat.COMFYUI_REVISION == "e638023d54497dbe0579565e5de4bb7076899592"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "07c337679d250b5a7af810adb73e26449fc6e676"  # pragma: allowlist secret
     assert {
         "dual positional and named widget serialization",
         "partner node validation classification",
@@ -1332,13 +1336,13 @@ def test_t32_preserves_62_prior_checks_and_adds_exactly_four_named_checks():
     assert PRE_T33_CHECK_LABELS - PRE_T32_CHECK_LABELS == T32_NEW_CHECK_LABELS
 
 
-def test_t33_preserves_66_prior_checks_and_adds_exactly_three_named_checks():
+def test_current_host_manifest_preserves_prior_checks_and_adds_named_contracts():
     labels = {check.label for check in host_compat.CHECKS}
 
     assert len(PRE_T33_CHECK_LABELS) == 66
     assert labels >= PRE_T33_CHECK_LABELS
-    assert labels - PRE_T33_CHECK_LABELS == T33_NEW_CHECK_LABELS
-    assert len(host_compat.CHECKS) == 69
+    assert labels - PRE_T33_CHECK_LABELS == T33_NEW_CHECK_LABELS | CURRENT_NEW_CHECK_LABELS
+    assert len(host_compat.CHECKS) == 75
 
 
 def test_t32_revision_metadata_is_exact_and_stale_constants_fail_independently():
@@ -1368,7 +1372,7 @@ def test_t32_stale_lane_and_surface_revision_metadata_fail_independently():
         source_revision="dd79c643a95402136a75a28f6187d843bcf457ed",  # pragma: allowlist secret
     )
 
-    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.51.9"]
+    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.53.6"]
 
     checks = host_compat.CHECKS
     check_index = next(
@@ -1667,3 +1671,130 @@ def test_t30_rejects_unconditional_default_detail_file(tmp_path):
     assert "file_log_outputs = [('DETAIL', 'comfyui_detail.log')" in (
         failed[0].present_forbidden_patterns
     )
+
+
+# Minimal inert source fragments; no fixture is imported or executed.
+CURRENT_CONTRACT_FIXTURES = {
+    "ComfyUI/comfy_execution/asset_enrichment.py": "def register_executed_outputs(\nenriched = copy.deepcopy(output_ui)\nif not asset_manager.enabled:\n_enrich_in_place(enriched, job_id, asset_manager.register_executed_output)\ndef register_cached_outputs(\nenriched = copy.deepcopy(ui_wrapper)\n_strip_ids(output_ui)\n_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)\nenriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)\n\"display_node\": display_node_id\n",
+    "ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts": "export function isHostTelemetryEnabled(): boolean\nconst ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'\ngetDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)\nif (override !== undefined) return override\nremoteConfig.value.enable_telemetry === true\n",
+    "ComfyUI/comfy_extras/nodes_logic.py": "node_id=\"ComfySwitchNode\"\nnode_id=\"ComfySoftSwitchNode\"\nselected = on_true if switch else on_false\nreturn io.NodeOutput(None if selected is MISSING else selected)\nio.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)\n",
+    "ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts": "const groupInputs: INodeInputSlot[] = node.inputs.filter(\n(inp) => inp.name in matchGroup\nconst connectedTypes = groupInputs.map(\nif (!link) return '*'\n...connectedTypes.slice(0, idx)\n...connectedTypes.slice(idx + 1)\ninput.type = combinedType\nconst typedSpec = { ...inputSpec, type: allowed_types }\naddNodeInput(node, typedSpec)\n",
+    "ComfyUI/comfy_execution/validation.py": "class LoopValidationError(Exception):\n\"type\": \"custom_validation_failed\"\n\"input_name\": \"loop boundary\"\n\"loop_error_type\": error_type\n\"node_ids\": sorted(node_ids)\n\"output_ids\": sorted(output_ids)\n",
+    "ComfyUI_frontend/src/composables/canvas/useFocusNode.ts": "const navigated = await navigationStore.navigateToGraph(node.graph)\nif (!navigated) return\nif (graphChanged) await waitForCanvasNavigation()\nconst activeCanvas = canvasStore.canvas\nactiveCanvas.graph !== node.graph\n!node.graph.nodes.includes(node)\nwindow.setTimeout(resolve, 100)\nactiveCanvas.animateToBounds(node.boundingRect\n",
+}
+
+CURRENT_NEW_CHECK_LABELS = {
+    "executed asset registration helper",
+    "host telemetry enablement helper",
+    "optional Switch branch contract",
+    "MatchType sibling input propagation",
+    "loop validation error envelope",
+    "focus navigation lifecycle",
+}
+
+CURRENT_CONTRACT_MUTATIONS = (
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "def register_executed_outputs(", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "enriched = copy.deepcopy(output_ui)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "if not asset_manager.enabled:", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "_enrich_in_place(enriched, job_id, asset_manager.register_executed_output)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "def register_cached_outputs(", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "enriched = copy.deepcopy(ui_wrapper)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "_strip_ids(output_ui)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "enriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "\"display_node\": display_node_id", "executed asset registration helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "export function isHostTelemetryEnabled(): boolean", "host telemetry enablement helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'", "host telemetry enablement helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "getDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)", "host telemetry enablement helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "if (override !== undefined) return override", "host telemetry enablement helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "remoteConfig.value.enable_telemetry === true", "host telemetry enablement helper"),
+    ("ComfyUI/comfy_extras/nodes_logic.py", "node_id=\"ComfySwitchNode\"", "optional Switch branch contract"),
+    ("ComfyUI/comfy_extras/nodes_logic.py", "node_id=\"ComfySoftSwitchNode\"", "optional Switch branch contract"),
+    ("ComfyUI/comfy_extras/nodes_logic.py", "selected = on_true if switch else on_false", "optional Switch branch contract"),
+    ("ComfyUI/comfy_extras/nodes_logic.py", "return io.NodeOutput(None if selected is MISSING else selected)", "optional Switch branch contract"),
+    ("ComfyUI/comfy_extras/nodes_logic.py", "io.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)", "optional Switch branch contract"),
+    ("ComfyUI/comfy_extras/nodes_logic.py", "io.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)", "optional Switch branch contract"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "const groupInputs: INodeInputSlot[] = node.inputs.filter(", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "(inp) => inp.name in matchGroup", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "const connectedTypes = groupInputs.map(", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "if (!link) return '*'", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "...connectedTypes.slice(0, idx)", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "...connectedTypes.slice(idx + 1)", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "input.type = combinedType", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "const typedSpec = { ...inputSpec, type: allowed_types }", "MatchType sibling input propagation"),
+    ("ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts", "addNodeInput(node, typedSpec)", "MatchType sibling input propagation"),
+    ("ComfyUI/comfy_execution/validation.py", "class LoopValidationError(Exception):", "loop validation error envelope"),
+    ("ComfyUI/comfy_execution/validation.py", "\"type\": \"custom_validation_failed\"", "loop validation error envelope"),
+    ("ComfyUI/comfy_execution/validation.py", "\"input_name\": \"loop boundary\"", "loop validation error envelope"),
+    ("ComfyUI/comfy_execution/validation.py", "\"loop_error_type\": error_type", "loop validation error envelope"),
+    ("ComfyUI/comfy_execution/validation.py", "\"node_ids\": sorted(node_ids)", "loop validation error envelope"),
+    ("ComfyUI/comfy_execution/validation.py", "\"output_ids\": sorted(output_ids)", "loop validation error envelope"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "const navigated = await navigationStore.navigateToGraph(node.graph)", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "if (!navigated) return", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "if (graphChanged) await waitForCanvasNavigation()", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "const activeCanvas = canvasStore.canvas", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "activeCanvas.graph !== node.graph", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "!node.graph.nodes.includes(node)", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "window.setTimeout(resolve, 100)", "focus navigation lifecycle"),
+    ("ComfyUI_frontend/src/composables/canvas/useFocusNode.ts", "activeCanvas.animateToBounds(node.boundingRect", "focus navigation lifecycle"),
+)
+
+def test_current_contract_anchors_fail_independently(tmp_path):
+    for index, (relative, anchor, label) in enumerate(CURRENT_CONTRACT_MUTATIONS):
+        root = tmp_path / str(index)
+        _create_minimal_reference(root)
+        assert not _failed_results(root)
+        path = root / relative
+        text = path.read_text(encoding="utf-8")
+        assert anchor in text
+        path.write_text(text.replace(anchor, "removed_contract", 1), encoding="utf-8")
+        failed = _failed_results(root)
+        assert [r.check.label for r in failed] == [label], (label, anchor)
+
+
+def test_current_relocated_contract_fields_fail_independently(tmp_path):
+    cases = (
+        ("ComfyUI_frontend/src/types/extensionTypes.ts", "set: (id: string, value: unknown) => void", "extensionManager settings/sidebar API"),
+        ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "node_id?: NodeId | null", "frontend execution_error schema"),
+        ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "exception_message: string", "frontend execution_error schema"),
+        ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "current_outputs?: unknown", "frontend execution_error schema"),
+        ("ComfyUI_frontend/src/platform/telemetry/initHostTelemetry.ts", "import { isHostTelemetryEnabled } from './hostTelemetryEnabled'", "host telemetry initialization gate"),
+        ("ComfyUI_frontend/src/platform/telemetry/initHostTelemetry.ts", "if (!isHostTelemetryEnabled()) return", "host telemetry initialization gate"),
+        ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "const rootGraph = app.rootGraphOrUndefined", "surfaced error derivation"),
+        ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)", "surfaced error derivation"),
+    )
+    for index, (relative, anchor, label) in enumerate(cases):
+        root = tmp_path / str(index)
+        _create_minimal_reference(root)
+        assert not _failed_results(root)
+        path = root / relative
+        text = path.read_text(encoding="utf-8")
+        assert anchor in text
+        path.write_text(text.replace(anchor, "removed_contract", 1), encoding="utf-8")
+        assert [r.check.label for r in _failed_results(root)] == [label]
+
+
+def test_current_settings_contract_provenance_is_independent_of_package_pin():
+    expected = {
+        "desktop-0.9.4": ("e2d964b7456cea8423c7b9d3371c612313c06baa", False),  # pragma: allowlist secret
+        "core-pin-1.53.6": ("7d533a4cd4c4904ffdb0537f6b80ae9793dd62f1", True),  # pragma: allowlist secret
+        "standalone-1.55.12": ("07c337679d250b5a7af810adb73e26449fc6e676", True),  # pragma: allowlist secret
+    }  # pragma: allowlist secret
+
+    def mismatches(lanes):
+        return [
+            lane.id for lane in lanes
+            if (getattr(lane, "setting_contract_revision", None), lane.async_setting_on_change)
+            != expected.get(lane.id)
+        ]
+
+    lanes = host_compat.FRONTEND_RUNTIME_LANES
+    assert mismatches(lanes) == []
+    for index, lane in enumerate(lanes):
+        changed = list(lanes)
+        changed[index] = replace(lane, setting_contract_revision="stale")
+        assert mismatches(changed) == [lane.id]
+        changed[index] = replace(lane, async_setting_on_change=not lane.async_setting_on_change)
+        assert mismatches(changed) == [lane.id]
+    formatted = host_compat.format_results([])
+    assert "7d533a4cd4c4904ffdb0537f6b80ae9793dd62f1" in formatted  # pragma: allowlist secret

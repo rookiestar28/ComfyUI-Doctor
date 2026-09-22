@@ -64,6 +64,8 @@ export class DoctorUI {
         this.enableNotifications = options.enableNotifications !== undefined ? options.enableNotifications : true;
         this.api = options.api || null;  // ComfyUI API for event subscription
 
+        this.focusRequestGeneration = 0;
+        this.pendingNodeFocus = null;
         this.isVisible = false;
         this.panel = null;
         this.pollTimerId = null;
@@ -1312,17 +1314,73 @@ export class DoctorUI {
         return this.getFocusTargetByExecutionId(nodeId)?.node || null;
     }
 
-    navigateCanvasToGraph(graph) {
-        const canvas = app?.canvas;
-        if (!canvas || !graph || canvas.graph === graph) return;
+    navigateCanvasToGraph(graph, canvas = app?.canvas) {
+        if (!canvas || !graph || app?.canvas !== canvas) return false;
+        if (canvas.graph === graph) return true;
 
-        // IMPORTANT: mirror upstream focus navigation; missing host methods must fall back safely.
-        canvas.subgraph = graph.isRootGraph ? undefined : graph;
-        if (typeof canvas.setGraph === 'function') {
-            canvas.setGraph(graph);
-        } else {
-            canvas.graph = graph;
+        // Keep the observed host subgraph/setGraph contract without repeating a
+        // transition already completed by the subgraph setter's host listener.
+        const subgraph = graph.isRootGraph || graph === this.getComfyGraph() ? undefined : graph;
+        if (canvas.subgraph !== subgraph) canvas.subgraph = subgraph;
+        if (app?.canvas !== canvas) return false;
+        if (canvas.graph !== graph) {
+            if (typeof canvas.setGraph === 'function') {
+                canvas.setGraph(graph);
+            } else {
+                canvas.graph = graph;
+            }
         }
+        return app?.canvas === canvas && canvas.graph === graph;
+    }
+
+    cancelPendingNodeFocus() {
+        const request = this.pendingNodeFocus;
+        this.pendingNodeFocus = null;
+        request?.cancelWait?.();
+    }
+
+    isCurrentNodeFocus(request) {
+        const { canvas, root, graph, node, executionId } = request;
+        if (this.pendingNodeFocus !== request
+            || request.generation !== this.focusRequestGeneration
+            || app?.canvas !== canvas || this.getComfyGraph() !== root
+            || canvas.graph !== graph || (node.graph && node.graph !== graph)) return false;
+
+        // Modern membership is authoritative; an old lookup must not resurrect a
+        // removed/replaced node. Legacy hosts expose _nodes or getNodeById.
+        const nodes = graph.nodes;
+        if (Array.isArray(nodes)) {
+            if (!nodes.includes(node)) return false;
+        } else if (Array.isArray(graph._nodes)) {
+            if (!graph._nodes.includes(node)) return false;
+        } else if (this.getNodeFromGraph(graph, node.id) !== node) return false;
+
+        if (executionId) {
+            const current = this.getFocusTargetByExecutionId(executionId);
+            if (current?.node !== node || current.graph !== graph) return false;
+        }
+        return true;
+    }
+
+    waitForNodeFocusFrame(request) {
+        return new Promise((resolve) => {
+            let frameId = null;
+            let finished = false;
+            const finish = (ready) => {
+                if (finished) return;
+                finished = true;
+                window.clearTimeout(timeoutId);
+                if (frameId !== null) window.cancelAnimationFrame?.(frameId);
+                if (request.cancelWait === cancel) request.cancelWait = null;
+                resolve(ready);
+            };
+            const cancel = () => finish(false);
+            const timeoutId = window.setTimeout(() => finish(true), 100);
+            request.cancelWait = cancel;
+            if (typeof window.requestAnimationFrame === 'function') {
+                frameId = window.requestAnimationFrame(() => finish(true));
+            }
+        });
     }
 
     getNodeBounds(node) {
@@ -1333,52 +1391,66 @@ export class DoctorUI {
         return [node.pos[0], node.pos[1], width, height];
     }
 
-    focusCanvasOnNode(node, graph) {
+    async focusCanvasOnNode(node, graph, executionId = null) {
+        this.cancelPendingNodeFocus();
         const canvas = app?.canvas;
-        if (!canvas || !node) return;
-
-        this.navigateCanvasToGraph(graph);
-
-        if (typeof canvas.selectNodes === 'function') {
-            canvas.selectNodes([node]);
-            console.log('[ComfyUI-Doctor] Used selectNodes method');
-        }
-
-        const bounds = this.getNodeBounds(node);
-        if (bounds && typeof canvas.animateToBounds === 'function') {
-            canvas.animateToBounds(bounds);
-            console.log('[ComfyUI-Doctor] Used animateToBounds method');
-        } else if (Array.isArray(node.pos)) {
-            const nodeSize = Array.isArray(node.size) ? node.size : [100, 50];
-            const nodeX = node.pos[0] + (nodeSize[0] || 100) / 2;
-            const nodeY = node.pos[1] + (nodeSize[1] || 50) / 2;
-
-            const canvasWidth = canvas.canvas?.width || canvas.bgcanvas?.width || 1920;
-            const canvasHeight = canvas.canvas?.height || canvas.bgcanvas?.height || 1080;
-            const scale = canvas.ds?.scale || 1;
-
-            const offsetX = canvasWidth / 2 / scale - nodeX;
-            const offsetY = canvasHeight / 2 / scale - nodeY;
-
-            if (canvas.ds) {
-                canvas.ds.offset[0] = offsetX;
-                canvas.ds.offset[1] = offsetY;
-            } else if (canvas.offset) {
-                canvas.offset[0] = offsetX;
-                canvas.offset[1] = offsetY;
+        const root = this.getComfyGraph();
+        if (!canvas || !node || !graph || !root) return false;
+        const request = {
+            canvas, root, graph, node, executionId,
+            generation: ++this.focusRequestGeneration,
+            cancelWait: null,
+        };
+        this.pendingNodeFocus = request;
+        try {
+            const graphChanged = canvas.graph !== graph;
+            if (!this.navigateCanvasToGraph(graph, canvas)) return false;
+            // CRITICAL: navigation and frame callbacks can replace the workflow,
+            // canvas or node. Never select/frame a captured target without rechecking.
+            if (!this.isCurrentNodeFocus(request)) return false;
+            if (graphChanged) {
+                await Promise.resolve();
+                for (let frame = 0; frame < 2; frame++) {
+                    if (!this.isCurrentNodeFocus(request)) return false;
+                    if (!await this.waitForNodeFocusFrame(request)) return false;
+                }
             }
-        }
+            if (!this.isCurrentNodeFocus(request)) return false;
 
-        if (!canvas.selected_nodes || !canvas.selected_nodes[node.id]) {
-            canvas.selected_nodes = {};
-            canvas.selected_nodes[node.id] = node;
-        }
+            if (typeof canvas.selectNodes === 'function') {
+                canvas.selectNodes([node]);
+            } else {
+                canvas.selected_nodes = { [node.id]: node };
+            }
+            if (!this.isCurrentNodeFocus(request)) return false;
 
-        if (typeof canvas.setDirty === 'function') {
-            canvas.setDirty(true, true);
-        }
-        if (typeof canvas.draw === 'function') {
-            canvas.draw(true);
+            const bounds = this.getNodeBounds(node);
+            // A host bounds getter can run callbacks just like selection/navigation.
+            if (!this.isCurrentNodeFocus(request)) return false;
+            if (bounds && typeof canvas.animateToBounds === 'function') {
+                canvas.animateToBounds(bounds);
+            } else if (Array.isArray(node.pos)) {
+                const nodeSize = Array.isArray(node.size) ? node.size : [100, 50];
+                const nodeX = node.pos[0] + (nodeSize[0] || 100) / 2;
+                const nodeY = node.pos[1] + (nodeSize[1] || 50) / 2;
+                const canvasWidth = canvas.canvas?.width || canvas.bgcanvas?.width || 1920;
+                const canvasHeight = canvas.canvas?.height || canvas.bgcanvas?.height || 1080;
+                const scale = canvas.ds?.scale || 1;
+                const offset = canvas.ds?.offset || canvas.offset;
+                if (!this.isCurrentNodeFocus(request)) return false;
+                if (offset) {
+                    offset[0] = canvasWidth / 2 / scale - nodeX;
+                    offset[1] = canvasHeight / 2 / scale - nodeY;
+                }
+            }
+            if (!this.isCurrentNodeFocus(request)) return false;
+            canvas.setDirty?.(true, true);
+            if (!this.isCurrentNodeFocus(request)) return false;
+            canvas.draw?.(true);
+            return this.isCurrentNodeFocus(request);
+        } finally {
+            request.cancelWait?.();
+            if (this.pendingNodeFocus === request) this.pendingNodeFocus = null;
         }
     }
 
@@ -1935,34 +2007,23 @@ export class DoctorUI {
      * Locate and highlight a node on the canvas.
      * Uses ComfyUI's centralized approach similar to NodesMap.
      * @param {string|number} nodeId - The node ID to locate
+     * @returns {Promise<boolean>} Whether this request focused the current live target.
      */
-    locateNodeOnCanvas(nodeId) {
-        console.log('[ComfyUI-Doctor] locateNodeOnCanvas called with:', nodeId);
+    async locateNodeOnCanvas(nodeId) {
+        this.cancelPendingNodeFocus();
         try {
             const executionId = this.normalizeNodeId(nodeId);
-            if (!executionId) {
-                console.warn('[ComfyUI-Doctor] Invalid node ID:', nodeId);
-                return;
-            }
-
-            if (!app || !app.canvas) {
-                console.error('[ComfyUI-Doctor] ComfyUI app or canvas not available');
-                return;
-            }
-
-            const focusTarget = this.getFocusTargetByExecutionId(executionId);
-            const node = focusTarget?.node;
-            if (!node) {
-                console.warn('[ComfyUI-Doctor] Node not found in graph:', executionId);
-                return;
-            }
-
-            console.log('[ComfyUI-Doctor] Found node:', node.title || node.type, 'at pos:', node.pos);
-            this.focusCanvasOnNode(node, focusTarget.graph);
-
-            console.log('[ComfyUI-Doctor] Successfully located node:', executionId);
-        } catch (e) {
-            console.error('[ComfyUI-Doctor] Failed to locate node:', e);
+            if (!executionId || !app?.canvas) return false;
+            const target = this.getFocusTargetByExecutionId(executionId);
+            if (!target?.node) return false;
+            const focused = await this.focusCanvasOnNode(target.node, target.graph, executionId);
+            if (focused) console.log('[ComfyUI-Doctor] Located node on the current canvas');
+            return focused;
+        } catch {
+            // Host callbacks may fail during teardown. Keep event-handler promises
+            // contained and avoid logging workflow contents from host exceptions.
+            console.warn('[ComfyUI-Doctor] Unable to locate node on the current canvas');
+            return false;
         }
     }
 

@@ -527,7 +527,10 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 
 ## Host Compatibility and Diagnostics
 
+- Current source checks cover Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.53.6`, and exact standalone frontend `1.55.12`. Both current core-pinned and standalone lanes support asynchronous settings callbacks; the Desktop lane retains its synchronous contract. These checks and mocked browser tests do not establish live-host certification.
 - The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
+- Workflow diagnostics recognize the first-party `ComfySwitchNode` and `ComfySoftSwitchNode` and their optional `on_true` / `on_false` branches, including propagated socket types. Broken link references and unrelated required inputs still produce diagnostics.
+- Locate Node rechecks the active canvas, workflow, and target after graph navigation. New requests and sidebar teardown cancel pending focus, while root nodes, groups, nested subgraphs, and legacy canvas positioning remain supported.
 - Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
 - The exact first-party `SAM3DBody_Loader` resolves `model_file` only against registered `detection` roots. If that category is unavailable, Doctor reports the unresolved asset rather than accepting a same-named checkpoints file.
 - Workflow diagnostics inspect bounded `definitions.subgraphs` content, including promoted and non-promoted nested model references, while preserving the visible host and concrete source node provenance. Positional widget serialization remains authoritative, with bounded schema-linked named values used only when the positional slot is absent.

@@ -23,6 +23,7 @@ class SurfaceCheck:
     source_revision: str = ""
     applicable_lanes: tuple[str, ...] = ()
     note: str = ""
+    minimum_occurrences: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class FrontendRuntimeLane:
     source_revision: str
     setting_change_telemetry: bool
     async_setting_on_change: bool
+    setting_contract_revision: str
 
 
 @dataclass(frozen=True)
@@ -46,8 +48,8 @@ class CheckResult:
     present_forbidden_patterns: tuple[str, ...] = ()
 
 
-COMFYUI_REVISION = "e80c1570b6b44a2557d5d8e341e05782d18c9bbb"  # pragma: allowlist secret
-FRONTEND_REVISION = "9ff3fd7f0e36b810a621288ceaf6e74e3846bedd"  # pragma: allowlist secret
+COMFYUI_REVISION = "e638023d54497dbe0579565e5de4bb7076899592"  # pragma: allowlist secret
+FRONTEND_REVISION = "07c337679d250b5a7af810adb73e26449fc6e676"  # pragma: allowlist secret
 DESKTOP_REVISION = "e2d964b7456cea8423c7b9d3371c612313c06baa"  # pragma: allowlist secret
 
 FRONTEND_RUNTIME_LANES: tuple[FrontendRuntimeLane, ...] = (
@@ -60,26 +62,29 @@ FRONTEND_RUNTIME_LANES: tuple[FrontendRuntimeLane, ...] = (
         source_revision=DESKTOP_REVISION,
         setting_change_telemetry=False,
         async_setting_on_change=False,
+        setting_contract_revision=DESKTOP_REVISION,
     ),
     FrontendRuntimeLane(
-        id="core-pin-1.51.9",
+        id="core-pin-1.53.6",
         label="ComfyUI package pin",
-        version="1.51.9",
+        version="1.53.6",
         source_repo="ComfyUI",
         source_file="requirements.txt",
         source_revision=COMFYUI_REVISION,
         setting_change_telemetry=True,
-        async_setting_on_change=False,
+        async_setting_on_change=True,
+        setting_contract_revision="7d533a4cd4c4904ffdb0537f6b80ae9793dd62f1",  # pragma: allowlist secret
     ),
     FrontendRuntimeLane(
-        id="standalone-1.54.3+",
+        id="standalone-1.55.12",
         label="standalone frontend source",
-        version="1.54.3+",
+        version="1.55.12",
         source_repo="ComfyUI_frontend",
         source_file="package.json",
         source_revision=FRONTEND_REVISION,
         setting_change_telemetry=True,
         async_setting_on_change=True,
+        setting_contract_revision=FRONTEND_REVISION,
     ),
 )
 
@@ -207,7 +212,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         file="execution.py",
         label="executed output asset enrichment tolerance",
         required_patterns=(
-            "enrich_output_with_assets(output_ui)",
+            "register_executed_outputs(output_ui, prompt_id, asset_manager)",
             '"executed"',
             '"output": output_ui',
         ),
@@ -334,7 +339,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         repo="ComfyUI_frontend",
         file="src/types/extensionTypes.ts",
         label="extensionManager settings/sidebar API",
-        required_patterns=("registerSidebarTab", "setting:", "get: <T = unknown>", "set: <T = unknown>"),
+        required_patterns=("registerSidebarTab", "setting:", "get: <T = unknown>", "set: (id: string, value: unknown) => void"),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -364,15 +369,17 @@ CHECKS: tuple[SurfaceCheck, ...] = (
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
-        file="src/schemas/apiSchema.ts",
+        file="src/platform/remote/comfyui/execution/types.ts",
         label="frontend execution_error schema",
         required_patterns=(
-            "zExecutionErrorWsMessage",
-            "node_id:",
-            "node_type:",
-            "traceback:",
-            "current_inputs:",
-            "current_outputs:",
+            "ExecutionErrorWsMessage extends ExecutionWsMessageBase",
+            "node_id?: NodeId | null",
+            "node_type: string",
+            "exception_message: string",
+            "exception_type: string",
+            "traceback: string[]",
+            "current_inputs?: unknown",
+            "current_outputs?: unknown",
         ),
     ),
     SurfaceCheck(
@@ -448,21 +455,21 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         repo="ComfyUI",
         file="requirements.txt",
         label="frontend runtime lane: ComfyUI package pin",
-        required_patterns=("comfyui-frontend-package==1.51.9",),
+        required_patterns=("comfyui-frontend-package==1.53.6",),
         source_revision=COMFYUI_REVISION,
-        applicable_lanes=("core-pin-1.51.9",),
+        applicable_lanes=("core-pin-1.53.6",),
         note=(
-            "The package pin includes setting-change telemetry but predates the "
-            "standalone asynchronous onChange contract."
+            "The package pin includes telemetry and asynchronous onChange; "
+            "its setting contract was independently inspected at the matching frontend tag."
         ),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
         file="package.json",
         label="frontend runtime lane: standalone source",
-        required_patterns=('"version": "1.54.3"',),
+        required_patterns=('"version": "1.55.12"',),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="Current standalone source contains telemetry and asynchronous onChange contracts.",
     ),
     SurfaceCheck(
@@ -512,8 +519,8 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         label="standalone settings onChange return type",
         required_patterns=("onChange?(newValue: TValue, oldValue?: TValue): void | Promise<void>",),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
-        note="Standalone-only source contract; core 1.51.9 and Desktop 1.43.18 remain synchronous.",
+        applicable_lanes=("standalone-1.55.12",),
+        note="Current source contract also verified at core pin 1.53.6; Desktop 1.43.18 remains synchronous.",
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -528,7 +535,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "await handled",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="Standalone host contains synchronous throws and rejected handler promises.",
     ),
     SurfaceCheck(
@@ -537,7 +544,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         label="named widget restore global default",
         required_patterns=("namedValuesRestore: boolean = false",),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="Doctor retains positional-first diagnostics while the host default remains false.",
     ),
     SurfaceCheck(
@@ -552,7 +559,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "    experimental: true",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -564,7 +571,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "this.constructor.nodeData?.fallbackWidgetsValuesNames",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="A future default/authority change requires an explicit Doctor precedence review.",
     ),
     SurfaceCheck(
@@ -578,7 +585,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "return positionalIndex < restoration.positional.length",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note=(
             "Private host implementation evidence only: named values apply only when "
             "restoreNamed is active; positional values remain the fallback."
@@ -595,7 +602,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "createNodeExecutionId([...hostNodeIds, ...nodePath])",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="Public source evidence for R49; Doctor production code must not import frontend internals.",
     ),
     SurfaceCheck(
@@ -609,7 +616,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "if (spec.audio_upload) return 'audio'",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="Private host behavior is observed as source evidence only; R49 remains public-contract bounded.",
     ),
     SurfaceCheck(
@@ -645,7 +652,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         ),
         forbidden_patterns=("client_id", "clientId"),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -658,7 +665,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "if (event) useTelemetry()?.trackSettingChanged(event)",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -671,7 +678,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "telemetry?: SettingTelemetryOptions",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -683,21 +690,20 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "setTelemetryRegistry(registry)",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
         file="src/platform/telemetry/initHostTelemetry.ts",
         label="host telemetry initialization gate",
         required_patterns=(
-            "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'",
-            "remoteConfig.value.enable_telemetry === true",
+            "import { isHostTelemetryEnabled } from './hostTelemetryEnabled'",
             "if (!isHostTelemetryEnabled()) return",
             "if (!window.__comfyDesktop2?.Telemetry) return",
             "setTelemetryRegistry(registry)",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -713,8 +719,8 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         source_revision=FRONTEND_REVISION,
         applicable_lanes=(
             "desktop-0.9.4",
-            "core-pin-1.51.9",
-            "standalone-1.54.3+",
+            "core-pin-1.53.6",
+            "standalone-1.55.12",
         ),
     ),
     SurfaceCheck(
@@ -728,7 +734,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "export function liftNodeErrorsToBoundary(",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -736,12 +742,13 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         label="surfaced error derivation",
         required_patterns=(
             "const surfacedNodeErrors = computed(() =>",
-            "lastNodeErrors.value && app.isGraphReady",
-            "liftNodeErrorsToBoundary(app.rootGraph, lastNodeErrors.value)",
+            "const rootGraph = app.rootGraphOrUndefined",
+            "lastNodeErrors.value && rootGraph",
+            "liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)",
             ": lastNodeErrors.value",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="This is private host evidence; Doctor production code may use only public raw error state.",
     ),
     SurfaceCheck(
@@ -755,7 +762,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             '"widgets_values"',
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="The fixture is read as inert text and is never executed.",
     ),
     SurfaceCheck(
@@ -768,7 +775,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "Object.assign(o, serialiseWidgetValues(widgets))",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
         note="Current workflows may carry both positional and widget-name keyed values.",
     ),
     SurfaceCheck(
@@ -780,7 +787,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "'PARTNER_NODE_DISABLED'",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI_frontend",
@@ -792,7 +799,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "!hasPromptNodeErrors",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("standalone-1.54.3+",),
+        applicable_lanes=("standalone-1.55.12",),
     ),
     SurfaceCheck(
         repo="ComfyUI",
@@ -822,7 +829,7 @@ CHECKS: tuple[SurfaceCheck, ...] = (
             "return true",
         ),
         source_revision=FRONTEND_REVISION,
-        applicable_lanes=("core-pin-1.51.9", "standalone-1.54.3+"),
+        applicable_lanes=("core-pin-1.53.6", "standalone-1.55.12"),
         note=(
             "Host-owned prompt-submission boundary only; Doctor observes public error state "
             "and must not queue prompts, authenticate users, or duplicate this gate."
@@ -915,6 +922,107 @@ CHECKS: tuple[SurfaceCheck, ...] = (
         source_revision=DESKTOP_REVISION,
         applicable_lanes=("desktop-0.9.4",),
     ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_execution/asset_enrichment.py",
+        label="executed asset registration helper",
+        required_patterns=(
+            "def register_executed_outputs(",
+            "enriched = copy.deepcopy(output_ui)",
+            "if not asset_manager.enabled:",
+            "_enrich_in_place(enriched, job_id, asset_manager.register_executed_output)",
+            "def register_cached_outputs(",
+            "enriched = copy.deepcopy(ui_wrapper)",
+            "_strip_ids(output_ui)",
+            "_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)",
+            "enriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)",
+            "\"display_node\": display_node_id",
+        ),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("core-pin-1.53.6",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/platform/telemetry/hostTelemetryEnabled.ts",
+        label="host telemetry enablement helper",
+        required_patterns=(
+            "export function isHostTelemetryEnabled(): boolean",
+            "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'",
+            "getDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)",
+            "if (override !== undefined) return override",
+            "remoteConfig.value.enable_telemetry === true",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.55.12",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_extras/nodes_logic.py",
+        label="optional Switch branch contract",
+        required_patterns=(
+            "node_id=\"ComfySwitchNode\"",
+            "node_id=\"ComfySoftSwitchNode\"",
+            "selected = on_true if switch else on_false",
+            "return io.NodeOutput(None if selected is MISSING else selected)",
+        ),
+        minimum_occurrences=(
+            ("io.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)", 2),
+            ("io.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)", 2),
+        ),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("core-pin-1.53.6",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/core/graph/widgets/dynamicWidgets.ts",
+        label="MatchType sibling input propagation",
+        required_patterns=(
+            "const groupInputs: INodeInputSlot[] = node.inputs.filter(",
+            "(inp) => inp.name in matchGroup",
+            "const connectedTypes = groupInputs.map(",
+            "if (!link) return '*'",
+            "...connectedTypes.slice(0, idx)",
+            "...connectedTypes.slice(idx + 1)",
+            "input.type = combinedType",
+            "const typedSpec = { ...inputSpec, type: allowed_types }",
+            "addNodeInput(node, typedSpec)",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.55.12",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI",
+        file="comfy_execution/validation.py",
+        label="loop validation error envelope",
+        required_patterns=(
+            "class LoopValidationError(Exception):",
+            "\"type\": \"custom_validation_failed\"",
+            "\"input_name\": \"loop boundary\"",
+            "\"loop_error_type\": error_type",
+            "\"node_ids\": sorted(node_ids)",
+            "\"output_ids\": sorted(output_ids)",
+        ),
+        source_revision=COMFYUI_REVISION,
+        applicable_lanes=("core-pin-1.53.6",),
+    ),
+    SurfaceCheck(
+        repo="ComfyUI_frontend",
+        file="src/composables/canvas/useFocusNode.ts",
+        label="focus navigation lifecycle",
+        required_patterns=(
+            "const navigated = await navigationStore.navigateToGraph(node.graph)",
+            "if (!navigated) return",
+            "if (graphChanged) await waitForCanvasNavigation()",
+            "const activeCanvas = canvasStore.canvas",
+            "activeCanvas.graph !== node.graph",
+            "!node.graph.nodes.includes(node)",
+            "window.setTimeout(resolve, 100)",
+            "activeCanvas.animateToBounds(node.boundingRect",
+        ),
+        source_revision=FRONTEND_REVISION,
+        applicable_lanes=("standalone-1.55.12",),
+    ),
+
 )
 
 
@@ -936,6 +1044,12 @@ def run_checks(reference_root: Path, checks: Sequence[SurfaceCheck] = CHECKS) ->
             continue
 
         missing = tuple(pattern for pattern in check.required_patterns if pattern not in text)
+        # Both Switch classes must retain optional branches; one remaining declaration is insufficient.
+        missing += tuple(
+            f"{pattern} (minimum occurrences: {minimum})"
+            for pattern, minimum in check.minimum_occurrences
+            if text.count(pattern) < minimum
+        )
         forbidden = tuple(pattern for pattern in check.forbidden_patterns if pattern in text)
         results.append(
             CheckResult(
@@ -956,7 +1070,8 @@ def format_results(results: Iterable[CheckResult]) -> str:
         lines.append(
             f"- {lane.id}: frontend {lane.version} "
             f"({lane.label}; setting-change telemetry {telemetry}; "
-            f"async setting onChange {async_setting})"
+            f"async setting onChange {async_setting}; "
+            f"setting contract {lane.setting_contract_revision})"
         )
     lines.append("Surface checks:")
     for result in results:

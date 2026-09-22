@@ -175,6 +175,7 @@ app.registerExtension({
                             }
                         };
                         runCleanupStep(() => ownershipObserver?.disconnect());
+                        runCleanupStep(() => doctorUI.cancelPendingNodeFocus());
                         runCleanupStep(() => manager?.destroy());
                         runCleanupStep(() => tabRegistry.clear());
                         if (!hostTakeover) {

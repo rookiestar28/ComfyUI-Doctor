@@ -61,7 +61,15 @@ KNOWN_CORE_NODE_TYPES: Set[str] = {
     # Utilities
     "PreviewImage", "SaveImage", "SaveLatent",
     "PrimitiveNode", "Reroute", "Note",
+    "ComfySwitchNode", "ComfySoftSwitchNode",
 }
+
+OPTIONAL_SWITCH_INPUTS: frozenset[tuple[str, str]] = frozenset({
+    ("ComfySwitchNode", "on_false"),
+    ("ComfySwitchNode", "on_true"),
+    ("ComfySoftSwitchNode", "on_false"),
+    ("ComfySoftSwitchNode", "on_true"),
+})
 
 # Parameter thresholds for anti-pattern detection
 PARAM_THRESHOLDS = {
@@ -154,6 +162,15 @@ def _check_disconnected_links(
                     input_type = inp.get("type", "")
 
                     if link_id is None:
+                        # IMPORTANT: MatchType propagates a sibling's type to optional Switch
+                        # branches. Type-only classification falsely requires these inputs;
+                        # keep this exception inside the null-link branch so broken links warn.
+                        if (
+                            isinstance(node_type, str)
+                            and isinstance(input_name, str)
+                            and (node_type, input_name) in OPTIONAL_SWITCH_INPUTS
+                        ):
+                            continue
                         # Some inputs are optional (like CLIP in some loaders)
                         # We'll only warn for clearly required types
                         required_types = {"MODEL", "CLIP", "VAE", "LATENT", "CONDITIONING"}

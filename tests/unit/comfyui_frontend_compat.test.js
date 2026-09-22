@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
-
 const FRONTEND_LANES = [
     {
         id: "desktop-0.9.4",
@@ -10,14 +9,14 @@ const FRONTEND_LANES = [
         asyncSettingOnChange: false,
     },
     {
-        id: "core-pin-1.51.9",
-        version: "1.51.9",
+        id: "core-pin-1.53.6",
+        version: "1.53.6",
         settingChangeTelemetry: true,
-        asyncSettingOnChange: false,
+        asyncSettingOnChange: true,
     },
     {
-        id: "standalone-1.54.3+",
-        version: "1.54.3+",
+        id: "standalone-1.55.12",
+        version: "1.55.12",
         settingChangeTelemetry: true,
         asyncSettingOnChange: true,
     },
@@ -158,12 +157,12 @@ describe("Doctor setting telemetry contract", () => {
         },
     );
 
-    test("only standalone 1.54.3+ claims the asynchronous setting contract", () => {
+    test("core 1.53.6 and exact standalone 1.55.12 support asynchronous settings", () => {
         expect(
             FRONTEND_LANES
                 .filter((lane) => lane.asyncSettingOnChange)
                 .map((lane) => lane.id),
-        ).toEqual(["standalone-1.54.3+"]);
+        ).toEqual(["core-pin-1.53.6", "standalone-1.55.12"]);
     });
 
     test.each(FRONTEND_LANES)(
@@ -219,6 +218,27 @@ describe("Doctor setting telemetry contract", () => {
 });
 
 describe("public validation boundary surfacing", () => {
+    test.each([null, undefined, "throwing getter"])(
+        "retains loop validation metadata when root is %s",
+        async (root) => {
+            const { surfaceComfyValidationNodeErrors } = await loadCompatibilityModule();
+            const app = { get rootGraph() {
+                if (root === "throwing getter") throw new Error("not ready");
+                return root;
+            } };
+            const raw = { "12:5": { errors: [{
+                type: "custom_validation_failed",
+                message: "Synthetic loop boundary error",
+                extra_info: {
+                    input_name: "loop boundary", loop_error_type: "invalid_boundary",
+                    node_ids: ["12:5"], output_ids: ["9"], future_field: true,
+                },
+            }], dependent_outputs: ["9"] } };
+            const original = structuredClone(raw);
+            expect(surfaceComfyValidationNodeErrors(raw, app)).toEqual(original);
+            expect(raw).toEqual(original);
+        },
+    );
     test("prefers public raw state and falls back when its getter throws", async () => {
         const { getComfyValidationNodeErrors } =
             await loadCompatibilityModule();
@@ -511,6 +531,28 @@ describe("public validation boundary surfacing", () => {
             expect(source).not.toMatch(
                 /queuePrompt|partnerRunGate|useAuthStore|\/prompt\b/iu,
             );
+        }
+    });
+});
+
+describe("public setting setter promise containment", () => {
+    test.each(FRONTEND_LANES)("$id contains a rejected setter without retrying a write", async () => {
+        const { setDoctorSetting } = await loadCompatibilityModule();
+        const failure = new Error("synthetic setter rejection");
+        const legacy = vi.fn();
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const set = vi.fn(() => Promise.reject(failure));
+            expect(setDoctorSetting("Doctor.General.Enable", true, {
+                extensionManager: { setting: { set } },
+                ui: { settings: { setSettingValue: legacy } },
+            })).toBe(true);
+            await Promise.resolve();
+            expect(set).toHaveBeenCalledExactlyOnceWith("Doctor.General.Enable", true);
+            expect(legacy).not.toHaveBeenCalled();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining("Modern settings set failed"), failure);
+        } finally {
+            warn.mockRestore();
         }
     });
 });
