@@ -599,6 +599,11 @@ def register_api_routes(context: dict) -> None:
                 accept_lang = request.headers.get("Accept-Language", "en")
                 user_lang_code = parse_language_code(accept_lang)
 
+            # CRITICAL: initialize before the intent branches; the flag is read after all of them to
+            # decide whether to append the legacy environment block. Branch-local initialization
+            # raised UnboundLocalError (HTTP 500) for explain_node and for chat without an error.
+            r14_composer_succeeded = False
+
             # Intent-aware system prompt
             if intent == "explain_node":
                 # Node explanation mode - use simple prompt
