@@ -115,7 +115,7 @@ The Settings UI supports:
 - Ollama.
 - LMStudio.
 
-Provider defaults are fetched from Doctor's backend. Ollama and LMStudio base URLs can be overridden with environment variables when Windows, WSL2, Docker, or remote-host layouts need explicit routing.
+Provider defaults are fetched from Doctor's backend. Ollama and LMStudio base URLs can be overridden with environment variables when Windows, WSL2, Docker, or remote-host layouts need explicit routing. Doctor only sends LLM requests to approved destinations: the built-in providers, local Ollama/LM Studio, and the exact URLs set in `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `DOCTOR_LLM_BASE_URL` or `DOCTOR_LLM_ALLOWED_BASE_URLS` on the ComfyUI server. Any other base URL shows an operator guidance message instead of contacting the endpoint; see [LLM Destinations](CONFIGURATION_SECURITY.md#llm-destinations).
 OpenAI-compatible providers, Anthropic, and Ollama use dedicated backend adapters so request payloads, non-stream responses, streaming chunks, and model lists are parsed consistently.
 
 ## Privacy Modes

@@ -132,6 +132,7 @@
     "error_header": "⚠️ Error",
     "error_label": "Error",
     "error_loading_models": "Error loading models - use manual input",
+    "llm_destination_not_allowed": "This LLM endpoint is not approved on this server. Ask the server operator to add it to DOCTOR_LLM_ALLOWED_BASE_URLS.",
     "error_message": "Error",
     "expand_btn": "Expand",
     "feedback_admin_token_placeholder": "Admin token (optional if loopback/no DOCTOR_ADMIN_TOKEN)",

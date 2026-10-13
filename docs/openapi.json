@@ -187,6 +187,9 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "$ref": "#/components/responses/DestinationNotAllowed"
+          },
           "500": {
             "$ref": "#/components/responses/Error"
           }
@@ -234,6 +237,9 @@
           "401": {
             "$ref": "#/components/responses/Error"
           },
+          "403": {
+            "$ref": "#/components/responses/DestinationNotAllowed"
+          },
           "503": {
             "$ref": "#/components/responses/Error"
           },
@@ -264,6 +270,7 @@
         ],
         "operationId": "verifyProviderKey",
         "summary": "Validate provider connectivity and credential availability.",
+        "description": "Failures use HTTP 200 with success=false. A base_url that is not an operator-approved LLM destination returns error code destination_not_allowed without any DNS lookup or network request.",
         "requestBody": {
           "$ref": "#/components/requestBodies/ProviderCredentialRequest"
         },
@@ -281,6 +288,7 @@
         ],
         "operationId": "listProviderModels",
         "summary": "List models from the selected provider when supported.",
+        "description": "Failures use HTTP 200 with success=false. A base_url that is not an operator-approved LLM destination returns error code destination_not_allowed without any DNS lookup or network request.",
         "requestBody": {
           "$ref": "#/components/requestBodies/ProviderCredentialRequest"
         },
@@ -1087,6 +1095,16 @@
       },
       "AdminDenied": {
         "description": "Admin authorization denied.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "DestinationNotAllowed": {
+        "description": "The requested base_url is not an operator-approved LLM destination (error code destination_not_allowed). No DNS lookup or network request is made.",
         "content": {
           "application/json": {
             "schema": {

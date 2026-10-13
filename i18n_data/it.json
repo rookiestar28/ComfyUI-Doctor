@@ -132,6 +132,7 @@
     "error_header": "⚠️ Error",
     "error_label": "Error",
     "error_loading_models": "Errore nel caricamento dei modelli - usa l'inserimento manuale",
+    "llm_destination_not_allowed": "Questo endpoint LLM non è approvato su questo server. Chiedi all'operatore del server di aggiungerlo a DOCTOR_LLM_ALLOWED_BASE_URLS.",
     "error_message": "Errore",
     "expand_btn": "Espandi",
     "feedback_admin_token_placeholder": "Token Amministratore (opzionale)",

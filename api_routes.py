@@ -19,13 +19,73 @@ from .services.prompt_helpers import (
     parse_language_code,
     validate_fix_schema,
 )
+from .llm_client import (
+    FAILURE_DESTINATION_NOT_ALLOWED,
+    FAILURE_HTTP_STATUS,
+    FAILURE_RATE_LIMITED,
+    FAILURE_REDIRECT,
+    FAILURE_TIMEOUT,
+)
+from .security import record_ssrf_block
+from .services.llm_provider_adapters import get_llm_provider_adapter_for_provider
+from .services.outbound_policy import (
+    DESTINATION_NOT_ALLOWED,
+    DESTINATION_NOT_ALLOWED_MESSAGE,
+    Destination,
+    get_destination_registry,
+    is_destination_policy_error,
+)
 from .terminal_output import emit_doctor_log
 
 logger = logging.getLogger("ComfyUI-Doctor-API")
 
+# Fixed client-facing messages. Upstream bodies, resolved addresses and raw exception text are
+# never returned to the caller (they would turn any reachable endpoint into a read oracle).
+CONNECTION_FAILED_MESSAGE = "Could not connect to the LLM provider."
+INTERNAL_ERROR_MESSAGE = "The request could not be completed. Check the ComfyUI server log."
+REDIRECT_MESSAGE = "The LLM provider answered with a redirect, which is not followed."
+RATE_LIMITED_UPSTREAM_MESSAGE = "The LLM provider rate limit was exceeded. Please retry later."
+TIMEOUT_MESSAGE = "The LLM provider did not respond in time."
+
 
 def _local_llm_auth_placeholder() -> str:
     return "local-llm"
+
+
+def _upstream_status_message(status: int) -> str:
+    return f"The LLM provider returned HTTP {int(status)}."
+
+
+def _match_destination(base_url: object, route_name: str) -> "Destination | None":
+    """Return the operator-approved destination for a requested base URL (no DNS, no I/O).
+
+    CRITICAL: this exact-match lookup is the only way a request selects an outbound destination;
+    outbound URLs must be built from the returned entry, never from the caller's string.
+    """
+    destination = get_destination_registry().match(base_url)
+    if destination is None:
+        record_ssrf_block(DESTINATION_NOT_ALLOWED)
+        logger.warning(f"Outbound destination refused in {route_name}: base URL is not approved")
+    return destination
+
+
+def _retry_failure_message(result) -> "tuple[str, str]":
+    """Map a failed retry result to (code, fixed message) without upstream or network text."""
+    kind = getattr(result, "failure_kind", None)
+    status = getattr(result, "status", None)
+    if status is None and getattr(result, "response", None) is not None:
+        status = getattr(result.response, "status", None)
+    if kind == FAILURE_DESTINATION_NOT_ALLOWED:
+        return DESTINATION_NOT_ALLOWED, DESTINATION_NOT_ALLOWED_MESSAGE
+    if kind == FAILURE_REDIRECT:
+        return "llm_error", REDIRECT_MESSAGE
+    if kind == FAILURE_RATE_LIMITED:
+        return "llm_error", RATE_LIMITED_UPSTREAM_MESSAGE
+    if kind == FAILURE_TIMEOUT:
+        return "llm_error", TIMEOUT_MESSAGE
+    if (kind == FAILURE_HTTP_STATUS or kind is None) and isinstance(status, int):
+        return "llm_error", _upstream_status_message(status)
+    return "network_error", CONNECTION_FAILED_MESSAGE
 
 
 REGISTERED_ROUTE_DESCRIPTIONS = [
@@ -202,11 +262,11 @@ def register_api_routes(context: dict) -> None:
 
             logger.info(f"Analyze API called - error_length={len(error_text) if error_text else 0}, has_workflow={bool(workflow)}, model={model}, privacy={privacy_mode}")
 
-            # S2: SSRF protection - validate base URL
-            is_valid, ssrf_error = validate_ssrf_url(base_url)
-            if not is_valid:
-                logger.warning(f"SSRF blocked: {ssrf_error}")
-                return _error_response(f"Invalid Base URL: {ssrf_error}", status=400, code="invalid_base_url")
+            # S29: only operator-approved destinations (exact match before any DNS or socket use)
+            destination = _match_destination(base_url, request.path)
+            if destination is None:
+                return _error_response(DESTINATION_NOT_ALLOWED_MESSAGE, status=403, code=DESTINATION_NOT_ALLOWED)
+            base_url = destination.base_url
 
             # Resolve API key via request -> ENV -> server store
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
@@ -321,10 +381,8 @@ def register_api_routes(context: dict) -> None:
                     logger.warning(f"Failed to collect environment info: {env_err}")
                     user_prompt += "[System environment info unavailable]\n\n"
 
-            # Normalize Base URL
-            base_url = base_url.rstrip("/")
-            is_local = is_local_llm_url(base_url)
-            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            # S29: adapter and outbound URL come from the approved destination entry only
+            llm_adapter = get_llm_provider_adapter_for_provider(destination.provider)
             provider_request = llm_adapter.build_chat_request(
                 base_url,
                 api_key,
@@ -349,7 +407,7 @@ def register_api_routes(context: dict) -> None:
 
             # R7: Concurrency limit (prevent connection pool exhaustion)
             async with SessionManager.get_concurrency_limiter():
-                session = await SessionManager.get_session()
+                session = await SessionManager.get_session(bypass_proxy=destination.is_loopback)
                 payload = sanitize_outbound_payload(payload, sanitizer)
 
                 # R6: Request with retry logic
@@ -367,18 +425,15 @@ def register_api_routes(context: dict) -> None:
 
                 if not result.success:
                     _close_retry_response(result)
-                    error_msg = result.error or "Unknown error"
-                    logger.error(f"LLM request failed after {result.attempts} attempts: {error_msg}")
-                    return _error_response(f"LLM Error: {error_msg}", status=503, code="llm_error")
+                    code, message = _retry_failure_message(result)
+                    logger.error(f"LLM request failed after {result.attempts} attempts: {result.error or 'unknown'}")
+                    return _error_response(message, status=403 if code == DESTINATION_NOT_ALLOWED else 503, code=code)
 
                 async with result.response as response:
                     if response.status != 200:
-                        error_msg = await response.text()
-                        # Truncate error message for readability
-                        if len(error_msg) > 500:
-                            error_msg = error_msg[:500] + "..."
+                        logger.error(f"LLM provider returned HTTP {response.status} for analyze")
                         return _error_response(
-                            f"LLM Provider Error ({response.status}): {error_msg}",
+                            _upstream_status_message(response.status),
                             status=response.status,
                             code="llm_provider_error",
                         )
@@ -397,19 +452,22 @@ def register_api_routes(context: dict) -> None:
                         logger.info(f"Analysis successful, response length={len(content)}, attempts={result.attempts}")
                         return web.json_response({"analysis": content})
                     except (json.JSONDecodeError, KeyError, IndexError) as parse_err:
+                        logger.error(f"Failed to parse LLM response: {parse_err}")
                         return _error_response(
-                            f"Failed to parse LLM response: {str(parse_err)}",
+                            "The LLM provider response could not be parsed.",
                             status=502,
                             code="llm_parse_error",
                         )
 
         except aiohttp.ClientError as e:
-            # Network-level errors (timeout, connection refused, etc.)
+            # Network-level errors (timeout, connection refused, policy refusal, etc.)
             logger.error(f"LLM Network Error: {str(e)}")
-            return _error_response(f"Network Error: {str(e)}", status=503, code="network_error")
+            if is_destination_policy_error(e):
+                return _error_response(DESTINATION_NOT_ALLOWED_MESSAGE, status=403, code=DESTINATION_NOT_ALLOWED)
+            return _error_response(CONNECTION_FAILED_MESSAGE, status=503, code="network_error")
         except Exception as e:
             logger.error(f"LLM Analysis Failed: {str(e)}")
-            return _error_response(str(e), status=500)
+            return _error_response(INTERNAL_ERROR_MESSAGE, status=500, code="internal_error")
 
     @server.PromptServer.instance.routes.post("/doctor/chat")
     async def api_chat(request):
@@ -446,11 +504,11 @@ def register_api_routes(context: dict) -> None:
 
             logger.info(f"Chat API called - model={model}, intent={intent}, messages={len(messages)}, stream={stream}, privacy={privacy_mode}")
 
-            # S2: SSRF protection - validate base URL
-            is_valid, ssrf_error = validate_ssrf_url(base_url)
-            if not is_valid:
-                logger.warning(f"SSRF blocked: {ssrf_error}")
-                return _error_response(f"Invalid Base URL: {ssrf_error}", status=400, code="invalid_base_url")
+            # S29: only operator-approved destinations (exact match before any DNS or socket use)
+            destination = _match_destination(base_url, request.path)
+            if destination is None:
+                return _error_response(DESTINATION_NOT_ALLOWED_MESSAGE, status=403, code=DESTINATION_NOT_ALLOWED)
+            base_url = destination.base_url
 
             # Resolve API key via request -> ENV -> server store
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
@@ -740,14 +798,12 @@ def register_api_routes(context: dict) -> None:
                 except Exception as env_err:
                     logger.warning(f"Failed to collect environment info for chat: {env_err}")
 
-            # Prepare request
-            base_url = base_url.rstrip("/")
-            is_local = is_local_llm_url(base_url)
+            # Prepare request (base_url is the approved destination's canonical URL)
 
             # Limit conversation history to prevent token overflow
             MAX_HISTORY = 10
             recent_messages = messages[-MAX_HISTORY:] if len(messages) > MAX_HISTORY else messages
-            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            llm_adapter = get_llm_provider_adapter_for_provider(destination.provider)
             provider_request = llm_adapter.build_chat_request(
                 base_url,
                 api_key,
@@ -776,7 +832,7 @@ def register_api_routes(context: dict) -> None:
             async with SessionManager.get_concurrency_limiter():
                 if not stream:
                     # Non-streaming fallback with retry
-                    session = await SessionManager.get_session()
+                    session = await SessionManager.get_session(bypass_proxy=destination.is_loopback)
                     payload = sanitize_outbound_payload(payload, sanitizer)
 
                     # R6: Request with retry logic
@@ -794,15 +850,16 @@ def register_api_routes(context: dict) -> None:
 
                     if not result.success:
                         _close_retry_response(result)
-                        error_msg = result.error or "Unknown error"
-                        logger.error(f"LLM non-stream failed after {result.attempts} attempts: {error_msg}")
-                        return _error_response(f"LLM Error: {error_msg}", status=503, code="llm_error")
+                        code, message = _retry_failure_message(result)
+                        logger.error(f"LLM non-stream failed after {result.attempts} attempts: {result.error or 'unknown'}")
+                        return _error_response(message, status=403 if code == DESTINATION_NOT_ALLOWED else 503, code=code)
 
                     async with result.response as response:
                         if response.status != 200:
-                            error_msg = await response.text()
-                            logger.error(f"LLM non-stream error: {error_msg[:200]}")
-                            return _error_response(f"LLM Error: {error_msg[:500]}", status=response.status, code="llm_error")
+                            logger.error(f"LLM non-stream error: HTTP {response.status}")
+                            return _error_response(
+                                _upstream_status_message(response.status), status=response.status, code="llm_error"
+                            )
 
                         resp_data = await response.json()
                         content = llm_adapter.parse_chat_response(resp_data)
@@ -833,7 +890,7 @@ def register_api_routes(context: dict) -> None:
                     await response.write(f"data: {meta_event}\n\n".encode('utf-8'))
 
                 try:
-                    session = await SessionManager.get_session()
+                    session = await SessionManager.get_session(bypass_proxy=destination.is_loopback)
                     payload = sanitize_outbound_payload(payload, sanitizer)
 
                     # R6: Pre-stream retry (only retry before streaming starts)
@@ -853,18 +910,19 @@ def register_api_routes(context: dict) -> None:
 
                     if not result.success or result.response is None:
                         _close_retry_response(result)
-                        error_msg = result.error or "Unknown error"
-                        logger.error(f"LLM stream connection failed after {result.attempts} attempts: {error_msg}")
-                        error_data = json.dumps({"error": f"LLM Error: {error_msg}", "done": True})
+                        code, message = _retry_failure_message(result)
+                        logger.error(f"LLM stream connection failed after {result.attempts} attempts: {result.error or 'unknown'}")
+                        error_data = json.dumps({"error": message, "code": code, "done": True})
                         await response.write(f"data: {error_data}\n\n".encode('utf-8'))
                         return response
 
                     # Note: From here on, NO RETRY - streaming has begun
                     async with result.response as llm_response:
                         if llm_response.status != 200:
-                            error_msg = await llm_response.text()
-                            logger.error(f"LLM stream error: {error_msg[:200]}")
-                            error_data = json.dumps({"error": f"LLM Error: {error_msg[:200]}", "done": True})
+                            logger.error(f"LLM stream error: HTTP {llm_response.status}")
+                            error_data = json.dumps(
+                                {"error": _upstream_status_message(llm_response.status), "code": "llm_error", "done": True}
+                            )
                             await response.write(f"data: {error_data}\n\n".encode('utf-8'))
                             return response
 
@@ -937,17 +995,26 @@ def register_api_routes(context: dict) -> None:
                                 pass  # Invalid JSON, ignore
 
                 except Exception as stream_err:
-                    error_data = json.dumps({"error": str(stream_err), "done": True})
+                    logger.error(f"Chat stream failed: {stream_err}")
+                    if is_destination_policy_error(stream_err):
+                        stream_code, stream_message = DESTINATION_NOT_ALLOWED, DESTINATION_NOT_ALLOWED_MESSAGE
+                    elif isinstance(stream_err, aiohttp.ClientError):
+                        stream_code, stream_message = "network_error", CONNECTION_FAILED_MESSAGE
+                    else:
+                        stream_code, stream_message = "internal_error", INTERNAL_ERROR_MESSAGE
+                    error_data = json.dumps({"error": stream_message, "code": stream_code, "done": True})
                     await response.write(f"data: {error_data}\n\n".encode('utf-8'))
 
             return response
 
         except aiohttp.ClientError as e:
             emit_doctor_log(f"Chat network error: {e}", "ERROR")
-            return _error_response(f"Network Error: {str(e)}", status=503, code="network_error")
+            if is_destination_policy_error(e):
+                return _error_response(DESTINATION_NOT_ALLOWED_MESSAGE, status=403, code=DESTINATION_NOT_ALLOWED)
+            return _error_response(CONNECTION_FAILED_MESSAGE, status=503, code="network_error")
         except Exception as e:
             emit_doctor_log(f"Chat failed: {e}", "ERROR")
-            return _error_response(str(e), status=500)
+            return _error_response(INTERNAL_ERROR_MESSAGE, status=500, code="internal_error")
 
     @server.PromptServer.instance.routes.get("/debugger/history")
     async def api_get_history(request):
@@ -1093,22 +1160,23 @@ def register_api_routes(context: dict) -> None:
         Payload: { "base_url": str, "api_key": str }
         Returns: { "success": bool, "message": str, "is_local": bool }
         """
+        destination = None
         try:
             data = await request.json()
             base_url = data.get("base_url", DOCTOR_LLM_BASE_URL)
             api_key = data.get("api_key", "")
             provider = data.get("provider", "")
 
-            # S2: SSRF protection - validate base URL
-            is_valid, ssrf_error = validate_ssrf_url(base_url)
-            if not is_valid:
-                logger.warning(f"SSRF blocked in verify_key: {ssrf_error}")
+            # S29: only operator-approved destinations (exact match before any DNS or socket use)
+            destination = _match_destination(base_url, request.path)
+            if destination is None:
                 return _error_response(
-                    f"Invalid Base URL: {ssrf_error}",
+                    DESTINATION_NOT_ALLOWED_MESSAGE,
                     status=200,
-                    code="invalid_base_url",
+                    code=DESTINATION_NOT_ALLOWED,
                     extra={"is_local": False},
                 )
+            base_url = destination.base_url
 
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
                 base_url=base_url,
@@ -1131,7 +1199,7 @@ def register_api_routes(context: dict) -> None:
             if is_local and not api_key:
                 api_key = _local_llm_auth_placeholder()
 
-            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            llm_adapter = get_llm_provider_adapter_for_provider(destination.provider)
             provider_request = llm_adapter.build_models_request(base_url, api_key)
 
             # R7: Rate limit check (light limiter for quick requests)
@@ -1144,7 +1212,7 @@ def register_api_routes(context: dict) -> None:
                     extra={"is_local": is_local},
                 )
 
-            session = await SessionManager.get_session()
+            session = await SessionManager.get_session(bypass_proxy=destination.is_loopback)
             async with session.get(provider_request.url, headers=provider_request.headers, allow_redirects=False) as response:
                 if response.status == 200:
                     msg = "API key is valid" if not is_local else "Local LLM connection successful"
@@ -1155,26 +1223,33 @@ def register_api_routes(context: dict) -> None:
                         "is_local": is_local
                     })
                 else:
-                    error_text = await response.text()
-                    if len(error_text) > 200:
-                        error_text = error_text[:200] + "..."
                     logger.warning(f"API key verification failed - status={response.status}, base_url={base_url}")
                     return _error_response(
-                        f"Verification failed ({response.status}): {error_text}",
+                        f"Verification failed. {_upstream_status_message(response.status)}",
                         status=200,
                         code="verification_failed",
                         extra={"is_local": is_local},
                     )
 
         except aiohttp.ClientError as e:
+            logger.warning(f"API key verification connection error: {e}")
+            local_flag = bool(destination is not None and destination.is_loopback)
+            if is_destination_policy_error(e):
+                return _error_response(
+                    DESTINATION_NOT_ALLOWED_MESSAGE,
+                    status=200,
+                    code=DESTINATION_NOT_ALLOWED,
+                    extra={"is_local": local_flag},
+                )
             return _error_response(
-                f"Connection error: {str(e)}",
+                CONNECTION_FAILED_MESSAGE,
                 status=200,
                 code="connection_error",
-                extra={"is_local": is_local_llm_url(data.get("base_url", "")) if 'data' in locals() else False},
+                extra={"is_local": local_flag},
             )
         except Exception as e:
-            return _error_response(f"Error: {str(e)}", status=200, extra={"is_local": False})
+            logger.error(f"API key verification failed: {e}")
+            return _error_response(INTERNAL_ERROR_MESSAGE, status=200, code="internal_error", extra={"is_local": False})
 
     @server.PromptServer.instance.routes.post("/doctor/list_models")
     async def api_list_models(request):
@@ -1184,22 +1259,23 @@ def register_api_routes(context: dict) -> None:
         Payload: { "base_url": str, "api_key": str }
         Returns: { "success": bool, "models": list[{name, id}], "message": str }
         """
+        destination = None
         try:
             data = await request.json()
             base_url = data.get("base_url", DOCTOR_LLM_BASE_URL)
             api_key = data.get("api_key", "")
             provider = data.get("provider", "")
 
-            # S2: SSRF protection - validate base URL
-            is_valid, ssrf_error = validate_ssrf_url(base_url)
-            if not is_valid:
-                logger.warning(f"SSRF blocked in list_models: {ssrf_error}")
+            # S29: only operator-approved destinations (exact match before any DNS or socket use)
+            destination = _match_destination(base_url, request.path)
+            if destination is None:
                 return _error_response(
-                    f"Invalid Base URL: {ssrf_error}",
+                    DESTINATION_NOT_ALLOWED_MESSAGE,
                     status=200,
-                    code="invalid_base_url",
+                    code=DESTINATION_NOT_ALLOWED,
                     extra={"models": []},
                 )
+            base_url = destination.base_url
 
             api_key, key_source, resolved_provider, is_local = resolve_api_key(
                 base_url=base_url,
@@ -1219,7 +1295,7 @@ def register_api_routes(context: dict) -> None:
             if is_local and not api_key:
                 api_key = _local_llm_auth_placeholder()
 
-            llm_adapter = get_llm_provider_adapter(base_url, is_local=is_local)
+            llm_adapter = get_llm_provider_adapter_for_provider(destination.provider)
             provider_request = llm_adapter.build_models_request(base_url, api_key)
 
             # R7: Rate limit check (light limiter for quick requests)
@@ -1232,7 +1308,7 @@ def register_api_routes(context: dict) -> None:
                     extra={"models": []},
                 )
 
-            session = await SessionManager.get_session()
+            session = await SessionManager.get_session(bypass_proxy=destination.is_loopback)
             async with session.get(provider_request.url, headers=provider_request.headers, allow_redirects=False) as response:
                 if response.status != 200:
                     return _error_response(
@@ -1254,22 +1330,32 @@ def register_api_routes(context: dict) -> None:
                     })
 
                 except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"Failed to parse model list: {e}")
                     return _error_response(
-                        f"Failed to parse model list: {str(e)}",
+                        "The model list could not be parsed.",
                         status=200,
                         code="model_parse_failed",
                         extra={"models": []},
                     )
 
         except aiohttp.ClientError as e:
+            logger.warning(f"Model list connection error: {e}")
+            if is_destination_policy_error(e):
+                return _error_response(
+                    DESTINATION_NOT_ALLOWED_MESSAGE,
+                    status=200,
+                    code=DESTINATION_NOT_ALLOWED,
+                    extra={"models": []},
+                )
             return _error_response(
-                f"Connection error: {str(e)}",
+                CONNECTION_FAILED_MESSAGE,
                 status=200,
                 code="connection_error",
                 extra={"models": []},
             )
         except Exception as e:
-            return _error_response(f"Error: {str(e)}", status=200, extra={"models": []})
+            logger.error(f"Model list failed: {e}")
+            return _error_response(INTERNAL_ERROR_MESSAGE, status=200, code="internal_error", extra={"models": []})
 
     # ---- F4: Statistics Dashboard API Endpoints ----
 

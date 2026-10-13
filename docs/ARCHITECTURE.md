@@ -31,7 +31,7 @@ The backend is organized around a small entry point and focused service modules:
 | Package entry | `__init__.py`, `nodes.py`, `prestartup_script.py` | ComfyUI loading, node export, startup logging |
 | API routes | `api_routes.py`, `services/routes.py` | PromptServer HTTP route registration and route handlers |
 | Analysis | `analyzer.py`, `pattern_loader.py`, `pipeline/`, `services/prompt_helpers.py` | Error categorization, pattern matching, prompt construction |
-| LLM | `llm_client.py`, `session_manager.py`, `services/llm_provider_adapters.py`, `services/llm/` | Provider requests, retry, proxy policy, rate/concurrency limits |
+| LLM | `llm_client.py`, `session_manager.py`, `services/llm_provider_adapters.py`, `services/outbound_policy.py`, `services/llm/` | Provider requests, approved destinations and connect-time address checks, retry, proxy policy, rate/concurrency limits |
 | Security | `security.py`, `outbound.py`, `sanitizer.py`, `services/security/` | SSRF checks, outbound sanitization, admin guard, error envelopes |
 | Logging and health | `terminal_output.py`, `logger.py`, `services/dynamic_vram_advisory.py` | Canonical terminal output, bounded runtime capture, and isolated nonfatal host advisories |
 | Storage | `services/doctor_paths.py`, `history_store.py`, `services/secret_store.py` | Canonical data paths, history, encrypted credential storage |
@@ -75,7 +75,7 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 2. The analyzer and pattern pipeline classify the error.
 3. Node/workflow context is collected and pruned.
 4. Prompt helpers build a provider-neutral request payload.
-5. LLM calls go through adapter, retry, rate-limit, proxy, SSRF, and outbound-sanitization layers.
+5. LLM calls go through approved-destination matching, adapter, retry, rate-limit, proxy, connect-time address checks, and outbound-sanitization layers.
 6. Results are stored in history and exposed to the frontend.
 
 ### Nonfatal Host Advisory
@@ -156,7 +156,8 @@ breaking runtime error reporting.
 
 Security-sensitive behavior is centralized:
 
-- SSRF validation guards provider base URLs.
+- LLM requests only reach operator-approved destinations; outbound URLs are built from the
+  approved entry and resolved addresses are checked at connect time.
 - Outbound sanitization prevents raw private context from leaving the process;
   `Authorization` and `X-API-Key` values are always redacted in text and
   structured payloads, regardless of privacy mode.

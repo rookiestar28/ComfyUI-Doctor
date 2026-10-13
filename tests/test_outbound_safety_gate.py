@@ -71,7 +71,7 @@ async def good_handler():
     error_text = sanitizer.sanitize(context.traceback).sanitized_text
     payload = {"error": error_text}
     payload = sanitize_outbound_payload(payload, sanitizer)
-    await session.post(url, json=payload)
+    await session.post(url, json=payload, allow_redirects=False)
 '''
     violations = _check_code(code)
     assert len(violations) == 0
@@ -97,7 +97,7 @@ def test_respects_nosec_suppression():
 async def debug_endpoint():
     # nosec: outbound-bypass-allowed - Reason: local debug only
     payload = {"raw": context.traceback}
-    await session.post(url, json=payload)
+    await session.post(url, json=payload, allow_redirects=False)
 '''
     violations = _check_code(code)
     # Should be suppressed

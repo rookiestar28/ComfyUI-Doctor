@@ -8,6 +8,12 @@ The static safety check prevents accidental bypass of the outbound sanitization 
 2. **Missing `sanitize_outbound_payload()` calls**
 3. **Dangerous fallback patterns** like `sanitized_X or X`
 4. **`json.dumps()` on sensitive data**
+5. **`aiohttp.ClientSession()` outside `session_manager.py`** (the shared session installs the
+   connect-time destination check; `services/community_feedback.py` is the only other allowed
+   client, for the operator-configured GitHub API)
+6. **HTTP client calls without `allow_redirects=False`**
+
+Only git-tracked Python files outside `tests/` are scanned.
 
 ## Why This Matters
 
@@ -43,7 +49,7 @@ sanitizer, _ = get_outbound_sanitizer(base_url, privacy_mode)
 error_text = sanitizer.sanitize(context.traceback).sanitized_text
 payload = {"error": error_text}
 payload = sanitize_outbound_payload(payload, sanitizer)
-await session.post(url, json=payload)
+await session.post(url, json=payload, allow_redirects=False)
 ```
 
 ### ❌ Wrong: Dangerous Fallback

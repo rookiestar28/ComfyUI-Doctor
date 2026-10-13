@@ -7,6 +7,8 @@ Prevents bypass of outbound.py sanitization funnel by detecting:
 2. POST requests without sanitize_outbound_payload()
 3. Dangerous fallback patterns
 4. Missing sanitizer application
+5. aiohttp.ClientSession() created outside the destination-policy session modules
+6. HTTP client calls that do not pass allow_redirects=False
 
 Exit codes:
   0 = All checks passed
@@ -15,6 +17,7 @@ Exit codes:
 """
 
 import ast
+import subprocess
 import sys
 from pathlib import Path
 from typing import List, Dict, Tuple
@@ -41,6 +44,11 @@ class OutboundSafetyChecker(ast.NodeVisitor):
 
     # Sanitized field prefixes
     SANITIZED_PREFIXES = {'sanitized_'}
+
+    # Only these modules may construct HTTP client sessions: session_manager.py installs the
+    # destination-policy resolver; community_feedback.py talks to the operator-configured GitHub API.
+    SESSION_FACTORY_FILES = ('session_manager.py', 'services/community_feedback.py')
+    HTTP_METHODS = {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'request'}
 
     def __init__(self, filename: str, source: str):
         self.filename = filename
@@ -93,7 +101,41 @@ class OutboundSafetyChecker(ast.NodeVisitor):
         if self._is_json_dumps(node):
             self._check_json_dumps(node)
 
+        # Rule 5: HTTP client sessions only in the policy/session modules
+        if self._is_call_to(node, 'ClientSession') and not self._is_session_factory_file():
+            self.add_violation(node, 'CLIENT_SESSION_OUTSIDE_POLICY',
+                'aiohttp.ClientSession() outside session_manager.py bypasses the destination policy')
+
+        # Rule 6: every HTTP client call must disable redirects explicitly
+        if self._is_http_client_call(node) and not self._disables_redirects(node):
+            self.add_violation(node, 'REDIRECT_NOT_DISABLED',
+                f'{ast.unparse(node.func)}() without allow_redirects=False')
+
         self.generic_visit(node)
+
+    def _is_session_factory_file(self) -> bool:
+        normalized = self.filename.replace('\\', '/')
+        return any(normalized == allowed or normalized.endswith('/' + allowed)
+                   for allowed in self.SESSION_FACTORY_FILES)
+
+    def _is_http_client_call(self, node: ast.Call) -> bool:
+        """session.get/post/.../request(...) on a session-like receiver, or aiohttp.request(...)."""
+        func = node.func
+        if not isinstance(func, ast.Attribute) or func.attr not in self.HTTP_METHODS:
+            return False
+        receiver = func.value
+        if isinstance(receiver, ast.Name):
+            return receiver.id == 'aiohttp' or receiver.id.lower().endswith('session')
+        if isinstance(receiver, ast.Attribute):
+            return receiver.attr.lower().endswith('session')
+        return False
+
+    @staticmethod
+    def _disables_redirects(node: ast.Call) -> bool:
+        for keyword in node.keywords:
+            if keyword.arg == 'allow_redirects':
+                return isinstance(keyword.value, ast.Constant) and keyword.value.value is False
+        return False
 
     def visit_BoolOp(self, node: ast.BoolOp):
         # Rule 2: Detect "sanitized_X or X" pattern
@@ -273,6 +315,9 @@ def should_check_file(file_path: Path, project_root: Path) -> bool:
     # Skip whitelisted files/directories
     skip_patterns = [
         'tests/',
+        'reference/',
+        '.planning/',
+        '.tmp/',
         'outbound.py',
         'sanitizer.py',
         '.venv/',
@@ -290,6 +335,21 @@ def should_check_file(file_path: Path, project_root: Path) -> bool:
     return True
 
 
+def _candidate_files(project_root: Path) -> List[Path]:
+    """Return git-tracked *.py files, falling back to a filesystem walk outside a git checkout."""
+    try:
+        output = subprocess.run(
+            ['git', '-C', str(project_root), 'ls-files', '--', '*.py'],
+            capture_output=True, text=True, check=True, timeout=60,
+        ).stdout
+        tracked = [project_root / line for line in output.splitlines() if line.strip()]
+        if tracked:
+            return [path for path in tracked if path.is_file()]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return list(project_root.rglob('*.py'))
+
+
 def main():
     """Main entry point."""
     project_root = Path(__file__).resolve().parent.parent
@@ -297,8 +357,8 @@ def main():
     print("Outbound Funnel Safety Check")
     print(f"Scanning: {project_root}\n")
 
-    # Find all Python files
-    py_files = [f for f in project_root.rglob('*.py')
+    # Find tracked Python files (untracked reference checkouts are not product code)
+    py_files = [f for f in _candidate_files(project_root)
                 if should_check_file(f, project_root)]
 
     print(f"Checking {len(py_files)} Python files...\n")

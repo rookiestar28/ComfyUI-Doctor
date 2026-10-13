@@ -595,6 +595,7 @@ Open **Doctor** in ComfyUI's left sidebar:
 - **Chat**: review latest error context and ask follow-up debugging questions.
 - **Statistics**: inspect recent error trends, diagnostics, trust/health information, telemetry controls, and feedback tools.
 - **Settings**: choose language, LLM provider, base URL, model, privacy mode, auto-open behavior, and optional server-side credential storage.
+  The base URL must be one of the LLM destinations approved on the ComfyUI server: the built-in official providers, local Ollama/LM Studio, or URLs the server operator lists in `DOCTOR_LLM_ALLOWED_BASE_URLS` (see [Configuration and Security](docs/CONFIGURATION_SECURITY.md#llm-destinations)).
 
 When node context is available, locate actions use the host canvas focus APIs when possible, including graph/subgraph switching for nested execution ids while keeping executable group focus on the group host.
 

@@ -132,6 +132,7 @@
     "error_header": "⚠️ Error",
     "error_label": "Error",
     "error_loading_models": "Erreur lors du chargement des modèles - utiliser la saisie manuelle",
+    "llm_destination_not_allowed": "Ce point de terminaison LLM n'est pas approuvé sur ce serveur. Demandez à l'opérateur du serveur de l'ajouter à DOCTOR_LLM_ALLOWED_BASE_URLS.",
     "error_message": "Erreur",
     "expand_btn": "Agrandir",
     "feedback_admin_token_placeholder": "Jeton admin (optionnel)",

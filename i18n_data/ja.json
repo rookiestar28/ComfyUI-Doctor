@@ -132,6 +132,7 @@
     "error_header": "⚠️ エラー",
     "error_label": "エラー",
     "error_loading_models": "モデルの読み込みエラー - 手動入力を使用してください",
+    "llm_destination_not_allowed": "この LLM エンドポイントはこのサーバーで承認されていません。サーバー管理者に DOCTOR_LLM_ALLOWED_BASE_URLS への追加を依頼してください。",
     "error_message": "エラー",
     "expand_btn": "展開",
     "feedback_admin_token_placeholder": "管理者トークン (ローカルの場合等はオプション)",

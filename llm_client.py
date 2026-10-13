@@ -10,7 +10,7 @@ Integrates with:
 IMPORTANT SAFETY NOTES:
 - POST requests may cause duplicate charges if retried incorrectly
 - Streaming requests should NOT be retried after connection established
-- All requests use allow_redirects=False (SSRF protection)
+- All requests use allow_redirects=False and treat any 3xx as failure (SSRF protection)
 """
 
 import asyncio
@@ -22,7 +22,22 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, Tuple, Dict, Any
 
+try:
+    from .services.outbound_policy import is_destination_policy_error
+except ImportError as import_error:
+    from import_compat import ensure_absolute_import_fallback_allowed
+    ensure_absolute_import_fallback_allowed(import_error)
+    from services.outbound_policy import is_destination_policy_error
+
 logger = logging.getLogger(__name__)
+
+# Stable failure kinds for callers that must not reflect raw upstream/network text.
+FAILURE_DESTINATION_NOT_ALLOWED = "destination_not_allowed"
+FAILURE_HTTP_STATUS = "http_status"
+FAILURE_REDIRECT = "redirect"
+FAILURE_RATE_LIMITED = "rate_limited"
+FAILURE_TIMEOUT = "timeout"
+FAILURE_NETWORK = "network"
 
 
 @dataclass
@@ -62,6 +77,8 @@ class RetryResult:
     total_time: float
     error: Optional[str] = None
     idempotency_key: Optional[str] = None
+    failure_kind: Optional[str] = None
+    status: Optional[int] = None
 
 
 def _safe_release(response: aiohttp.ClientResponse) -> None:
@@ -148,6 +165,7 @@ async def llm_request_with_retry(
     start_time = time.monotonic()
     attempts = 0
     last_error: Optional[str] = None
+    failure_kind: Optional[str] = None
     response: Optional[aiohttp.ClientResponse] = None
     
     while attempts <= config.max_retries:
@@ -162,6 +180,7 @@ async def llm_request_with_retry(
                 total_time=elapsed,
                 error=f"Total timeout exceeded ({config.total_timeout_seconds}s)",
                 idempotency_key=idempotency_key,
+                failure_kind=FAILURE_TIMEOUT,
             )
         
         attempts += 1
@@ -179,8 +198,25 @@ async def llm_request_with_retry(
                 timeout=timeout,
             )
             
-            # === Success path (2xx, 3xx) ===
-            if response.status < 400:
+            # === Redirects are failures (3xx) ===
+            # CRITICAL: never treat a redirect as success; a 3xx from an approved destination must not
+            # be followed or handed to callers as a usable response (SSRF redirect pivot).
+            if 300 <= response.status < 400:
+                _safe_release(response)
+                logger.warning(f"Redirect response {response.status} rejected (redirects are not followed)")
+                return RetryResult(
+                    response=None,
+                    success=False,
+                    attempts=attempts,
+                    total_time=time.monotonic() - start_time,
+                    error=f"HTTP {response.status} redirect not followed",
+                    idempotency_key=idempotency_key,
+                    failure_kind=FAILURE_REDIRECT,
+                    status=response.status,
+                )
+
+            # === Success path (2xx) ===
+            if response.status < 300:
                 logger.debug(f"Request succeeded on attempt {attempts}")
                 return RetryResult(
                     response=response,
@@ -209,6 +245,8 @@ async def llm_request_with_retry(
                         total_time=time.monotonic() - start_time,
                         error="Rate limit exceeded after max retries",
                         idempotency_key=idempotency_key,
+                        failure_kind=FAILURE_RATE_LIMITED,
+                        status=429,
                     )
             
             # === 5xx Server Error ===
@@ -232,10 +270,13 @@ async def llm_request_with_retry(
                 total_time=time.monotonic() - start_time,
                 error=f"HTTP {response.status}",
                 idempotency_key=idempotency_key,
+                failure_kind=FAILURE_HTTP_STATUS,
+                status=response.status,
             )
             
         except asyncio.TimeoutError:
             last_error = f"Request timeout ({per_request_timeout:.1f}s)"
+            failure_kind = FAILURE_TIMEOUT
             logger.warning(f"Timeout on attempt {attempts}")
             if config.retryable_network_errors and attempts <= config.max_retries:
                 delay = _calculate_backoff(attempts, config)
@@ -245,7 +286,14 @@ async def llm_request_with_retry(
             break
             
         except aiohttp.ClientError as e:
+            if is_destination_policy_error(e):
+                # Policy refusals are final; never retry towards a forbidden address.
+                last_error = "Destination refused by the outbound policy"
+                failure_kind = FAILURE_DESTINATION_NOT_ALLOWED
+                logger.warning("Outbound destination refused at connect time")
+                break
             last_error = str(e)
+            failure_kind = FAILURE_NETWORK
             logger.warning(f"Network error on attempt {attempts}: {e}")
             if config.retryable_network_errors and attempts <= config.max_retries:
                 delay = _calculate_backoff(attempts, config)
@@ -263,6 +311,7 @@ async def llm_request_with_retry(
         total_time=time.monotonic() - start_time,
         error=last_error,
         idempotency_key=idempotency_key,
+        failure_kind=failure_kind,
     )
 
 

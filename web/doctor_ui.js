@@ -18,6 +18,7 @@ import {
     updateRightErrorPanel,
 } from "./doctor_right_panel.js";
 import { doctorContext } from "./doctor_state.js";
+import { describeLlmError } from "./utils/llm_error_text.js";
 
 /**
  * CRITICAL INITIALIZATION WARNING (Added 2026-01-03)
@@ -1946,7 +1947,7 @@ export class DoctorUI {
                     },
                     (error) => {
                         console.error("[Doctor] Stream error:", error);
-                        placeholderMsg.textContent = `Error: ${error.message}`;
+                        placeholderMsg.textContent = `Error: ${describeLlmError(error.message, this.uiText)}`;
                     },
                     controller.signal
                 );
@@ -1954,7 +1955,7 @@ export class DoctorUI {
             } catch (e) {
                 console.error('[Doctor] AI request failed:', e);
                 console.error('[Doctor] Error stack:', e.stack);
-                placeholderMsg.textContent = `Error: ${e.message}`;
+                placeholderMsg.textContent = `Error: ${describeLlmError(e.message, this.uiText)}`;
             }
         } catch (outerError) {
             console.error('[Doctor] sendToAI outer catch:', outerError);

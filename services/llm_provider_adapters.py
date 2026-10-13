@@ -277,6 +277,15 @@ def is_anthropic_base_url(base_url: str) -> bool:
     return "anthropic.com" in hostname.lower()
 
 
+def get_llm_provider_adapter_for_provider(provider: str) -> LLMProviderAdapter:
+    """Select an adapter from an approved destination's provider id (registry entry)."""
+    if provider == "ollama":
+        return OllamaLLMProviderAdapter()
+    if provider == "anthropic":
+        return AnthropicLLMProviderAdapter()
+    return OpenAICompatibleLLMProviderAdapter()
+
+
 def get_llm_provider_adapter(base_url: str, *, is_local: bool) -> LLMProviderAdapter:
     """Select an LLM provider adapter for a validated base URL."""
     base_info = parse_base_url(base_url.rstrip("/"))
@@ -295,5 +304,6 @@ __all__ = [
     "OllamaLLMProviderAdapter",
     "OpenAICompatibleLLMProviderAdapter",
     "get_llm_provider_adapter",
+    "get_llm_provider_adapter_for_provider",
     "is_anthropic_base_url",
 ]

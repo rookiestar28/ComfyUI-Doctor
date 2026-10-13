@@ -132,6 +132,7 @@
     "error_header": "⚠️ 錯誤",
     "error_label": "錯誤",
     "error_loading_models": "載入模型錯誤 - 請手動輸入",
+    "llm_destination_not_allowed": "此 LLM 端點未獲此伺服器核准。請伺服器管理者將其加入 DOCTOR_LLM_ALLOWED_BASE_URLS。",
     "error_message": "錯誤",
     "expand_btn": "展開",
     "feedback_admin_token_placeholder": "管理員憑證 (若為本機或無 DOCTOR_ADMIN_TOKEN 則可選)",

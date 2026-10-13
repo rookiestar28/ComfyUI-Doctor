@@ -48,7 +48,7 @@ Denied writes use:
 
 ## LLM and Chat Endpoints
 
-Doctor normalizes provider-specific behavior for OpenAI-compatible APIs, Anthropic, and Ollama behind a shared backend adapter layer. The route endpoints still enforce SSRF checks, credential resolution, privacy sanitization, retry/concurrency limits, and streaming response handling.
+Doctor normalizes provider-specific behavior for OpenAI-compatible APIs, Anthropic, and Ollama behind a shared backend adapter layer. The route endpoints still enforce the operator-approved destination list (requests for any other base URL return `destination_not_allowed`; see [Configuration and Security](CONFIGURATION_SECURITY.md#llm-destinations)), credential resolution, privacy sanitization, retry/concurrency limits, and streaming response handling.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

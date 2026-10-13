@@ -346,7 +346,8 @@ class GitHubPRClient:
         if not self._session:
             raise RuntimeError("GitHubPRClient session not started")
         url = f"{self.config.api_base.rstrip('/')}{path}"
-        async with self._session.request(method, url, json=body) as resp:
+        # IMPORTANT: never follow redirects; a 3xx would carry the Bearer token to another host.
+        async with self._session.request(method, url, json=body, allow_redirects=False) as resp:
             data = await resp.json(content_type=None)
             if resp.status not in expected:
                 message = ""

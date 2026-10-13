@@ -3,6 +3,7 @@ import { DoctorAPI } from "../doctor_api.js";
 import { getRuntimeApiKey, setRuntimeApiKey } from "../llm_key_store.js";
 import { SUPPORTED_LANGUAGES, getDoctorRuntimeSettings, getDoctorSetting, setDoctorSetting } from "../comfyui_frontend_compat.js";
 import { LLM_PROVIDER_OPTIONS } from "../llm_provider_quick_switch.js";
+import { DESTINATION_NOT_ALLOWED, describeLlmError } from "../utils/llm_error_text.js";
 
 export function render(container) {
     const doctorUI = app.Doctor;
@@ -223,7 +224,11 @@ export function render(container) {
     const apiKeyInput = settingsPanel.querySelector('#doctor-apikey-input');
 
     // Load models logic
+    // IMPORTANT: only the newest request may update the list; a slower earlier response (for a
+    // previous base URL) must not overwrite the result for the URL now shown.
+    let loadModelsGeneration = 0;
     const loadModels = async () => {
+        const generation = ++loadModelsGeneration;
         const baseUrl = baseUrlInput.value;
         const apiKey = apiKeyInput.value;
 
@@ -234,10 +239,14 @@ export function render(container) {
 
         refreshModelsBtn.textContent = '⏳';
         refreshModelsBtn.disabled = true;
+        modelSelect.title = '';
         modelSelect.disabled = true;
 
         try {
             const result = await DoctorAPI.listModels(baseUrl, apiKey);
+            if (generation !== loadModelsGeneration) {
+                return;
+            }
 
             if (result.success && result.models.length > 0) {
                 modelSelect.innerHTML = '';
@@ -268,16 +277,27 @@ export function render(container) {
                         modelSelect.insertBefore(option, modelSelect.firstChild);
                     }
                 }
+            } else if (result.error === DESTINATION_NOT_ALLOWED) {
+                // Operator guidance: the base URL is not an approved destination on this server.
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = describeLlmError(result.error, doctorUI?.uiText);
+                modelSelect.replaceChildren(option);
+                modelSelect.title = option.textContent;
             } else {
                 modelSelect.innerHTML = '<option value="">No models found - use manual input</option>';
             }
         } catch (error) {
             console.error('[ComfyUI-Doctor] Failed to load models:', error);
-            modelSelect.innerHTML = '<option value="">Error loading models - use manual input</option>';
+            if (generation === loadModelsGeneration) {
+                modelSelect.innerHTML = '<option value="">Error loading models - use manual input</option>';
+            }
         } finally {
-            refreshModelsBtn.textContent = '🔄';
-            refreshModelsBtn.disabled = false;
-            modelSelect.disabled = false;
+            if (generation === loadModelsGeneration) {
+                refreshModelsBtn.textContent = '🔄';
+                refreshModelsBtn.disabled = false;
+                modelSelect.disabled = false;
+            }
         }
     };
 

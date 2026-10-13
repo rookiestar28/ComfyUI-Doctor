@@ -212,9 +212,19 @@ class _FakeSession:
 class _EgressGuard:
     """Loopback-only socket/DNS guard with an explicit fake DNS table."""
 
-    def __init__(self, dns_table: Mapping[str, Sequence[str]]):
+    def __init__(
+        self,
+        dns_table: Mapping[str, Sequence[str]],
+        dns_sequences: Optional[Mapping[str, Sequence[Sequence[str]]]] = None,
+    ):
         self._dns_table = {name.lower(): tuple(ips) for name, ips in dns_table.items()}
+        # Per-name answer sequences (one entry per lookup, the last one repeats): DNS rebinding.
+        self._dns_sequences = {
+            name.lower(): [tuple(ips) for ips in answers] for name, answers in (dns_sequences or {}).items()
+        }
         self.blocked: List[str] = []
+        #: Every non-numeric name the code under test tried to resolve, in order.
+        self.lookups: List[str] = []
         self._saved: Optional[Tuple[Any, Any, Any]] = None
 
     def _check_target(self, address: Any) -> None:
@@ -244,7 +254,10 @@ class _EgressGuard:
             if name in _LOOPBACK_HOSTS or _is_ip_literal(name):
                 # Numeric hosts resolve locally without a DNS query; connect() is still guarded.
                 return real_getaddrinfo(host, port, *args, **kwargs)
-            answers = guard._dns_table.get(name.lower().rstrip("."))
+            key = name.lower().rstrip(".")
+            guard.lookups.append(key)
+            sequence = guard._dns_sequences.get(key)
+            answers = (sequence.pop(0) if len(sequence) > 1 else sequence[0]) if sequence else guard._dns_table.get(key)
             if answers is None:
                 guard.blocked.append(f"dns:{name}")
                 raise socket.gaierror(f"harness egress guard refused DNS lookup for {name!r}")
@@ -292,9 +305,14 @@ class DoctorRouteHarness:
         *,
         env: Optional[Mapping[str, str]] = None,
         dns_table: Optional[Mapping[str, Sequence[str]]] = None,
+        dns_sequences: Optional[Mapping[str, Sequence[Sequence[str]]]] = None,
+        real_session: bool = False,
     ) -> None:
         self._env_overrides = dict(env or {})
-        self.guard = _EgressGuard(DEFAULT_DNS_TABLE if dns_table is None else dns_table)
+        self.guard = _EgressGuard(DEFAULT_DNS_TABLE if dns_table is None else dns_table, dns_sequences)
+        # real_session keeps the production shared aiohttp session (connector, resolver, proxy policy);
+        # only loopback targets on non-LLM ports stay reachable through the egress guard.
+        self._real_session = real_session
         self.captured: List[CapturedRequest] = []
         self.provider_reply = ProviderReply()
         self.startup_output = ""
@@ -479,7 +497,8 @@ class DoctorRouteHarness:
             }
 
         api_routes.llm_request_with_retry = fake_llm_request_with_retry
-        api_routes.SessionManager.get_session = staticmethod(fake_get_session)
+        if not self._real_session:
+            api_routes.SessionManager.get_session = staticmethod(fake_get_session)
         api_routes.get_system_environment = fake_system_environment
         system_info.get_system_environment = fake_system_environment
 

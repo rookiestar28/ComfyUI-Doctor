@@ -67,7 +67,7 @@ def test_list_models_rejects_private_base_url_before_any_outbound_call(harness):
     assert response.status == 200
     body = response.json()
     assert body["success"] is False
-    assert body["error"] == "invalid_base_url"
+    assert body["error"] == "destination_not_allowed"
     assert body["models"] == []
     assert harness.captured == []
 

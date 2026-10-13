@@ -132,6 +132,7 @@
     "error_header": "⚠️ 错误",
     "error_label": "错误",
     "error_loading_models": "加载模型错误 - 请手动输入",
+    "llm_destination_not_allowed": "此 LLM 端点未获此服务器批准。请服务器管理员将其加入 DOCTOR_LLM_ALLOWED_BASE_URLS。",
     "error_message": "错误",
     "expand_btn": "展开",
     "feedback_admin_token_placeholder": "管理员令牌 (如果是本地或无 DOCTOR_ADMIN_TOKEN 则可选)",

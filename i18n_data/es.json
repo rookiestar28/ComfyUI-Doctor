@@ -132,6 +132,7 @@
     "error_header": "⚠️ Error",
     "error_label": "Error",
     "error_loading_models": "Error al cargar modelos - usar entrada manual",
+    "llm_destination_not_allowed": "Este endpoint de LLM no está aprobado en este servidor. Pide al operador del servidor que lo añada a DOCTOR_LLM_ALLOWED_BASE_URLS.",
     "error_message": "Error",
     "expand_btn": "Expandir",
     "feedback_admin_token_placeholder": "Token de administrador (opcional)",

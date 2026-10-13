@@ -31,6 +31,65 @@ Local endpoint overrides:
 - `OLLAMA_BASE_URL`
 - `LMSTUDIO_BASE_URL`
 
+## LLM Destinations
+
+The server only sends LLM requests (analysis, chat, key verification and model listing) to
+destinations approved on the machine that runs ComfyUI. The Base URL in Doctor settings, the
+provider quick switch and API request bodies can only select one of these destinations; they cannot
+add a new one or change its host, port, path, query or scheme.
+
+Approved without configuration:
+
+- Official providers: `https://api.openai.com/v1`, `https://api.anthropic.com`,
+  `https://api.deepseek.com/v1`, `https://api.groq.com/openai/v1`,
+  `https://generativelanguage.googleapis.com/v1beta/openai`, `https://api.x.ai/v1`,
+  `https://openrouter.ai/api/v1`. `https://api.openai.com` and `https://api.deepseek.com` are
+  accepted as the same destinations as their `/v1` forms, and `https://api.anthropic.com/v1` as
+  `https://api.anthropic.com`.
+- Local services on this machine: Ollama at `http://127.0.0.1:11434`, `http://localhost:11434`
+  or `http://[::1]:11434`, and LM Studio at the same hosts on port `1234` (`/v1`).
+
+Approved by the server operator through environment variables read at startup:
+
+- `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL` and `DOCTOR_LLM_BASE_URL` (each value is approved
+  exactly as written).
+- `DOCTOR_LLM_ALLOWED_BASE_URLS`: a comma-separated list of exact base URLs, for example
+  `https://llm-gateway.example.com/v1,http://192.168.1.20:11434`.
+
+Matching rules:
+
+- A request must use one approved base URL exactly. Letter case, a trailing slash, a trailing dot
+  on the host and an explicit default port are normalized; everything else must match.
+- Base URLs with user information, a query, a fragment, a backslash, whitespace, percent-encoding,
+  `.`/`..` path segments or a non-HTTP(S) scheme are never approved.
+- Values that cannot be parsed, metadata or link-local addresses, and extra paths on official
+  provider hosts are ignored at startup with a log warning.
+- A request for any other destination is refused with the error code `destination_not_allowed`
+  before any DNS lookup or network connection. The Doctor settings panel shows this as
+  operator guidance.
+
+Connection checks:
+
+- Addresses are checked when the connection is made, on the exact addresses that will be used.
+- Official providers must resolve only to public internet addresses.
+- Built-in local services, and approved entries whose host is `localhost` or a loopback address,
+  must resolve only to loopback addresses.
+- Other operator-approved hosts (for example a LAN address, a Docker service name or
+  `host.docker.internal`) may resolve to private or public addresses, but never to loopback,
+  link-local, cloud metadata, unspecified or multicast addresses.
+- Redirects are never followed, and any `3xx` answer is treated as a failure.
+- Error responses use fixed messages: provider error bodies, resolved addresses and network error
+  details are written to the server log only.
+
+When `DOCTOR_OUTBOUND_PROXY_POLICY=inherit_env` is set, requests that go through the proxy rely on
+the proxy for address checks; approved hosts reached directly (for example through `NO_PROXY`)
+are still checked. Local loopback destinations never use a proxy.
+
+Migrating a custom endpoint: if a custom Base URL (self-hosted gateway, Azure OpenAI, remote
+Ollama or LM Studio, or a Docker host address) stops working with `destination_not_allowed`, add
+the exact URL to `DOCTOR_LLM_ALLOWED_BASE_URLS` (or to `OLLAMA_BASE_URL`/`LMSTUDIO_BASE_URL`) in
+the environment that starts ComfyUI, restart ComfyUI, and use the same URL in Doctor settings.
+
 Provider handling is centralized for OpenAI-compatible APIs, Anthropic, and Ollama. The backend adapter layer normalizes chat/analysis payloads, model-list parsing, non-stream responses, and streaming chunks while route handlers keep the security controls described below.
 
 ## Admin Guard
@@ -81,9 +140,9 @@ Doctor applies outbound safety checks before sending provider-bound data:
   values in text, mappings, lists, request/response headers, outbound payloads,
   and recent log-buffer reads. This boundary remains active in privacy mode
   `none`.
-- SSRF-oriented URL validation.
-- Redirect restrictions for sensitive outbound checks.
-- DNS/private-target checks for hostname-based private or metadata targets.
+- Operator-approved LLM destinations with connect-time address checks (see
+  [LLM Destinations](#llm-destinations)).
+- Redirects are never followed on outbound requests.
 - Redacted audit records for external enrichment submit actions.
 
 LLM prompt context is assembled through the analysis pipeline after sanitization. The provider adapter layer should receive already-sanitized payloads from route handlers.

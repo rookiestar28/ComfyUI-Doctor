@@ -15,10 +15,12 @@ from typing import Optional
 
 try:
     from .rate_limiter import RateLimiter, ConcurrencyLimiter
+    from .services.outbound_policy import DestinationPolicyResolver, get_destination_registry
 except ImportError as import_error:
     from import_compat import ensure_absolute_import_fallback_allowed
     ensure_absolute_import_fallback_allowed(import_error)
     from rate_limiter import RateLimiter, ConcurrencyLimiter
+    from services.outbound_policy import DestinationPolicyResolver, get_destination_registry
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ class SessionManager:
             ...
     """
     _session: Optional[aiohttp.ClientSession] = None
+    _direct_session: Optional[aiohttp.ClientSession] = None  # loopback destinations, never proxied
     _lock: Optional[asyncio.Lock] = None
     _closed: bool = False
     
@@ -205,25 +208,46 @@ class SessionManager:
         return cls._concurrency
     
     @classmethod
-    async def get_session(cls) -> aiohttp.ClientSession:
+    def _new_session(cls, *, trust_env: bool) -> aiohttp.ClientSession:
+        # CRITICAL: every LLM connection goes through the destination policy resolver, which checks
+        # the addresses the connector actually uses (DNS-rebinding safe). Do not create LLM sessions
+        # without it. With proxy inheritance only unregistered (proxy) hosts bypass the check.
+        resolver = DestinationPolicyResolver(
+            get_destination_registry(),
+            allow_unregistered_hosts=trust_env,
+        )
+        return aiohttp.ClientSession(
+            timeout=cls.DEFAULT_TIMEOUT,
+            trust_env=trust_env,
+            connector=aiohttp.TCPConnector(resolver=resolver),
+        )
+
+    @classmethod
+    async def get_session(cls, *, bypass_proxy: bool = False) -> aiohttp.ClientSession:
         """
         Get or create a shared aiohttp ClientSession.
-        
+
+        Args:
+            bypass_proxy: Use a session that never inherits proxy settings (loopback destinations).
+
         Returns:
             aiohttp.ClientSession: The shared session instance.
-            
+
         Note:
             This method is thread-safe and will create the session
             on first call. The session uses a default 60-second timeout.
         """
         async with cls._get_lock():
+            trust_env = cls._proxy_policy == cls.PROXY_POLICY_INHERIT_ENV
+            if bypass_proxy and trust_env:
+                if cls._direct_session is None or cls._direct_session.closed:
+                    cls._closed = False
+                    cls._direct_session = cls._new_session(trust_env=False)
+                return cls._direct_session
             if cls._session is None or cls._session.closed:
                 cls._closed = False
                 # CRITICAL: Keep strict-off default to avoid ambient proxy env inheritance.
-                cls._session = aiohttp.ClientSession(
-                    timeout=cls.DEFAULT_TIMEOUT,
-                    trust_env=(cls._proxy_policy == cls.PROXY_POLICY_INHERIT_ENV),
-                )
+                cls._session = cls._new_session(trust_env=trust_env)
             return cls._session
     
     @classmethod
@@ -235,10 +259,12 @@ class SessionManager:
         proper cleanup. Safe to call multiple times.
         """
         async with cls._get_lock():
-            if cls._session is not None and not cls._session.closed:
-                await cls._session.close()
-                cls._session = None
-                cls._closed = True
+            for attribute in ("_session", "_direct_session"):
+                session = getattr(cls, attribute)
+                if session is not None and not session.closed:
+                    await session.close()
+                    cls._closed = True
+                setattr(cls, attribute, None)
     
     @classmethod
     def is_closed(cls) -> bool:
@@ -253,6 +279,7 @@ class SessionManager:
         Warning: This does not close the session - call close() first.
         """
         cls._session = None
+        cls._direct_session = None
         cls._lock = None
         cls._closed = False
         cls._core_limiter = None
@@ -268,7 +295,12 @@ def _sync_close_session():
     
     Called by atexit to ensure session is closed when Python exits.
     """
-    if SessionManager._session is not None and not SessionManager._session.closed:
+    open_sessions = [
+        session
+        for session in (SessionManager._session, SessionManager._direct_session)
+        if session is not None and not session.closed
+    ]
+    if open_sessions:
         try:
             # Try to get or create an event loop
             try:
@@ -286,10 +318,10 @@ def _sync_close_session():
         except Exception:
             # At shutdown, errors are expected - just try to close directly
             try:
-                if SessionManager._session is not None:
+                for session in open_sessions:
                     # Force close the connector
-                    if SessionManager._session.connector is not None:
-                        SessionManager._session.connector.close()
+                    if session.connector is not None:
+                        session.connector.close()
             except Exception:
                 pass
 

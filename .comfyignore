@@ -1,0 +1,16 @@
+# Files excluded from the Comfy Registry archive (comfy-cli packs `git ls-files` minus these
+# gitwildmatch patterns). Only development, test and CI files are listed; runtime code, web assets,
+# i18n data, docs and licensing stay in the published node.
+tests/
+scripts/
+.github/
+.githooks/
+/package.json
+/package-lock.json
+/playwright.config.js
+/vitest.config.js
+/requirements-dev.txt
+/pytest.ini
+/.pre-commit-config.yaml
+/.secrets.baseline
+/.ruffignore

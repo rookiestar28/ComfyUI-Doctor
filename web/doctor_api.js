@@ -161,7 +161,8 @@ export const DoctorAPI = {
                     try {
                         const data = JSON.parse(jsonStr);
                         if (data.error) {
-                            onError?.(new Error(data.error));
+                            // Stable codes (e.g. destination_not_allowed) are localized by the UI.
+                            onError?.(new Error(data.code === 'destination_not_allowed' ? data.code : data.error));
                             return;
                         }
                         onChunk?.(data);

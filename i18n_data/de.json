@@ -132,6 +132,7 @@
     "error_header": "⚠️ Error",
     "error_label": "Error",
     "error_loading_models": "Fehler beim Laden der Modelle - manuelle Eingabe verwenden",
+    "llm_destination_not_allowed": "Dieser LLM-Endpunkt ist auf diesem Server nicht freigegeben. Bitten Sie den Serverbetreiber, ihn zu DOCTOR_LLM_ALLOWED_BASE_URLS hinzuzufügen.",
     "error_message": "Fehler",
     "expand_btn": "Erweitern",
     "feedback_admin_token_placeholder": "Admin-Token (optional)",

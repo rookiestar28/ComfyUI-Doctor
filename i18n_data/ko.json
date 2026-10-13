@@ -132,6 +132,7 @@
     "error_header": "⚠️ Error",
     "error_label": "Error",
     "error_loading_models": "모델 로딩 오류 - 수동 입력 사용",
+    "llm_destination_not_allowed": "이 LLM 엔드포인트는 이 서버에서 승인되지 않았습니다. 서버 운영자에게 DOCTOR_LLM_ALLOWED_BASE_URLS에 추가해 달라고 요청하세요.",
     "error_message": "오류",
     "expand_btn": "확대",
     "feedback_admin_token_placeholder": "관리자 토큰 (선택 사항)",

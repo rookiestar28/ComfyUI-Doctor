@@ -83,10 +83,18 @@ def _resolve_hostname_ips(hostname: str, timeout_seconds: Optional[float] = None
     return ips
 
 
+def record_ssrf_block(reason: str) -> None:
+    """Count an outbound-destination refusal in the /doctor/health SSRF metrics."""
+    _record_ssrf_block(reason)
+
+
 def _classify_restricted_ip(ip) -> Optional[str]:
-    # Keep metadata endpoint reason explicit for audits.
-    if str(ip) == "169.254.169.254":
+    # Keep metadata endpoint reasons explicit for audits.
+    if str(ip) in {"169.254.169.254", "100.100.100.200", "fd00:ec2::254"}:
         return "metadata endpoint"
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
     if ip.is_private:
         return "private IP"
     if ip.is_loopback:
@@ -99,6 +107,10 @@ def _classify_restricted_ip(ip) -> Optional[str]:
         return "unspecified IP"
     if ip.is_reserved:
         return "reserved IP"
+    # IMPORTANT: deny unless global. is_private/is_reserved miss 100.64.0.0/10 (CGNAT, incl. the
+    # Alibaba Cloud metadata address) and other special-purpose ranges.
+    if not ip.is_global:
+        return "non-global IP"
     return None
 
 
