@@ -319,15 +319,34 @@ async function handleMockEndpoint(req, res, url) {
   return false;
 }
 
-function resolveFilePath(pathname) {
-  const requestedPath = pathname === '/' ? '/tests/e2e/test-harness.html' : pathname;
-  const decodedPath = decodeURIComponent(requestedPath);
-  const absolutePath = path.normalize(path.join(rootDir, decodedPath));
-  const rootPrefix = rootDir.endsWith(path.sep) ? rootDir : `${rootDir}${path.sep}`;
-  if (absolutePath !== rootDir && !absolutePath.startsWith(rootPrefix)) {
+// ComfyUI serves an extension's WEB_DIRECTORY at /extensions/<custom-node folder>/. Mirror that
+// host shape so vendored rendering assets resolve locally instead of falling back to a CDN.
+const HOST_EXTENSION_PREFIX = '/extensions/ComfyUI-Doctor/';
+const webDir = path.join(rootDir, 'web');
+
+function confinedPath(baseDir, relativePath) {
+  const absolutePath = path.normalize(path.join(baseDir, relativePath));
+  const basePrefix = baseDir.endsWith(path.sep) ? baseDir : `${baseDir}${path.sep}`;
+  if (absolutePath !== baseDir && !absolutePath.startsWith(basePrefix)) {
     return null;
   }
   return absolutePath;
+}
+
+function resolveFilePath(pathname) {
+  const requestedPath = pathname === '/' ? '/tests/e2e/test-harness.html' : pathname;
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(requestedPath);
+  } catch {
+    return null;
+  }
+  // IMPORTANT: the host-shaped alias must stay confined to web/ (traversal guard per base dir);
+  // widening it to the repository root would expose tests, scripts and planning files.
+  if (decodedPath.startsWith(HOST_EXTENSION_PREFIX)) {
+    return confinedPath(webDir, decodedPath.slice(HOST_EXTENSION_PREFIX.length));
+  }
+  return confinedPath(rootDir, decodedPath);
 }
 
 function serveStatic(req, res, pathname) {
