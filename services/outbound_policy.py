@@ -109,6 +109,8 @@ class Destination:
     host: str
     port: int
     base_path: str
+    # Operator entries: the environment variable that approved them (credential binding uses it).
+    source: str = ""
 
     @property
     def is_loopback(self) -> bool:
@@ -422,6 +424,7 @@ def build_destination_registry(environ: Mapping[str, str]) -> DestinationRegistr
             canonical.host,
             canonical.port,
             canonical.path,
+            env_name,
         )
         routes[canonical.key] = entry
 
@@ -507,6 +510,10 @@ __all__ = [
     "DestinationPolicyError",
     "DestinationPolicyResolver",
     "DestinationRegistry",
+    "ENV_DOCTOR_LLM_BASE_URL",
+    "KIND_LOCAL",
+    "KIND_OFFICIAL",
+    "KIND_OPERATOR",
     "address_allowed",
     "build_destination_registry",
     "canonicalize_base_url",

@@ -7,20 +7,29 @@ Resolution precedence:
 3) generic ENV
 4) server secret store (provider)
 5) server secret store (generic)
+
+Server-held credentials (2-5) are bound to approved destinations (see ``resolve_api_key``); the
+caller's provider hint never selects or widens them.
 """
 
 from __future__ import annotations
 
+import logging
 import os
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, Iterator, Optional, Tuple
 
+from .outbound_policy import (
+    ENV_DOCTOR_LLM_BASE_URL,
+    KIND_LOCAL,
+    KIND_OFFICIAL,
+    KIND_OPERATOR,
+    Destination,
+    canonicalize_base_url,
+    get_destination_registry,
+)
 from .secret_store import get_secret_store
 
-try:
-    from ..security import is_local_llm_url, parse_base_url
-except Exception:
-    from security import is_local_llm_url, parse_base_url
-
+logger = logging.getLogger(__name__)
 
 LOCAL_PROVIDERS = {"ollama", "lmstudio"}
 
@@ -52,35 +61,22 @@ def normalize_provider_id(provider: Optional[str]) -> str:
 
 
 def detect_provider(base_url: str, provider_hint: Optional[str] = None) -> str:
+    """Return the provider hint, else the provider of an official/local destination with exactly
+    this scheme, host and port ("" otherwise). No substring or suffix host matching."""
     hinted = normalize_provider_id(provider_hint)
     if hinted:
         return hinted
 
-    info = parse_base_url(base_url or "")
-    if not info:
+    canonical = canonicalize_base_url(base_url)
+    if canonical is None:
         return ""
-
-    host = (info.get("hostname") or "").lower()
-    port = info.get("port")
-
-    if port == 11434 and host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
-        return "ollama"
-    if port == 1234 and host in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
-        return "lmstudio"
-    if host.endswith("api.openai.com"):
-        return "openai"
-    if host.endswith("api.anthropic.com"):
-        return "anthropic"
-    if host.endswith("api.deepseek.com"):
-        return "deepseek"
-    if host.endswith("api.groq.com"):
-        return "groq"
-    if host.endswith("openrouter.ai"):
-        return "openrouter"
-    if host.endswith("api.x.ai"):
-        return "xai"
-    if "googleapis.com" in host:
-        return "gemini"
+    for entry in get_destination_registry().entries:
+        if entry.kind in (KIND_OFFICIAL, KIND_LOCAL) and (entry.scheme, entry.host, entry.port) == (
+            canonical.scheme,
+            canonical.host,
+            canonical.port,
+        ):
+            return entry.provider
     return ""
 
 
@@ -93,37 +89,71 @@ def get_env_api_key(provider: str) -> Optional[str]:
     return _first_non_empty_env(GENERIC_ENV_KEYS)
 
 
+def _is_local_destination(destination: Optional[Destination], hint: str) -> bool:
+    if destination is None:
+        return False
+    if destination.provider in LOCAL_PROVIDERS:
+        return True
+    # A hint may mark an operator destination as a keyless local-style server (it never releases a
+    # credential); official provider destinations always require a key.
+    return destination.kind != KIND_OFFICIAL and hint in LOCAL_PROVIDERS
+
+
+def _bound_server_credentials(destination: Optional[Destination]) -> Iterator[Tuple[Optional[str], str]]:
+    """Yield (credential, source) candidates bound to the destination, in precedence order.
+
+    CRITICAL: decided from the approved registry entry only. Caller-controlled labels (the request's
+    provider hint) must never select or widen server-held credentials: a hint used to send one
+    provider's key to another provider, to local services and to connectivity-only gateways.
+    """
+    if destination is None or destination.provider in LOCAL_PROVIDERS:
+        return
+    if destination.kind == KIND_OFFICIAL:
+        yield _first_non_empty_env(PROVIDER_ENV_KEYS.get(destination.provider, ())), "env"
+        yield _first_non_empty_env(GENERIC_ENV_KEYS), "env"
+        store = get_secret_store()  # only opened when no environment key applies (as before)
+        yield store.get_secret(destination.provider), "server_store"
+        yield store.get_secret("generic"), "server_store"
+    elif destination.kind == KIND_OPERATOR and destination.source == ENV_DOCTOR_LLM_BASE_URL:
+        # The operator's default base URL is paired with the generic (default) key only.
+        yield _first_non_empty_env(GENERIC_ENV_KEYS), "env"
+        yield get_secret_store().get_secret("generic"), "server_store"
+
+
 def resolve_api_key(
     *,
     base_url: str,
     provider_hint: Optional[str] = None,
     request_api_key: Optional[str] = None,
+    destination: Optional[Destination] = None,
 ) -> Tuple[str, str, str, bool]:
     """
-    Returns: (api_key, source, provider, is_local_provider)
+    Returns: (api_key, source, provider, is_local)
     source: request|env|server_store|none
+
+    ``destination`` is the approved registry entry for the request; when omitted, ``base_url`` is
+    matched against the registry. Without an approved destination only a request key is returned.
     """
-    provider = detect_provider(base_url=base_url, provider_hint=provider_hint)
-    is_local = is_local_llm_url(base_url) or provider in LOCAL_PROVIDERS
+    if destination is None:
+        destination = get_destination_registry().match(base_url)
+    hint = normalize_provider_id(provider_hint)
+    provider = destination.provider if destination is not None else ""
+    is_local = _is_local_destination(destination, hint)
 
     req_key = (request_api_key or "").strip()
     if req_key:
         return req_key, "request", provider, is_local
 
-    env_key = get_env_api_key(provider)
-    if env_key:
-        return env_key, "env", provider, is_local
+    for credential, source in _bound_server_credentials(destination):
+        if credential:
+            return credential, source, provider, is_local
 
-    store = get_secret_store()
-    if provider:
-        store_key = store.get_secret(provider)
-        if store_key:
-            return store_key, "server_store", provider, is_local
-
-    generic_key = store.get_secret("generic")
-    if generic_key:
-        return generic_key, "server_store", provider, is_local
-
+    if not is_local:
+        logger.warning(
+            "No LLM credential available for destination %s (server-held keys are bound to official "
+            "providers and the DOCTOR_LLM_BASE_URL destination)",
+            destination.destination_id if destination is not None else "(not approved)",
+        )
     return "", "none", provider, is_local
 
 

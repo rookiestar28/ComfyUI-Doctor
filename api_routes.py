@@ -277,6 +277,7 @@ def register_api_routes(context: dict) -> None:
                 base_url=base_url,
                 provider_hint=provider,
                 request_api_key=api_key,
+                destination=destination,
             )
             if not api_key and not is_local:
                 return _error_response("Missing API Key", status=401, code="missing_api_key")
@@ -519,6 +520,7 @@ def register_api_routes(context: dict) -> None:
                 base_url=base_url,
                 provider_hint=provider,
                 request_api_key=api_key,
+                destination=destination,
             )
             if not api_key and not is_local:
                 return _error_response("Missing API Key", status=401, code="missing_api_key")
@@ -1186,6 +1188,7 @@ def register_api_routes(context: dict) -> None:
                 base_url=base_url,
                 provider_hint=provider,
                 request_api_key=api_key,
+                destination=destination,
             )
             if not api_key and not is_local:
                 return _error_response(
@@ -1285,6 +1288,7 @@ def register_api_routes(context: dict) -> None:
                 base_url=base_url,
                 provider_hint=provider,
                 request_api_key=api_key,
+                destination=destination,
             )
             if not api_key and not is_local:
                 return _error_response(

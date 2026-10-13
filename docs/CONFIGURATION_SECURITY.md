@@ -13,6 +13,24 @@ Doctor resolves LLM credentials in this order:
 
 For shared, production-like, or compliance-sensitive environments, environment variables are the recommended default. The browser Settings field is session-only and cleared on reload.
 
+Credentials held by the server (environment variables and the server-side credential store) are
+only sent to the destination they are bound to. The binding is decided from the approved
+destination (see [LLM Destinations](#llm-destinations)); the provider selected in the request
+cannot change it.
+
+| Destination | Server-held credential used |
+| --- | --- |
+| Official provider (for example `https://api.openai.com/v1`) | That provider's key, then the generic key |
+| The URL set in `DOCTOR_LLM_BASE_URL` (custom endpoint) | Generic key only (`DOCTOR_LLM_API_KEY` or the store's generic entry) |
+| URLs listed only in `DOCTOR_LLM_ALLOWED_BASE_URLS` | None — enter a key in Settings |
+| Local Ollama / LM Studio and `OLLAMA_BASE_URL` / `LMSTUDIO_BASE_URL` | None (keyless) |
+
+A key entered in Settings is sent to whichever approved destination is selected. If no credential
+is available, the request fails with `missing_api_key` and nothing is sent.
+
+Migrating a custom endpoint that used the server's generic key: set it as `DOCTOR_LLM_BASE_URL`
+(this also approves it as a destination) or enter a key in Settings.
+
 ## Provider Environment Variables
 
 Common provider-specific variables:
