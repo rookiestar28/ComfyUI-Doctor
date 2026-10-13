@@ -5,7 +5,95 @@
  * Provides one-click fix application with visual feedback and undo support.
  */
 
-import { getComfyNodeById, markComfyGraphDirty } from "./comfyui_frontend_compat.js";
+import { markComfyGraphDirty, resolveComfyFixTargetNode } from "./comfyui_frontend_compat.js";
+
+export const FIX_TEXT_MAX_LENGTH = 4096;
+const SAFE_WIDGET_TYPES = ['number', 'slider', 'combo', 'text', 'toggle', 'converted-widget'];
+// Plain decimal numbers only: no hex, no partial parses ("12abc"), no blanks.
+const DECIMAL_NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+function invalid(errorKey) {
+    return { ok: false, errorKey };
+}
+
+function parseNumberValue(raw, options) {
+    let value = NaN;
+    if (typeof raw === 'number') {
+        value = raw;
+    } else if (typeof raw === 'string' && DECIMAL_NUMBER.test(raw.trim())) {
+        value = Number(raw.trim());
+    }
+    if (!Number.isFinite(value)) return invalid('fix_error_invalid_number');
+    if (typeof options?.min === 'number' && value < options.min) return invalid('fix_error_invalid_value');
+    if (typeof options?.max === 'number' && value > options.max) return invalid('fix_error_invalid_value');
+    return { ok: true, value };
+}
+
+function parseToggleValue(raw) {
+    if (typeof raw === 'boolean') return { ok: true, value: raw };
+    if (raw === 1 || raw === 0) return { ok: true, value: raw === 1 };
+    if (typeof raw === 'string') {
+        const normalized = raw.trim().toLowerCase();
+        if (normalized === 'true') return { ok: true, value: true };
+        if (normalized === 'false') return { ok: true, value: false };
+    }
+    return invalid('fix_error_invalid_value');
+}
+
+function comboValues(widget) {
+    const values = widget?.options?.values;
+    try {
+        const list = typeof values === 'function' ? values(widget) : values;
+        return Array.isArray(list) ? list : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function parseComboValue(raw, widget) {
+    const values = comboValues(widget);
+    if (values) {
+        if (values.includes(raw)) return { ok: true, value: raw };
+        if (typeof raw === 'number' && values.includes(String(raw))) return { ok: true, value: String(raw) };
+        return invalid('fix_error_invalid_value');
+    }
+    return parseTextValue(raw);
+}
+
+function parseTextValue(raw) {
+    if (typeof raw !== 'string' || raw.length > FIX_TEXT_MAX_LENGTH) return invalid('fix_error_invalid_value');
+    return { ok: true, value: raw };
+}
+
+/**
+ * Validate an LLM-suggested value for a widget. Returns {ok, value} or {ok: false, errorKey}.
+ * Rejections never mutate anything.
+ */
+export function parseFixValue(widget, raw) {
+    const widgetType = widget?.type || 'number';
+    if (widgetType === 'number' || widgetType === 'slider') return parseNumberValue(raw, widget.options);
+    if (widgetType === 'toggle') return parseToggleValue(raw);
+    if (widgetType === 'combo') return parseComboValue(raw, widget);
+    if (widgetType === 'text') return parseTextValue(raw);
+    if (widgetType === 'converted-widget') {
+        if (typeof widget.value === 'number') return parseNumberValue(raw, widget.options);
+        if (typeof widget.value === 'boolean') return parseToggleValue(raw);
+        return parseTextValue(raw);
+    }
+    return invalid('fix_error_unsafe_type');
+}
+
+const FALLBACK_ERRORS = {
+    fix_error_node_not_found: 'Node not found',
+    fix_error_widget_not_found: 'Widget not found',
+    fix_error_unsafe_type: 'Unsafe widget type',
+    fix_error_invalid_number: 'Invalid number value',
+    fix_error_invalid_value: 'Invalid value for this widget',
+};
+
+function fixError(i18n, key) {
+    return new Error(i18n?.[key] || FALLBACK_ERRORS[key]);
+}
 
 export class FixHandler {
     constructor(app) {
@@ -43,7 +131,8 @@ export class FixHandler {
 
         return fixData.fixes.every(fix => {
             // Check required fields
-            if (!fix.node_id || !fix.widget || fix.to === undefined) {
+            if (!fix || fix.node_id === undefined || fix.node_id === null || fix.node_id === ''
+                || typeof fix.widget !== 'string' || !fix.widget || fix.to === undefined) {
                 return false;
             }
 
@@ -72,13 +161,17 @@ export class FixHandler {
             btn.className = 'doctor-fix-btn';
 
             // Format button text with i18n support
-            const fromText = fix.from !== undefined ? ` ${fix.from} →` : '';
+            const fromText = fix.from !== undefined ? ` ${String(fix.from)} →` : '';
             const buttonText = i18n?.fix_apply_button
-                ? `${i18n.fix_apply_button}: ${fix.widget}${fromText} ${fix.to}`
-                : `⚡ Apply: ${fix.widget}${fromText} ${fix.to}`;
+                ? `${i18n.fix_apply_button}: ${fix.widget}${fromText} ${String(fix.to)}`
+                : `⚡ Apply: ${fix.widget}${fromText} ${String(fix.to)}`;
 
-            btn.innerHTML = buttonText;
-            btn.title = fix.reason || (i18n?.fix_apply_tooltip || 'Apply parameter fix');
+            // CRITICAL: fix fields are LLM-controlled and prompt-injectable; never parse them as HTML
+            // (innerHTML here executed injected handlers in the ComfyUI origin).
+            btn.textContent = buttonText;
+            btn.title = typeof fix.reason === 'string' && fix.reason
+                ? fix.reason
+                : (i18n?.fix_apply_tooltip || 'Apply parameter fix');
             btn.dataset.fixIndex = index;
 
             btn.onclick = () => this.applyFix(fix, btn, i18n);
@@ -100,45 +193,36 @@ export class FixHandler {
             button.disabled = true;
             button.textContent = i18n?.fix_applying || 'Applying...';
 
-            // Find node
-            const nodeId = parseInt(fix.node_id);
-            const node = getComfyNodeById(nodeId, this.app);
-
+            // Find the exact live node (no numeric coercion of LLM-provided ids)
+            const node = resolveComfyFixTargetNode(fix.node_id, this.app);
             if (!node) {
-                throw new Error(i18n?.fix_error_node_not_found || `Node ${nodeId} not found`);
+                throw fixError(i18n, 'fix_error_node_not_found');
             }
+            const nodeId = String(fix.node_id);
 
             // Find widget
-            const widget = node.widgets?.find(w => w.name === fix.widget);
+            const widget = typeof fix.widget === 'string'
+                ? node.widgets?.find(w => w.name === fix.widget)
+                : null;
             if (!widget) {
-                throw new Error(
-                    i18n?.fix_error_widget_not_found || `Widget "${fix.widget}" not found`
-                );
+                throw fixError(i18n, 'fix_error_widget_not_found');
             }
 
             // Validate widget type (security whitelist)
-            const safeTypes = ['number', 'slider', 'combo', 'text', 'toggle', 'converted-widget'];
-            const widgetType = widget.type || 'number';
-
-            if (!safeTypes.includes(widgetType)) {
-                throw new Error(
-                    i18n?.fix_error_unsafe_type || `Unsafe widget type: ${widgetType}`
-                );
+            if (!SAFE_WIDGET_TYPES.includes(widget.type || 'number')) {
+                throw fixError(i18n, 'fix_error_unsafe_type');
             }
 
-            // Type coercion based on widget type
-            let newValue = fix.to;
-            if (widgetType === 'number' || widgetType === 'slider') {
-                newValue = parseFloat(fix.to);
-                if (isNaN(newValue)) {
-                    throw new Error(i18n?.fix_error_invalid_number || 'Invalid number value');
-                }
-            } else if (widgetType === 'toggle') {
-                newValue = Boolean(fix.to);
+            // Strict value validation; rejections leave the graph untouched
+            const parsed = parseFixValue(widget, fix.to);
+            if (!parsed.ok) {
+                throw fixError(i18n, parsed.errorKey);
             }
+            const newValue = parsed.value;
 
-            // Store for undo
+            // Store for undo (the resolved node itself, not a re-parsed id)
             this.appliedFixes.push({
+                node,
                 node_id: nodeId,
                 widget: fix.widget,
                 oldValue: widget.value,
@@ -162,7 +246,7 @@ export class FixHandler {
             button.textContent = i18n?.fix_applied || '✓ Applied';
 
             // Flash node highlight
-            this.flashNodeHighlight(nodeId);
+            this.flashNodeHighlight(node);
 
             // Log success
             console.log(`[FixHandler] Applied fix: Node ${nodeId}, ${fix.widget} = ${newValue}`);
@@ -177,10 +261,9 @@ export class FixHandler {
     /**
      * Flash visual highlight on node
      *
-     * @param {number} nodeId - Node ID to highlight
+     * @param {Object} node - Resolved node to highlight
      */
-    flashNodeHighlight(nodeId) {
-        const node = getComfyNodeById(nodeId, this.app);
+    flashNodeHighlight(node) {
         if (!node) return;
 
         const originalColor = node.color;
@@ -212,8 +295,7 @@ export class FixHandler {
         }
 
         const last = this.appliedFixes.pop();
-        const node = getComfyNodeById(last.node_id, this.app);
-        const widget = node?.widgets?.find(w => w.name === last.widget);
+        const widget = last.node?.widgets?.find(w => w.name === last.widget);
 
         if (!widget) {
             console.error('[FixHandler] Cannot undo: widget not found');

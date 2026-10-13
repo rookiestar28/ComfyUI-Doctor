@@ -160,6 +160,7 @@
     "fix_error_invalid_number": "Valeur numérique invalide",
     "fix_error_node_not_found": "Nœud introuvable",
     "fix_error_unsafe_type": "Type de widget non sécurisé",
+    "fix_error_invalid_value": "Valeur non valide pour ce widget",
     "fix_error_widget_not_found": "Widget introuvable",
     "generation_stopped_user": "Génération arrêtée par l'utilisateur.",
     "global_error_banner_title": "Une erreur s'est produite",

@@ -160,6 +160,7 @@
     "fix_error_invalid_number": "無効な数値",
     "fix_error_node_not_found": "ノードが見つかりません",
     "fix_error_unsafe_type": "安全でないウィジェットタイプ",
+    "fix_error_invalid_value": "このウィジェットには無効な値です",
     "fix_error_widget_not_found": "ウィジェットが見つかりません",
     "generation_stopped_user": "ユーザーによって生成が停止されました。",
     "global_error_banner_title": "エラーが発生しました",

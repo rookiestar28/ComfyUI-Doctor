@@ -160,6 +160,7 @@
     "fix_error_invalid_number": "잘못된 숫자 값",
     "fix_error_node_not_found": "노드를 찾을 수 없음",
     "fix_error_unsafe_type": "안전하지 않은 위젯 유형",
+    "fix_error_invalid_value": "이 위젯에 유효하지 않은 값입니다",
     "fix_error_widget_not_found": "위젯을 찾을 수 없음",
     "generation_stopped_user": "사용자가 생성을 중지했습니다.",
     "global_error_banner_title": "오류가 발생했습니다",

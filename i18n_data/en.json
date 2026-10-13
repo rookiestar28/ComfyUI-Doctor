@@ -160,6 +160,7 @@
     "fix_error_invalid_number": "Invalid number value",
     "fix_error_node_not_found": "Node not found",
     "fix_error_unsafe_type": "Unsafe widget type",
+    "fix_error_invalid_value": "Invalid value for this widget",
     "fix_error_widget_not_found": "Widget not found",
     "generation_stopped_user": "Generation stopped by user.",
     "global_error_banner_title": "An error occurred",

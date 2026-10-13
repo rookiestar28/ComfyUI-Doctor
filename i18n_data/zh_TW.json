@@ -160,6 +160,7 @@
     "fix_error_invalid_number": "無效的數值",
     "fix_error_node_not_found": "找不到節點",
     "fix_error_unsafe_type": "不安全的小工具類型",
+    "fix_error_invalid_value": "此小工具的值無效",
     "fix_error_widget_not_found": "找不到小工具",
     "generation_stopped_user": "生成已被使用者停止。",
     "global_error_banner_title": "發生錯誤",

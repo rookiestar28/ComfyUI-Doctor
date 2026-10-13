@@ -263,6 +263,48 @@ function getNodeFromGraph(graph, nodeId) {
         || null;
 }
 
+function isRealSubgraphHost(node) {
+    if (!node?.subgraph) return false;
+    try {
+        return typeof node.isSubgraphNode !== "function" || node.isSubgraphNode() === true;
+    } catch (_) {
+        return false;
+    }
+}
+
+/**
+ * Resolve the live node an LLM-suggested fix targets, or null when the id is not exact.
+ *
+ * IMPORTANT: fix node ids are LLM-controlled. Never coerce them (parseInt("12:5") is 12, Number(" 12")
+ * and Number("0x0c") are 12): every id part must equal the found node's id exactly. Execution-path
+ * ids ("12:5") walk only real subgraph hosts, like locate/focus; executable group hosts and paths
+ * ending at a subgraph host are ambiguous and fail closed.
+ */
+export function resolveComfyFixTargetNode(nodeId, appInstance = app) {
+    let text = "";
+    if (typeof nodeId === "number") {
+        text = Number.isSafeInteger(nodeId) && nodeId >= 0 ? String(nodeId) : "";
+    } else if (typeof nodeId === "string") {
+        text = nodeId;
+    }
+    if (!text) return null;
+
+    const parts = text.split(":");
+    let graph = getComfyRootGraph(appInstance);
+    for (let index = 0; index < parts.length; index += 1) {
+        const part = parts[index];
+        const node = part ? getNodeFromGraph(graph, part) : null;
+        if (!node || String(node.id) !== part) return null;
+        const isLast = index === parts.length - 1;
+        if (isLast) {
+            return parts.length > 1 && isRealSubgraphHost(node) ? null : node;
+        }
+        if (!isRealSubgraphHost(node)) return null;
+        graph = node.subgraph;
+    }
+    return null;
+}
+
 function getNodeByExecutionId(rootGraph, executionId) {
     if (!rootGraph || typeof executionId !== "string" || !executionId) {
         return null;

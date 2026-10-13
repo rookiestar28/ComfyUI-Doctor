@@ -160,6 +160,7 @@
     "fix_error_invalid_number": "Ungültiger Zahlenwert",
     "fix_error_node_not_found": "Knoten nicht gefunden",
     "fix_error_unsafe_type": "Unsicherer Widget-Typ",
+    "fix_error_invalid_value": "Ungültiger Wert für dieses Widget",
     "fix_error_widget_not_found": "Widget nicht gefunden",
     "generation_stopped_user": "Generierung vom Benutzer gestoppt.",
     "global_error_banner_title": "Ein Fehler ist aufgetreten",

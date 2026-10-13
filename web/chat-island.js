@@ -242,14 +242,16 @@ function MessageItem({ msg, uiText }) {
         highlightCodeBlocks(contentRef.current);
         addCopyButtons(contentRef.current);
 
-        if (fixHandler) {
+        // IMPORTANT: only assistant replies may offer fix buttons; user/system/error text can carry
+        // pasted or reflected fix blocks. Content was replaced above, so buttons never accumulate.
+        if (fixHandler && msg.role === 'assistant') {
             const fixData = fixHandler.detectFixes(msg.content || '');
             if (fixData) {
                 fixHandler.renderFixButtons(contentRef.current, fixData, uiText);
             }
         }
 
-    }, [msg.content]);
+    }, [msg.content, msg.role]);
 
     return html`
         <div class="doctor-chat-message ${msg.role}" ref=${contentRef} style="
