@@ -8,12 +8,18 @@ The static safety check prevents accidental bypass of the outbound sanitization 
 2. **Missing `sanitize_outbound_payload()` calls**
 3. **Dangerous fallback patterns** like `sanitized_X or X`
 4. **`json.dumps()` on sensitive data**
-5. **`aiohttp.ClientSession()` outside `session_manager.py`** (the shared session installs the
-   connect-time destination check; `services/community_feedback.py` is the only other allowed
-   client, for the operator-configured GitHub API)
+5. **`aiohttp.ClientSession()` or `aiohttp.TCPConnector()` outside `session_manager.py`**,
+   including import aliases and qualified names (the shared session installs the connect-time
+   destination check; `services/community_feedback.py` is the only other allowed client, for the
+   operator-configured GitHub API)
 6. **HTTP client calls without `allow_redirects=False`**
+7. **Sessions in `session_manager.py` without the policy connector, or connectors without the
+   destination policy resolver**
+8. **Raw HTTP client imports** (`requests`, `httpx`, `urllib3`, `urllib.request`, `http.client`)
 
-Only git-tracked Python files outside `tests/` are scanned.
+Rules 5-8 cannot be suppressed with the `nosec` marker, and a file that cannot be read or parsed
+fails the check. Only git-tracked Python files are scanned; test directories and the
+sanitization funnel modules themselves are skipped by exact path segment.
 
 ## Why This Matters
 

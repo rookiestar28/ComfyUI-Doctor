@@ -74,16 +74,22 @@ Connection checks:
 - Official providers must resolve only to public internet addresses.
 - Built-in local services, and approved entries whose host is `localhost` or a loopback address,
   must resolve only to loopback addresses.
-- Other operator-approved hosts (for example a LAN address, a Docker service name or
-  `host.docker.internal`) may resolve to private or public addresses, but never to loopback,
-  link-local, cloud metadata, unspecified or multicast addresses.
+- Other operator-approved hosts (for example a LAN address, a Docker service name such as
+  `my_ollama`, or `host.docker.internal`) may resolve to private or public addresses, but never to
+  loopback, link-local, cloud metadata, unspecified or multicast addresses. IPv6 forms that embed
+  one of these IPv4 addresses (NAT64, 6to4, IPv4-compatible or IPv4-mapped) are refused as well.
 - Redirects are never followed, and any `3xx` answer is treated as a failure.
 - Error responses use fixed messages: provider error bodies, resolved addresses and network error
   details are written to the server log only.
 
 When `DOCTOR_OUTBOUND_PROXY_POLICY=inherit_env` is set, requests that go through the proxy rely on
 the proxy for address checks; approved hosts reached directly (for example through `NO_PROXY`)
-are still checked. Local loopback destinations never use a proxy.
+are still checked. The proxy itself, including a proxy on this machine such as
+`http://localhost:7890`, is connected to as configured. Local loopback destinations never use a
+proxy.
+
+The approved list is fixed when ComfyUI loads Doctor; restart ComfyUI after changing these
+environment variables.
 
 Migrating a custom endpoint: if a custom Base URL (self-hosted gateway, Azure OpenAI, remote
 Ollama or LM Studio, or a Docker host address) stops working with `destination_not_allowed`, add

@@ -207,6 +207,61 @@ def test_resolver_proxy_mode_passes_only_unregistered_hosts():
         _resolve(proxied, "api.openai.com", 443)  # registry hosts stay enforced (NO_PROXY path)
 
 
+def test_resolver_proxy_mode_accepts_localhost_proxy_on_an_unregistered_port():
+    registry = build_destination_registry({})
+    proxied = DestinationPolicyResolver(registry, _FakeResolver(["127.0.0.1"]), allow_unregistered_hosts=True)
+    assert _resolve(proxied, "localhost", 7890)[0]["host"] == "127.0.0.1"
+    # The registered local destination on the same host keeps its loopback-only policy.
+    rebound = DestinationPolicyResolver(registry, _FakeResolver(["8.8.8.8"]), allow_unregistered_hosts=True)
+    with pytest.raises(DestinationPolicyError):
+        _resolve(rebound, "localhost", 11434)
+    strict = DestinationPolicyResolver(registry, _FakeResolver(["127.0.0.1"]))
+    with pytest.raises(DestinationPolicyError):
+        _resolve(strict, "localhost", 7890)
+
+
+def test_docker_service_names_with_underscores_are_canonical_hosts():
+    canonical = canonicalize_base_url("http://My_Ollama:11434")
+    assert canonical is not None and canonical.key == ("http", "my_ollama", 11434, "")
+    registry = build_destination_registry({"DOCTOR_LLM_ALLOWED_BASE_URLS": "http://llm_gateway.internal_net:8080/v1"})
+    entry = registry.match("http://llm_gateway.internal_net:8080/v1")
+    assert entry is not None and entry.base_url == "http://llm_gateway.internal_net:8080/v1"
+    # aiohttp's URL parser keeps the same host, so the connector resolves exactly the approved name.
+    from yarl import URL
+
+    assert URL("http://my_ollama:11434/api/tags").host == "my_ollama"
+    for raw in ("http://_:11434", "http://my ollama:11434", "http://-ollama:11434", "http://ollama-:11434"):
+        assert canonicalize_base_url(raw) is None, raw
+
+
+@pytest.mark.parametrize(
+    ("policy", "address"),
+    [
+        ("public", "::127.0.0.1"),            # IPv4-compatible (deprecated) form of loopback
+        ("public", "::8.8.8.8"),              # IPv4-compatible forms are never public destinations
+        ("public", "fec0::1"),                # deprecated site-local
+        ("operator_network", "64:ff9b::a9fe:a9fe"),   # NAT64 of 169.254.169.254
+        ("operator_network", "2002:a9fe:a9fe::1"),    # 6to4 of 169.254.169.254
+        ("operator_network", "::169.254.169.254"),    # IPv4-compatible metadata
+        ("operator_network", "64:ff9b::7f00:1"),      # NAT64 of 127.0.0.1
+        ("operator_network", "2002:7f00:1::1"),       # 6to4 of 127.0.0.1
+    ],
+)
+def test_embedded_ipv4_and_deprecated_ipv6_forms_are_refused(policy, address):
+    assert address_allowed(policy, address) is False
+
+
+def test_operator_ip_literal_embedding_metadata_is_dropped_and_loopback_entries_stay():
+    registry = build_destination_registry(
+        {"DOCTOR_LLM_ALLOWED_BASE_URLS": "http://[64:ff9b::a9fe:a9fe]:8080/v1,http://[::1]:8081/v1"}
+    )
+    assert registry.match("http://[64:ff9b::a9fe:a9fe]:8080/v1") is None
+    assert registry.match("http://[::1]:8081/v1") is not None
+    assert address_allowed("loopback", "::1") is True
+    assert address_allowed("operator_network", "192.168.1.20") is True
+    assert address_allowed("public", "2606:4700::1111") is True
+
+
 def test_real_connector_with_policy_resolver_never_connects_to_rebound_loopback():
     hits: List[str] = []
 
@@ -314,6 +369,103 @@ def test_static_outbound_check_enforces_redirect_and_session_rules(tmp_path):
         timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _checker_module():
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+    try:
+        import check_outbound_safety
+    finally:
+        sys.path.pop(0)
+    return check_outbound_safety
+
+
+def _rules(checker, root: Path, relative: str, source: str) -> set:
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source, encoding="utf-8")
+    return {violation.rule for violation in checker.check_file(path, project_root=root)}
+
+
+def test_static_outbound_check_resolves_aliases_and_policy_files(tmp_path):
+    checker = _checker_module()
+
+    aliased = (
+        "from aiohttp import ClientSession as CS, TCPConnector as TC, request as fetch\n"
+        "import aiohttp as ah\n"
+        "async def run(url):\n"
+        "    CS()\n"
+        "    TC()\n"
+        "    ah.client.ClientSession()\n"
+        "    await fetch('GET', url)\n"
+        "    await ah.request('GET', url)\n"
+    )
+    rules = _rules(checker, tmp_path, "services/aliased.py", aliased)
+    assert {"CLIENT_SESSION_OUTSIDE_POLICY", "REDIRECT_NOT_DISABLED"} <= rules
+
+    # Only the exact repository paths are session factories, not any file with the same name.
+    lookalike = "import aiohttp\ndef make():\n    return aiohttp.ClientSession(connector=aiohttp.TCPConnector(resolver=None))\n"
+    assert "CLIENT_SESSION_OUTSIDE_POLICY" in _rules(checker, tmp_path, "plugins/session_manager.py", lookalike)
+
+    # The policy session factory must install a resolver on every connector and pass the connector.
+    factory = (
+        "import aiohttp\n"
+        "def make(resolver):\n"
+        "    aiohttp.ClientSession(connector=aiohttp.TCPConnector())\n"
+        "    aiohttp.ClientSession()\n"
+        "    return aiohttp.ClientSession(connector=aiohttp.TCPConnector(resolver=resolver))\n"
+    )
+    factory_violations = [
+        v.rule for v in checker.check_file(_write(tmp_path / "session_manager.py", factory), project_root=tmp_path)
+    ]
+    assert factory_violations.count("CONNECTOR_WITHOUT_POLICY_RESOLVER") == 1
+    assert factory_violations.count("SESSION_WITHOUT_POLICY_CONNECTOR") == 1
+
+    # Policy rules cannot be silenced with the sanitization-funnel nosec marker.
+    suppressed = (
+        "import aiohttp\n"
+        "async def run(url):\n"
+        "    async with aiohttp.ClientSession() as session:  # nosec: outbound-bypass-allowed\n"
+        "        await session.get(url)  # nosec: outbound-bypass-allowed\n"
+    )
+    assert {"CLIENT_SESSION_OUTSIDE_POLICY", "REDIRECT_NOT_DISABLED"} <= _rules(
+        checker, tmp_path, "services/suppressed.py", suppressed
+    )
+
+    # Raw HTTP clients outside aiohttp are not allowed in shipped code.
+    raw_clients = "import requests\nimport urllib.request\nfrom httpx import AsyncClient\nimport http.client\n"
+    assert "RAW_HTTP_CLIENT_IMPORT" in _rules(checker, tmp_path, "services/raw_clients.py", raw_clients)
+
+    # Unparseable files fail closed.
+    assert "PARSE_ERROR" in _rules(checker, tmp_path, "services/broken.py", "def broken(:\n")
+
+
+def _write(path: Path, source: str) -> Path:
+    path.write_text(source, encoding="utf-8")
+    return path
+
+
+def test_static_outbound_check_skips_only_whole_path_segments(tmp_path):
+    checker = _checker_module()
+    checked = [
+        "latests/client.py",
+        "evil_outbound.py",
+        "services/my_sanitizer.py",
+        "web_reference/client.py",
+    ]
+    skipped = [
+        "tests/test_x.py",
+        "services/tests/test_y.py",
+        "reference/repo/client.py",
+        ".planning/x.py",
+        "outbound.py",
+        "sanitizer.py",
+        "pipeline/stages/sanitizer.py",
+    ]
+    for relative in checked:
+        assert checker.should_check_file(tmp_path / relative, tmp_path) is True, relative
+    for relative in skipped:
+        assert checker.should_check_file(tmp_path / relative, tmp_path) is False, relative
 
 
 def test_comfyignore_excludes_non_runtime_files_from_the_published_archive():

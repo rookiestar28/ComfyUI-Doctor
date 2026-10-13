@@ -233,7 +233,13 @@ export function render(container) {
         const apiKey = apiKeyInput.value;
 
         if (!baseUrl) {
+            // This call already invalidated any in-flight request, whose finally block will skip
+            // the reset below, so restore the controls here.
             modelSelect.innerHTML = '<option value="">Please set Base URL first</option>';
+            modelSelect.title = '';
+            modelSelect.disabled = false;
+            refreshModelsBtn.textContent = '🔄';
+            refreshModelsBtn.disabled = false;
             return;
         }
 

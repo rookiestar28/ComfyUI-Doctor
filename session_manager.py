@@ -211,7 +211,7 @@ class SessionManager:
     def _new_session(cls, *, trust_env: bool) -> aiohttp.ClientSession:
         # CRITICAL: every LLM connection goes through the destination policy resolver, which checks
         # the addresses the connector actually uses (DNS-rebinding safe). Do not create LLM sessions
-        # without it. With proxy inheritance only unregistered (proxy) hosts bypass the check.
+        # without it. With proxy inheritance only unregistered host:port pairs (the proxy) bypass it.
         resolver = DestinationPolicyResolver(
             get_destination_registry(),
             allow_unregistered_hosts=trust_env,

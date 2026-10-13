@@ -135,6 +135,10 @@ def _print_registered_routes(startup_print) -> None:
 def register_api_routes(context: dict) -> None:
     """Register all PromptServer routes using dependencies from __init__.py."""
     globals().update(context)
+    # IMPORTANT: fix the approved LLM destinations now, while ComfyUI loads the node. Building the
+    # registry lazily on the first request would let a later os.environ change (e.g. by another
+    # custom node) approve new destinations.
+    get_destination_registry()
     @server.PromptServer.instance.routes.get("/debugger/last_analysis")
     async def api_get_last_analysis(request):
         """

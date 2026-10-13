@@ -7,8 +7,14 @@ Prevents bypass of outbound.py sanitization funnel by detecting:
 2. POST requests without sanitize_outbound_payload()
 3. Dangerous fallback patterns
 4. Missing sanitizer application
-5. aiohttp.ClientSession() created outside the destination-policy session modules
+5. aiohttp.ClientSession()/TCPConnector() created outside the destination-policy session modules
+   (import aliases and qualified names included)
 6. HTTP client calls that do not pass allow_redirects=False
+7. session_manager.py sessions without a connector, or connectors without the policy resolver
+8. Raw HTTP client imports (requests, httpx, urllib3, urllib.request, http.client)
+
+Policy rules (5-8) and unreadable/unparseable files cannot be suppressed with the nosec marker;
+they fail closed.
 
 Exit codes:
   0 = All checks passed
@@ -20,7 +26,7 @@ import ast
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 @dataclass
@@ -45,16 +51,33 @@ class OutboundSafetyChecker(ast.NodeVisitor):
     # Sanitized field prefixes
     SANITIZED_PREFIXES = {'sanitized_'}
 
-    # Only these modules may construct HTTP client sessions: session_manager.py installs the
-    # destination-policy resolver; community_feedback.py talks to the operator-configured GitHub API.
-    SESSION_FACTORY_FILES = ('session_manager.py', 'services/community_feedback.py')
+    # Only these modules (exact repository paths) may construct HTTP client sessions:
+    # session_manager.py installs the destination-policy resolver; community_feedback.py talks to
+    # the operator-configured GitHub API.
+    SESSION_FACTORY_FILES = frozenset({'session_manager.py', 'services/community_feedback.py'})
+    POLICY_SESSION_FILE = 'session_manager.py'
+    CLIENT_CONSTRUCTORS = frozenset({'ClientSession', 'TCPConnector'})
     HTTP_METHODS = {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'request'}
+    RAW_HTTP_CLIENT_MODULES = frozenset({'requests', 'httpx', 'urllib3', 'urllib.request', 'http.client'})
+    # CRITICAL: destination-policy rules are never suppressible by the sanitization-funnel nosec
+    # marker; a new outbound client must be added to the allowlist above in a reviewed change.
+    POLICY_RULES = frozenset({
+        'CLIENT_SESSION_OUTSIDE_POLICY',
+        'REDIRECT_NOT_DISABLED',
+        'CONNECTOR_WITHOUT_POLICY_RESOLVER',
+        'SESSION_WITHOUT_POLICY_CONNECTOR',
+        'RAW_HTTP_CLIENT_IMPORT',
+    })
 
-    def __init__(self, filename: str, source: str):
+    def __init__(self, filename: str, source: str, relative_path: Optional[str] = None):
         self.filename = filename
+        self.relative_path = relative_path
         self.source = source
         self.lines = source.splitlines()
         self.violations: List[Violation] = []
+        self.module_aliases = {'aiohttp'}
+        self.constructor_aliases: Dict[str, str] = {}
+        self.request_aliases: set = set()
 
         # Track state within functions
         self.in_function = False
@@ -101,10 +124,20 @@ class OutboundSafetyChecker(ast.NodeVisitor):
         if self._is_json_dumps(node):
             self._check_json_dumps(node)
 
-        # Rule 5: HTTP client sessions only in the policy/session modules
-        if self._is_call_to(node, 'ClientSession') and not self._is_session_factory_file():
+        # Rule 5: HTTP client sessions/connectors only in the policy/session modules
+        constructor = self._client_constructor(node)
+        if constructor and not self._is_session_factory_file():
             self.add_violation(node, 'CLIENT_SESSION_OUTSIDE_POLICY',
-                'aiohttp.ClientSession() outside session_manager.py bypasses the destination policy')
+                f'aiohttp.{constructor}() outside session_manager.py bypasses the destination policy')
+
+        # Rule 7: the policy factory must wire the destination-policy resolver into every session
+        if constructor and self.relative_path == self.POLICY_SESSION_FILE:
+            if constructor == 'TCPConnector' and not self._has_value_keyword(node, 'resolver'):
+                self.add_violation(node, 'CONNECTOR_WITHOUT_POLICY_RESOLVER',
+                    'TCPConnector() in session_manager.py must pass the destination policy resolver')
+            if constructor == 'ClientSession' and not self._has_value_keyword(node, 'connector'):
+                self.add_violation(node, 'SESSION_WITHOUT_POLICY_CONNECTOR',
+                    'ClientSession() in session_manager.py must use a policy connector')
 
         # Rule 6: every HTTP client call must disable redirects explicitly
         if self._is_http_client_call(node) and not self._disables_redirects(node):
@@ -113,19 +146,60 @@ class OutboundSafetyChecker(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def collect_imports(self, tree: ast.AST) -> None:
+        """Pre-pass: record aiohttp aliases and flag raw HTTP client imports (rule 8)."""
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == 'aiohttp' or alias.name.startswith('aiohttp.'):
+                        self.module_aliases.add(alias.asname or alias.name.split('.')[0])
+                    if self._is_raw_http_module(alias.name):
+                        self.add_violation(node, 'RAW_HTTP_CLIENT_IMPORT',
+                            f'import {alias.name}: use the policy session from session_manager.py')
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ''
+                for alias in node.names:
+                    local = alias.asname or alias.name
+                    if module == 'aiohttp' or module.startswith('aiohttp.'):
+                        if alias.name in self.CLIENT_CONSTRUCTORS:
+                            self.constructor_aliases[local] = alias.name
+                        elif alias.name == 'request':
+                            self.request_aliases.add(local)
+                    if self._is_raw_http_module(module) or self._is_raw_http_module(f'{module}.{alias.name}'):
+                        self.add_violation(node, 'RAW_HTTP_CLIENT_IMPORT',
+                            f'from {module} import {alias.name}: use the policy session from session_manager.py')
+
+    def _is_raw_http_module(self, name: str) -> bool:
+        return any(name == module or name.startswith(module + '.') for module in self.RAW_HTTP_CLIENT_MODULES)
+
+    def _client_constructor(self, node: ast.Call) -> Optional[str]:
+        func = node.func
+        if isinstance(func, ast.Name):
+            if func.id in self.CLIENT_CONSTRUCTORS:
+                return func.id
+            return self.constructor_aliases.get(func.id)
+        if isinstance(func, ast.Attribute) and func.attr in self.CLIENT_CONSTRUCTORS:
+            return func.attr
+        return None
+
+    @staticmethod
+    def _has_value_keyword(node: ast.Call, name: str) -> bool:
+        return any(keyword.arg == name and not isinstance(keyword.value, ast.Constant)
+                   for keyword in node.keywords)
+
     def _is_session_factory_file(self) -> bool:
-        normalized = self.filename.replace('\\', '/')
-        return any(normalized == allowed or normalized.endswith('/' + allowed)
-                   for allowed in self.SESSION_FACTORY_FILES)
+        return self.relative_path in self.SESSION_FACTORY_FILES
 
     def _is_http_client_call(self, node: ast.Call) -> bool:
         """session.get/post/.../request(...) on a session-like receiver, or aiohttp.request(...)."""
         func = node.func
+        if isinstance(func, ast.Name):
+            return func.id in self.request_aliases
         if not isinstance(func, ast.Attribute) or func.attr not in self.HTTP_METHODS:
             return False
         receiver = func.value
         if isinstance(receiver, ast.Name):
-            return receiver.id == 'aiohttp' or receiver.id.lower().endswith('session')
+            return receiver.id in self.module_aliases or receiver.id.lower().endswith('session')
         if isinstance(receiver, ast.Attribute):
             return receiver.attr.lower().endswith('session')
         return False
@@ -265,8 +339,8 @@ class OutboundSafetyChecker(ast.NodeVisitor):
 
     def add_violation(self, node: ast.AST, rule: str, message: str):
         """Add a violation with context."""
-        # Check for suppression
-        if self._is_suppressed(node):
+        # Check for suppression (never for destination-policy rules)
+        if rule not in self.POLICY_RULES and self._is_suppressed(node):
             return
 
         snippet = self._get_code_snippet(node.lineno)
@@ -287,51 +361,59 @@ class OutboundSafetyChecker(ast.NodeVisitor):
                         for i in range(start, end))
 
 
-def check_file(file_path: Path) -> List[Violation]:
-    """Check a single Python file for outbound safety violations."""
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Skipped by whole path segment or exact repository path (substring matching skipped unrelated
+# files such as "latests/x.py" or "evil_outbound.py").
+SKIP_DIRECTORIES = frozenset({
+    'tests', 'reference', 'REFERENCE', '.reference', '.planning', '.tmp', '.venv', 'venv',
+    'node_modules', '__pycache__',
+})
+SKIP_PATH_PREFIXES = ('docs/reference/',)
+# The sanitization funnel itself legitimately handles raw context fields.
+SKIP_FILES = frozenset({'outbound.py', 'sanitizer.py', 'pipeline/stages/sanitizer.py'})
+
+
+def _relative_posix(file_path: Path, project_root: Path) -> Optional[str]:
+    try:
+        return file_path.resolve().relative_to(project_root.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def _fail_closed(file_path: Path, rule: str, message: str) -> List[Violation]:
+    print(f"{message} in {file_path}", file=sys.stderr)
+    return [Violation(file=str(file_path), line=0, column=0, rule=rule, message=message, code_snippet='')]
+
+
+def check_file(file_path: Path, project_root: Optional[Path] = None) -> List[Violation]:
+    """Check a single Python file for outbound safety violations (fails closed on errors)."""
+    root = project_root if project_root is not None else PROJECT_ROOT
     try:
         source = file_path.read_text(encoding='utf-8')
         tree = ast.parse(source, filename=str(file_path))
+    except (OSError, UnicodeDecodeError, SyntaxError, ValueError) as e:
+        return _fail_closed(file_path, 'PARSE_ERROR', f'Cannot read or parse file: {type(e).__name__}')
 
-        checker = OutboundSafetyChecker(str(file_path), source)
+    try:
+        checker = OutboundSafetyChecker(str(file_path), source, _relative_posix(file_path, root))
+        checker.collect_imports(tree)
         checker.visit(tree)
-
         return checker.violations
-    except SyntaxError as e:
-        print(f"Syntax error in {file_path}: {e}", file=sys.stderr)
-        return []
-    except Exception as e:
-        print(f"Error checking {file_path}: {e}", file=sys.stderr)
-        return []
+    except Exception as e:  # checker bug: never pass silently
+        return _fail_closed(file_path, 'CHECKER_ERROR', f'Checker failed: {type(e).__name__}')
 
 
 def should_check_file(file_path: Path, project_root: Path) -> bool:
     """Determine if file should be checked."""
-    try:
-        rel_path = file_path.relative_to(project_root)
-    except ValueError:
+    rel_path = _relative_posix(file_path, project_root)
+    if rel_path is None:
         return False
-
-    # Skip whitelisted files/directories
-    skip_patterns = [
-        'tests/',
-        'reference/',
-        '.planning/',
-        '.tmp/',
-        'outbound.py',
-        'sanitizer.py',
-        '.venv/',
-        'venv/',
-        'node_modules/',
-        'docs/reference/',
-        '__pycache__',
-    ]
-
-    rel_path_str = str(rel_path).replace('\\', '/')
-    for pattern in skip_patterns:
-        if pattern in rel_path_str:
-            return False
-
+    parts = rel_path.split('/')
+    if any(part in SKIP_DIRECTORIES for part in parts[:-1]):
+        return False
+    if rel_path in SKIP_FILES or rel_path.startswith(SKIP_PATH_PREFIXES):
+        return False
     return True
 
 
@@ -352,7 +434,7 @@ def _candidate_files(project_root: Path) -> List[Path]:
 
 def main():
     """Main entry point."""
-    project_root = Path(__file__).resolve().parent.parent
+    project_root = PROJECT_ROOT
 
     print("Outbound Funnel Safety Check")
     print(f"Scanning: {project_root}\n")
@@ -365,7 +447,7 @@ def main():
 
     all_violations = []
     for file_path in py_files:
-        violations = check_file(file_path)
+        violations = check_file(file_path, project_root)
         all_violations.extend(violations)
 
     # Report results

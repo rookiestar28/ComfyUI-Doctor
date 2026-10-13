@@ -214,6 +214,29 @@ def test_operator_environment_entries_are_approved_exactly():
             assert active.captured == []
 
 
+def test_operator_docker_service_name_with_underscore_is_approved_exactly():
+    with DoctorRouteHarness(env={"OLLAMA_BASE_URL": "http://my_ollama:11434"}) as active:
+        _unlimited(active)
+        response = active.request(
+            "POST", "/doctor/list_models", json=_body("/doctor/list_models", "http://my_ollama:11434")
+        )
+        assert response.json()["success"] is True, response.text
+        assert [(c.method, c.url) for c in active.captured] == [("GET", "http://my_ollama:11434/api/tags")]
+
+
+def test_approvals_are_fixed_when_routes_are_registered():
+    with DoctorRouteHarness() as active:
+        _unlimited(active)
+        # Environment changes after route registration (e.g. by another custom node) must not
+        # approve new destinations.
+        with active.patched_env(DOCTOR_LLM_ALLOWED_BASE_URLS="https://late.example.test/v1"):
+            response = active.request(
+                "POST", "/doctor/list_models", json=_body("/doctor/list_models", "https://late.example.test/v1")
+            )
+        assert _error_code(response) == "destination_not_allowed"
+        assert active.captured == []
+
+
 def test_no_route_or_request_field_can_change_the_registry(harness):
     registry = harness.module("services.outbound_policy").get_destination_registry()
     before = registry.snapshot()

@@ -18,7 +18,7 @@ import os
 import re
 import socket
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 from urllib.parse import urlsplit
 
 from aiohttp.abc import AbstractResolver
@@ -57,7 +57,9 @@ POLICY_OPERATOR_NETWORK = "operator_network"
 _MAX_URL_LENGTH = 2048
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 _PATH_PATTERN = re.compile(r"^(?:/[A-Za-z0-9_~-][A-Za-z0-9._~-]*)*$")
-_HOST_LABEL_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+# Underscores are allowed inside labels because Docker/Compose service names (e.g. `my_ollama`)
+# contain them; labels still start and end with a letter or digit.
+_HOST_LABEL_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])?$")
 _LOOPBACK_NAMES = frozenset({"localhost"})
 
 # Never reachable, even when resolved for an approved name or listed as an operator IP literal.
@@ -81,11 +83,15 @@ _NON_PUBLIC_NETWORKS: Tuple[Union[ipaddress.IPv4Network, ipaddress.IPv6Network],
     ipaddress.ip_network(net)
     for net in (
         "100.64.0.0/10",        # shared address space / CGNAT (not covered by is_private)
+        "::/96",                # IPv4-compatible IPv6 (deprecated)
         "64:ff9b::/96",         # NAT64
         "64:ff9b:1::/48",
         "2002::/16",            # 6to4
+        "fec0::/10",            # IPv6 site-local (deprecated)
     )
 )
+_NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
+_IPV4_COMPATIBLE = ipaddress.IPv6Network("::/96")
 
 
 class DestinationPolicyError(OSError):
@@ -156,14 +162,40 @@ def _in_any(ip: IPAddress, networks: Sequence[Union[ipaddress.IPv4Network, ipadd
     return any(ip.version == net.version and ip in net for net in networks)
 
 
-def is_always_denied_address(ip: IPAddress) -> bool:
-    """Metadata, link-local, unspecified, multicast and reserved addresses are never reachable."""
-    ip = _unmapped(ip)
+def _embedded_ipv4(ip: IPAddress) -> Optional[ipaddress.IPv4Address]:
+    """IPv4 address carried inside an IPv6 transition form (mapped, compatible, NAT64, 6to4)."""
+    if not isinstance(ip, ipaddress.IPv6Address):
+        return None
+    if ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    if ip.sixtofour is not None:
+        return ip.sixtofour
+    if ip in _NAT64_WELL_KNOWN or (ip in _IPV4_COMPATIBLE and int(ip) > 1):  # not :: or ::1
+        return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return None
+
+
+def _is_denied_itself(ip: IPAddress) -> bool:
     return ip.is_unspecified or ip.is_multicast or ip.is_link_local or _in_any(ip, _ALWAYS_DENIED_NETWORKS)
 
 
+def is_always_denied_address(ip: IPAddress) -> bool:
+    """Metadata, link-local, unspecified, multicast and reserved addresses are never reachable.
+
+    IPv6 transition forms are judged by the IPv4 address they carry as well, so a NAT64/6to4/
+    compatible spelling of a metadata address is refused like the address itself.
+    """
+    embedded = _embedded_ipv4(ip)
+    return _is_denied_itself(ip) or (embedded is not None and _is_denied_itself(embedded))
+
+
+def _is_loopback_like(ip: IPAddress) -> bool:
+    embedded = _embedded_ipv4(ip)
+    return ip.is_loopback or (embedded is not None and embedded.is_loopback)
+
+
 def is_public_address(ip: IPAddress) -> bool:
-    """Deny-unless-global check used for official and operator hostname destinations."""
+    """Deny-unless-global check used for official provider destinations."""
     ip = _unmapped(ip)
     if is_always_denied_address(ip) or _in_any(ip, _NON_PUBLIC_NETWORKS):
         return False
@@ -180,8 +212,7 @@ def address_allowed(policy: str, address: str) -> bool:
     if policy == POLICY_PUBLIC:
         return is_public_address(ip)
     if policy == POLICY_OPERATOR_NETWORK:
-        unmapped = _unmapped(ip)
-        return not unmapped.is_loopback and not is_always_denied_address(unmapped)
+        return not _is_loopback_like(ip) and not is_always_denied_address(ip)
     return False
 
 
@@ -299,7 +330,6 @@ class DestinationRegistry:
             if existing is None or strictness[entry.address_policy] < strictness[existing]:
                 policies[key] = entry.address_policy
         self._host_policies: Dict[Tuple[str, int], str] = policies
-        self._hosts: FrozenSet[str] = frozenset(host for host, _port in policies)
 
     @property
     def entries(self) -> Tuple[Destination, ...]:
@@ -317,9 +347,6 @@ class DestinationRegistry:
         if normalized.startswith("[") and normalized.endswith("]"):
             normalized = normalized[1:-1]
         return self._host_policies.get((normalized, port))
-
-    def knows_host(self, host: str) -> bool:
-        return host.lower().rstrip(".") in self._hosts
 
     def snapshot(self) -> Tuple[Tuple[str, str, str, str, str, int, str], ...]:
         return tuple(
@@ -418,7 +445,6 @@ class DestinationPolicyResolver(AbstractResolver):
     ):
         self._registry = registry
         self._inner = inner if inner is not None else ThreadedResolver()
-        # Only proxy hosts can be unregistered: request URLs are always built from registry entries.
         self._allow_unregistered_hosts = allow_unregistered_hosts
 
     async def resolve(
@@ -426,7 +452,10 @@ class DestinationPolicyResolver(AbstractResolver):
     ) -> List[ResolveResult]:
         policy = self._registry.address_policy_for(host, port)
         if policy is None:
-            if self._allow_unregistered_hosts and not self._registry.knows_host(host):
+            # IMPORTANT: decide by host *and* port. Request URLs are always built from registry
+            # entries, so with proxy inheritance an unregistered host:port can only be the proxy
+            # itself (e.g. a local proxy on localhost:7890); checking the host alone refuses it.
+            if self._allow_unregistered_hosts:
                 return await self._inner.resolve(host, port, family)
             raise DestinationPolicyError("destination host is not approved")
         results = await self._inner.resolve(host, port, family)
@@ -460,7 +489,11 @@ _REGISTRY: Optional[DestinationRegistry] = None
 
 
 def get_destination_registry() -> DestinationRegistry:
-    """Return the process registry, built once from the environment on first use (startup)."""
+    """Return the process registry, built once from the environment.
+
+    ``register_api_routes`` calls this while ComfyUI loads the node, so approvals are fixed at
+    startup; later environment changes in the same process do not alter them.
+    """
     global _REGISTRY
     if _REGISTRY is None:
         _REGISTRY = build_destination_registry(os.environ)
