@@ -71,6 +71,7 @@ Bei optionaler LLM-Analyse erstellt Doctor den prompt context über dieselbe str
 - **Chat**: aktuellen Fehlerkontext prüfen und weitere Debugging-Fragen stellen.
 - **Statistics**: aktuelle Fehlertrends, diagnostics, trust/health information, telemetry controls und feedback tools prüfen.
 - **Settings**: Sprache, LLM provider, base URL, model, privacy mode, Auto-Open-Verhalten und optionalen serverseitigen credential storage auswählen.
+  Die base URL muss ein auf dem ComfyUI-Server freigegebenes LLM-Ziel sein: die integrierten offiziellen Provider, lokales Ollama/LM Studio oder URLs, die der Serverbetreiber in `DOCTOR_LLM_ALLOWED_BASE_URLS` einträgt (siehe [Configuration and Security](../CONFIGURATION_SECURITY.md#llm-destinations)). Serverseitig gespeicherte Schlüssel werden nur an ihr zugehöriges Ziel gesendet.
 
 ### Smart Debug Node
 

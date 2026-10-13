@@ -69,6 +69,8 @@ LLM failure responses use the standard JSON error envelope. The chat streaming p
 | `PUT` | `/doctor/secrets` | Save a provider credential to the optional server-side store. |
 | `DELETE` | `/doctor/secrets/{provider}` | Delete a stored provider credential. |
 
+`GET /doctor/secrets/status` also reports `store.state` (`ok`, `empty`, `locked_key_required`, `locked_key_mismatch` or `corrupt`). While an encrypted store is locked, `PUT` and `DELETE` return HTTP 409 with error code `secret_store_locked` and leave the store file unchanged.
+
 ## Statistics, Feedback, and Health Endpoints
 
 | Method | Path | Purpose |

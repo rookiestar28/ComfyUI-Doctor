@@ -71,6 +71,7 @@ Clone 完成后重启 ComfyUI。Doctor 应会输出启动诊断信息，并注�
 - **Chat**：查看最新错误上下文，并提出后续调试问题。
 - **Statistics**：查看近期错误趋势、诊断信息、信任/健康状态、telemetry 控制与反馈工具。
 - **Settings**：选择语言、LLM provider、base URL、model、隐私模式、自动打开行为，以及可选的服务器端凭据存储。
+  base URL 必须是 ComfyUI 服务器批准的 LLM 目标：内置官方 provider、本机 Ollama/LM Studio，或服务器管理员在 `DOCTOR_LLM_ALLOWED_BASE_URLS` 中列出的 URL（参见 [Configuration and Security](../CONFIGURATION_SECURITY.md#llm-destinations)）。服务器端存储的密钥只会发送到其所属的目标。
 
 ### Smart Debug Node
 

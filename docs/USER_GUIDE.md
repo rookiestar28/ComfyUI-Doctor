@@ -39,6 +39,10 @@ Use it when:
 Cloud providers require a credential. Local providers such as Ollama and LMStudio can be used without a cloud credential.
 Provider-specific request and response formats are normalized by Doctor's backend for chat, single-shot analysis, model listing, and connectivity checks.
 
+Chat also works before any error has been captured. While a reply is being generated, a **Stop** button cancels it; a failed request is shown as an error message in the conversation. Long workflow and traceback context is trimmed to the configured token budget before it is sent.
+Replies are rendered as markdown with code highlighting from Doctor's own bundled files; if those files are unavailable, replies are shown as plain text.
+Fix suggestions appear as buttons on assistant replies only. Applying one changes only the exact node the suggestion names, and values that do not fit the input are rejected.
+
 ### Statistics Tab
 
 The Statistics tab groups operational views:
@@ -68,7 +72,7 @@ Use Settings for routine configuration:
 - Model selection or manual model entry.
 - Privacy mode.
 - Right-side latest-diagnosis auto-open behavior.
-- Optional Advanced Key Store for server-side credential storage.
+- Optional Advanced Key Store for server-side credential storage. If the store is encrypted and the configured key is missing or different, it stays locked: saved keys are not used and saving or deleting is refused until the original key is restored (see [Server-Side Credential Store](CONFIGURATION_SECURITY.md#server-side-credential-store)).
 
 Doctor also registers compatibility defaults through the current ComfyUI frontend settings API so modern frontend builds retain expected defaults. The sidebar Settings tab remains the recommended surface for normal use.
 All Doctor-owned frontend settings explicitly disable the host frontend's

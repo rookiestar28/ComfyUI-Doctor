@@ -71,6 +71,7 @@ ComfyUI 왼쪽 사이드바에서 **Doctor**를 엽니다.
 - **Chat**: 최신 오류 컨텍스트를 검토하고 후속 디버깅 질문을 합니다.
 - **Statistics**: 최근 오류 추세, diagnostics, trust/health information, telemetry controls, feedback tools를 확인합니다.
 - **Settings**: 언어, LLM provider, base URL, model, privacy mode, 자동 열기 동작, 선택적 서버 측 credential storage를 선택합니다.
+  base URL은 ComfyUI 서버에서 승인된 LLM 대상이어야 합니다: 기본 제공 공식 provider, 로컬 Ollama/LM Studio, 또는 서버 운영자가 `DOCTOR_LLM_ALLOWED_BASE_URLS`에 나열한 URL입니다([Configuration and Security](../CONFIGURATION_SECURITY.md#llm-destinations) 참조). 서버에 저장된 키는 해당 키가 속한 대상에만 전송됩니다.
 
 ### Smart Debug Node
 

@@ -14,6 +14,22 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>LLM destinations, credential safety, and chat reliability hardened</strong></summary>
+
+- Sent LLM requests only to approved destinations: the built-in providers, local Ollama/LM Studio, and exact base URLs the server operator lists in `DOCTOR_LLM_ALLOWED_BASE_URLS` (or `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `DOCTOR_LLM_BASE_URL`). Any other base URL is refused with operator guidance before any network request.
+- Sent keys stored on the server only to the destination they belong to; other endpoints need a key entered in Settings.
+- Kept an encrypted credential store locked when the configured key is missing or different, instead of overwriting it or moving it aside; restoring the original key recovers every stored credential.
+- Rendered chat fix-suggestion buttons as plain text, offered them only on assistant replies, and applied them only to the exact node named with a valid value.
+- Fixed chat failing when no error had been captured yet, showed chat failures in the conversation instead of a stuck placeholder, and added a Stop button for a running reply.
+- Applied the configured token budget to chat requests, trimming large workflow and traceback context before it is sent.
+- Loaded chat markdown and code highlighting from Doctor's own folder whatever the custom-node folder is named, without a CDN fallback; if those files are missing, replies are shown as plain text.
+- Fixed the privacy diagnostic failing whenever no recognized provider was configured (it now warns about privacy mode `none` with an unknown remote endpoint), added the matched pattern category to error summaries, let local telemetry recognize Doctor's built-in pattern ids, kept errors that arrive before the sidebar finishes loading from breaking it, and stopped warning about the optional custom-pattern folder.
+- Computed per-node-type failure counts in the statistics API from stored error history without copying raw error text.
+- Removed unused frontend modules and a stray development script, and added tests that run the real API route handlers.
+
+</details>
+
+<details>
 <summary><strong>Host contracts, Switch diagnostics, and Locate Node reliability refreshed</strong></summary>
 
 - Updated source-linked compatibility checks for the current ComfyUI and frontend versions, including separate Desktop, ComfyUI-pinned, and standalone frontend behavior.
@@ -529,7 +545,8 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Host-compatible sidebar registration and node locate actions for current and legacy ComfyUI frontend builds, including distinct group-node and real-subgraph navigation.
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes and unconditional sensitive-header redaction.
-- Optional server-side credential store with admin guarding and encryption-at-rest support.
+- LLM requests go only to operator-approved destinations, and keys stored on the server are only sent to the destination they belong to.
+- Optional server-side credential store with admin guarding and encryption-at-rest support; a store that cannot be opened with the configured key stays locked instead of being overwritten.
 - Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, first-party dataset folders, privacy, performance, signature packs, statistics, plugin trust, bounded host fallback advisories, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
@@ -614,6 +631,7 @@ Recommended defaults:
 - Use **Privacy Mode: Basic** or **Strict** for cloud providers.
 - Treat `Authorization` and `X-API-Key` values as always-redacted secrets; this protection remains active even for verified-local `none` mode.
 - Use environment variables for shared or production-like environments.
+- To use a self-hosted or other third-party endpoint, list its exact base URL in `DOCTOR_LLM_ALLOWED_BASE_URLS` on the ComfyUI server; see [LLM Destinations](docs/CONFIGURATION_SECURITY.md#llm-destinations).
 - Set `DOCTOR_ADMIN_TOKEN` and `DOCTOR_REQUIRE_ADMIN_TOKEN=1` on shared servers.
 - Keep local-only loopback convenience mode for single-user desktop use only.
 

@@ -71,6 +71,7 @@ Apri **Doctor** nella sidebar sinistra di ComfyUI:
 - **Chat**: rivedi l'ultimo contesto di errore e fai domande di debug successive.
 - **Statistics**: ispeziona trend recenti degli errori, diagnostics, trust/health information, telemetry controls e feedback tools.
 - **Settings**: scegli lingua, LLM provider, base URL, model, privacy mode, comportamento auto-open e credential storage lato server opzionale.
+  La base URL deve essere una destinazione LLM approvata sul server ComfyUI: i provider ufficiali integrati, Ollama/LM Studio in locale o gli URL che l'operatore del server elenca in `DOCTOR_LLM_ALLOWED_BASE_URLS` (vedi [Configuration and Security](../CONFIGURATION_SECURITY.md#llm-destinations)). Le chiavi salvate sul server vengono inviate solo alla destinazione a cui appartengono.
 
 ### Smart Debug Node
 
