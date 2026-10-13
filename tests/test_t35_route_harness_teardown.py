@@ -6,10 +6,12 @@ active while restoration is measured.
 
 from __future__ import annotations
 
+import logging
 import os
 import socket
 import sys
 import threading
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -37,6 +39,8 @@ def test_harness_teardown_restores_process_state():
     original_stdout, original_stderr = sys.stdout, sys.stderr
     env_before = dict(os.environ)
     user_before = _user_dir_snapshot()
+    api_logger = logging.getLogger("ComfyUI-Doctor-API")
+    api_handlers_before = list(api_logger.handlers)
     os.environ[_SCRUBBED_VAR] = _SCRUBBED_VALUE
     try:
         with DoctorRouteHarness() as active:
@@ -55,8 +59,25 @@ def test_harness_teardown_restores_process_state():
     assert not [name for name in sys.modules if name.startswith("doctor_hostload_")]
     assert socket.socket.connect is _REAL_CONNECT
     assert socket.getaddrinfo is _REAL_GETADDRINFO
+    # Regression: a process-global API-log file handler stayed open and locked the temp root.
+    assert list(api_logger.handlers) == api_handlers_before
     assert data_root is not None and not data_root.exists()
     assert _user_dir_snapshot() == user_before
+
+
+def test_harness_tolerates_spec_less_torch_stub_left_by_other_tests(monkeypatch):
+    # Regression: earlier suite modules leave a MagicMock torch (no usable __spec__) in sys.modules,
+    # which made importlib.util.find_spec("torch") raise ValueError during harness setup.
+    stub = MagicMock()
+    stub.__version__ = "0.0-other-test-stub"
+    stub.cuda.is_available.return_value = False
+    monkeypatch.setitem(sys.modules, "torch", stub)
+
+    with DoctorRouteHarness() as active:
+        assert sys.modules["torch"] is stub
+        assert active.request("GET", "/doctor/provider_defaults").status == 200
+
+    assert sys.modules["torch"] is stub
 
 
 def test_harness_restores_state_when_entry_fails(monkeypatch):

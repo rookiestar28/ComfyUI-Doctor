@@ -31,6 +31,7 @@ import importlib.util
 import io
 import ipaddress
 import json as jsonlib
+import logging
 import os
 import shutil
 import socket
@@ -69,6 +70,7 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 _BLOCKED_LOOPBACK_PORTS = frozenset({11434, 1234})
 _SCRUBBED_ENV_TOKENS = ("API_KEY", "DOCTOR", "TOKEN", "SECRET", "PROXY")
 _HOST_STUB_NAMES = ("folder_paths", "server", "torch")
+_API_LOGGER_NAME = "ComfyUI-Doctor-API"
 
 T = TypeVar("T")
 
@@ -266,6 +268,13 @@ class _EgressGuard:
         self._saved = None
 
 
+def _torch_importable() -> bool:
+    try:
+        return importlib.util.find_spec("torch") is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def _load_validator() -> types.ModuleType:
     spec = importlib.util.spec_from_file_location("doctor_route_harness_host_load", _VALIDATOR_PATH)
     if spec is None or spec.loader is None:
@@ -314,6 +323,8 @@ class DoctorRouteHarness:
             self.guard.install()
             stack.callback(self.guard.uninstall)
 
+            stack.callback(self._restore_api_logger, self._detach_api_logger())
+
             validator = _load_validator()
             self.package_name = stack.enter_context(validator.synthetic_package_import_context(PROJECT_ROOT))
             self._execute_package_init()
@@ -333,6 +344,30 @@ class DoctorRouteHarness:
     def _restore_env(saved: Dict[str, str]) -> None:
         os.environ.clear()
         os.environ.update(saved)
+
+    @staticmethod
+    def _detach_api_logger() -> Tuple[List[logging.Handler], int, bool]:
+        # IMPORTANT: ``setup_api_logger`` keeps a process-global logger and returns early when it
+        # already has handlers. Detach them so this instance's file handler targets its own data
+        # root, and close that handler on exit: an open RotatingFileHandler locks
+        # api_operations.log on Windows and silently defeats the temp-root cleanup.
+        api_logger = logging.getLogger(_API_LOGGER_NAME)
+        saved = (list(api_logger.handlers), api_logger.level, api_logger.propagate)
+        for handler in saved[0]:
+            api_logger.removeHandler(handler)
+        return saved
+
+    @staticmethod
+    def _restore_api_logger(saved: Tuple[List[logging.Handler], int, bool]) -> None:
+        api_logger = logging.getLogger(_API_LOGGER_NAME)
+        for handler in list(api_logger.handlers):
+            api_logger.removeHandler(handler)
+            handler.close()
+        handlers, level, propagate = saved
+        for handler in handlers:
+            api_logger.addHandler(handler)
+        api_logger.setLevel(level)
+        api_logger.propagate = propagate
 
     @staticmethod
     def _restore_host_stubs(saved: Mapping[str, Optional[types.ModuleType]]) -> None:
@@ -359,7 +394,11 @@ class DoctorRouteHarness:
         server.PromptServer = prompt_server  # type: ignore[attr-defined]
         sys.modules["server"] = server
 
-        if importlib.util.find_spec("torch") is None:
+        # IMPORTANT: other tests in the same session can leave a spec-less ``torch`` stub in
+        # sys.modules, and importlib.util.find_spec("torch") then raises ValueError (setup errors
+        # only in the full suite). Reuse any loaded torch module; probe the import system only
+        # when none is loaded.
+        if sys.modules.get("torch") is None and not _torch_importable():
             torch = types.ModuleType("torch")
             torch.__version__ = "0.0-harness-stub"  # type: ignore[attr-defined]
             torch.Tensor = type("Tensor", (), {})  # type: ignore[attr-defined]
