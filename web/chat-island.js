@@ -29,10 +29,64 @@ import {
 // R5: Error Boundaries
 import { createErrorBoundaryAsync } from './ErrorBoundary.js';
 import { isDoctorErrorBoundariesEnabled } from './comfyui_frontend_compat.js';
+import { describeLlmError } from './utils/llm_error_text.js';
+import { t } from './utils/i18n_fallback.js';
 
 // Shared State
 let preactModules = null;
 let fixHandler = null;
+
+const PENDING_REPLY = '...';
+
+// IMPORTANT: the chat route forwards history roles verbatim to the provider. Island-only bubbles
+// (error/system notices) and the pending placeholder must never be sent back as conversation history.
+function buildChatHistory(messages, pendingId) {
+    return messages
+        .filter((m) => m.id !== pendingId && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function updateMessage(id, patch) {
+    const messages = getMessages();
+    if (!messages.some((m) => m.id === id)) return;
+    setState({ messages: messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
+}
+
+/**
+ * Final notice for a finished chat request, or null when the streamed reply stands as is.
+ * `DoctorAPI.streamChat` reports failures through its callback and never rethrows, so the outcome
+ * is decided here from the abort signal, the reported failure and the streamed content.
+ */
+function describeChatOutcome({ aborted, stoppedByUser, failure, content }, uiText) {
+    if (aborted) {
+        return stoppedByUser
+            ? { role: 'system', content: t(uiText, 'generation_stopped_user', 'Generation stopped by user.') }
+            : null;
+    }
+    const streamError = t(uiText, 'stream_error', 'Stream Error');
+    let detail = '';
+    if (failure) {
+        const message = typeof failure?.message === 'string' ? failure.message : String(failure);
+        detail = describeLlmError(message, uiText) || streamError;
+    } else if (!content) {
+        detail = streamError;
+    }
+    return detail ? { role: 'error', content: `${t(uiText, 'chat_error', 'Chat error')}: ${detail}` } : null;
+}
+
+function finishPendingReply(id, content, outcome) {
+    const messages = getMessages();
+    if (!messages.some((m) => m.id === id)) return; // history was cleared meanwhile
+    if (content) {
+        if (outcome) addMessage(outcome.role, outcome.content);
+        return;
+    }
+    setState({
+        messages: outcome
+            ? messages.map((m) => (m.id === id ? { ...m, role: outcome.role, content: outcome.content } : m))
+            : messages.filter((m) => m.id !== id),
+    });
+}
 
 // 5C.3: Local loadAssets, loadScript, sanitizeHtml removed - using shared doctor_rendering.js
 
@@ -226,7 +280,15 @@ function MessageItem({ msg, uiText }) {
     const contentRef = useRef(null);
 
     useEffect(() => {
-        if (!contentRef.current || !window.marked) return;
+        if (!contentRef.current) return;
+
+        // CRITICAL: error/system bubbles carry server, provider or island status text. Render them as
+        // text only (no markdown, no fix detection): failure strings must never become markup.
+        if (msg.role === 'error' || msg.role === 'system') {
+            contentRef.current.textContent = msg.content || '';
+            return;
+        }
+        if (!window.marked) return;
 
         // Match vanilla behavior: allow fix buttons to appear in chat content.
         if (!fixHandler && app) {
@@ -304,6 +366,7 @@ function ChatIsland({ uiText }) {
 
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
+    const stopRequestedRef = useRef(false);
     const textareaRef = useRef(null);
 
     // 5C.2: Subscribe via selectors instead of direct doctorContext access
@@ -374,17 +437,18 @@ function ChatIsland({ uiText }) {
         addMessage('user', text);
         setProcessing(true);
 
-        // 2. Add System Placeholder for Assistant
-        addMessage('assistant', '...');
+        // 2. Add the pending assistant reply (settled by id once the request finishes)
+        const pending = addMessage('assistant', PENDING_REPLY);
 
         // 3. Prepare Payload via selectors
-        abortControllerRef.current = new AbortController();
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        stopRequestedRef.current = false;
 
-        const msgs = getMessages();
         const wfCtx = getWorkflowContext();
         const settings = getSettings();
         const payload = {
-            messages: msgs.filter(m => m.content !== '...'),
+            messages: buildChatHistory(getMessages(), pending.id),
             error_context: wfCtx || {},
             intent: 'chat',
             selected_nodes: [],
@@ -396,6 +460,7 @@ function ChatIsland({ uiText }) {
         };
 
         let fullContent = '';
+        let failure = null;
 
         try {
             await DoctorAPI.streamChat(
@@ -403,25 +468,37 @@ function ChatIsland({ uiText }) {
                 (chunk) => {
                     if (chunk.delta) {
                         fullContent += chunk.delta;
-                        const currentMsgs = [...getMessages()];
-                        if (currentMsgs.length > 0) {
-                            currentMsgs[currentMsgs.length - 1].content = fullContent;
-                            setState({ messages: currentMsgs });
-                        }
+                        updateMessage(pending.id, { content: fullContent });
                     }
                 },
-                (err) => console.error("Stream error", err),
-                abortControllerRef.current.signal
+                (err) => {
+                    console.error("Stream error", err);
+                    failure = err;
+                },
+                controller.signal
             );
         } catch (e) {
-            if (e.name !== 'AbortError') {
-                addMessage('system', `Error: ${e.message}`);
-            }
+            failure = e;
         } finally {
+            // IMPORTANT: every outcome must settle the pending reply here; streamChat never rethrows,
+            // so a console-only error callback left a permanent '...' bubble.
+            const outcome = describeChatOutcome({
+                aborted: controller.signal.aborted,
+                stoppedByUser: stopRequestedRef.current,
+                failure,
+                content: fullContent,
+            }, uiText);
+            finishPendingReply(pending.id, fullContent, outcome);
             setProcessing(false);
-            abortControllerRef.current = null;
+            if (abortControllerRef.current === controller) abortControllerRef.current = null;
         }
-    }, [isProcessing]);
+    }, [isProcessing, uiText]);
+
+    const handleStop = useCallback(() => {
+        if (!abortControllerRef.current) return;
+        stopRequestedRef.current = true;
+        abortControllerRef.current.abort();
+    }, []);
 
     const handleSend = useCallback(async () => {
         if (!inputValue.trim() || isProcessing) return;
@@ -536,6 +613,23 @@ function ChatIsland({ uiText }) {
                         >
                             ${isProcessing ? 'Thinking...' : (uiText?.send_btn || 'Send')}
                         </button>
+                        ${isProcessing && html`
+                            <button
+                                id="doctor-stop-btn"
+                                onClick=${handleStop}
+                                style="
+                                    flex: 1;
+                                    padding: 8px;
+                                    background: #b23b3b;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 4px;
+                                    cursor: pointer;
+                                "
+                            >
+                                ${uiText?.stop_btn || 'Stop'}
+                            </button>
+                        `}
                         <button 
                             id="doctor-clear-btn"
                             onClick=${handleClear}
