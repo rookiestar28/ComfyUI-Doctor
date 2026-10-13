@@ -226,10 +226,36 @@ class _EgressGuard:
         #: Every non-numeric name the code under test tried to resolve, in order.
         self.lookups: List[str] = []
         self._saved: Optional[Tuple[Any, Any, Any]] = None
+        #: Loopback ports currently held by the harness's own in-process test server.
+        self._harness_ports: set = set()
+        self._suspended = False
+
+    @contextlib.contextmanager
+    def suspended(self) -> Iterator[None]:
+        """Let harness plumbing (not code under test) connect, e.g. the event loop's self-pipe."""
+        previous = self._suspended
+        self._suspended = True
+        try:
+            yield
+        finally:
+            self._suspended = previous
+
+    @contextlib.contextmanager
+    def harness_port(self, port: int) -> Iterator[None]:
+        """Allow loopback connects to a port the harness itself is listening on."""
+        self._harness_ports.add(port)
+        try:
+            yield
+        finally:
+            self._harness_ports.discard(port)
 
     def _check_target(self, address: Any) -> None:
+        if self._suspended:
+            return
         host = str(address[0]) if isinstance(address, tuple) and address else str(address)
         port = address[1] if isinstance(address, tuple) and len(address) > 1 else None
+        if host in _LOOPBACK_HOSTS and port in self._harness_ports:
+            return
         if host not in _LOOPBACK_HOSTS or port in _BLOCKED_LOOPBACK_PORTS:
             self.blocked.append(f"connect:{host}:{port}")
             raise EgressBlocked(f"harness egress guard refused connect to {host!r}:{port}")
@@ -545,7 +571,11 @@ class DoctorRouteHarness:
         # IMPORTANT: an explicit selector loop routes connects through socket.connect so the egress
         # guard applies on Windows (the default proactor loop bypasses it) without mutating the
         # process-wide event-loop policy.
-        loop = asyncio.SelectorEventLoop()
+        # CRITICAL: on Windows the loop's self-pipe is socket.socketpair(), a real loopback connect to
+        # an OS-assigned port; hosts with a low dynamic port range can assign a guarded LLM port
+        # (1234/11434) and the guard then refused the harness itself. Build the loop unguarded.
+        with self.guard.suspended():
+            loop = asyncio.SelectorEventLoop()
         try:
             return loop.run_until_complete(self._serve(scenario))
         finally:
@@ -557,8 +587,11 @@ class DoctorRouteHarness:
         app.add_routes(self._route_table or [])
         client = TestClient(TestServer(app, host="127.0.0.1"))
         await client.start_server()
+        # The in-process server's OS-assigned port may equal a guarded LLM port; it is ours, so the
+        # client's connects to it are harness plumbing, not egress by the code under test.
         try:
-            return await scenario(client)
+            with self.guard.harness_port(client.port):
+                return await scenario(client)
         finally:
             await client.close()
 

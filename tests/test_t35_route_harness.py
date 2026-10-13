@@ -165,6 +165,20 @@ def test_egress_guard_refuses_non_loopback_connects_dns_and_local_llm_ports(harn
     assert "dns:example.com" in harness.guard.blocked
 
 
+def test_harness_plumbing_ports_are_not_mistaken_for_code_under_test(harness, monkeypatch):
+    # The selector loop's self-pipe (a loopback socketpair on Windows) and the in-process test server
+    # use OS-assigned ports; a host with a low dynamic port range can assign a guarded LLM port.
+    import tests.doctor_route_harness as harness_module
+
+    monkeypatch.setattr(harness_module, "_BLOCKED_LOOPBACK_PORTS", frozenset(range(1, 65536)))
+
+    response = harness.request("GET", "/doctor/health")
+
+    assert response.status == 200
+    with pytest.raises(EgressBlocked):
+        socket.create_connection(("127.0.0.1", 11434), timeout=1)
+
+
 def test_harness_writes_doctor_data_only_under_its_temp_root(harness):
     data_dir = Path(harness.module("services.doctor_paths").get_doctor_data_dir())
     assert harness.data_root is not None
