@@ -558,8 +558,10 @@ def register_api_routes(context: dict) -> None:
                         soft_max_tokens=soft_max,
                         hard_max_tokens=hard_max,
                         trimming_policy=policy,
+                        # IMPORTANT: the field is `fallback_chars_per_token`; a `chars_per_token` keyword
+                        # raised TypeError on every chat and the fail-open handler below hid it.
                         estimator_config=EstimatorConfig(
-                            chars_per_token=CONFIG.r12_estimator_fallback_cpt,
+                            fallback_chars_per_token=CONFIG.r12_estimator_fallback_cpt,
                             safety_multiplier=CONFIG.r12_estimator_safety_mult
                         ),
                         prune_default_depth=CONFIG.r12_prune_default_depth,
@@ -586,7 +588,13 @@ def register_api_routes(context: dict) -> None:
                     if "error_context" in budgeted_context:
                         error_context = budgeted_context["error_context"]
                 except Exception as r12_err:
-                    logger.warning(f"R12 Budget application failed, proceeding with original payload: {r12_err}")
+                    # Fail open with the original payload, but stay observable: stable code and the
+                    # exception type only (exception text can carry request content).
+                    r12_meta = {}
+                    logger.warning(
+                        "R12 budget skipped [r12_budget_failed]: %s; proceeding with the original payload",
+                        type(r12_err).__name__,
+                    )
 
             # S6: PII Sanitization - Remove sensitive info before sending to LLM
             sanitizer, downgraded = get_outbound_sanitizer(base_url, privacy_mode)

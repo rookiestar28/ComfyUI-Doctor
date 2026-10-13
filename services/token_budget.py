@@ -7,7 +7,7 @@ until they fit within the defined provider budget.
 import logging
 import copy
 import json
-from dataclasses import dataclass, field
+from dataclasses import astuple, dataclass, field, replace
 from typing import Dict, Any, List, Optional, Tuple, Literal
 
 from .token_estimator import TokenEstimator, EstimatorConfig, TokenEstimate
@@ -49,9 +49,34 @@ class TokenBudgetService:
     Service to apply token budget constraints to LLM payloads.
     """
     
+    _MAX_DERIVED_ESTIMATORS = 8
+
     def __init__(self, estimator: Optional[TokenEstimator] = None, pruner: Optional[WorkflowPruner] = None):
+        self._estimator_injected = estimator is not None
         self.estimator = estimator or TokenEstimator()
         self.pruner = pruner or WorkflowPruner()
+        self._derived_estimators: Dict[Tuple[Any, ...], TokenEstimator] = {}
+
+    def _estimator_for(self, estimator_config: Optional[EstimatorConfig]) -> TokenEstimator:
+        """
+        Estimator for one call: BudgetConfig.estimator_config decides the estimate, an injected
+        estimator (tests, tools) stays authoritative, and the service default is never mutated.
+        """
+        if (
+            self._estimator_injected
+            or not isinstance(estimator_config, EstimatorConfig)
+            or estimator_config == self.estimator.config
+        ):
+            return self.estimator
+        key = astuple(estimator_config)
+        estimator = self._derived_estimators.get(key)
+        if estimator is None:
+            if len(self._derived_estimators) >= self._MAX_DERIVED_ESTIMATORS:
+                self._derived_estimators.clear()
+            # Copy: later mutation of the caller's config must not change a cached estimator.
+            estimator = TokenEstimator(replace(estimator_config))
+            self._derived_estimators[key] = estimator
+        return estimator
 
     def apply_token_budget(
         self,
@@ -67,6 +92,10 @@ class TokenBudgetService:
         is_enabled = config.enabled_remote if is_remote_provider else config.enabled_local
         if not is_enabled:
             return payload, {}
+
+        # IMPORTANT: estimate with the per-call settings; using self.estimator here ignored
+        # BudgetConfig.estimator_config (fallback chars-per-token / safety multiplier).
+        estimator = self._estimator_for(config.estimator_config)
 
         # Working copy to avoid mutating original
         # Note: If deepcopy is too slow for massive workflows, we might need optimization.
@@ -141,7 +170,7 @@ class TokenBudgetService:
             """Estimate tokens for a specific section."""
             if key not in ctx:
                 return 0
-            return self.estimator.estimate(json.dumps(ctx[key])).estimated_tokens
+            return estimator.estimate(json.dumps(ctx[key])).estimated_tokens
         
         def estimate_by_section(ctx: dict) -> dict:
             """Get token breakdown by section."""
@@ -151,12 +180,12 @@ class TokenBudgetService:
                 "node_context": estimate_section("node_context", ctx),
                 "system_info": sum(estimate_section(k, ctx) for k in ["pip_list", "system_env", "env_info"] if k in ctx),
             }
-            sections["other"] = self.estimator.estimate(json.dumps(ctx)).estimated_tokens - sum(sections.values())
+            sections["other"] = estimator.estimate(json.dumps(ctx)).estimated_tokens - sum(sections.values())
             sections["other"] = max(0, sections["other"])  # Clamp to 0
             return sections
         
         def estimate_total(ctx: dict) -> int:
-            return self.estimator.estimate(json.dumps(ctx)).estimated_tokens
+            return estimator.estimate(json.dumps(ctx)).estimated_tokens
         
         # Initial by-section breakdown
         initial_by_section = estimate_by_section(error_context)
@@ -185,7 +214,7 @@ class TokenBudgetService:
                 "overhead_fixed": config.overhead_fixed,
                 "estimated_tokens_initial": total_estimated,
                 "by_section_initial": initial_by_section,
-                "estimator_method": "tiktoken" if self.estimator._get_encoding("gpt-4") else "fallback"
+                "estimator_method": "tiktoken" if estimator._get_encoding("gpt-4") else "fallback"
             },
             "pruning": {
                 "applied": False,
