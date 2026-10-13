@@ -82,7 +82,14 @@
     try {
       // Import the full doctor.js extension which will register everything
       // This includes the left sidebar tab with settings, chat, etc.
-      await import('../../web/doctor.js');
+      // ?extensionFolder=<name> loads it from /extensions/<name>/ like ComfyUI does, so module-relative
+      // URLs resolve against that folder. The default stays /web/: specs import /web/... modules
+      // directly and must share the instances loaded here (ES modules are keyed by URL).
+      const extensionFolder = harnessParams.get('extensionFolder');
+      const doctorEntry = extensionFolder && /^[A-Za-z0-9_-]+$/.test(extensionFolder)
+        ? `/extensions/${extensionFolder}/doctor.js`
+        : '../../web/doctor.js';
+      await import(doctorEntry);
 
       console.log('[Test Harness] Doctor extension loaded and registered');
 

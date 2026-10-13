@@ -11,12 +11,14 @@
 // ASSET PATHS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const LOCAL_MARKED = "/extensions/ComfyUI-Doctor/lib/marked.min.js";
-const LOCAL_HIGHLIGHT = "/extensions/ComfyUI-Doctor/lib/highlight.min.js";
-const LOCAL_HIGHLIGHT_CSS = "/extensions/ComfyUI-Doctor/lib/github-dark.min.css";
-const CDN_MARKED = "https://cdn.jsdelivr.net/npm/marked@15.0.4/marked.min.js";
-const CDN_HIGHLIGHT = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js";
-const CDN_HIGHLIGHT_CSS = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css";
+// IMPORTANT: ComfyUI serves this extension at /extensions/<install folder>/ and the folder name
+// varies (renamed clones, archive extractions), so resolve vendored assets relative to this module.
+// An absolute /extensions/ComfyUI-Doctor/ path 404s elsewhere. Do not add a CDN fallback: it loaded
+// unpinned third-party script into the ComfyUI origin; missing assets degrade to plain text instead.
+const LIB_BASE = new URL('./lib/', import.meta.url);
+const LOCAL_MARKED = new URL('marked.min.js', LIB_BASE).href;
+const LOCAL_HIGHLIGHT = new URL('highlight.min.js', LIB_BASE).href;
+const LOCAL_HIGHLIGHT_CSS = new URL('github-dark.min.css', LIB_BASE).href;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE
@@ -45,8 +47,8 @@ function loadScript(src) {
 }
 
 /**
- * Load all rendering assets (marked, highlight.js, CSS).
- * Uses local vendor files with CDN fallback.
+ * Load all rendering assets (marked, highlight.js, CSS) from the extension's own lib/ directory.
+ * Never rejects: a missing asset is reported once and rendering falls back to plain text.
  * @returns {Promise<void>}
  */
 export async function loadRenderingAssets() {
@@ -60,7 +62,9 @@ export async function loadRenderingAssets() {
             link.id = 'hljs-style';
             link.rel = 'stylesheet';
             link.href = LOCAL_HIGHLIGHT_CSS;
-            link.onerror = () => { link.href = CDN_HIGHLIGHT_CSS; };
+            link.onerror = () => {
+                console.warn('[DoctorRendering] highlight theme unavailable; code blocks stay unstyled');
+            };
             document.head.appendChild(link);
         }
 
@@ -70,8 +74,7 @@ export async function loadRenderingAssets() {
                 await loadScript(LOCAL_MARKED);
                 console.log('[DoctorRendering] ✅ marked loaded from local');
             } catch {
-                await loadScript(CDN_MARKED);
-                console.log('[DoctorRendering] ✅ marked loaded from CDN');
+                console.warn('[DoctorRendering] marked unavailable; chat replies render as plain text');
             }
         }
 
@@ -81,8 +84,7 @@ export async function loadRenderingAssets() {
                 await loadScript(LOCAL_HIGHLIGHT);
                 console.log('[DoctorRendering] ✅ hljs loaded from local');
             } catch {
-                await loadScript(CDN_HIGHLIGHT);
-                console.log('[DoctorRendering] ✅ hljs loaded from CDN');
+                console.warn('[DoctorRendering] highlight.js unavailable; code blocks stay unhighlighted');
             }
         }
 

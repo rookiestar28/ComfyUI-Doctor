@@ -225,6 +225,8 @@ the host setting-change telemetry registry.
 
 Doctor frontend assets are served locally from the extension directory. External CDN use is not required for normal operation.
 
+The chat markdown and code-highlighting libraries load only from the extension's own `web/lib/` directory, whatever the custom-node folder is named; there is no CDN fallback for them. If those files are missing, chat replies are shown as plain text.
+
 For restricted environments:
 
 - Keep ComfyUI and Doctor assets served from local extension paths.

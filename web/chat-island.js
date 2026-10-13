@@ -276,8 +276,16 @@ function ProviderQuickSwitch({ state, uiText, disabled, onSwitch }) {
 }
 
 function MessageItem({ msg, uiText }) {
-    const { html, useEffect, useRef } = preactModules;
+    const { html, useState, useEffect, useRef } = preactModules;
     const contentRef = useRef(null);
+    const [assetsSettled, setAssetsSettled] = useState(Boolean(window.marked));
+
+    // Re-render once the shared asset load settles (it never rejects), so a reply that arrived first
+    // switches from plain text to markdown.
+    useEffect(() => {
+        if (assetsSettled) return;
+        loadRenderingAssets().then(() => setAssetsSettled(true));
+    }, []);
 
     useEffect(() => {
         if (!contentRef.current) return;
@@ -288,7 +296,12 @@ function MessageItem({ msg, uiText }) {
             contentRef.current.textContent = msg.content || '';
             return;
         }
-        if (!window.marked) return;
+        // IMPORTANT: without marked (assets still loading or missing) show the reply as plain text;
+        // returning early here left assistant bubbles blank.
+        if (!window.marked) {
+            contentRef.current.textContent = msg.content || '';
+            return;
+        }
 
         // Match vanilla behavior: allow fix buttons to appear in chat content.
         if (!fixHandler && app) {
@@ -313,7 +326,7 @@ function MessageItem({ msg, uiText }) {
             }
         }
 
-    }, [msg.content, msg.role]);
+    }, [msg.content, msg.role, assetsSettled]);
 
     return html`
         <div class="doctor-chat-message ${msg.role}" ref=${contentRef} style="

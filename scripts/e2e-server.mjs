@@ -320,8 +320,9 @@ async function handleMockEndpoint(req, res, url) {
 }
 
 // ComfyUI serves an extension's WEB_DIRECTORY at /extensions/<custom-node folder>/. Mirror that
-// host shape so vendored rendering assets resolve locally instead of falling back to a CDN.
-const HOST_EXTENSION_PREFIX = '/extensions/ComfyUI-Doctor/';
+// host shape for the canonical folder and a non-canonical install folder, so tests can prove that
+// asset URLs follow the folder the extension is actually served from.
+const HOST_EXTENSION_PREFIXES = ['ComfyUI-Doctor', 'comfyui-doctor'].map((folder) => `/extensions/${folder}/`);
 const webDir = path.join(rootDir, 'web');
 
 function confinedPath(baseDir, relativePath) {
@@ -343,8 +344,9 @@ function resolveFilePath(pathname) {
   }
   // IMPORTANT: the host-shaped alias must stay confined to web/ (traversal guard per base dir);
   // widening it to the repository root would expose tests, scripts and planning files.
-  if (decodedPath.startsWith(HOST_EXTENSION_PREFIX)) {
-    return confinedPath(webDir, decodedPath.slice(HOST_EXTENSION_PREFIX.length));
+  const hostPrefix = HOST_EXTENSION_PREFIXES.find((prefix) => decodedPath.startsWith(prefix));
+  if (hostPrefix) {
+    return confinedPath(webDir, decodedPath.slice(hostPrefix.length));
   }
   return confinedPath(rootDir, decodedPath);
 }
