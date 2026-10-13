@@ -48,7 +48,7 @@ PACKAGE_MODULES = [
     "services.prompt_helpers",
     "services.log_ring_buffer",
 ]
-SKIP_STATIC_IMPORT_SCAN = {"prestartup_script.py", "verify_routes.py"}
+SKIP_STATIC_IMPORT_SCAN = {"prestartup_script.py"}
 SKIP_SCAN_DIR_NAMES = {"__pycache__", ".venv", ".venv-wsl", "tests", "scripts", "reference", "docs", "web", "node_modules"}
 ALLOWED_BARE_INTERNAL_IMPORTS = {"import_compat"}
 

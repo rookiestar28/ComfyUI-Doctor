@@ -26,7 +26,7 @@ class TestXSSSanitization(unittest.TestCase):
     Tests for S4: Chat XSS Sanitization
     
     These tests validate the sanitization logic that should be applied
-    in the frontend (doctor_chat.js sanitizeHtml function).
+    in the frontend (doctor_rendering.js sanitizeHtml function).
     We test the expected behavior patterns here.
     """
     

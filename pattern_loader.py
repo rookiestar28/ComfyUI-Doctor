@@ -62,25 +62,6 @@ class PatternLoader:
         self.compiled_patterns: List[Tuple[re.Pattern, str, bool, int]] = []
         self._file_mtimes: Dict[Path, float] = {}
 
-    def get_pattern_info(self, pattern_id: str) -> Optional[Dict]:
-        """
-        Get full metadata for a pattern by ID.
-
-        Args:
-            pattern_id: The ID of the pattern to look up
-
-        Returns:
-            Dictionary with pattern metadata (id, category, priority) or None if not found
-        """
-        for pattern in self.patterns:
-            if pattern.get("id") == pattern_id:
-                return {
-                    "id": pattern.get("id"),
-                    "category": pattern.get("category"),
-                    "priority": pattern.get("priority")
-                }
-        return None
-
     def load(self, validate_schema: bool = True) -> int:
         """
         Load all patterns from JSON files.

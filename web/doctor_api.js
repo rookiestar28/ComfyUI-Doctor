@@ -17,20 +17,6 @@ export const DoctorAPI = {
     },
 
     /**
-     * Get error history
-     */
-    async getHistory() {
-        try {
-            const response = await fetch('/debugger/history');
-            if (!response.ok) throw new Error('Network response was not ok');
-            return await response.json();
-        } catch (error) {
-            console.error('[ComfyUI-Doctor] Failed to fetch history:', error);
-            return null;
-        }
-    },
-
-    /**
      * Set display language
      * @param {string} language - 'en', 'zh_TW', 'zh_CN', 'ja'
      */
@@ -68,26 +54,6 @@ export const DoctorAPI = {
         } catch (error) {
             console.error('[ComfyUI-Doctor] Analysis failed:', error);
             throw error;
-        }
-    },
-
-    /**
-     * Verify API key validity
-     * @param {string} baseUrl - LLM API base URL
-     * @param {string} apiKey - API key to verify
-     * @returns {Promise<{success: boolean, message: string, is_local: boolean}>}
-     */
-    async verifyApiKey(baseUrl, apiKey) {
-        try {
-            const response = await fetch('/doctor/verify_key', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ base_url: baseUrl, api_key: apiKey })
-            });
-            return await response.json();
-        } catch (error) {
-            console.error('[ComfyUI-Doctor] Key verification failed:', error);
-            return { success: false, message: error.message, is_local: false };
         }
     },
 
@@ -179,30 +145,6 @@ export const DoctorAPI = {
             }
             console.error('[ComfyUI-Doctor] Stream chat failed:', error);
             onError?.(error);
-        }
-    },
-
-    /**
-     * Non-streaming chat with LLM (fallback)
-     * @param {Object} payload - Same as streamChat
-     * @returns {Promise<{content: string, done: boolean}>}
-     */
-    async chat(payload) {
-        try {
-            const response = await fetch('/doctor/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...payload, stream: false })
-            });
-
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-                throw new Error(err.error || `HTTP ${response.status}`);
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('[ComfyUI-Doctor] Chat failed:', error);
-            throw error;
         }
     },
 

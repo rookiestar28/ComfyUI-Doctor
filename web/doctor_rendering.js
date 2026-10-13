@@ -206,25 +206,8 @@ export function addCopyButtons(container) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FULL PIPELINE
+// TEXT ESCAPING
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Full rendering pipeline: markdown → sanitize → highlight → copy buttons.
- *
- * @param {string} content - Markdown content to render
- * @param {HTMLElement} container - Target container element
- * @returns {Promise<void>}
- */
-export async function renderContentPipeline(content, container) {
-    await loadRenderingAssets();
-
-    const html = renderMarkdown(content);
-    container.innerHTML = html;
-
-    highlightCodeBlocks(container);
-    addCopyButtons(container);
-}
 
 /**
  * Escape HTML to prevent XSS (for text-only content).

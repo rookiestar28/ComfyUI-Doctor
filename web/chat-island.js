@@ -1,7 +1,7 @@
 /**
  * Preact component for ComfyUI-Doctor Chat Interface.
  * Implements full chat functionality including streaming, markdown, code highlighting, and fix suggestions.
- * Replace doctor_chat.js functionality.
+ * This is the only chat panel; tabs/chat_tab.js renders the vanilla fallback when Preact is unavailable.
  */
 
 import { app } from "../../../scripts/app.js";

@@ -7,7 +7,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PRODUCT_ROOTS = [PROJECT_ROOT, PROJECT_ROOT / "services", PROJECT_ROOT / "pipeline"]
 SKIP_DIRS = {"__pycache__", "plugins"}
-SKIP_FILES = {"__init__.py", "prestartup_script.py", "verify_routes.py"}
+SKIP_FILES = {"__init__.py", "prestartup_script.py"}
 GUARD_CALL = "ensure_absolute_import_fallback_allowed"
 
 

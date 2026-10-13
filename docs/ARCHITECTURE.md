@@ -37,7 +37,7 @@ The backend is organized around a small entry point and focused service modules:
 | Storage | `services/doctor_paths.py`, `history_store.py`, `services/secret_store.py` | Canonical data paths, history, encrypted credential storage |
 | Diagnostics | `services/diagnostics/`, `services/intent/` | Workflow, dependency, current host model/media/dataset asset folders and loaders, privacy, performance, and signature-pack checks |
 | Community | `services/community_feedback.py`, `pipeline/plugins/` | Feedback preview/submission and scan-only plugin trust reporting |
-| Telemetry | `telemetry.py`, `web/doctor_telemetry.js` | Local-only opt-in event buffer and UI controls |
+| Telemetry | `telemetry.py`, `web/statistics-island.js`, `web/tabs/stats_tab.js` | Local-only opt-in event buffer; controls in the statistics view |
 
 The domain packages under `services/llm/`, `services/security/`, `services/infra/`, and `services/community/` provide stable import entry points for code that should not depend on individual implementation file paths.
 
@@ -135,8 +135,8 @@ ComfyUI loads frontend assets from `web/`.
 | Extension registration | `web/doctor.js`, `web/comfyui_frontend_compat.js` | ComfyUI extension setup and host API compatibility |
 | State and API | `web/doctor_state.js`, `web/doctor_api.js`, `web/doctor_actions.js` | UI state, backend requests, user actions |
 | Shell UI | `web/doctor_ui.js`, `web/doctor_right_panel.js`, `web/doctor_rendering.js`, `web/doctor_selectors.js` | Sidebar shell, right panel, rendering helpers, selectors |
-| Chat | `web/doctor_chat.js`, `web/chat-island.js`, `web/tabs/chat_tab.js`, `web/llm_provider_quick_switch.js` | Chat UI, Preact island, vanilla fallback, provider switch |
-| Statistics and diagnostics | `web/statistics-island.js`, `web/tabs/stats_tab.js`, `web/utils/health_summary.js`, `web/doctor_telemetry.js` | Stats dashboard, shared health/trust formatting, feedback, telemetry |
+| Chat | `web/chat-island.js`, `web/tabs/chat_tab.js`, `web/llm_provider_quick_switch.js` | Chat UI, Preact island, vanilla fallback, provider switch |
+| Statistics and diagnostics | `web/statistics-island.js`, `web/tabs/stats_tab.js`, `web/utils/health_summary.js` | Stats dashboard, shared health/trust formatting, feedback, telemetry |
 | Settings | `web/tabs/settings_tab.js`, `web/llm_key_store.js`, `web/privacy_utils.js` | Provider settings, credential handling, privacy mode |
 | Resilience | `web/preact-loader.js`, `web/island_registry.js`, `web/ErrorBoundary.js`, `web/global_error_handler.js` | Local Preact loading, island fallback, error boundaries |
 
