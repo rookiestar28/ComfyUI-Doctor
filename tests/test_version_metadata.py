@@ -65,6 +65,8 @@ def test_release_version_metadata_matches_pyproject():
     assert package_json.get("private") is True
     assert package_lock["version"] == canonical_version
     assert package_lock["packages"][""]["version"] == canonical_version
+    # The published API contract carries the package version too; bump it with every release.
+    assert _read_json("docs/openapi.json")["info"]["version"] == canonical_version
 
 
 def test_coverage_workflow_runs_for_all_release_metadata_changes():

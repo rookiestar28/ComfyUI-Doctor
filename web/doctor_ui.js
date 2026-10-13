@@ -1608,9 +1608,11 @@ export class DoctorUI {
         if (statusDot) statusDot.classList.add('active');
 
         // Auto-open sidebar on error (if enabled)
+        // IMPORTANT: errors can arrive before createSidebar() (it waits for UI text); isVisible is the
+        // source of truth and createSidebar() applies it. Dereferencing a null panel threw here.
         if (this.autoOpenOnError && !this.isVisible) {
             this.isVisible = true;
-            this.panel.classList.add('visible');
+            this.panel?.classList.add('visible');
         }
 
         // Show browser notification (if enabled)
@@ -2576,6 +2578,8 @@ export class DoctorUI {
         content.appendChild(logCard);
 
         this.panel.appendChild(content);
+        // Apply visibility requested before the panel existed (early auto-open or menu toggle).
+        this.panel.classList.toggle('visible', this.isVisible);
         document.body.appendChild(this.panel);
     }
 
@@ -2621,7 +2625,7 @@ export class DoctorUI {
 
     toggle() {
         this.isVisible = !this.isVisible;
-        this.panel.classList.toggle('visible', this.isVisible);
+        this.panel?.classList.toggle('visible', this.isVisible);
     }
 
     startErrorMonitor() {

@@ -171,14 +171,15 @@ def get_pattern_allowlist() -> Set[str]:
     
     try:
         try:
-            from .pattern_loader import PatternLoader
+            from .pattern_loader import get_pattern_loader
         except ImportError as import_error:
             from import_compat import ensure_absolute_import_fallback_allowed
             ensure_absolute_import_fallback_allowed(import_error)
-            from pattern_loader import PatternLoader
-        loader = PatternLoader()
-        patterns = loader.get_all_patterns()
-        _pattern_cache = {p.get("id", "") for p in patterns if p.get("id")}
+            from pattern_loader import get_pattern_loader
+        # IMPORTANT: read ids from the analyzer's shared loader (same pattern directories). The old
+        # `PatternLoader()` call lacked its required directories; the swallowed TypeError left the
+        # allowlist empty and mapped every label to __unknown__.
+        _pattern_cache = set(get_pattern_loader().get_pattern_ids())
         _pattern_cache_time = now
         return _pattern_cache
     except Exception:

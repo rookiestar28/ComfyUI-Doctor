@@ -153,7 +153,10 @@ class LLMContextBuilderStage(PipelineStage):
             return
 
         # R14 Step 1: Extract error summary
-        pattern_category = context.metadata.get("pattern_match", {}).get("category")
+        # The pattern stage writes a top-level "category"; the nested key is a legacy shape.
+        pattern_category = context.metadata.get("category") or (
+            context.metadata.get("pattern_match") or {}
+        ).get("category")
         error_summary = extract_error_summary(
             context.sanitized_traceback,
             pattern_category=pattern_category

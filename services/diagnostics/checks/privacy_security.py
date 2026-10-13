@@ -172,9 +172,12 @@ async def check_privacy_security(
 
     # Check 3: Remote provider without API key configured
     environment_info = _get_settings_info()
+    # IMPORTANT: provider_name is None for unknown endpoints and an empty base_url; `.get(key, "")`
+    # does not cover a present None value, and the AttributeError dropped every issue of this check.
+    active_provider = (provider_info.get("provider_name") or "").lower()
     for provider_name, has_key in environment_info["api_keys_present"].items():
         # Only warn if the provider is actively being used
-        if provider_info.get("provider_name", "").lower() == provider_name.lower():
+        if active_provider == provider_name.lower():
             if not has_key:
                 issues.append(_create_missing_api_key_issue(provider_name))
 

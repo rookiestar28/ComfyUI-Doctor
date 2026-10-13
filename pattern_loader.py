@@ -46,15 +46,18 @@ class PatternLoader:
     - Merge strategy for community patterns
     """
 
-    def __init__(self, pattern_dirs: List[str]):
+    def __init__(self, pattern_dirs: List[str], optional_pattern_dirs: Optional[List[str]] = None):
         """
         Initialize loader with pattern directories.
 
         Args:
             pattern_dirs: List of directories to search for *.json files
                          Priority order: builtin.json > community.json > custom.json
+            optional_pattern_dirs: Entries of pattern_dirs that may be absent (for example a
+                         user's custom directory); a missing one is logged at debug level only.
         """
         self.pattern_dirs = [Path(d) for d in pattern_dirs]
+        self.optional_pattern_dirs = frozenset(Path(d) for d in (optional_pattern_dirs or []))
         self.patterns: List[Dict] = []
         self.compiled_patterns: List[Tuple[re.Pattern, str, bool, int]] = []
         self._file_mtimes: Dict[Path, float] = {}
@@ -96,7 +99,10 @@ class PatternLoader:
         # Load from each directory
         for pattern_dir in self.pattern_dirs:
             if not pattern_dir.exists():
-                logger.warning(f"[PatternLoader] Pattern directory not found: {pattern_dir}")
+                if pattern_dir in self.optional_pattern_dirs:
+                    logger.debug(f"[PatternLoader] Optional pattern directory not present: {pattern_dir}")
+                else:
+                    logger.warning(f"[PatternLoader] Pattern directory not found: {pattern_dir}")
                 continue
 
             for json_file in pattern_dir.glob("*.json"):
@@ -254,6 +260,10 @@ class PatternLoader:
                 return pattern
         return None
 
+    def get_pattern_ids(self) -> List[str]:
+        """Return the ids of all loaded patterns, in match-priority order."""
+        return [pattern["id"] for pattern in self.patterns if pattern.get("id")]
+
     def get_stats(self) -> Dict:
         """
         Get pattern statistics.
@@ -319,13 +329,15 @@ def get_pattern_loader() -> PatternLoader:
     if _pattern_loader is None:
         # Initialize with default pattern directories
         base_dir = os.path.dirname(os.path.abspath(__file__))
+        custom_dir = os.path.join(base_dir, "patterns", "custom")
         pattern_dirs = [
             os.path.join(base_dir, "patterns", "builtin"),
             os.path.join(base_dir, "patterns", "community"),
-            os.path.join(base_dir, "patterns", "custom")
+            custom_dir
         ]
 
-        _pattern_loader = PatternLoader(pattern_dirs)
+        # The custom directory is user-provided and absent by default.
+        _pattern_loader = PatternLoader(pattern_dirs, optional_pattern_dirs=[custom_dir])
 
         try:
             count = _pattern_loader.load()
