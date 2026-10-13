@@ -26,7 +26,7 @@ import threading
 import sys
 from datetime import datetime, timezone
 from pathlib import Path, PosixPath, WindowsPath
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from .doctor_paths import get_doctor_data_dir
 
@@ -43,6 +43,33 @@ class SecretStoreError(RuntimeError):
 
 class SecretStoreKeyRequiredError(SecretStoreError):
     """Raised when encryption is required but key is missing."""
+
+
+STATE_OK = "ok"
+STATE_EMPTY = "empty"
+STATE_LOCKED_KEY_REQUIRED = "locked_key_required"
+STATE_LOCKED_KEY_MISMATCH = "locked_key_mismatch"
+STATE_CORRUPT = "corrupt"
+LOCKED_STATES = frozenset({STATE_LOCKED_KEY_REQUIRED, STATE_LOCKED_KEY_MISMATCH})
+
+STORE_LOCKED_ERROR_CODE = "secret_store_locked"
+SECRET_STORE_LOCKED_MESSAGE = (
+    "The server secret store is locked: the encrypted store cannot be read with the configured "
+    "DOCTOR_SECRET_STORE_ENCRYPTION_KEY. Restore the original key, or move the store file aside to "
+    "start a new store."
+)
+
+
+class SecretStoreLockedError(SecretStoreError):
+    """The encrypted store cannot be authenticated with the configured key; it is left untouched."""
+
+    def __init__(self, state: str) -> None:
+        super().__init__(SECRET_STORE_LOCKED_MESSAGE)
+        self.state = state
+
+
+class _SecretStoreAuthenticationError(SecretStoreError):
+    """MAC verification failed: wrong key or tampered ciphertext (indistinguishable)."""
 
 
 class SecretStore:
@@ -66,6 +93,7 @@ class SecretStore:
         self._filepath = WindowsPath(target_path) if sys.platform.startswith("win") else PosixPath(target_path)
         self._lock = threading.RLock()
         self._windows_acl_attempted = False
+        self._last_state: Optional[str] = None
         self._encryption_key = (os.getenv("DOCTOR_SECRET_STORE_ENCRYPTION_KEY", "") or "").strip()
         self._encryption_required = _is_truthy(os.getenv("DOCTOR_SECRET_STORE_ENCRYPTION_REQUIRED", "0"))
         self._warn_insecure = _is_truthy(os.getenv("DOCTOR_SECRET_STORE_WARN_INSECURE", "1"))
@@ -204,7 +232,7 @@ class SecretStore:
         enc_key, mac_key = self._derive_keys(salt)
         expected_mac = hmac.new(mac_key, nonce + ciphertext, hashlib.sha256).digest()
         if not hmac.compare_digest(mac, expected_mac):
-            raise SecretStoreError("Encrypted payload MAC verification failed")
+            raise _SecretStoreAuthenticationError("Encrypted payload MAC verification failed")
 
         plain = self._xor_stream_crypt(ciphertext, enc_key, nonce)
         try:
@@ -234,9 +262,10 @@ class SecretStore:
                     out[normalized] = value
         return out
 
-    def _load_all(self) -> Dict[str, str]:
+    def _load_state(self) -> Tuple[str, Dict[str, str]]:
+        """Read the store and classify it; callers must hold ``self._lock``."""
         if not self._filepath.exists():
-            return {}
+            return self._note_state(STATE_EMPTY), {}
 
         try:
             payload = json.loads(self._filepath.read_text(encoding="utf-8"))
@@ -244,22 +273,55 @@ class SecretStore:
                 raise ValueError("secrets file is not a JSON object")
 
             if self._is_encrypted_payload(payload):
-                return self._decrypt_payload(payload)
-
-            return self._normalize_plain_payload(payload)
-        except SecretStoreKeyRequiredError as exc:
-            # Do not rotate encrypted files when key is missing; fail closed and warn.
-            logger.error(str(exc))
-            return {}
+                data = self._decrypt_payload(payload)
+            else:
+                data = self._normalize_plain_payload(payload)
+            # Note the state only after decryption succeeded; noting "ok" first made every locked
+            # read look like a fresh ok -> locked transition and repeat the error log.
+            return self._note_state(STATE_OK), data
+        # CRITICAL: an encrypted store that cannot be authenticated must never be rotated or
+        # rewritten. A missing key let the next write replace it with plaintext; a wrong key (MAC
+        # failure) renamed it aside and started a new store under that key; both destroyed secrets.
+        except SecretStoreKeyRequiredError:
+            return self._note_state(STATE_LOCKED_KEY_REQUIRED), {}
+        except _SecretStoreAuthenticationError:
+            return self._note_state(STATE_LOCKED_KEY_MISMATCH), {}
         except Exception:
-            # Corruption recovery: rotate aside and continue clean.
-            try:
-                ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-                backup = self._filepath.with_name(f"{self._filepath.name}.corrupt-{ts}")
-                self._filepath.rename(backup)
-            except Exception:
-                pass
-            return {}
+            # Structural corruption (unparseable before authentication): rotate aside, continue clean.
+            self._rotate_corrupt_file()
+            return self._note_state(STATE_CORRUPT), {}
+
+    def _rotate_corrupt_file(self) -> None:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        backup = self._filepath.with_name(f"{self._filepath.name}.corrupt-{ts}")
+        try:
+            self._filepath.rename(backup)
+        except Exception:
+            return
+        logger.warning(f"SecretStore file {self._filepath.name} was unreadable and was moved aside as {backup.name}")
+
+    def _note_state(self, state: str) -> str:
+        """Log a locked store once per state change (state name and file name only)."""
+        if state != self._last_state and state in LOCKED_STATES:
+            logger.error(
+                f"SecretStore is locked ({state}): reads return nothing and writes are refused. "
+                f"Restore the original DOCTOR_SECRET_STORE_ENCRYPTION_KEY, or move {self._filepath.name} "
+                "aside to start a new store."
+            )
+        self._last_state = state
+        return state
+
+    def _load_writable(self) -> Dict[str, str]:
+        state, data = self._load_state()
+        if state in LOCKED_STATES:
+            raise SecretStoreLockedError(state)
+        return data
+
+    def get_state(self) -> str:
+        """Store state: ok, empty, locked_key_required, locked_key_mismatch or corrupt (just rotated)."""
+        with self._lock:
+            state, _ = self._load_state()
+            return state
 
     def _save_all(self, data: Dict[str, str]) -> None:
         if self._encryption_required and not self._encryption_key:
@@ -286,7 +348,7 @@ class SecretStore:
         if not pid:
             return None
         with self._lock:
-            return self._load_all().get(pid)
+            return self._load_state()[1].get(pid)
 
     def set_secret(self, provider_id: str, secret: str) -> None:
         pid = self._normalize_provider_id(provider_id)
@@ -297,7 +359,7 @@ class SecretStore:
             raise ValueError("secret must be non-empty")
 
         with self._lock:
-            data = self._load_all()
+            data = self._load_writable()
             data[pid] = value
             self._save_all(data)
 
@@ -307,7 +369,7 @@ class SecretStore:
             return False
 
         with self._lock:
-            data = self._load_all()
+            data = self._load_writable()
             if pid not in data:
                 return False
             data.pop(pid, None)
@@ -316,14 +378,14 @@ class SecretStore:
 
     def clear_all(self) -> int:
         with self._lock:
-            data = self._load_all()
+            data = self._load_writable()
             count = len(data)
             self._save_all({})
             return count
 
     def get_status(self, providers: Optional[list[str]] = None) -> Dict[str, Dict[str, object]]:
         with self._lock:
-            data = self._load_all()
+            _, data = self._load_state()
             provider_list = providers or sorted(set(list(data.keys()) + ["generic"]))
             status: Dict[str, Dict[str, object]] = {}
             for provider in provider_list:

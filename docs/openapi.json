@@ -306,6 +306,7 @@
         ],
         "operationId": "getSecretStatus",
         "summary": "Return provider credential source status without exposing secret values.",
+        "description": "The response includes store.state: ok, empty, locked_key_required (encrypted store but no key configured), locked_key_mismatch (the configured key does not open the store) or corrupt (an unreadable file was just moved aside). While the store is locked, providers report configured=false and writes return 409 secret_store_locked.",
         "security": [
           {
             "AdminTokenAuth": []
@@ -358,6 +359,9 @@
           },
           "403": {
             "$ref": "#/components/responses/AdminDenied"
+          },
+          "409": {
+            "$ref": "#/components/responses/SecretStoreLocked"
           }
         }
       }
@@ -394,6 +398,9 @@
           },
           "404": {
             "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/SecretStoreLocked"
           }
         }
       }
@@ -1105,6 +1112,16 @@
       },
       "DestinationNotAllowed": {
         "description": "The requested base_url is not an operator-approved LLM destination (error code destination_not_allowed). No DNS lookup or network request is made.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "SecretStoreLocked": {
+        "description": "The encrypted server-side credential store cannot be opened with the configured DOCTOR_SECRET_STORE_ENCRYPTION_KEY (error code secret_store_locked; state is locked_key_required or locked_key_mismatch). The store file is left unchanged; restore the original key, or move the file aside to start a new store.",
         "content": {
           "application/json": {
             "schema": {

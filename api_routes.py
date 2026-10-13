@@ -35,6 +35,7 @@ from .services.outbound_policy import (
     get_destination_registry,
     is_destination_policy_error,
 )
+from .services.secret_store import STORE_LOCKED_ERROR_CODE, SecretStoreLockedError
 from .terminal_output import emit_doctor_log
 
 logger = logging.getLogger("ComfyUI-Doctor-API")
@@ -1094,6 +1095,8 @@ def register_api_routes(context: dict) -> None:
             return web.json_response({
                 "success": True,
                 "providers": providers,
+                # State name only (ok, empty, locked_key_required, locked_key_mismatch, corrupt).
+                "store": {"state": get_secret_store().get_state()},
             })
         except Exception as e:
             logger.error(f"Secrets status API error: {e}")
@@ -1129,6 +1132,9 @@ def register_api_routes(context: dict) -> None:
             get_secret_store().set_secret(provider, api_key)
             logger.info(f"Secret saved for provider={provider}")
             return web.json_response({"success": True, "message": "Secret saved"})
+        except SecretStoreLockedError as locked:
+            logger.warning(f"Secrets put refused: store {locked.state}")
+            return _error_response(str(locked), status=409, code=STORE_LOCKED_ERROR_CODE, extra={"state": locked.state})
         except Exception as e:
             logger.error(f"Secrets put API error: {e}")
             return _error_response(str(e), status=500)
@@ -1161,6 +1167,9 @@ def register_api_routes(context: dict) -> None:
                 return _error_response("Not found", status=404, code="not_found")
             logger.info(f"Secret deleted for provider={provider}")
             return web.json_response({"success": True, "message": "Secret deleted"})
+        except SecretStoreLockedError as locked:
+            logger.warning(f"Secrets delete refused: store {locked.state}")
+            return _error_response(str(locked), status=409, code=STORE_LOCKED_ERROR_CODE, extra={"state": locked.state})
         except Exception as e:
             logger.error(f"Secrets delete API error: {e}")
             return _error_response(str(e), status=500)

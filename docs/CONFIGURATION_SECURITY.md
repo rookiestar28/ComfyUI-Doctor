@@ -142,6 +142,15 @@ Runtime controls:
 
 The current zero-dependency encrypted format derives encryption and MAC keys with PBKDF2-HMAC-SHA256, encrypts with an HMAC-SHA256-derived XOR stream, and authenticates `nonce + ciphertext` with HMAC-SHA256 before decrypting.
 
+An encrypted store is locked when it cannot be opened with the configured key:
+
+- `locked_key_required`: the store is encrypted but `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` is not set.
+- `locked_key_mismatch`: the configured key does not authenticate the store (for example, the key was changed).
+
+While locked, the store file is never rewritten, downgraded to plaintext, or moved aside. Stored credentials read as not configured, `GET /doctor/secrets/status` reports the state in `store.state`, and `PUT /doctor/secrets` and `DELETE /doctor/secrets/{provider}` return HTTP 409 with error code `secret_store_locked`. The server logs the locked state once per change, without key material or credential values.
+
+To recover, restore the original `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` and restart ComfyUI. To deliberately start over instead, move the store file aside and save the credentials again. A store file that is structurally unreadable (not valid JSON or invalid encoding) is still moved aside as `<name>.corrupt-<timestamp>` so a new store can be created.
+
 ## Runtime State Location
 
 Doctor stores runtime state under ComfyUI's private system-user directory when
