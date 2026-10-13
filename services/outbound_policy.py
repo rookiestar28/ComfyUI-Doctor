@@ -18,11 +18,16 @@ import os
 import re
 import socket
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple, Union
 from urllib.parse import urlsplit
 
-from aiohttp.abc import AbstractResolver, ResolveResult
+from aiohttp.abc import AbstractResolver
 from aiohttp.resolver import ThreadedResolver
+
+if TYPE_CHECKING:
+    # CRITICAL: annotation-only import. aiohttp<3.10 (still bundled by some ComfyUI hosts) has no
+    # ResolveResult; a runtime import raises ImportError and the whole node fails to load.
+    from aiohttp.abc import ResolveResult
 
 logger = logging.getLogger(__name__)
 

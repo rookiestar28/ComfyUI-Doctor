@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import http.server
+import importlib.util
 import socket
 import subprocess
 import sys
 import threading
+import types
 import warnings
 from pathlib import Path
 from typing import List
@@ -241,6 +243,29 @@ def test_real_connector_with_policy_resolver_never_connects_to_rebound_loopback(
 
     assert hits == []
     assert is_destination_policy_error(error)
+
+
+def test_policy_module_loads_on_aiohttp_without_resolve_result(monkeypatch):
+    # aiohttp 3.9 has AbstractResolver but no aiohttp.abc.ResolveResult (added in 3.10); the node
+    # uses the host's bundled aiohttp, so the policy module must still import there.
+    legacy_abc = types.ModuleType("aiohttp.abc")
+    legacy_abc.__dict__.update(
+        {name: value for name, value in vars(aiohttp.abc).items() if name not in {"ResolveResult", "__name__"}}
+    )
+    assert not hasattr(legacy_abc, "ResolveResult")
+    monkeypatch.setitem(sys.modules, "aiohttp.abc", legacy_abc)
+
+    spec = importlib.util.spec_from_file_location(
+        "s29_legacy_aiohttp_outbound_policy", PROJECT_ROOT / "services" / "outbound_policy.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)  # @dataclass resolves its module via sys.modules
+    spec.loader.exec_module(module)
+
+    registry = module.build_destination_registry({})
+    resolver = module.DestinationPolicyResolver(registry, _FakeResolver(["127.0.0.1"]))
+    assert isinstance(resolver, aiohttp.abc.AbstractResolver)
+    assert _resolve(resolver, "localhost", 11434)[0]["host"] == "127.0.0.1"
 
 
 def test_retry_client_treats_redirect_as_failure():
