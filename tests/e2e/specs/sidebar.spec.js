@@ -438,6 +438,37 @@ test.describe('Doctor Chat Interface', () => {
     await expect(quickSwitch).toHaveValue('ollama');
   });
 
+  for (const targetId of [9, 'insert:synthetic:node:9', `quote"'&<節點>`,
+    'id" onpointerover="window.__nodeTargetInjected=1',
+    'id"><img id="injected-node-target" src="data:," onerror="window.__nodeTargetInjected=1">']) {
+    test(`right panel keeps node target as inert data (${JSON.stringify(targetId)})`, async ({ page }) => {
+      await page.evaluate((id) => {
+        const graph = window.app.graph;
+        const node = { id, type: 'KSampler', pos: [140, 240], size: [180, 100], graph };
+        graph._nodes = [node];
+        graph.getNodeById = (candidate) => String(candidate) === String(id) ? node : null;
+        window.app.canvas.graph = graph;
+        window.app.canvas.selected_nodes = {};
+        window.app.canvas.lastAnimatedBounds = null;
+        window.__nodeTargetInjected = 0;
+        window.app.Doctor.handleNewError({ last_error: 'Synthetic target encoding probe',
+          timestamp: new Date().toISOString(), node_context: { node_id: id, node_name: 'KSampler' } });
+      }, targetId);
+      const button = page.locator('#doctor-latest-log #doctor-locate-btn');
+      await button.hover();
+      expect(await page.evaluate(() => window.__nodeTargetInjected)).toBe(0);
+      await expect(button).toHaveAttribute('data-node', String(targetId));
+      await expect(page.locator('#injected-node-target')).toHaveCount(0);
+      expect(await button.evaluate((element) => element.getAttributeNames().sort()))
+        .toEqual(['class', 'data-node', 'id']);
+      await button.click();
+      await expect.poll(() => page.evaluate(() => Object.keys(window.app.canvas.selected_nodes)))
+        .toEqual([String(targetId)]);
+      expect(await page.evaluate(() => window.app.canvas.lastAnimatedBounds)).toEqual([140, 240, 180, 100]);
+      expect(await page.evaluate(() => window.__nodeTargetInjected)).toBe(0);
+    });
+  }
+
   for (const scenario of ['raw', 'nested', 'ambiguous']) {
     test(`Locate button respects opaque identity (${scenario})`, async ({ page }) => {
       const opaque = 'insert:synthetic-operation:root:node:9';

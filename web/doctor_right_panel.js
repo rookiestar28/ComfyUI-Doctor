@@ -168,15 +168,16 @@ export function updateRightErrorPanel({
 
     html += `<div style="font-size:11px;color:#666;margin-bottom:8px;">${new Date(currentData.timestamp).toLocaleTimeString()}</div>`;
 
+    let preferredNodeId = null;
     if (hasNodeId(currentData.node_context)) {
-        const preferredNodeId = getPreferredNodeId(currentData.node_context);
+        preferredNodeId = getPreferredNodeId(currentData.node_context);
         const safeNodeId = escapeHtml(String(preferredNodeId));
         const safeNodeName = escapeHtml(currentData.node_context.node_name || "Unknown");
         html += `
             <div style="background:#222;padding:6px;border-radius:4px;margin-bottom:8px;font-family:monospace;font-size:11px;">
                 ${getUIText("node_label")} #${safeNodeId}: ${safeNodeName}
             </div>
-            <button class="doctor-action-btn" id="doctor-locate-btn" data-node="${safeNodeId}">
+            <button class="doctor-action-btn" id="doctor-locate-btn">
                 \uD83D\uDD0D ${getUIText("locate_node_btn")}
             </button>
         `;
@@ -195,6 +196,9 @@ export function updateRightErrorPanel({
 
     const btn = container.querySelector("#doctor-locate-btn");
     if (btn) {
+        // CRITICAL: text escaping leaves quotes intact; interpolate no node ID into HTML attributes.
+        // DOM assignment preserves opaque identity without creating attacker-controlled handlers.
+        btn.dataset.node = String(preferredNodeId);
         btn.onclick = () => {
             const nodeId = btn.getAttribute("data-node");
             locateNodeOnCanvas(nodeId);
