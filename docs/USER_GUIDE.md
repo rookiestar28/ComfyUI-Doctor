@@ -99,6 +99,10 @@ After navigation, Doctor checks that the canvas, workflow, and target still
 match the request before focusing. A newer locate request or closing the
 sidebar cancels pending focus.
 
+Numeric and opaque string node IDs are preserved, including IDs containing colons or special
+characters. Locate resolves the exact live node, and permitted fixes reject ambiguous targets.
+Node IDs in the panel are kept as inert data rather than HTML attributes built from raw text.
+
 ## Smart Debug Node
 
 The **Smart Debug Node** can be inserted inline with workflow connections. It passes data through unchanged and logs useful inspection details such as type, shape, dtype, device, and value statistics when available.
@@ -158,7 +162,9 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
   null-byte, and symlink-escape candidates before any asset probe.
 - Missing assets or placeholder values.
 - First-party Switch nodes may leave either optional branch disconnected;
-  Doctor still reports broken links and missing required inputs.
+  first-party Branch nodes may leave canonical `autogrow.branch0` through
+  `autogrow.branch31` inputs unused too. Doctor still reports broken links and
+  missing required inputs. ComfyUI validates whether the selected branch is connected.
 - Node configuration anti-patterns.
 - Environment mismatch hints, including Python 3.10+ support and conservative
   PyTorch-below-2.7 guidance when the version is parseable.
@@ -169,6 +175,10 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
 The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.
+
+Malformed or duplicate node identities can omit findings on those nodes; findings on unrelated
+valid nodes remain available. After upgrading, an acknowledged issue for a numeric-string node
+ID may appear once again because issue identifiers now preserve the original ID type.
 
 Frontend error and credential-store status messages are displayed as literal
 text. Backend or exception strings are not treated as trusted markup.

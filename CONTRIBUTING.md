@@ -22,6 +22,9 @@ npm install
 
 Use one Python interpreter consistently for setup, tests, and validation. On Windows, the repository full-test script uses `.venv` as the project-local environment.
 
+Use Node.js 24 for the current Vitest unit-test dependency stack. The broader Node.js 18 through 25
+range above describes the frontend E2E harness; it is not a compatibility claim for every dev tool.
+
 ## Repository Orientation
 
 Start with these public docs:

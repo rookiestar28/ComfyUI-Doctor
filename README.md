@@ -14,6 +14,18 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Opaque node IDs, Branch diagnostics, and dependency security aligned</strong></summary>
+
+- Preserved numeric and opaque string node IDs throughout diagnostics, Locate Node, and permitted fixes, including IDs containing colons; ambiguous or stale targets cannot change another node.
+- Kept special-character node IDs as inert data in the latest-diagnosis Locate button, preserving the exact ID without injecting HTML attributes or event handlers.
+- Recognized ComfyUI's first-party Branch node and its optional inputs without hiding real broken links or missing required inputs.
+- Refreshed host contracts for Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.57.1`, and standalone frontend `1.59.1`, including node identity and asset preview boundaries.
+- Updated Vite to `6.4.4` for five development-dependency security advisories and added offline checks against vulnerable locked copies.
+- Replaced the test harness's source-level execution with normal package loading and added mandatory checks for the Registry security rule set.
+
+</details>
+
+<details>
 <summary><strong>LLM destinations, credential safety, and chat reliability hardened</strong></summary>
 
 - Sent LLM requests only to approved destinations: the built-in providers, local Ollama/LM Studio, and exact base URLs the server operator lists in `DOCTOR_LLM_ALLOWED_BASE_URLS` (or `OLLAMA_BASE_URL`, `LMSTUDIO_BASE_URL`, `DOCTOR_LLM_BASE_URL`). Any other base URL is refused with operator guidance before any network request.
@@ -553,9 +565,10 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 
 ## Host Compatibility and Diagnostics
 
-- Current source checks cover Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.53.6`, and exact standalone frontend `1.55.12`. Both current core-pinned and standalone lanes support asynchronous settings callbacks; the Desktop lane retains its synchronous contract. These checks and mocked browser tests do not establish live-host certification.
+- Current source checks cover Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.57.1`, and exact standalone frontend `1.59.1`. Both current core-pinned and standalone lanes support asynchronous settings callbacks; the Desktop lane retains its synchronous contract. These checks and mocked browser tests do not establish live-host certification.
 - The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
-- Workflow diagnostics recognize the first-party `ComfySwitchNode` and `ComfySoftSwitchNode` and their optional `on_true` / `on_false` branches, including propagated socket types. Broken link references and unrelated required inputs still produce diagnostics.
+- Workflow diagnostics recognize first-party `ComfySwitchNode` / `ComfySoftSwitchNode` optional `on_true` / `on_false` inputs and `BranchNode` optional `autogrow.branch0` through `autogrow.branch31` inputs, including propagated socket types. Broken link references and unrelated required inputs still produce diagnostics; ComfyUI remains responsible for validating the selected branch at execution time.
+- Diagnostics preserve numeric and bounded opaque string node IDs, including IDs containing colons. Locate and permitted fixes resolve the exact live target; ambiguous identities cannot trigger a fix. Malformed or duplicate node identities may omit findings on those nodes, while unrelated valid-node findings remain available. A previous acknowledgement for a numeric-string ID may reappear once because its issue identifier now preserves the original ID type.
 - Locate Node rechecks the active canvas, workflow, and target after graph navigation. New requests and sidebar teardown cancel pending focus, while root nodes, groups, nested subgraphs, and legacy canvas positioning remain supported.
 - Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
 - The exact first-party `SAM3DBody_Loader` resolves `model_file` only against registered `detection` roots. If that category is unavailable, Doctor reports the unresolved asset rather than accepting a same-named checkpoints file.
@@ -638,6 +651,7 @@ Recommended defaults:
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md): UI walkthrough, diagnostics, privacy modes, LLM setup, and feedback flow.
+- [2.1.0 Release Notes](docs/releases/v2.1.0.md): improvements since v1.9.0 and upgrade notes.
 - [Architecture](docs/ARCHITECTURE.md): host startup, backend/frontend boundaries, data flows, security/storage boundaries, and test lanes.
 - [Configuration and Security](docs/CONFIGURATION_SECURITY.md): environment variables, admin guard behavior, credential storage, outbound safety, telemetry, and CSP notes.
 - [API Reference](docs/API_REFERENCE.md): public Doctor and debugger endpoints, route alias behavior, and prompt usage-source policy.
@@ -673,7 +687,7 @@ powershell -File scripts/run_full_tests_windows.ps1
 bash scripts/run_full_tests_linux.sh
 ```
 
-The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Host compatibility checks also track current prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, the SAM3D Body detection-root contract, promoted media provenance, partner-policy validation errors, DynamicVRAM applicability and feature threshold, core-pinned and standalone asynchronous settings handlers, system statistics metadata, telemetry feature flags, job-cancel contracts, and frontend queue/cancel adoption. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
+The full gate covers supply-chain checks, secrets detection, pre-commit hooks, host-like startup validation, source-mutation-free backend unit collection, frontend Playwright E2E tests, and an offline floor for security-sensitive development dependencies. Backend tests also enforce the Registry security scan rules across tracked Python files. Host compatibility checks track prompt queue metadata, execution event payloads, positional/named workflow serialization, model and dataset asset folders/loaders, promoted media and asset-preview boundaries, opaque node IDs, optional Switch/Branch inputs, partner-policy validation errors, DynamicVRAM applicability and feature threshold, asynchronous settings handlers, system statistics metadata, telemetry flags, and job-cancel contracts. See [Validation Guide](docs/VALIDATION.md) for the explicit staged commands and optional lanes.
 
 ## Requirements
 

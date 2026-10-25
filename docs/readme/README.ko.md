@@ -28,6 +28,8 @@ ComfyUI-Doctor는 ComfyUI용 실시간 진단 및 디버깅 도우미입니다. 
 - 로컬 diagnostics, statistics, plugin trust report, telemetry controls, community feedback preview/submit tools를 제공합니다.
 - Doctor API 실패 응답은 일관된 JSON error envelope를 사용합니다.
 - UI와 제안은 영어, 번체 중국어, 간체 중국어, 일본어, 한국어, 독일어, 프랑스어, 이탈리아어, 스페인어를 완전히 지원합니다.
+- 콜론과 특수 문자가 포함된 숫자 및 불투명 문자열 노드 ID를 보존합니다. Locate와 허용된 수정은 정확한 대상을 확인하며, 모호한 대상의 수정은 거부합니다.
+- 코어 Switch/Branch 노드의 선택적 입력을 인식하면서 실제 필수 입력 누락과 끊어진 링크 진단은 유지합니다.
 
 ## 스크린샷
 

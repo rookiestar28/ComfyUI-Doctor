@@ -28,6 +28,8 @@ Les dernières mises à jour sont maintenues dans le README anglais. Consultez [
 - Diagnostics locaux, statistiques, plugin trust report, telemetry controls et outils community feedback preview/submit.
 - JSON error envelopes cohérentes pour les échecs de l'API Doctor.
 - Prise en charge complète de l'interface et des suggestions en anglais, chinois traditionnel, chinois simplifié, japonais, coréen, allemand, français, italien et espagnol.
+- Les identifiants numériques et les chaînes opaques des nœuds sont préservés, y compris les deux-points et caractères spéciaux. Locate et les corrections autorisées résolvent la cible exacte ; les cibles ambiguës ne peuvent pas être modifiées.
+- Les entrées facultatives des nœuds Switch/Branch du cœur sont reconnues, tout en conservant les diagnostics des entrées obligatoires manquantes et des liens cassés.
 
 ## Captures d'écran
 

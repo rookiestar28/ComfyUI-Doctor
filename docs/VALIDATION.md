@@ -31,6 +31,10 @@ Backend collection keeps the canonical production `__init__.py` in place. The
 host-like stage separately validates ComfyUI-shaped package loading; test
 tooling must not rename, remove, or substitute a backup package entry point.
 
+The route harness loads the unchanged canonical entry point through a normal importlib package
+spec/loader. Backend tests also scan all tracked Python files with isolated Ruff `S102`, `S307`
+and `E702` rules; missing tooling or invocation errors fail the scan instead of skipping it.
+
 ## Explicit Staged Commands
 
 Use this flow when debugging one validation stage at a time.
@@ -71,6 +75,11 @@ base PyTorch minimum, core-pinned and standalone asynchronous settings-handler
 typing/containment, frontend raw/surfaced validation errors, setting-change
 telemetry controls, real subgraph shape, system statistics metadata, Desktop
 layout, ComfyUI job-cancel routes, and frontend queue/cancel adoption.
+
+The current frontend source lanes are Desktop `1.43.18`, ComfyUI-pinned `1.57.1`, and standalone
+`1.59.1`. Dedicated contracts cover opaque node identity, optional Branch autogrow inputs, and
+asset-preview extraction/cache boundaries. Source checks and mocked UI tests are distinct from
+live-host qualification.
 
 The compatibility script reads source files only. It does not import, install,
 build, or execute code from the host reference repositories.
@@ -146,5 +155,8 @@ npm test
 ```
 
 Node 26+ is blocked until Doctor's Playwright harness and package metadata are explicitly validated against that runtime.
+
+Use Node.js 24 for `npm run test:unit` with the current Vitest dependency stack. The broader
+Node.js 18 through 25 E2E range does not guarantee that every development dependency supports Node 18.
 
 When running under WSL from a mounted Windows path, use a writable temp directory and a `python` shim if only `python3` is available. The full Linux script handles these common cases.

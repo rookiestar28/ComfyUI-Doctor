@@ -28,6 +28,8 @@ ComfyUI-Doctor は、ComfyUI 向けのリアルタイム診断およびデバッ
 - ローカル診断、統計、plugin trust report、telemetry 制御、community feedback のプレビュー/送信ツールを提供します。
 - Doctor API の失敗応答は、一貫した JSON error envelope を使用します。
 - UI と提案は、英語、繁体字中国語、簡体字中国語、日本語、韓国語、ドイツ語、フランス語、イタリア語、スペイン語に完全対応しています。
+- コロンや特殊文字を含む数値／不透明文字列のノード ID を保持し、Locate と許可された修正では正確な対象を解決します。曖昧な対象への修正は拒否します。
+- コアの Switch／Branch ノードの任意入力を認識し、実際の必須入力不足や broken link の診断は維持します。
 
 ## スクリーンショット
 

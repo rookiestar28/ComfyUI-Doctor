@@ -95,7 +95,7 @@ async def handler():
     sanitizer, _ = get_outbound_sanitizer(url, mode)
     payload = {"data": "test"}
     payload = sanitize_outbound_payload(payload, sanitizer)
-    await session.post(url, json=payload)
+    await session.post(url, json=payload, allow_redirects=False)
 ```
 
 ## Suppressing False Positives

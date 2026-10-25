@@ -128,6 +128,13 @@ activation from a version or device name alone, or replace
 
 Diagnostics reports are produced by concrete local checks such as workflow linting, dependency checks, model asset checks, privacy/security checks, runtime performance checks, and signature-pack checks.
 
+An issue target's `node_id` may be a nonnegative safe integer or an opaque string of up to 1024
+Unicode code points. Strings preserve their exact spelling, including colons and leading zeros;
+surrounding whitespace, control characters and unpaired surrogates are rejected. Clients must not
+cast these IDs to integers or split them on colons. A target may be absent when no safe target is
+available. Ambiguous targets cannot authorize a fix. Malformed/duplicate workflow identities can
+omit findings for those nodes while unrelated valid-node findings survive.
+
 Model asset diagnostics use the current host's registered model roots and
 extensions when available, including custom folders and `.pt2`/`.sft`
 artifacts. They also inspect bounded nested subgraph definitions while

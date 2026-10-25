@@ -28,6 +28,8 @@ Gli ultimi aggiornamenti sono mantenuti nel README inglese. Vedi [Latest Updates
 - Diagnostics locali, statistics, plugin trust report, telemetry controls e strumenti community feedback preview/submit.
 - JSON error envelopes coerenti per gli errori dell'API Doctor.
 - Supporto completo di UI e suggerimenti in inglese, cinese tradizionale, cinese semplificato, giapponese, coreano, tedesco, francese, italiano e spagnolo.
+- Gli ID numerici e le stringhe opache dei nodi sono preservati, inclusi due punti e caratteri speciali. Locate e le correzioni consentite risolvono il bersaglio esatto; le correzioni su bersagli ambigui vengono rifiutate.
+- Gli ingressi facoltativi dei nodi core Switch/Branch sono riconosciuti, mantenendo le diagnosi degli ingressi obbligatori mancanti e dei collegamenti interrotti.
 
 ## Screenshot
 

@@ -28,6 +28,8 @@ Las últimas actualizaciones se mantienen en el README en inglés. Consulta [Lat
 - Diagnostics locales, statistics, plugin trust report, telemetry controls y herramientas community feedback preview/submit.
 - JSON error envelopes consistentes para fallos de la API Doctor.
 - Soporte completo de UI y sugerencias en inglés, chino tradicional, chino simplificado, japonés, coreano, alemán, francés, italiano y español.
+- Se conservan los ID numéricos y las cadenas opacas de los nodos, incluidos los dos puntos y caracteres especiales. Locate y las correcciones permitidas resuelven el destino exacto; se rechazan las correcciones de destinos ambiguos.
+- Se reconocen las entradas opcionales de los nodos Switch/Branch del núcleo y se mantienen los diagnósticos de entradas obligatorias ausentes y enlaces rotos.
 
 ## Capturas de pantalla
 

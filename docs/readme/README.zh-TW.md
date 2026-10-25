@@ -28,6 +28,8 @@ ComfyUI-Doctor 是 ComfyUI 的即時診斷與除錯助手。它會擷取執行�
 - 提供本機診斷、統計、plugin trust report、telemetry 控制，以及社群回饋預覽/提交工具。
 - Doctor API 失敗回應採用一致的 JSON error envelope。
 - UI 與建議完整支援英文、繁體中文、簡體中文、日文、韓文、德文、法文、義大利文、西班牙文。
+- 保留數值與不透明字串節點 ID（包括冒號與特殊字元）；Locate 與允許的修復會精確解析目標，拒絕有歧義的修復目標。
+- 辨識核心 Switch／Branch 節點的可選輸入，同時保留真正缺少必要輸入與 broken-link 的診斷。
 
 ## 截圖
 

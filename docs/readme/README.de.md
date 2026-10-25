@@ -28,6 +28,8 @@ Die neuesten Änderungen werden in der englischen README gepflegt. Siehe [Latest
 - Lokale diagnostics, statistics, plugin trust report, telemetry controls und community feedback preview/submit tools.
 - Konsistente JSON error envelopes für Doctor API-Fehler.
 - Vollständige UI- und Vorschlagssprachunterstützung für Englisch, traditionelles Chinesisch, vereinfachtes Chinesisch, Japanisch, Koreanisch, Deutsch, Französisch, Italienisch und Spanisch.
+- Numerische und opake Zeichenfolgen als Knoten-IDs bleiben einschließlich Doppelpunkten und Sonderzeichen erhalten. Locate und zulässige Korrekturen lösen das genaue Ziel auf; mehrdeutige Korrekturziele werden abgelehnt.
+- Optionale Eingänge der Core-Knoten Switch/Branch werden erkannt; echte fehlende Pflichteingänge und defekte Links werden weiterhin gemeldet.
 
 ## Screenshots
 

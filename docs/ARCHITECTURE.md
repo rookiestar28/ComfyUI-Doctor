@@ -107,6 +107,15 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
    privacy/security, runtime performance, and signature packs.
 4. Reports are saved by the diagnostics store and exposed through report/history endpoints.
 
+`services/diagnostics/node_identity.py` defines the bounded numeric/opaque-string identity
+contract shared by issue targets, workflow lint, signature targets and asset provenance.
+`web/comfyui_frontend_compat.js` resolves raw IDs and real subgraph execution paths with bounded
+enumeration; mutations require a unique exact target. Colons inside raw IDs are preserved.
+Malformed or duplicate workflow identities are skipped locally, so valid-node findings survive,
+but completeness on the malformed nodes is not guaranteed. Workflow lint exempts only the proven
+optional Switch and canonical Branch input families; host-selected branch execution checks remain
+owned by ComfyUI.
+
 Model asset checks use ComfyUI's live `folder_names_and_paths` registry as the
 authoritative source when available, including custom roots and registered
 extensions. Older hosts retain a bounded fixed fallback. Workflow traversal
@@ -193,6 +202,11 @@ The full local acceptance gate is `scripts/run_full_tests_windows.ps1` on Window
 Backend test collection leaves the canonical production `__init__.py`
 byte-stable. Host-shaped package loading is validated separately rather than
 renaming the entry point or substituting a backup during pytest collection.
+
+The route harness uses a normal importlib package spec and loader for the unchanged canonical
+entry point. Mandatory backend tests run isolated Ruff `S102`, `S307` and `E702` checks over all
+tracked Python files and verify the scanner with inert failure fixtures. No host reference code
+is executed by compatibility checks.
 
 Additional focused lanes:
 

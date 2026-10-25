@@ -17,6 +17,10 @@ Runs the required end-to-end validation sequence in one command on Windows:
 
 The script always uses the project-local `.venv` interpreter for Python tooling and tests (Windows track).
 
+The backend stage includes mandatory isolated Ruff checks for `S102`, `S307` and `E702` across
+tracked Python files. The route harness loads the canonical package through importlib rather
+than source-level `exec`. Host compatibility checks read reference source without executing it.
+
 **Usage**:
 ```powershell
 powershell -File scripts/run_full_tests_windows.ps1
