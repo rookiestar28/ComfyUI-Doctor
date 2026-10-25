@@ -33,7 +33,7 @@
   "overrides": {
     "esbuild": "0.28.1",
     "postcss": "8.5.25",
-    "vite": "6.4.3"
+    "vite": "6.4.4"
   },
   "engines": {
     "node": ">=18.0.0 <26.0.0"
