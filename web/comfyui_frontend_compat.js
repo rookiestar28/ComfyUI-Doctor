@@ -250,17 +250,38 @@ const INPUT_LEVEL_VALIDATION_ERROR_TYPES = new Set([
     "exception_during_inner_validation",
 ]);
 
-function getNodeFromGraph(graph, nodeId) {
-    if (!graph || nodeId === null || nodeId === undefined || nodeId === "") {
+function nodeIdentityKey(value) {
+    if (typeof value === "number") {
+        return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+    }
+    if (typeof value !== "string" || !value || Array.from(value).length > 1024
+        || value.trim() !== value || /[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)) return null;
+    return value;
+}
+
+function exactGraphNode(graph, rawId) {
+    const nodes = Array.isArray(graph?.nodes) ? graph.nodes : graph?._nodes;
+    if (Array.isArray(nodes)) {
+        // IMPORTANT: membership outranks stale host caches; duplicate IDs cannot select a fix target.
+        const matches = nodes.filter((node) => nodeIdentityKey(node?.id) === rawId);
+        return { node: matches.length === 1 ? matches[0] : null, ambiguous: matches.length > 1 };
+    }
+    const matches = new Set();
+    for (const key of [rawId, ...(/^(0|[1-9]\d*)$/u.test(rawId) ? [Number(rawId)] : [])]) {
+        const node = graph?.getNodeById?.(key);
+        if (node && nodeIdentityKey(node.id) === rawId) matches.add(node);
+    }
+    return { node: matches.size === 1 ? [...matches][0] : null, ambiguous: matches.size > 1 };
+}
+
+export function getComfyNodeFromGraph(graph, nodeId) {
+    const rawId = nodeIdentityKey(nodeId);
+    if (rawId === null || !graph) return null;
+    try {
+        return exactGraphNode(graph, rawId).node;
+    } catch (_) {
         return null;
     }
-
-    const rawId = String(nodeId);
-    const numericId = Number(rawId);
-    return graph.getNodeById?.(Number.isNaN(numericId) ? rawId : numericId)
-        || graph.getNodeById?.(rawId)
-        || graph._nodes?.find?.((candidate) => String(candidate?.id) === rawId)
-        || null;
 }
 
 function isRealSubgraphHost(node) {
@@ -272,68 +293,78 @@ function isRealSubgraphHost(node) {
     }
 }
 
-/**
- * Resolve the live node an LLM-suggested fix targets, or null when the id is not exact.
- *
- * IMPORTANT: fix node ids are LLM-controlled. Never coerce them (parseInt("12:5") is 12, Number(" 12")
- * and Number("0x0c") are 12): every id part must equal the found node's id exactly. Execution-path
- * ids ("12:5") walk only real subgraph hosts, like locate/focus; executable group hosts and paths
- * ending at a subgraph host are ambiguous and fail closed.
- */
-export function resolveComfyFixTargetNode(nodeId, appInstance = app) {
-    let text = "";
-    if (typeof nodeId === "number") {
-        text = Number.isSafeInteger(nodeId) && nodeId >= 0 ? String(nodeId) : "";
-    } else if (typeof nodeId === "string") {
-        text = nodeId;
-    }
-    if (!text) return null;
+function isExecutableGroup(node) {
+    return !isRealSubgraphHost(node) && (
+        node?.isGroupNode?.() === true || node?.isVirtualNode === true
+        || typeof node?.getInnerNodes === "function"
+    );
+}
 
-    const parts = text.split(":");
-    let graph = getComfyRootGraph(appInstance);
-    for (let index = 0; index < parts.length; index += 1) {
-        const part = parts[index];
-        const node = part ? getNodeFromGraph(graph, part) : null;
-        if (!node || String(node.id) !== part) return null;
-        const isLast = index === parts.length - 1;
-        if (isLast) {
-            return parts.length > 1 && isRealSubgraphHost(node) ? null : node;
+function resolveGraphNodeTarget(rootGraph, nodeId, { forFix = false, allowGroupFallback = false } = {}) {
+    const text = nodeIdentityKey(nodeId);
+    if (!rootGraph || text === null) return null;
+    const targets = [];
+    let candidates = 0;
+    let rejected = false;
+
+    // IMPORTANT: ':' is legal inside a raw ID. Consider every exact live interpretation, then
+    // reject ambiguity or budget overflow globally; a first-match shortcut can mutate another node.
+    function visit(graph, rest, path) {
+        if (path.length >= 16) { rejected = true; return; }
+        const endpoints = [rest.length];
+        for (let index = rest.indexOf(":"); index !== -1; index = rest.indexOf(":", index + 1)) {
+            endpoints.push(index);
         }
-        if (!isRealSubgraphHost(node)) return null;
-        graph = node.subgraph;
+        for (const end of endpoints) {
+            if (++candidates > 256) { rejected = true; return; }
+            const localId = rest.slice(0, end);
+            if (nodeIdentityKey(localId) === null) continue;
+            const found = exactGraphNode(graph, localId);
+            if (found.ambiguous) { rejected = true; return; }
+            const node = found.node;
+            if (!node || (node.graph && node.graph !== graph)) continue;
+            const executionId = path.length ? `${path.at(-1).executionId}:${localId}` : localId;
+            const nextPath = [...path, { node, graph, executionId }];
+            if (end === rest.length) {
+                targets.push({ node, graph, path: nextPath,
+                    eligible: !forFix || !path.length || !isRealSubgraphHost(node) });
+            } else if (isRealSubgraphHost(node)) {
+                const tail = rest.slice(end + 1);
+                if (tail) visit(node.subgraph, tail, nextPath);
+            } else if (allowGroupFallback && !forFix && isExecutableGroup(node)) {
+                targets.push({ node, graph, path: nextPath, eligible: true });
+            }
+            if (rejected) return;
+        }
     }
-    return null;
+    try {
+        visit(rootGraph, text, []);
+        const unique = targets.filter((target, index) => targets.findIndex(
+            (other) => other.node === target.node && other.graph === target.graph,
+        ) === index);
+        return !rejected && unique.length === 1 && targets.every((target) => target.eligible)
+            ? unique[0] : null;
+    } catch (_) {
+        // Host getters may throw during navigation/removal; never fall back to a partial result.
+        return null;
+    }
+}
+
+export function resolveComfyNodeTarget(nodeId, appInstance = app, options = {}) {
+    return resolveGraphNodeTarget(getComfyRootGraph(appInstance), nodeId, options);
+}
+
+export function resolveComfyFixTargetNode(nodeId, appInstance = app) {
+    return resolveComfyNodeTarget(nodeId, appInstance, { forFix: true })?.node || null;
 }
 
 function getNodeByExecutionId(rootGraph, executionId) {
-    if (!rootGraph || typeof executionId !== "string" || !executionId) {
-        return null;
-    }
+    return resolveGraphNodeTarget(rootGraph, executionId)?.node || null;
+}
 
-    const parts = executionId.split(":");
-    if (parts.some((part) => !part)) return null;
-
-    let graph = rootGraph;
-    for (let index = 0; index < parts.length; index += 1) {
-        const node = getNodeFromGraph(graph, parts[index]);
-        if (!node) return null;
-        if (index === parts.length - 1) return node;
-
-        try {
-            if (!node.subgraph) return null;
-            if (
-                typeof node.isSubgraphNode === "function"
-                && node.isSubgraphNode() !== true
-            ) {
-                return null;
-            }
-            graph = node.subgraph;
-        } catch (_) {
-            return null;
-        }
-    }
-
-    return null;
+function parentExecutionId(rootGraph, executionId) {
+    const path = resolveGraphNodeTarget(rootGraph, executionId)?.path;
+    return path?.length > 1 ? path.at(-2).executionId : null;
 }
 
 function isImageNotLoadedValidationError(error) {
@@ -371,9 +402,8 @@ function resolvePublicBoundaryChain(rootGraph, executionId, inputName) {
             const hostInputName = resolved?.subgraphInput?.name;
             if (typeof hostInputName !== "string" || !hostInputName) break;
 
-            const separatorIndex = currentExecutionId.lastIndexOf(":");
-            if (separatorIndex <= 0) break;
-            const hostExecutionId = currentExecutionId.slice(0, separatorIndex);
+            const hostExecutionId = parentExecutionId(rootGraph, currentExecutionId);
+            if (!hostExecutionId) break;
             if (!getNodeByExecutionId(rootGraph, hostExecutionId)) break;
 
             chain.push({
@@ -595,17 +625,7 @@ export function getComfyRootGraph(appInstance = app) {
 }
 
 export function getComfyNodeById(nodeId, appInstance = app) {
-    const graph = getComfyRootGraph(appInstance);
-    if (!graph || nodeId === null || nodeId === undefined || nodeId === "") {
-        return null;
-    }
-
-    const rawId = String(nodeId);
-    const numericId = Number(rawId);
-    return graph.getNodeById?.(Number.isNaN(numericId) ? rawId : numericId)
-        || graph.getNodeById?.(rawId)
-        || graph._nodes?.find?.((candidate) => String(candidate?.id) === rawId)
-        || null;
+    return getComfyNodeFromGraph(getComfyRootGraph(appInstance), nodeId);
 }
 
 export function markComfyGraphDirty(appInstance = app, foreground = true, background = true) {

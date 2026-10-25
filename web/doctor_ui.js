@@ -5,10 +5,12 @@ import { app } from "../../../scripts/app.js";
 import { getRuntimeApiKey } from "./llm_key_store.js";
 import {
     getComfyNodeById,
+    getComfyNodeFromGraph,
     getComfyRootGraph,
     getComfyValidationNodeErrors,
     getDoctorRuntimeSettings,
     surfaceComfyValidationNodeErrors,
+    resolveComfyNodeTarget,
 } from "./comfyui_frontend_compat.js";
 import { DoctorAPI } from "./doctor_api.js";
 import {
@@ -1244,13 +1246,7 @@ export class DoctorUI {
     }
 
     getNodeFromGraph(graph, nodeId) {
-        if (!graph || nodeId === null || nodeId === undefined || nodeId === '') return null;
-        const rawId = String(nodeId);
-        const numericId = Number(rawId);
-        return graph.getNodeById?.(Number.isNaN(numericId) ? rawId : numericId)
-            || graph.getNodeById?.(rawId)
-            || graph._nodes?.find?.(candidate => String(candidate?.id) === rawId)
-            || null;
+        return getComfyNodeFromGraph(graph, nodeId);
     }
 
     getChildGraphFromNode(node) {
@@ -1282,32 +1278,7 @@ export class DoctorUI {
     }
 
     getFocusTargetByExecutionId(nodeId) {
-        const executionId = this.normalizeNodeId(nodeId);
-        const rootGraph = this.getComfyGraph();
-        if (!executionId || !rootGraph) return null;
-
-        if (!executionId.includes(':')) {
-            const node = this.getNodeFromGraph(rootGraph, executionId);
-            return node ? { node, graph: node.graph || rootGraph } : null;
-        }
-
-        const parts = executionId.split(':');
-        const localNodeId = parts.pop();
-        let currentGraph = rootGraph;
-
-        const rootParent = this.getNodeFromGraph(rootGraph, parts[0]);
-        if (this.isHostGroupNode(rootParent)) {
-            return { node: rootParent, graph: rootParent.graph || rootGraph };
-        }
-
-        for (const part of parts) {
-            const subgraphNode = this.getNodeFromGraph(currentGraph, part);
-            currentGraph = this.getChildGraphFromNode(subgraphNode);
-            if (!currentGraph) return null;
-        }
-
-        const node = this.getNodeFromGraph(currentGraph, localNodeId);
-        return node ? { node, graph: node.graph || currentGraph } : null;
+        return resolveComfyNodeTarget(nodeId, app, { allowGroupFallback: true });
     }
 
     getNodeByExecutionId(nodeId) {
@@ -2014,10 +1985,10 @@ export class DoctorUI {
     async locateNodeOnCanvas(nodeId) {
         this.cancelPendingNodeFocus();
         try {
-            const executionId = this.normalizeNodeId(nodeId);
-            if (!executionId || !app?.canvas) return false;
-            const target = this.getFocusTargetByExecutionId(executionId);
+            if (!app?.canvas) return false;
+            const target = this.getFocusTargetByExecutionId(nodeId);
             if (!target?.node) return false;
+            const executionId = this.normalizeNodeId(nodeId);
             const focused = await this.focusCanvasOnNode(target.node, target.graph, executionId);
             if (focused) console.log('[ComfyUI-Doctor] Located node on the current canvas');
             return focused;

@@ -249,7 +249,8 @@ export class FixHandler {
             this.flashNodeHighlight(node);
 
             // Log success
-            console.log(`[FixHandler] Applied fix: Node ${nodeId}, ${fix.widget} = ${newValue}`);
+            // IMPORTANT: raw node IDs and widget values can contain private workflow content.
+            console.log('[FixHandler] Applied fix');
 
         } catch (error) {
             console.error('[FixHandler] Apply failed:', error);
@@ -308,7 +309,7 @@ export class FixHandler {
         }
 
         markComfyGraphDirty(this.app, false, true);
-        console.log(`[FixHandler] Undone: Node ${last.node_id}, ${last.widget} = ${last.oldValue}`);
+        console.log('[FixHandler] Undone fix');
 
         return true;
     }

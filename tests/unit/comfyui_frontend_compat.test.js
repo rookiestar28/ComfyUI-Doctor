@@ -65,6 +65,95 @@ function createGraph(nodes = [], links = {}) {
     return graph;
 }
 
+describe("Exact opaque node identity", () => {
+    const opaqueId = "insert:synthetic-operation:root:node:9";
+    const appFor = (root) => ({ graph: root, rootGraph: root, rootGraphOrUndefined: root });
+
+    test("raw colon IDs and leading-zero IDs never alias their tail or numeric form", async () => {
+        const compat = await loadCompatibilityModule();
+        const raw = { id: opaqueId };
+        const zero = { id: "09" };
+        const numeric = { id: 9 };
+        const root = createGraph([raw, numeric, zero]);
+        const instance = appFor(root);
+        expect(compat.resolveComfyFixTargetNode(opaqueId, instance)).toBe(raw);
+        expect(compat.resolveComfyFixTargetNode("09", instance)).toBe(zero);
+        expect(compat.getComfyNodeById("09", instance)).toBe(zero);
+        expect(compat.resolveComfyFixTargetNode("9", instance)).toBe(numeric);
+        expect(compat.resolveComfyFixTargetNode("other:node:9", instance)).toBeNull();
+    });
+
+    test("nested paths consume whole colon-bearing host and leaf IDs", async () => {
+        const compat = await loadCompatibilityModule();
+        const leaf = { id: opaqueId };
+        const inner = createGraph([leaf]);
+        const host = { id: "host:synthetic", subgraph: inner, isSubgraphNode: () => true };
+        const root = createGraph([host]);
+        expect(compat.resolveComfyFixTargetNode(`host:synthetic:${opaqueId}`, appFor(root))).toBe(leaf);
+    });
+
+    test("raw-versus-path ambiguity and duplicate live identities fail closed", async () => {
+        const compat = await loadCompatibilityModule();
+        const leaf = { id: 5 };
+        const inner = createGraph([leaf]);
+        const host = { id: 12, subgraph: inner, isSubgraphNode: () => true };
+        const root = createGraph([host, { id: "12:5" }]);
+        expect(compat.resolveComfyFixTargetNode("12:5", appFor(root))).toBeNull();
+        const duplicate = createGraph([{ id: 9 }, { id: "9" }]);
+        expect(compat.resolveComfyFixTargetNode("9", appFor(duplicate))).toBeNull();
+    });
+
+    test("an ineligible nested host still makes a raw fix target ambiguous", async () => {
+        const compat = await loadCompatibilityModule();
+        const nestedHost = { id: 5, subgraph: createGraph([]), isSubgraphNode: () => true };
+        const host = { id: 12, subgraph: createGraph([nestedHost]), isSubgraphNode: () => true };
+        const raw = { id: "12:5" };
+        const root = createGraph([host, raw]);
+        expect(compat.resolveComfyFixTargetNode("12:5", appFor(root))).toBeNull();
+        expect(compat.resolveComfyNodeTarget("12:5", appFor(root))).toBeNull();
+    });
+
+    test("authoritative membership defeats stale or coercing host lookup caches", async () => {
+        const compat = await loadCompatibilityModule();
+        const live = { id: 9 };
+        const stale = { id: opaqueId };
+        const root = createGraph([live]);
+        root.getNodeById = () => stale;
+        expect(compat.resolveComfyFixTargetNode(opaqueId, appFor(root))).toBeNull();
+        const legacy = { getNodeById: () => live };
+        expect(compat.resolveComfyFixTargetNode("09", appFor(legacy))).toBeNull();
+    });
+
+    test("malformed scalars are rejected without invoking user coercion", async () => {
+        const compat = await loadCompatibilityModule();
+        const instance = appFor(createGraph([{ id: 9 }]));
+        const hostile = { toString() { throw new Error("coercion must not run"); } };
+        for (const value of [hostile, [], true, null, NaN, Infinity, -1, 9.5, " 9", "9\n", "x".repeat(1025)]) {
+            expect(compat.resolveComfyFixTargetNode(value, instance)).toBeNull();
+        }
+    });
+
+    test("resolution depth and candidate budgets fail the entire lookup closed", async () => {
+        const compat = await loadCompatibilityModule();
+        const makeChain = (count) => {
+            let root = createGraph([{ id: "leaf" }]);
+            const parts = ["leaf"];
+            for (let index = 1; index < count; index++) {
+                parts.unshift(`host${index}`);
+                root = createGraph([{ id: `host${index}`, subgraph: root, isSubgraphNode: () => true }]);
+            }
+            return { root, text: parts.join(":") };
+        };
+        const allowed = makeChain(16);
+        expect(compat.resolveComfyFixTargetNode(allowed.text, appFor(allowed.root))?.id).toBe("leaf");
+        const overflow = makeChain(17);
+        expect(compat.resolveComfyFixTargetNode(overflow.text, appFor(overflow.root))).toBeNull();
+        const manyPrefixes = "a:".repeat(257) + "leaf";
+        const root = createGraph([{ id: manyPrefixes }]);
+        expect(compat.resolveComfyFixTargetNode(manyPrefixes, appFor(root))).toBeNull();
+    });
+});
+
 describe("Doctor setting telemetry contract", () => {
     test("every Doctor setting explicitly opts out of host change telemetry", async () => {
         const { DOCTOR_EXTENSION_SETTINGS } = await loadCompatibilityModule();

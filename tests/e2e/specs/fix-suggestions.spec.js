@@ -59,6 +59,51 @@ async function sendChat(page, text) {
 }
 
 test.describe('Fix suggestion trust boundary', () => {
+  for (const scenario of ['raw', 'nested', 'ambiguous', 'duplicate', 'removed']) {
+    test(`opaque target ${scenario}: chat click changes only an exact unique live node`, async ({ page }) => {
+      const opaque = 'insert:synthetic-operation:root:node:9';
+      const targetId = scenario === 'nested' ? `host:synthetic:${opaque}`
+        : scenario === 'ambiguous' ? '12:5' : opaque;
+      const block = fixBlock([{ node_id: targetId, widget: 'steps', to: 25 }]);
+      const logs = [];
+      page.on('console', (message) => {
+        if (message.text().startsWith('[FixHandler]')) logs.push(message.text());
+      });
+      await openChat(page, (route) => route.fulfill(sse([{ delta: block, done: false }, { done: true }])));
+      await page.evaluate(({ opaque, targetId, scenario }) => {
+        const make = (id) => ({ id, widgets: [{ name: 'steps', type: 'number', value: 20 }] });
+        const root = window.app.rootGraph;
+        const target = make(scenario === 'nested' ? opaque : targetId);
+        const other = make('insert:other:root:node:9');
+        const numeric = make(9);
+        const innerLeaf = make(5);
+        root._nodes = [other, numeric];
+        if (scenario === 'nested') {
+          const inner = { _nodes: [target] };
+          target.graph = inner;
+          root._nodes.push({ id: 'host:synthetic', subgraph: inner, isSubgraphNode: () => true });
+        } else if (scenario !== 'removed') {
+          root._nodes.push(target);
+        }
+        if (scenario === 'ambiguous') root._nodes.push({ id: 12, subgraph: { _nodes: [innerLeaf] }, isSubgraphNode: () => true });
+        if (scenario === 'duplicate') root._nodes.push(make(targetId));
+        window.__identityTargets = { target, other, numeric, innerLeaf };
+      }, { opaque, targetId, scenario });
+      await sendChat(page, 'apply the synthetic fix');
+      const button = page.locator('.doctor-chat-message.assistant .doctor-fix-btn');
+      await expect(button).toHaveCount(1);
+      await button.click();
+      const accepted = scenario === 'raw' || scenario === 'nested';
+      if (accepted) await expect(button).toHaveClass(/applied/);
+      else await expect(button).not.toHaveClass(/applied/);
+      expect(await page.evaluate(() => Object.fromEntries(Object.entries(window.__identityTargets)
+        .map(([name, node]) => [name, node.widgets[0].value])))).toEqual({
+        target: accepted ? 25 : 20, other: 20, numeric: 20, innerLeaf: 20,
+      });
+      if (accepted) expect(logs.filter((line) => line.includes('Applied'))).toEqual(['[FixHandler] Applied fix']);
+    });
+  }
+
   test('streamed fix fields render as inert text and never execute', async ({ page }) => {
     const block = fixBlock([{ node_id: '1', widget: XSS_WIDGET, from: XSS_WIDGET, to: XSS_WIDGET, reason: XSS_REASON }]);
     await openChat(page, (route) => route.fulfill(sse([

@@ -18,6 +18,7 @@ from ..models import (
     IssueTarget,
 )
 from . import register_check
+from ..node_identity import NodeId, valid_node_id
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.checks.workflow_lint")
 
@@ -109,13 +110,21 @@ async def check_workflow_lint(
     if not isinstance(nodes, list):
         return issues
 
-    # Build node lookup
-    node_map: Dict[int, Dict[str, Any]] = {}
+    # IMPORTANT: int(id) both crashes on opaque IDs and aliases "09" to 9.
+    # Reject malformed/duplicate identities locally so unrelated findings survive.
+    node_map: Dict[NodeId, Dict[str, Any]] = {}
+    identities: Dict[str, NodeId] = {}
     for node in nodes:
         if isinstance(node, dict):
-            node_id = node.get("id")
-            if node_id is not None:
-                node_map[int(node_id)] = node
+            node_id = valid_node_id(node.get("id"))
+            if node_id is None:
+                continue
+            key = str(node_id)
+            if key in identities:
+                node_map.pop(identities[key], None)
+            else:
+                identities[key] = node_id
+                node_map[node_id] = node
 
     # Build link lookup: link_id -> (from_node, from_slot, to_node, to_slot)
     link_map: Dict[int, Tuple[int, int, int, int]] = {}
@@ -138,7 +147,7 @@ async def check_workflow_lint(
 
 
 def _check_disconnected_links(
-    node_map: Dict[int, Dict[str, Any]],
+    node_map: Dict[NodeId, Dict[str, Any]],
     link_map: Dict[int, Tuple[int, int, int, int]],
 ) -> List[HealthIssue]:
     """Check for disconnected or broken links."""
@@ -225,7 +234,7 @@ def _check_disconnected_links(
 
 
 def _check_unsupported_nodes(
-    node_map: Dict[int, Dict[str, Any]],
+    node_map: Dict[NodeId, Dict[str, Any]],
 ) -> List[HealthIssue]:
     """Check for potentially missing or unsupported nodes."""
     issues: List[HealthIssue] = []
@@ -298,7 +307,7 @@ def _check_unsupported_nodes(
 
 
 def _check_parameter_antipatterns(
-    node_map: Dict[int, Dict[str, Any]],
+    node_map: Dict[NodeId, Dict[str, Any]],
 ) -> List[HealthIssue]:
     """Check for obvious parameter anti-patterns."""
     issues: List[HealthIssue] = []
@@ -330,7 +339,7 @@ def _check_parameter_antipatterns(
 
 
 def _check_sampler_params(
-    node_id: int,
+    node_id: NodeId,
     node_title: str,
     node_type: str,
     widgets_values: List[Any],
@@ -399,7 +408,7 @@ def _check_sampler_params(
 
 
 def _check_latent_params(
-    node_id: int,
+    node_id: NodeId,
     node_title: str,
     node_type: str,
     widgets_values: List[Any],
@@ -491,7 +500,7 @@ def _check_latent_params(
 
 
 def _check_generic_widget_values(
-    node_id: int,
+    node_id: NodeId,
     node_title: str,
     node_type: str,
     widgets_values: List[Any],

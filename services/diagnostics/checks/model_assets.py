@@ -9,6 +9,7 @@ Analyzes workflow to detect:
 import logging
 import os
 import re
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Set, Optional, Tuple
@@ -21,6 +22,7 @@ from ..models import (
     IssueTarget,
 )
 from . import register_check
+from ..node_identity import NodeId, valid_node_id
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.checks.model_assets")
 
@@ -689,10 +691,15 @@ def _normalize_path_budget(value: Any) -> int:
 
 def _safe_execution_id_component(value: Any) -> str:
     """Keep provenance identifiers content-free and bounded."""
-    if isinstance(value, int):
+    value = valid_node_id(value)
+    if type(value) is int:
         return str(value)
-    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
-        return value
+    if isinstance(value, str):
+        if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+            return value
+        # IMPORTANT: opaque IDs must not collapse to "unknown" or become path components.
+        # The ~ namespace cannot collide with legacy safe IDs; source_node keeps the raw mapping.
+        return "sha256~" + hashlib.sha256(value.encode("utf-8")).hexdigest()
     return "unknown"
 
 
@@ -841,7 +848,9 @@ def _apply_promoted_widget_values(
     for node in raw_nodes:
         if not isinstance(node, dict):
             continue
-        node_id = node.get("id")
+        node_id = valid_node_id(node.get("id"))
+        if node_id is None:
+            continue
         values = node.get("widgets_values", [])
         copied_values = list(values) if isinstance(values, list) else []
         effective[node_id] = (node, copied_values, set())
@@ -981,7 +990,9 @@ def _collect_workflow_asset_nodes(
             return
         visited_nodes += 1
 
-        node_id = node.get("id")
+        node_id = valid_node_id(node.get("id"))
+        if node_id is None:
+            return
         node_component = _safe_execution_id_component(node_id)
         source_execution_id = (
             f"{source_prefix}:{node_component}"
@@ -1449,7 +1460,7 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
 def _check_file_readable(
     path: Path,
     containing_root: Path,
-    node_id: int,
+    node_id: NodeId,
     node_title: str,
     node_type: str,
     original_value: str,

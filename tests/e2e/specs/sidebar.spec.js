@@ -438,6 +438,48 @@ test.describe('Doctor Chat Interface', () => {
     await expect(quickSwitch).toHaveValue('ollama');
   });
 
+  for (const scenario of ['raw', 'nested', 'ambiguous']) {
+    test(`Locate button respects opaque identity (${scenario})`, async ({ page }) => {
+      const opaque = 'insert:synthetic-operation:root:node:9';
+      const targetId = scenario === 'nested' ? `host:synthetic:${opaque}`
+        : scenario === 'ambiguous' ? '12:5' : opaque;
+      await page.evaluate(({ opaque, targetId, scenario }) => {
+        const root = window.app.rootGraph;
+        const target = { id: scenario === 'nested' ? opaque : targetId,
+          pos: [140, 240], size: [180, 100], boundingRect: [140, 240, 180, 100] };
+        root._nodes = [{ id: 9 }, { id: 'insert:other:root:node:9' }];
+        if (scenario === 'nested') {
+          const child = { _nodes: [target] };
+          target.graph = child;
+          root._nodes.push({ id: 'host:synthetic', graph: root, subgraph: child, isSubgraphNode: () => true });
+          window.__identityFocusGraph = child;
+        } else {
+          target.graph = root;
+          root._nodes.push(target);
+          window.__identityFocusGraph = root;
+        }
+        if (scenario === 'ambiguous') root._nodes.push({ id: 12, graph: root,
+          subgraph: { _nodes: [{ id: 5 }] }, isSubgraphNode: () => true });
+        window.app.canvas.graph = root;
+        window.app.canvas.selected_nodes = {};
+        window.app.canvas.lastAnimatedBounds = null;
+        window.app.Doctor.handleNewError({ last_error: 'Synthetic identity probe',
+          timestamp: new Date().toISOString(), node_context: { node_id: targetId, node_name: 'KSampler' } });
+      }, { opaque, targetId, scenario });
+      const button = page.locator('#doctor-latest-log #doctor-locate-btn');
+      await expect(button).toHaveAttribute('data-node', targetId);
+      await button.click();
+      if (scenario !== 'ambiguous') await expect.poll(() => page.evaluate(() =>
+        Object.keys(window.app.canvas.selected_nodes))).toEqual([opaque]);
+      const state = await page.evaluate(() => ({ ids: Object.keys(window.app.canvas.selected_nodes),
+        bounds: window.app.canvas.lastAnimatedBounds,
+        correctGraph: window.app.canvas.graph === window.__identityFocusGraph }));
+      expect(state).toEqual(scenario === 'ambiguous'
+        ? { ids: [], bounds: null, correctGraph: true }
+        : { ids: [opaque], bounds: [140, 240, 180, 100], correctGraph: true });
+    });
+  }
+
   test('should keep locate button after poll update without node id', async ({ page }) => {
     await page.evaluate(() => {
       if (!window.app?.Doctor?.handleNewError) {

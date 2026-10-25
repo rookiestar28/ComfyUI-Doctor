@@ -12,6 +12,8 @@ from datetime import datetime
 import hashlib
 import json
 
+from .node_identity import NodeId
+
 
 class IssueCategory(str, Enum):
     """Categories of diagnostic issues."""
@@ -59,7 +61,7 @@ class SignalSource(str, Enum):
 @dataclass
 class IssueTarget:
     """Target location of a diagnostic issue."""
-    node_id: Optional[int] = None
+    node_id: Optional[NodeId] = None
     path: Optional[str] = None
     setting: Optional[str] = None
 

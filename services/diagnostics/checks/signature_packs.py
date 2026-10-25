@@ -18,6 +18,7 @@ from ..models import (
     IssueTarget,
 )
 from ..signatures import load_signature_packs, is_signature_packs_enabled
+from ..node_identity import NodeId, valid_node_id
 from . import register_check
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.checks.signature_packs")
@@ -43,14 +44,8 @@ def _to_category(value: str) -> IssueCategory:
         return IssueCategory.WORKFLOW
 
 
-def _safe_node_id(node: Dict[str, Any]) -> Optional[int]:
-    try:
-        node_id = node.get("id")
-        if node_id is None:
-            return None
-        return int(node_id)
-    except Exception:
-        return None
+def _safe_node_id(node: Dict[str, Any]) -> Optional[NodeId]:
+    return valid_node_id(node.get("id"))
 
 
 def _rule_metadata(pack: Dict[str, Any], rule: Dict[str, Any], extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
