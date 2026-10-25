@@ -104,3 +104,93 @@ def test_mixed_report_removes_only_optional_false_positive():
 
 def test_unconnected_wildcard_remains_clean():
     assert diagnose(workflow("ComfySwitchNode", "on_false", "*")) == []
+
+
+@pytest.mark.parametrize("index", range(32))
+@pytest.mark.parametrize("input_type", TYPES)
+@pytest.mark.parametrize("omit_link", (False, True))
+@pytest.mark.parametrize("node_id", (9, "insert:synthetic:node:9"))
+def test_optional_branch_autogrow_has_no_false_issue_or_score_penalty(index, input_type, omit_link, node_id):
+    value = workflow("BranchNode", f"autogrow.branch{index}", input_type, omit_link=omit_link)
+    value["nodes"][0]["id"] = node_id
+    original = copy.deepcopy(value)
+    issues = diagnose(value)
+    assert issues == []
+    assert HealthReport.compute_health_score(issues) == 100
+    assert value == original
+
+
+@pytest.mark.parametrize("index", range(32))
+@pytest.mark.parametrize("link", (0, 7))
+@pytest.mark.parametrize("node_id", (9, "insert:synthetic:node:9"))
+def test_branch_dangling_link_is_still_critical_with_exact_target(index, link, node_id):
+    value = workflow("BranchNode", f"autogrow.branch{index}", "MODEL", link)
+    value["nodes"][0]["id"] = node_id
+    original = copy.deepcopy(value)
+    issues = diagnose(value)
+    assert len(issues) == 1
+    assert issues[0].title == "Broken Link Reference"
+    assert issues[0].severity == IssueSeverity.CRITICAL
+    assert issues[0].target.node_id == node_id
+    assert type(issues[0].target.node_id) is type(node_id)
+    assert HealthReport.compute_health_score(issues) == 70
+    assert value == original
+
+
+@pytest.mark.parametrize("name", (
+    "model", "branch0", "autogrow.branch", "autogrow.branch-1", "autogrow.branch32",
+    "autogrow.branch00", "autogrow.branch01", "autogrow.branch1suffix", "autogrow.branch1.foo",
+    "autogrow.branch1 ", "Autogrow.branch1", "autogrow.Branch0", "autogrow.branch１",
+))
+@pytest.mark.parametrize("input_type", TYPES)
+@pytest.mark.parametrize("node_id", (9, "insert:synthetic:node:9"))
+def test_branch_exception_cannot_hide_required_or_deceptive_input(name, input_type, node_id):
+    value = workflow("BranchNode", name, input_type)
+    value["nodes"][0]["id"] = node_id
+    original = copy.deepcopy(value)
+    issues = diagnose(value)
+    assert [issue.title for issue in issues] == ["Disconnected Required Input"]
+    assert issues[0].severity == IssueSeverity.WARNING
+    assert issues[0].target.node_id == node_id
+    assert HealthReport.compute_health_score(issues) == 90
+    assert value == original
+
+
+@pytest.mark.parametrize("node_type", ("CustomBranchNode", "BranchNodeCustom", "branchnode", "Branch"))
+@pytest.mark.parametrize("input_type", TYPES)
+def test_custom_branch_names_do_not_inherit_core_optionality(node_type, input_type):
+    value = workflow(node_type, "autogrow.branch0", input_type)
+    issues = diagnose(value)
+    assert [issue.title for issue in issues] == ["Disconnected Required Input", "Unknown Node Type"]
+    assert HealthReport.compute_health_score(issues) == 88
+
+
+@pytest.mark.parametrize("index", range(32))
+@pytest.mark.parametrize("node_id", (9, "insert:synthetic:node:9"))
+def test_connected_branch_inputs_remain_clean(index, node_id):
+    value = workflow("BranchNode", f"autogrow.branch{index}", "MODEL", 7)
+    value["nodes"][0]["id"] = node_id
+    value["nodes"].append({"id": 2, "type": "CheckpointLoaderSimple"})
+    value["links"] = [[7, 2, 0, node_id, 0, "MODEL"]]
+    original = copy.deepcopy(value)
+    assert diagnose(value) == []
+    assert value == original
+
+
+def test_mixed_branch_switch_and_required_node_keep_only_real_warning():
+    value = workflow("BranchNode", "autogrow.branch31", "MODEL")
+    value["nodes"].extend([
+        {"id": 2, "type": "ComfySoftSwitchNode", "inputs": [
+            {"name": "on_false", "type": "MODEL", "link": None},
+        ]},
+        {"id": "insert:synthetic:node:9", "type": "KSampler", "inputs": [
+            {"name": "model", "type": "MODEL", "link": None},
+        ]},
+    ])
+    original = copy.deepcopy(value)
+    issues = diagnose(value)
+    assert [(issue.title, issue.target.node_id) for issue in issues] == [
+        ("Disconnected Required Input", "insert:synthetic:node:9"),
+    ]
+    assert HealthReport.compute_health_score(issues) == 90
+    assert value == original
