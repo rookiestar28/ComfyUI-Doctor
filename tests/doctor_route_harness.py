@@ -458,9 +458,17 @@ class DoctorRouteHarness:
         try:
             sys.stdout = sink
             sys.stderr = sink
-            # IMPORTANT: execute the canonical entrypoint unchanged (T31 invariant: never rename or
-            # rewrite the production __init__.py to make tests import it).
-            exec(compile(init_path.read_text(encoding="utf-8"), str(init_path), "exec"), package.__dict__)
+            # IMPORTANT: use the normal loader on the unchanged canonical entrypoint. Source exec
+            # fails the Registry scan; copying/rewriting the entrypoint invalidates host-load proof.
+            spec = importlib.util.spec_from_file_location(
+                self.package_name, init_path, submodule_search_locations=[str(PROJECT_ROOT)]
+            )
+            if spec is None or spec.loader is None:
+                raise RuntimeError(f"Cannot build canonical package loader for {init_path}")
+            package.__spec__ = spec
+            package.__loader__ = spec.loader
+            package.__cached__ = spec.cached
+            spec.loader.exec_module(package)
         finally:
             # CRITICAL: the Doctor logger wraps sys.stdout/sys.stderr and starts a daemon thread.
             # Uninstall it before restoring the streams; skipping this leaves SafeStreamWrapper around

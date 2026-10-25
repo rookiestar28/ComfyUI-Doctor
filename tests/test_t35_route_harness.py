@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import socket
+import sys
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 import pytest
@@ -59,6 +61,10 @@ def test_registered_routes_come_from_real_entrypoint_and_match_openapi(harness):
     assert len(operations) == 34
     assert operations == _openapi_operations()
     assert harness.package_name.startswith("doctor_hostload_")
+    package = sys.modules[harness.package_name]
+    assert Path(package.__spec__.origin) == PROJECT_ROOT / "__init__.py"
+    assert isinstance(package.__loader__, SourceFileLoader)
+    assert package.__spec__.loader is package.__loader__
 
 
 def test_list_models_rejects_private_base_url_before_any_outbound_call(harness):
