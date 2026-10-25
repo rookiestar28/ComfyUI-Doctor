@@ -39,7 +39,7 @@ def _create_minimal_reference(root: Path) -> None:
         "ModelPatcher. VRAM estimates may be unreliable especially on Windows')\n",
     )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.53.6\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.57.1\n")
     _write(
         root / "ComfyUI" / "README.md",
         "torch 2.7 is minimally supported but using a newer version is extremely recommended.\n",
@@ -95,7 +95,7 @@ def _create_minimal_reference(root: Path) -> None:
         'if io.Hidden.comfy_usage_source.name in hidden:\n'
         '    hidden_inputs_v3[io.Hidden.comfy_usage_source] = extra_data.get("comfy_usage_source", None)\n'
         'input_data_all[x] = [extra_data.get("comfy_usage_source", None)]\n'
-        "output_ui = register_executed_outputs(output_ui, prompt_id, asset_manager)\n"
+        "output_ui = register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews)\n"
         '"executed" "output": output_ui\n'
         "def interrupt_if_running(self, prompt_id):\n"
         "    if self.currently_running == prompt_id:\n"
@@ -170,7 +170,7 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.55.12"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.59.1"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -333,29 +333,49 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "stores" / "widgetValueStore.ts",
-        "function getRestoredWidgetValue(graphId, nodeId, name, positionalIndex) {\n"
-        "  const restoration = graphWidgetRestorations.get(graphId)?.get(nodeId)\n"
-        "  if (restoration.restoreNamed && restoration.named) {\n"
-        "    return Object.hasOwn(restoration.named, name)\n"
-        "      ? { value: restoration.named[name] }\n"
-        "      : undefined\n"
-        "  }\n"
-        "  return positionalIndex < restoration.positional.length\n"
-        "    ? { value: restoration.positional[positionalIndex] }\n"
-        "    : undefined\n"
-        "}\n",
+        """\
+function getRestoredWidgetValue(graphId, nodeId, widget, positionalIndex) {
+  const restoration = graphWidgetRestorations.get(graphId)?.get(nodeId)
+  if (!restoration) return
+  if (restoration.restoreNamed && restoration.named) {
+    if (!Object.hasOwn(restoration.named, widget.name)) return
+    return { value: coerceRestoredWidgetValue(widget, restoration.named[widget.name]) }
+  }
+  if (positionalIndex >= restoration.positional.length) return
+  return { value: coerceRestoredWidgetValue(
+    widget,
+    restoration.positional[positionalIndex]
+  ) }
+}
+export function stripGraphPrefix(scopedId: SerializedNodeId): NodeId | null {
+  let rest = String(scopedId)
+  let separatorIndex = rest.indexOf(':')
+  while (
+    separatorIndex !== -1 &&
+    isUuidShapedSubgraphId(rest.slice(0, separatorIndex))
+  ) {
+    rest = rest.slice(separatorIndex + 1)
+    separatorIndex = rest.indexOf(':')
+  }
+  return parseNodeId(rest)
+}
+""",
     )
     _write(
         root
         / "ComfyUI_frontend"
         / "src"
-        / "composables"
+        / "platform"
         / "billing"
+        / "composables"
         / "usePartnerNodesRunGate.ts",
         "export function partnerRunGateBlocksAutoQueue(): boolean {\n"
         "  if (isCloud) return false\n"
         "  if (!useFeatureFlags().flags.partnerRunGateEnabled) return false\n"
-        "  if (!useAuthStore().isInitialized) return false\n"
+        "  if (isAuthResolving(apiKeyStore)) return false\n"
+        "function isAuthResolving(apiKeyStore: ApiKeyAuthStore): boolean\n"
+        "!useAuthStore().isInitialized ||\n"
+        "(Boolean(apiKeyStore.getApiKey()) && !apiKeyStore.isAuthenticated)\n"
         "  const partnerNodes = scanPartnerNodesInGraph()\n"
         "  if (partnerNodes.length === 0) return false\n"
         "  reportGateBlocked('auto-queue', partnerNodes, isLoggedIn.value)\n"
@@ -409,6 +429,7 @@ def _create_minimal_reference(root: Path) -> None:
         / "ComfyUI_frontend"
         / "src"
         / "platform"
+        / "workflowErrors"
         / "missingMedia"
         / "missingMediaScan.ts",
         "function mediaTypeFromSpec(spec: InputSpecV2 | undefined) {\n"
@@ -437,7 +458,7 @@ def _create_minimal_reference(root: Path) -> None:
     _write(
         root / "ComfyUI_frontend" / "src" / "stores" / "executionErrorStore.ts",
         "const surfacedNodeErrors = computed(() =>\n"
-        "  const rootGraph = app.rootGraphOrUndefined\n"
+        "  const rootGraph = useApp().rootGraphOrUndefined\n"
         "  lastNodeErrors.value && rootGraph\n"
         "    ? liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)\n"
         "    : lastNodeErrors.value\n"
@@ -715,7 +736,7 @@ def test_host_compatibility_smoke_reports_missing_executed_asset_enrichment_anch
     _create_minimal_reference(tmp_path)
     execution_path = tmp_path / "ComfyUI" / "execution.py"
     execution_path.write_text(
-        execution_path.read_text(encoding="utf-8").replace("register_executed_outputs(output_ui, prompt_id, asset_manager)", "output_ui"),
+        execution_path.read_text(encoding="utf-8").replace("register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews)", "output_ui"),
         encoding="utf-8",
     )
 
@@ -724,7 +745,7 @@ def test_host_compatibility_smoke_reports_missing_executed_asset_enrichment_anch
 
     assert len(failed) == 1
     assert failed[0].check.label == "executed output asset enrichment tolerance"
-    assert "register_executed_outputs(output_ui, prompt_id, asset_manager)" in failed[0].missing_patterns
+    assert "register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews)" in failed[0].missing_patterns
 
 
 def test_host_compatibility_smoke_reports_missing_system_stats_deploy_environment(tmp_path):
@@ -908,8 +929,8 @@ T33_NEW_CHECK_LABELS = {
 }
 
 EXPECTED_HOST_REVISIONS = {
-    "ComfyUI": "e638023d54497dbe0579565e5de4bb7076899592",  # pragma: allowlist secret
-    "ComfyUI_frontend": "07c337679d250b5a7af810adb73e26449fc6e676",  # pragma: allowlist secret
+    "ComfyUI": "19ae172bff6c9e4c738e7f2e00fe087f5b5b46ab",  # pragma: allowlist secret
+    "ComfyUI_frontend": "43845693a1b72d16509e4eb7be6d1d95a1d3cdb2",  # pragma: allowlist secret
     "desktop": "e2d964b7456cea8423c7b9d3371c612313c06baa",  # pragma: allowlist secret
 }
 
@@ -971,8 +992,8 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
         for lane in lanes
     ] == [
         ("desktop-0.9.4", "1.43.18", False, False),
-        ("core-pin-1.53.6", "1.53.6", True, True),
-        ("standalone-1.55.12", "1.55.12", True, True),
+        ("core-pin-1.57.1", "1.57.1", True, True),
+        ("standalone-1.59.1", "1.59.1", True, True),
     ]
 
 
@@ -988,14 +1009,14 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.53.6",
+            "comfyui-frontend-package==1.57.1",
             "comfyui-frontend-package==1.49.5",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.55.12"',
+            '"version": "1.59.1"',
             '"version": "1.52.0"',
             "frontend runtime lane: standalone source",
         ),
@@ -1283,8 +1304,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.53.6: frontend 1.53.6" in formatted
-    assert "standalone-1.55.12: frontend 1.55.12" in formatted
+    assert "core-pin-1.57.1: frontend 1.57.1" in formatted
+    assert "standalone-1.59.1: frontend 1.59.1" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1309,8 +1330,8 @@ def test_t28_reference_source_is_never_executed(tmp_path):
 def test_t30_records_current_revisions_and_contract_families():
     labels = {check.label for check in host_compat.CHECKS}
 
-    assert host_compat.COMFYUI_REVISION == "e638023d54497dbe0579565e5de4bb7076899592"  # pragma: allowlist secret
-    assert host_compat.FRONTEND_REVISION == "07c337679d250b5a7af810adb73e26449fc6e676"  # pragma: allowlist secret
+    assert host_compat.COMFYUI_REVISION == "19ae172bff6c9e4c738e7f2e00fe087f5b5b46ab"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "43845693a1b72d16509e4eb7be6d1d95a1d3cdb2"  # pragma: allowlist secret
     assert {
         "dual positional and named widget serialization",
         "partner node validation classification",
@@ -1341,8 +1362,8 @@ def test_current_host_manifest_preserves_prior_checks_and_adds_named_contracts()
 
     assert len(PRE_T33_CHECK_LABELS) == 66
     assert labels >= PRE_T33_CHECK_LABELS
-    assert labels - PRE_T33_CHECK_LABELS == T33_NEW_CHECK_LABELS | CURRENT_NEW_CHECK_LABELS
-    assert len(host_compat.CHECKS) == 75
+    assert labels - PRE_T33_CHECK_LABELS == T33_NEW_CHECK_LABELS | CURRENT_NEW_CHECK_LABELS | ALIGNMENT_CHECK_LABELS
+    assert len(host_compat.CHECKS) == 78
 
 
 def test_t32_revision_metadata_is_exact_and_stale_constants_fail_independently():
@@ -1372,7 +1393,7 @@ def test_t32_stale_lane_and_surface_revision_metadata_fail_independently():
         source_revision="dd79c643a95402136a75a28f6187d843bcf457ed",  # pragma: allowlist secret
     )
 
-    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.53.6"]
+    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.57.1"]
 
     checks = host_compat.CHECKS
     check_index = next(
@@ -1573,7 +1594,7 @@ def test_t30_current_contract_anchors_fail_in_isolation(tmp_path):
         ),
         (
             "media-upload-flags",
-            Path("ComfyUI_frontend/src/platform/missingMedia/missingMediaScan.ts"),
+            Path("ComfyUI_frontend/src/platform/workflowErrors/missingMedia/missingMediaScan.ts"),
             "if (spec.audio_upload) return 'audio'",
             "if (spec.legacy_audio_upload) return 'audio'",
             "missing media upload spec classification",
@@ -1632,7 +1653,7 @@ def test_t33_current_contract_anchors_fail_in_isolation(tmp_path):
         ),
         (
             "partner-auto-queue-gate",
-            Path("ComfyUI_frontend/src/composables/billing/usePartnerNodesRunGate.ts"),
+            Path("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts"),
             "export function partnerRunGateBlocksAutoQueue(): boolean {",
             "export function partnerRunGateBlocksAfterQueue(): boolean {",
             "frontend partner run gate ownership",
@@ -1675,7 +1696,7 @@ def test_t30_rejects_unconditional_default_detail_file(tmp_path):
 
 # Minimal inert source fragments; no fixture is imported or executed.
 CURRENT_CONTRACT_FIXTURES = {
-    "ComfyUI/comfy_execution/asset_enrichment.py": "def register_executed_outputs(\nenriched = copy.deepcopy(output_ui)\nif not asset_manager.enabled:\n_enrich_in_place(enriched, job_id, asset_manager.register_executed_output)\ndef register_cached_outputs(\nenriched = copy.deepcopy(ui_wrapper)\n_strip_ids(output_ui)\n_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)\nenriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)\n\"display_node\": display_node_id\n",
+    "ComfyUI/comfy_execution/asset_enrichment.py": "def register_executed_outputs(\nenriched = copy.deepcopy(output_ui)\nif not asset_manager.enabled:\nlambda path, job: asset_manager.register_executed_output(path, job, preview_ref=previews.get(path))\ndef register_cached_outputs(\nenriched = copy.deepcopy(ui_wrapper)\n_strip_ids(output_ui)\n_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)\nenriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)\n\"display_node\": display_node_id\n",
     "ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts": "export function isHostTelemetryEnabled(): boolean\nconst ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'\ngetDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)\nif (override !== undefined) return override\nremoteConfig.value.enable_telemetry === true\n",
     "ComfyUI/comfy_extras/nodes_logic.py": "node_id=\"ComfySwitchNode\"\nnode_id=\"ComfySoftSwitchNode\"\nselected = on_true if switch else on_false\nreturn io.NodeOutput(None if selected is MISSING else selected)\nio.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)\n",
     "ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts": "const groupInputs: INodeInputSlot[] = node.inputs.filter(\n(inp) => inp.name in matchGroup\nconst connectedTypes = groupInputs.map(\nif (!link) return '*'\n...connectedTypes.slice(0, idx)\n...connectedTypes.slice(idx + 1)\ninput.type = combinedType\nconst typedSpec = { ...inputSpec, type: allowed_types }\naddNodeInput(node, typedSpec)\n",
@@ -1696,7 +1717,7 @@ CURRENT_CONTRACT_MUTATIONS = (
     ("ComfyUI/comfy_execution/asset_enrichment.py", "def register_executed_outputs(", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "enriched = copy.deepcopy(output_ui)", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "if not asset_manager.enabled:", "executed asset registration helper"),
-    ("ComfyUI/comfy_execution/asset_enrichment.py", "_enrich_in_place(enriched, job_id, asset_manager.register_executed_output)", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", "lambda path, job: asset_manager.register_executed_output(path, job, preview_ref=previews.get(path))", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "def register_cached_outputs(", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "enriched = copy.deepcopy(ui_wrapper)", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "_strip_ids(output_ui)", "executed asset registration helper"),
@@ -1760,7 +1781,7 @@ def test_current_relocated_contract_fields_fail_independently(tmp_path):
         ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "current_outputs?: unknown", "frontend execution_error schema"),
         ("ComfyUI_frontend/src/platform/telemetry/initHostTelemetry.ts", "import { isHostTelemetryEnabled } from './hostTelemetryEnabled'", "host telemetry initialization gate"),
         ("ComfyUI_frontend/src/platform/telemetry/initHostTelemetry.ts", "if (!isHostTelemetryEnabled()) return", "host telemetry initialization gate"),
-        ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "const rootGraph = app.rootGraphOrUndefined", "surfaced error derivation"),
+        ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "const rootGraph = useApp().rootGraphOrUndefined", "surfaced error derivation"),
         ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "liftNodeErrorsToBoundary(rootGraph, lastNodeErrors.value)", "surfaced error derivation"),
     )
     for index, (relative, anchor, label) in enumerate(cases):
@@ -1777,8 +1798,8 @@ def test_current_relocated_contract_fields_fail_independently(tmp_path):
 def test_current_settings_contract_provenance_is_independent_of_package_pin():
     expected = {
         "desktop-0.9.4": ("e2d964b7456cea8423c7b9d3371c612313c06baa", False),  # pragma: allowlist secret
-        "core-pin-1.53.6": ("7d533a4cd4c4904ffdb0537f6b80ae9793dd62f1", True),  # pragma: allowlist secret
-        "standalone-1.55.12": ("07c337679d250b5a7af810adb73e26449fc6e676", True),  # pragma: allowlist secret
+        "core-pin-1.57.1": ("c875ee420aa027a359b2953361eb3b356b7bef00", True),  # pragma: allowlist secret
+        "standalone-1.59.1": ("43845693a1b72d16509e4eb7be6d1d95a1d3cdb2", True),  # pragma: allowlist secret
     }  # pragma: allowlist secret
 
     def mismatches(lanes):
@@ -1797,4 +1818,70 @@ def test_current_settings_contract_provenance_is_independent_of_package_pin():
         changed[index] = replace(lane, async_setting_on_change=not lane.async_setting_on_change)
         assert mismatches(changed) == [lane.id]
     formatted = host_compat.format_results([])
-    assert "7d533a4cd4c4904ffdb0537f6b80ae9793dd62f1" in formatted  # pragma: allowlist secret
+    assert "c875ee420aa027a359b2953361eb3b356b7bef00" in formatted  # pragma: allowlist secret
+
+
+ALIGNMENT_CHECK_LABELS = {
+    "opaque node identity preservation",
+    "Branch optional autogrow contract",
+    "asset preview extraction and cache stripping",
+}
+
+# Text fragments are inert and are never imported from the reference tree.
+CURRENT_CONTRACT_FIXTURES["ComfyUI/comfy_execution/asset_enrichment.py"] += (
+    'def take_asset_previews(output_ui: dict) -> dict[str, dict]:\n'
+    'if not isinstance(entry, dict) or "asset_preview" not in entry:\n'
+    'preview = entry.pop("asset_preview")\n'
+    'entry.pop("id", None)\n'
+    'entry.pop("preview_id", None)\n'
+)
+CURRENT_CONTRACT_FIXTURES["ComfyUI/comfy_extras/nodes_logic.py"] += (
+    'node_id="BranchNode"\n'
+    'minput = io.MatchType.Input("branch", template=mtemplate, lazy=True, optional=True)\n'
+    'template = _io.Autogrow.TemplatePrefix(input=minput, prefix="branch", min=1, max=32)\n'
+    '_io.Autogrow.Input("autogrow", template=template)\n'
+    'key = f"branch{branch_names.index(branch)}"\n'
+    'if key not in autogrow:\n'
+    "return ['autogrow.' + key]\n"
+)
+
+
+def test_refreshed_host_contracts_fail_independently(tmp_path):
+    # All eight repaired labels plus each newly added guard are pinned here.
+    cases = (
+        ("ComfyUI/execution.py", "register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews)", "executed output asset enrichment tolerance"),
+        ("ComfyUI/requirements.txt", "comfyui-frontend-package==1.57.1", "frontend runtime lane: ComfyUI package pin"),
+        ("ComfyUI_frontend/package.json", '\"version\": \"1.59.1\"', "frontend runtime lane: standalone source"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "Object.hasOwn(restoration.named, widget.name)", "named widget restoration store precedence"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "if (positionalIndex >= restoration.positional.length) return", "named widget restoration store precedence"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "value: coerceRestoredWidgetValue(widget, restoration.named[widget.name])", "named widget restoration store precedence"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "coerceRestoredWidgetValue(\n", "named widget restoration store precedence"),
+        ("ComfyUI_frontend/src/platform/workflowErrors/missingMedia/missingMediaScan.ts", "if (spec.video_upload) return 'video'", "missing media upload spec classification"),
+        ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "const rootGraph = useApp().rootGraphOrUndefined", "surfaced error derivation"),
+        ("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts", "export function partnerRunGateBlocksAutoQueue(): boolean {", "frontend partner run gate ownership"),
+        ("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts", "if (isAuthResolving(apiKeyStore)) return false", "frontend partner run gate ownership"),
+        ("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts", "(Boolean(apiKeyStore.getApiKey()) && !apiKeyStore.isAuthenticated)", "frontend partner run gate ownership"),
+        ("ComfyUI/comfy_execution/asset_enrichment.py", "lambda path, job: asset_manager.register_executed_output(path, job, preview_ref=previews.get(path))", "executed asset registration helper"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "isUuidShapedSubgraphId(rest.slice(0, separatorIndex))", "opaque node identity preservation"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "rest = rest.slice(separatorIndex + 1)", "opaque node identity preservation"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "return parseNodeId(rest)", "opaque node identity preservation"),
+        ("ComfyUI/comfy_extras/nodes_logic.py", 'io.MatchType.Input("branch", template=mtemplate, lazy=True, optional=True)', "Branch optional autogrow contract"),
+        ("ComfyUI/comfy_extras/nodes_logic.py", '_io.Autogrow.TemplatePrefix(input=minput, prefix="branch", min=1, max=32)', "Branch optional autogrow contract"),
+        ("ComfyUI/comfy_extras/nodes_logic.py", "return ['autogrow.' + key]", "Branch optional autogrow contract"),
+        ("ComfyUI/comfy_execution/asset_enrichment.py", 'def take_asset_previews(output_ui: dict) -> dict[str, dict]:', "asset preview extraction and cache stripping"),
+        ("ComfyUI/comfy_execution/asset_enrichment.py", 'preview = entry.pop("asset_preview")', "asset preview extraction and cache stripping"),
+        ("ComfyUI/comfy_execution/asset_enrichment.py", 'entry.pop("preview_id", None)', "asset preview extraction and cache stripping"),
+    )
+    covered = set()
+    for index, (relative, anchor, label) in enumerate(cases):
+        root = tmp_path / str(index)
+        _create_minimal_reference(root)
+        assert not _failed_results(root)
+        path = root / relative
+        source = path.read_text(encoding="utf-8")
+        assert anchor in source, (relative, anchor)
+        path.write_text(source.replace(anchor, "REMOVED_CONTRACT", 1), encoding="utf-8")
+        assert [result.check.label for result in _failed_results(root)] == [label]
+        covered.add(label)
+    assert len(covered) == 11
+    assert covered >= ALIGNMENT_CHECK_LABELS

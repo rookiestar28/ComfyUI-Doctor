@@ -9,14 +9,14 @@ const FRONTEND_LANES = [
         asyncSettingOnChange: false,
     },
     {
-        id: "core-pin-1.53.6",
-        version: "1.53.6",
+        id: "core-pin-1.57.1",
+        version: "1.57.1",
         settingChangeTelemetry: true,
         asyncSettingOnChange: true,
     },
     {
-        id: "standalone-1.55.12",
-        version: "1.55.12",
+        id: "standalone-1.59.1",
+        version: "1.59.1",
         settingChangeTelemetry: true,
         asyncSettingOnChange: true,
     },
@@ -157,12 +157,12 @@ describe("Doctor setting telemetry contract", () => {
         },
     );
 
-    test("core 1.53.6 and exact standalone 1.55.12 support asynchronous settings", () => {
+    test("core 1.57.1 and exact standalone 1.59.1 support asynchronous settings", () => {
         expect(
             FRONTEND_LANES
                 .filter((lane) => lane.asyncSettingOnChange)
                 .map((lane) => lane.id),
-        ).toEqual(["core-pin-1.53.6", "standalone-1.55.12"]);
+        ).toEqual(["core-pin-1.57.1", "standalone-1.59.1"]);
     });
 
     test.each(FRONTEND_LANES)(
