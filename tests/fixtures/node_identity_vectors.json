@@ -1,0 +1,574 @@
+{
+ "description": "Node-id accept/reject vectors shared by the Python and JavaScript validators. 'accept' is the specified result for every implementation. A string is rejected when it is empty, longer than 1024 code points, holds a control character (U+0000-U+001F, U+007F) or a lone surrogate anywhere, or starts or ends with a character in the edge-whitespace set: the union of the ECMAScript WhiteSpace and LineTerminator characters and Python's str.isspace() characters. An integer is accepted when 0 <= n <= 2^53-1.",
+ "vectors": [
+  {
+   "name": "int 0",
+   "accept": true,
+   "kind": "int",
+   "value": 0
+  },
+  {
+   "name": "int 1",
+   "accept": true,
+   "kind": "int",
+   "value": 1
+  },
+  {
+   "name": "int 3",
+   "accept": true,
+   "kind": "int",
+   "value": 3
+  },
+  {
+   "name": "int 9007199254740991",
+   "accept": true,
+   "kind": "int",
+   "value": 9007199254740991
+  },
+  {
+   "name": "str 'abc'",
+   "accept": true,
+   "kind": "str",
+   "value": "abc"
+  },
+  {
+   "name": "str '3'",
+   "accept": true,
+   "kind": "str",
+   "value": "3"
+  },
+  {
+   "name": "str '09'",
+   "accept": true,
+   "kind": "str",
+   "value": "09"
+  },
+  {
+   "name": "str '007'",
+   "accept": true,
+   "kind": "str",
+   "value": "007"
+  },
+  {
+   "name": "str 'node-a'",
+   "accept": true,
+   "kind": "str",
+   "value": "node-a"
+  },
+  {
+   "name": "str '12:3'",
+   "accept": true,
+   "kind": "str",
+   "value": "12:3"
+  },
+  {
+   "name": "str 'a b'",
+   "accept": true,
+   "kind": "str",
+   "value": "a b"
+  },
+  {
+   "name": "str 'a\\xa0b'",
+   "accept": true,
+   "kind": "str",
+   "value": "a\u00a0b"
+  },
+  {
+   "name": "str 'a\\u3000b'",
+   "accept": true,
+   "kind": "str",
+   "value": "a\u3000b"
+  },
+  {
+   "name": "str '\\xe9'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u00e9"
+  },
+  {
+   "name": "str '\\u65e5\\u672c\\u8a9e'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u65e5\u672c\u8a9e"
+  },
+  {
+   "name": "str '\\x80'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u0080"
+  },
+  {
+   "name": "str 'a\\x85b'",
+   "accept": true,
+   "kind": "str",
+   "value": "a\u0085b"
+  },
+  {
+   "name": "str 'a\\ufeffb'",
+   "accept": true,
+   "kind": "str",
+   "value": "a\ufeffb"
+  },
+  {
+   "name": "str '\\u200b'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u200b"
+  },
+  {
+   "name": "str '\\u180e'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u180e"
+  },
+  {
+   "name": "str '\\u2060'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u2060"
+  },
+  {
+   "name": "str '\\xad'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u00ad"
+  },
+  {
+   "name": "str '\\U0001f600'",
+   "accept": true,
+   "kind": "str",
+   "value": "\ud83d\ude00"
+  },
+  {
+   "name": "str '\\u0663'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u0663"
+  },
+  {
+   "name": "str '\\xb2'",
+   "accept": true,
+   "kind": "str",
+   "value": "\u00b2"
+  },
+  {
+   "name": "1024 ASCII characters",
+   "accept": true,
+   "kind": "str",
+   "value": null,
+   "repeat": "x",
+   "count": 1024
+  },
+  {
+   "name": "1024 astral code points (2048 UTF-16 units)",
+   "accept": true,
+   "kind": "str",
+   "value": null,
+   "repeat": "\ud83d\ude00",
+   "count": 1024
+  },
+  {
+   "name": "int -1",
+   "accept": false,
+   "kind": "int",
+   "value": -1
+  },
+  {
+   "name": "int 9007199254740992",
+   "accept": false,
+   "kind": "int",
+   "value": 9007199254740992
+  },
+  {
+   "name": "null",
+   "accept": false,
+   "kind": "null"
+  },
+  {
+   "name": "true",
+   "accept": false,
+   "kind": "bool",
+   "value": true
+  },
+  {
+   "name": "false",
+   "accept": false,
+   "kind": "bool",
+   "value": false
+  },
+  {
+   "name": "float 1.5",
+   "accept": false,
+   "kind": "float",
+   "value": 1.5
+  },
+  {
+   "name": "list",
+   "accept": false,
+   "kind": "list"
+  },
+  {
+   "name": "object",
+   "accept": false,
+   "kind": "object"
+  },
+  {
+   "name": "empty string",
+   "accept": false,
+   "kind": "str",
+   "value": ""
+  },
+  {
+   "name": "1025 ASCII characters",
+   "accept": false,
+   "kind": "str",
+   "value": null,
+   "repeat": "x",
+   "count": 1025
+  },
+  {
+   "name": "1025 astral code points",
+   "accept": false,
+   "kind": "str",
+   "value": null,
+   "repeat": "\ud83d\ude00",
+   "count": 1025
+  },
+  {
+   "name": "control character 'a\\tb'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\tb"
+  },
+  {
+   "name": "control character 'a\\nb'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\nb"
+  },
+  {
+   "name": "control character 'a\\x00b'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\u0000b"
+  },
+  {
+   "name": "control character 'a\\x1fb'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\u001fb"
+  },
+  {
+   "name": "control character 'a\\x7fb'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\u007fb"
+  },
+  {
+   "name": "control character '\\tabc'",
+   "accept": false,
+   "kind": "str",
+   "value": "\tabc"
+  },
+  {
+   "name": "control character 'abc\\n'",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\n"
+  },
+  {
+   "name": "control character 'a\\x1cb'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\u001cb"
+  },
+  {
+   "name": "lone surrogate '\\ud800'",
+   "accept": false,
+   "kind": "str",
+   "value": "\ud800"
+  },
+  {
+   "name": "lone surrogate 'a\\udc00b'",
+   "accept": false,
+   "kind": "str",
+   "value": "a\udc00b"
+  },
+  {
+   "name": "lone surrogate '\\ude00\\ud83d'",
+   "accept": false,
+   "kind": "str",
+   "value": "\ude00\ud83d"
+  },
+  {
+   "name": "lone surrogate '\\ud83d'",
+   "accept": false,
+   "kind": "str",
+   "value": "\ud83d"
+  },
+  {
+   "name": "valid surrogate pair is one astral character",
+   "accept": true,
+   "kind": "str",
+   "value": "\ud83d\ude00"
+  },
+  {
+   "name": "leading U+0020",
+   "accept": false,
+   "kind": "str",
+   "value": " abc"
+  },
+  {
+   "name": "trailing U+0020",
+   "accept": false,
+   "kind": "str",
+   "value": "abc "
+  },
+  {
+   "name": "leading U+0085",
+   "accept": false,
+   "kind": "str",
+   "value": "\u0085abc"
+  },
+  {
+   "name": "trailing U+0085",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u0085"
+  },
+  {
+   "name": "leading U+00A0",
+   "accept": false,
+   "kind": "str",
+   "value": "\u00a0abc"
+  },
+  {
+   "name": "trailing U+00A0",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u00a0"
+  },
+  {
+   "name": "leading U+1680",
+   "accept": false,
+   "kind": "str",
+   "value": "\u1680abc"
+  },
+  {
+   "name": "trailing U+1680",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u1680"
+  },
+  {
+   "name": "leading U+2000",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2000abc"
+  },
+  {
+   "name": "trailing U+2000",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2000"
+  },
+  {
+   "name": "leading U+2001",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2001abc"
+  },
+  {
+   "name": "trailing U+2001",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2001"
+  },
+  {
+   "name": "leading U+2002",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2002abc"
+  },
+  {
+   "name": "trailing U+2002",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2002"
+  },
+  {
+   "name": "leading U+2003",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2003abc"
+  },
+  {
+   "name": "trailing U+2003",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2003"
+  },
+  {
+   "name": "leading U+2004",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2004abc"
+  },
+  {
+   "name": "trailing U+2004",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2004"
+  },
+  {
+   "name": "leading U+2005",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2005abc"
+  },
+  {
+   "name": "trailing U+2005",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2005"
+  },
+  {
+   "name": "leading U+2006",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2006abc"
+  },
+  {
+   "name": "trailing U+2006",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2006"
+  },
+  {
+   "name": "leading U+2007",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2007abc"
+  },
+  {
+   "name": "trailing U+2007",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2007"
+  },
+  {
+   "name": "leading U+2008",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2008abc"
+  },
+  {
+   "name": "trailing U+2008",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2008"
+  },
+  {
+   "name": "leading U+2009",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2009abc"
+  },
+  {
+   "name": "trailing U+2009",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2009"
+  },
+  {
+   "name": "leading U+200A",
+   "accept": false,
+   "kind": "str",
+   "value": "\u200aabc"
+  },
+  {
+   "name": "trailing U+200A",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u200a"
+  },
+  {
+   "name": "leading U+2028",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2028abc"
+  },
+  {
+   "name": "trailing U+2028",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2028"
+  },
+  {
+   "name": "leading U+2029",
+   "accept": false,
+   "kind": "str",
+   "value": "\u2029abc"
+  },
+  {
+   "name": "trailing U+2029",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u2029"
+  },
+  {
+   "name": "leading U+202F",
+   "accept": false,
+   "kind": "str",
+   "value": "\u202fabc"
+  },
+  {
+   "name": "trailing U+202F",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u202f"
+  },
+  {
+   "name": "leading U+205F",
+   "accept": false,
+   "kind": "str",
+   "value": "\u205fabc"
+  },
+  {
+   "name": "trailing U+205F",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u205f"
+  },
+  {
+   "name": "leading U+3000",
+   "accept": false,
+   "kind": "str",
+   "value": "\u3000abc"
+  },
+  {
+   "name": "trailing U+3000",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\u3000"
+  },
+  {
+   "name": "leading U+FEFF",
+   "accept": false,
+   "kind": "str",
+   "value": "\ufeffabc"
+  },
+  {
+   "name": "trailing U+FEFF",
+   "accept": false,
+   "kind": "str",
+   "value": "abc\ufeff"
+  },
+  {
+   "name": "only a space",
+   "accept": false,
+   "kind": "str",
+   "value": " "
+  }
+ ]
+}

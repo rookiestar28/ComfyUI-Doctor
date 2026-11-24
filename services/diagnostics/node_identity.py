@@ -8,13 +8,24 @@ NodeId: TypeAlias = int | str
 MAX_NODE_ID_LENGTH = 1024
 MAX_SAFE_INTEGER = (1 << 53) - 1
 
+# IMPORTANT: this list must stay identical to NODE_ID_EDGE_WHITESPACE in web/comfyui_frontend_compat.js;
+# tests/fixtures/node_identity_vectors.json runs the same vectors through both. It is the union of the
+# ECMAScript WhiteSpace/LineTerminator characters and Python's str.isspace() characters (control characters
+# are rejected anywhere in an id, so they are not listed). Do not go back to ``str.strip()``: it treats
+# U+FEFF as content and U+0085 as whitespace, the exact opposite of the frontend's ``trim()``, so an id
+# one side produced would be unusable on the other.
+EDGE_WHITESPACE = frozenset(
+    chr(code)
+    for code in (0x20, 0x85, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF)
+)
+
 
 def valid_node_id(value: Any) -> NodeId | None:
     """Keep the original scalar; do not turn opaque or leading-zero IDs into numbers."""
     if type(value) is int:
         return value if 0 <= value <= MAX_SAFE_INTEGER else None
     if isinstance(value, str) and 0 < len(value) <= MAX_NODE_ID_LENGTH:
-        if value.strip() != value or any(
+        if value[0] in EDGE_WHITESPACE or value[-1] in EDGE_WHITESPACE or any(
             ord(char) < 32 or ord(char) == 127 or 0xD800 <= ord(char) <= 0xDFFF
             for char in value
         ):

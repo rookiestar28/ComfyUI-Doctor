@@ -144,7 +144,11 @@ Diagnostics reports are produced by concrete local checks such as workflow linti
 
 An issue target's `node_id` may be a nonnegative safe integer or an opaque string of up to 1024
 Unicode code points. Strings preserve their exact spelling, including colons and leading zeros;
-surrounding whitespace, control characters and unpaired surrogates are rejected. Clients must not
+surrounding whitespace, control characters and unpaired surrogates are rejected. The backend and the
+sidebar use one list of surrounding-whitespace characters (space, U+0085, U+00A0, U+1680, U+2000-U+200A,
+U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF), so an ID one side accepts is accepted by the other.
+Intent-signal evidence (`node_ids`) lists IDs exactly as the workflow spells them, and an ID that is not
+valid is ignored. Clients must not
 cast these IDs to integers or split them on colons. A target may be absent when no safe target is
 available. Ambiguous targets cannot authorize a fix. A workflow node whose ID is malformed or shared
 with another node keeps its findings, but they carry no `node_id` and are described by their position

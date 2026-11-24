@@ -18,6 +18,7 @@ import logging
 from typing import Dict, Any, List, Optional
 
 from ..time_utils import utc_isoformat
+from ..diagnostics.node_identity import NodeId, valid_node_id
 from ..diagnostics.models import (
     IntentSignature,
     IntentMatch,
@@ -77,29 +78,22 @@ class SignalExtractor:
         # links format in Comfy: [[id, source_id, source_enc, target_id, target_enc, type], ...]
         
         # Build node maps for edge detection
-        node_id_to_type = {}
-        node_types: Dict[str, List[int]] = {}  # type -> [node_ids]
+        node_id_to_type: Dict[str, str] = {}  # identity key -> type
+        node_types: Dict[str, List[NodeId]] = {}  # type -> [node_ids]
 
         for node in nodes:
             if not isinstance(node, dict):
                 continue
-            
+
             node_type = node.get("type") or node.get("class_type") or ""
-            node_id = node.get("id")
-            
+            # IMPORTANT: keep the exact id; never coerce it. ``int("09")`` is 9, ``int("\u0669")`` is 9 and
+            # ``int("\u00b2")`` raises, so the old coercion merged different nodes or dropped one. An id that
+            # is not valid is skipped on its own and never costs a valid sibling its signal.
+            node_id = valid_node_id(node.get("id"))
+
             if node_type and node_id is not None:
-                # Store for edge detection
-                try:
-                    # node_id might be string or int in JSON, simpler to map as is
-                    node_id_to_type[node_id] = node_type
-                    # Store as int for consistency if possible, else str
-                    nid_safe = int(node_id) if str(node_id).isdigit() else str(node_id)
-                    
-                    if node_type not in node_types:
-                        node_types[node_type] = []
-                    node_types[node_type].append(nid_safe)
-                except ValueError:
-                    pass
+                node_id_to_type[_identity_key(node_id)] = node_type
+                node_types.setdefault(node_type, []).append(node_id)
 
         # 1. Node Type & Count Signals
         for node_type, node_ids in node_types.items():
@@ -127,20 +121,22 @@ class SignalExtractor:
         # 2. Edge Signals
         if isinstance(links, list):
             unique_edges = set()
-            
+
             for link in links:
                 # defensive check against malformed link arrays
                 if not isinstance(link, list) or len(link) < 5:
                     continue
-                    
+
                 # link schema: [id, origin_id, origin_slot, target_id, target_slot, type]
                 try:
-                    origin_id = link[1]
-                    target_id = link[3]
-                    
-                    origin_type = node_id_to_type.get(origin_id) or node_id_to_type.get(str(origin_id)) or node_id_to_type.get(int(origin_id) if str(origin_id).isdigit() else None)
-                    target_type = node_id_to_type.get(target_id) or node_id_to_type.get(str(target_id)) or node_id_to_type.get(int(target_id) if str(target_id).isdigit() else None)
-                    
+                    origin_id = valid_node_id(link[1])
+                    target_id = valid_node_id(link[3])
+                    if origin_id is None or target_id is None:
+                        continue
+
+                    origin_type = node_id_to_type.get(_identity_key(origin_id))
+                    target_type = node_id_to_type.get(_identity_key(target_id))
+
                     if origin_type and target_type:
                         edge_key = f"edge.{origin_type}_{target_type}"
                         if edge_key not in unique_edges:
@@ -162,6 +158,15 @@ class SignalExtractor:
 # ============================================================================
 # Helpers (P3)
 # ============================================================================
+
+def _identity_key(node_id: NodeId) -> str:
+    """Lookup key for a valid node id: the host's integer id and its canonical string are the same node.
+
+    Hosts serialize link endpoints as integers while API-format ids are strings, so ``5`` and ``"5"`` match.
+    Nothing else bridges: ``"09"`` is not 9, and look-alike digits never become ASCII digits.
+    """
+    return str(node_id)
+
 
 def _sanitize_evidence_string(text: str, max_len: int = 120) -> str:
     """

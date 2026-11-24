@@ -262,12 +262,18 @@ const INPUT_LEVEL_VALIDATION_ERROR_TYPES = new Set([
     "exception_during_inner_validation",
 ]);
 
+// IMPORTANT: keep identical to EDGE_WHITESPACE in services/diagnostics/node_identity.py (shared vectors in
+// tests/fixtures/node_identity_vectors.json). Do not use String.prototype.trim() here: it treats U+FEFF as
+// whitespace and U+0085 as content, the opposite of Python's str.strip(), so an id the backend produced
+// could be unusable here.
+const NODE_ID_EDGE_WHITESPACE = /^[\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]|[\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]$/u;
+
 function nodeIdentityKey(value) {
     if (typeof value === "number") {
         return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
     }
     if (typeof value !== "string" || !value || Array.from(value).length > 1024
-        || value.trim() !== value || /[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)) return null;
+        || NODE_ID_EDGE_WHITESPACE.test(value) || /[\u0000-\u001f\u007f\ud800-\udfff]/u.test(value)) return null;
     return value;
 }
 

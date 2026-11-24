@@ -221,14 +221,14 @@ class SignalEvidence:
         weight: Signal weight for scoring
         value: Signal value (string, number, or bool)
         source: Where the signal came from
-        node_ids: Optional list of related node IDs
+        node_ids: Optional list of related node IDs, exactly as the workflow gives them (integers or strings)
         explain: Short explanation text (sanitized)
     """
     signal_id: str
     weight: float
     value: Any
     source: SignalSource
-    node_ids: Optional[List[int]] = None
+    node_ids: Optional[List[NodeId]] = None
     explain: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
