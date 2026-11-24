@@ -29,7 +29,10 @@ LATEST_USER = "Why did the sampler fail this time?"
 # Small nodes keep the prompt's workflow section (about 2,000 characters) complete and deterministic;
 # a long traceback (trimmed only by the last ladder step) keeps the context over the remote hard
 # limit, so the ladder must run through the minimal workflow prune (upstream depth 1).
-UNTRIMMED_SECTION = [27, 28, 29, 30]
+# The chat route's own 2,000-character workflow budget applies to a parsed dict as it always did to a
+# JSON string: it keeps the failed node and its two-hop neighborhood (28-32), so the untouched section
+# shows the failed node and its upstream chain within that neighborhood.
+UNTRIMMED_SECTION = [28, 29, 30]
 MINIMAL_PRUNE = [29, 30]
 FULL_LADDER = ["prune_workflow_std", "prune_workflow_agg", "prune_workflow_min", "drop_system_info", "truncate_traceback"]
 FAILURE_MARKERS = ("R12 Budget application failed", "r12_budget_failed")

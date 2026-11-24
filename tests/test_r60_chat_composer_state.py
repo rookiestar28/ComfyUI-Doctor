@@ -43,11 +43,15 @@ ANALYSIS_HEADERS = [
     "**Fix Format** (if applicable):",
     "**Remember**: Focus on CRASH PREVENTION, not quality improvement.",
 ]
-# Pre-fix structure snapshots (captured on the unchanged base through this harness).
-LEGACY_FALLBACK_HEADERS = ANALYSIS_HEADERS + [
-    "**ERROR CONTEXT**:",
+# Structure snapshots captured through this harness. An error without a workflow used to fall back to
+# the legacy prompt only because a missing failed node made the composer block raise; it now uses the
+# composer context without the failed-node and workflow sections.
+COMPOSER_NO_WORKFLOW_HEADERS = ANALYSIS_HEADERS + [
+    "## Error Summary",
+    "## Traceback",
+    "## Recent Logs",
+    COMPOSER_ENV_HEADER,
     "**ERROR CATEGORY** (auto-detected):",
-    LEGACY_ENV_HEADER,
 ]
 COMPOSER_HEADERS = ANALYSIS_HEADERS + [
     "## Error Summary",
@@ -153,13 +157,16 @@ def test_explain_node_with_error_context_uses_node_prompt_with_one_env_block(har
     _assert_single_legacy_env_block(prompt)
 
 
-def test_error_context_without_workflow_keeps_legacy_fallback_structure(harness):
+def test_error_context_without_workflow_uses_the_composer_structure_without_a_failed_node(harness):
     response = _chat(harness, error_context=ERROR)
 
     assert response.status == 200, response.text
     prompt = _system_prompt(harness)
-    assert _headers(prompt) == LEGACY_FALLBACK_HEADERS
-    _assert_single_legacy_env_block(prompt)
+    assert _headers(prompt) == COMPOSER_NO_WORKFLOW_HEADERS
+    assert "**ERROR CONTEXT**:" not in prompt
+    assert prompt.count(COMPOSER_ENV_HEADER) == 1
+    assert prompt.count(LEGACY_ENV_HEADER) == 0
+    assert prompt.count(ENV_MARKER) == 1
 
 
 def test_error_context_with_workflow_keeps_composer_structure_without_duplicate_env(harness):

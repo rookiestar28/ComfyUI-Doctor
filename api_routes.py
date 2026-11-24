@@ -627,7 +627,16 @@ def register_api_routes(context: dict) -> None:
             # R8: Smart workflow truncation
             if workflow:
                 from .truncate_workflow import truncate_workflow_smart
-                workflow, _ = truncate_workflow_smart(workflow, max_chars=2000)
+                # IMPORTANT: name the failed node (as /doctor/analyze does). Without it an over-budget workflow
+                # keeps its first twenty nodes and the failed node can be cut away, which is worse now that a
+                # parsed dict is held to the same 2000-character budget as a JSON string.
+                chat_error_node_id = (
+                    node_context.get("display_node")
+                    or node_context.get("node_id")
+                    or node_context.get("real_node_id")
+                    or node_context.get("id")
+                ) if isinstance(node_context, dict) and node_context else None
+                workflow, _ = truncate_workflow_smart(workflow, chat_error_node_id, max_chars=2000)
 
             # Option B Phase 1: Parse workflow data for enhanced error context
             workflow_data = None
@@ -700,14 +709,18 @@ def register_api_routes(context: dict) -> None:
                         try:
                             r14_composer_succeeded = True  # Assume success until exception
                             traceback_text = str(enriched_context.get('traceback') or '')
-                            failed_node = enriched_context.get('failed_node', {})
+                            # IMPORTANT: collect_error_context stores None (the key exists) when no failed node
+                            # was found, so `.get('failed_node', {})` returned None, `.get('id')` raised and
+                            # every chat without a found node silently dropped to the legacy prompt.
+                            failed_node = enriched_context.get('failed_node') or {}
+                            sent_node_context = node_context if isinstance(node_context, dict) else {}
                             pipeline_node_context = {
-                                "node_id": failed_node.get('id') or node_context.get('node_id'),
-                                "node_name": failed_node.get('title') or node_context.get('node_name'),
-                                "node_class": failed_node.get('class_type') or node_context.get('node_class'),
-                                "display_node": failed_node.get('display_node') or node_context.get('display_node'),
-                                "parent_node": failed_node.get('parent_node') or node_context.get('parent_node'),
-                                "real_node_id": failed_node.get('real_node_id') or node_context.get('real_node_id'),
+                                "node_id": failed_node.get('id') or sent_node_context.get('node_id'),
+                                "node_name": failed_node.get('title') or sent_node_context.get('node_name'),
+                                "node_class": failed_node.get('class_type') or sent_node_context.get('node_class'),
+                                "display_node": failed_node.get('display_node') or sent_node_context.get('display_node'),
+                                "parent_node": failed_node.get('parent_node') or sent_node_context.get('parent_node'),
+                                "real_node_id": failed_node.get('real_node_id') or sent_node_context.get('real_node_id'),
                             }
                             pipeline_context = ErrorAnalyzer.build_llm_context(
                                 traceback_text or enriched_context['error_message'],

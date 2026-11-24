@@ -61,6 +61,14 @@ Doctor normalizes provider-specific behavior for OpenAI-compatible APIs, Anthrop
 
 LLM failure responses use the standard JSON error envelope. The chat streaming path reports stream connection or provider errors as terminal SSE events.
 
+`/doctor/chat` and `/doctor/analyze` accept an optional workflow as a JSON string or an object, either in the
+host's serialized-graph shape (`{"nodes": [...], "links": [...]}`) or as an API prompt keyed by node id. The
+failed node is looked up by its exact execution id first (for example `12:3`) and then by its last segment;
+a workflow in which it cannot be found, or one that is not valid JSON, never fails the request: the prompt is
+built from the error text alone. A workflow longer than the request budget is shortened to the failed node and
+its connected neighbors (the largest neighborhood that fits), or cut to the budget when even the node alone does
+not fit.
+
 ## Credential Store Endpoints
 
 | Method | Path | Purpose |

@@ -38,6 +38,59 @@ def validate_fix_schema(fix_json):
 
 # --- Option B Phase 1: Enhanced Error Context & Multi-Language Templates ---
 
+# --- R71: workflow shape handling for the chat error context ---
+def _index_workflow(workflow_data):
+    """Return ``(node_lookup, link_rows)`` for either serialized workflow shape.
+
+    IMPORTANT: the chat route receives whatever the sidebar sends. The host frontend serializes a graph
+    as ``{"nodes": [...], "links": [...]}`` where a node's ``inputs`` is a LIST of slot dicts and every
+    connection is a top-level link row; an API-format prompt is ``{"<id>": {"class_type": ...,
+    "inputs": {...}}}``. Treating both as API format raised ``AttributeError`` on ``list.items()`` and
+    turned a valid chat request into HTTP 500. Nothing here mutates the workflow or trusts its types.
+    """
+    if not isinstance(workflow_data, dict):
+        return {}, []
+    raw_nodes = workflow_data.get("nodes")
+    if isinstance(raw_nodes, list):
+        lookup = {
+            str(node.get("id")): node
+            for node in raw_nodes
+            if isinstance(node, dict) and node.get("id") is not None
+        }
+        links = workflow_data.get("links")
+        return lookup, links if isinstance(links, list) else []
+    return {str(key): value for key, value in workflow_data.items() if isinstance(value, dict)}, []
+
+
+def _connection_inputs(node, link_rows_by_id):
+    """Name the node's connected inputs as ``{input_name: [source_node_id, output_slot]}``.
+
+    API-format ``inputs`` already are that mapping and are returned unchanged. For a UI-format node the
+    slot list is resolved through the link rows (``[link_id, origin_id, origin_slot, target_id,
+    target_slot, type]``); malformed slots or rows and slots without a link are skipped.
+    """
+    inputs = node.get("inputs", {})
+    if isinstance(inputs, dict):
+        return inputs
+    if not isinstance(inputs, list):
+        return {}
+    connections = {}
+    for slot in inputs:
+        if not isinstance(slot, dict) or not isinstance(slot.get("name"), str) or slot.get("link") is None:
+            continue
+        row = link_rows_by_id.get(str(slot["link"]))
+        if row is not None:
+            connections[slot["name"]] = [str(row[1]), row[2]]
+    return connections
+
+
+def _node_title(node):
+    meta = node.get("_meta")
+    meta_title = meta.get("title") if isinstance(meta, dict) else ""
+    title = meta_title or node.get("title", "")
+    return title if isinstance(title, str) else ""
+
+
 def collect_error_context(error_data, workflow_data):
     """
     Collect comprehensive error context for LLM analysis (Option B Phase 1).
@@ -98,26 +151,32 @@ def collect_error_context(error_data, workflow_data):
         or error_data.get("node_id")
         or error_data.get("real_node_id")
     )
-    normalized_node_id = str(node_id).split(":")[-1] if node_id else None
-    node_lookup = None
-    if isinstance(workflow_data, dict):
-        if "nodes" in workflow_data and isinstance(workflow_data.get("nodes"), list):
-            node_lookup = {
-                str(node.get("id")): node
-                for node in workflow_data.get("nodes", [])
-                if isinstance(node, dict) and node.get("id") is not None
-            }
-        else:
-            node_lookup = workflow_data
+    node_lookup, link_rows = _index_workflow(workflow_data)
+    # An execution id such as "12:34" names a node inside a subgraph; its local id is the last segment.
+    # The exact spelling wins first because API-format prompts of a subgraph are keyed by "12:34".
+    exact_node_id = str(node_id) if node_id else None
+    normalized_node_id = (
+        exact_node_id
+        if exact_node_id in node_lookup
+        else exact_node_id.split(":")[-1]
+        if exact_node_id
+        else None
+    )
 
     if normalized_node_id and node_lookup:
         node = node_lookup.get(normalized_node_id)
         if node:
+            link_rows_by_id = {
+                str(row[0]): row
+                for row in link_rows
+                if isinstance(row, (list, tuple)) and len(row) >= 5
+            }
+            connection_inputs = _connection_inputs(node, link_rows_by_id)
             context["failed_node"] = {
                 "id": normalized_node_id,
                 "class_type": node.get("class_type") or node.get("type"),
-                "inputs": node.get("inputs", {}),
-                "title": node.get("_meta", {}).get("title", "") or node.get("title", ""),
+                "inputs": connection_inputs,
+                "title": _node_title(node),
                 "display_node": error_data.get("display_node"),
                 "parent_node": error_data.get("parent_node"),
                 "real_node_id": error_data.get("real_node_id"),
@@ -127,7 +186,7 @@ def collect_error_context(error_data, workflow_data):
             # 4. Analyze workflow structure around failed node
             # Find upstream nodes (nodes that feed into this one)
             upstream = []
-            for input_key, input_value in node.get("inputs", {}).items():
+            for input_key, input_value in connection_inputs.items():
                 if isinstance(input_value, list) and len(input_value) == 2:
                     # This is a connection: [source_node_id, output_index]
                     source_node_id = str(input_value[0])
@@ -150,7 +209,13 @@ def collect_error_context(error_data, workflow_data):
                     ensure_absolute_import_fallback_allowed(import_error)
                     from nodes import NODE_CLASS_MAPPINGS
                 node_class = NODE_CLASS_MAPPINGS.get(node.get("class_type"))
-                if node_class and hasattr(node_class, "INPUT_TYPES"):
+                # Only API-format inputs list every required input; a UI-format slot list omits widgets,
+                # so comparing against it would report every widget as a missing connection.
+                if (
+                    node_class
+                    and hasattr(node_class, "INPUT_TYPES")
+                    and isinstance(node.get("inputs", {}), dict)
+                ):
                     required_inputs = node_class.INPUT_TYPES().get("required", {})
                     for req_input in required_inputs.keys():
                         if req_input not in node.get("inputs", {}):
