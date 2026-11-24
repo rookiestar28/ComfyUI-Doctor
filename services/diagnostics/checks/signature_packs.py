@@ -18,7 +18,7 @@ from ..models import (
     IssueTarget,
 )
 from ..signatures import load_signature_packs, is_signature_packs_enabled
-from ..node_identity import NodeId, valid_node_id
+from ..node_identity import NodeId, NodeIdentity, resolve_node_identities, valid_node_id, with_discriminator
 from . import register_check
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.checks.signature_packs")
@@ -151,12 +151,17 @@ def _doctor_metadata_match(rule: Dict[str, Any], workflow: Dict[str, Any]) -> Op
     return reasons or []
 
 
-def _build_issue_for_node(pack: Dict[str, Any], rule: Dict[str, Any], node: Dict[str, Any], evidence_hint: str) -> HealthIssue:
+def _build_issue_for_node(pack: Dict[str, Any], rule: Dict[str, Any], identity: NodeIdentity, evidence_hint: str) -> HealthIssue:
+    node = identity.node
     node_type = str(node.get("type") or "Unknown")
-    node_id = _safe_node_id(node)
+    # IMPORTANT: only a valid AND unique id may become a target; a malformed or duplicate id keeps the
+    # finding but not the Locate target, and its position discriminator keeps the issue ids distinct.
+    node_id = identity.node_id
     node_title = str(node.get("title") or node_type)
     target = IssueTarget(node_id=node_id)
-    content_hash = f"{pack.get('pack_id')}:{rule.get('rule_id')}:{node_type}:{evidence_hint}"
+    content_hash = with_discriminator(
+        f"{pack.get('pack_id')}:{rule.get('rule_id')}:{node_type}:{evidence_hint}", identity
+    )
     issue_id = HealthIssue.generate_issue_id("f18_signature_pack", target, content_hash)
 
     return HealthIssue(
@@ -171,7 +176,7 @@ def _build_issue_for_node(pack: Dict[str, Any], rule: Dict[str, Any], node: Dict
         ),
         evidence=[
             f"Signature pack rule matched: {pack.get('pack_id')}::{rule.get('rule_id')}",
-            f"Node #{node_id if node_id is not None else '?'} ({node_type})",
+            f"{'Node ' if identity.actionable else ''}{identity.label} ({node_type})",
             f"Match source: {evidence_hint}",
         ],
         recommendation=list(rule.get("recommendation") or []),
@@ -215,8 +220,8 @@ async def check_signature_packs(workflow: Dict[str, Any], request: HealthCheckRe
         return []
 
     issues: List[HealthIssue] = []
-    nodes = workflow.get("nodes", [])
-    node_list = nodes if isinstance(nodes, list) else []
+    # Resolved once: every rule scans the same identities.
+    identities = resolve_node_identities(workflow.get("nodes", []))
 
     try:
         for pack in packs:
@@ -238,9 +243,10 @@ async def check_signature_packs(workflow: Dict[str, Any], request: HealthCheckRe
                 if rule.get("scope") != "node_widget":
                     continue
 
-                for node in node_list[:MAX_NODES_SCAN]:
-                    if not isinstance(node, dict):
-                        continue
+                for identity in identities:
+                    if identity.position >= MAX_NODES_SCAN:
+                        break
+                    node = identity.node
                     node_type = str(node.get("type") or "")
                     if not _node_type_match(rule, node_type):
                         continue
@@ -259,7 +265,7 @@ async def check_signature_packs(workflow: Dict[str, Any], request: HealthCheckRe
                     else:
                         evidence_hint = f"{numeric_match[0]}={numeric_match[2]:g}@widget[{numeric_match[1]}]"
 
-                    issues.append(_build_issue_for_node(pack, rule, node, evidence_hint))
+                    issues.append(_build_issue_for_node(pack, rule, identity, evidence_hint))
                     rule_matches += 1
 
                     if len(issues) >= MAX_ISSUES_PER_RUN:

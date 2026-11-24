@@ -9,7 +9,6 @@ Analyzes workflow to detect:
 import logging
 import os
 import re
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Any, List, Set, Optional, Tuple
@@ -22,7 +21,13 @@ from ..models import (
     IssueTarget,
 )
 from . import register_check
-from ..node_identity import NodeId, valid_node_id
+from ..node_identity import (
+    NodeId,
+    NodeIdentity,
+    resolve_node_identities,
+    safe_execution_id_component as _safe_execution_id_component,
+    valid_node_id,
+)
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.checks.model_assets")
 
@@ -587,7 +592,7 @@ def _dataset_folder_issue(
         severity=IssueSeverity.WARNING,
         title=title,
         summary=(
-            f"Node '{node_title}' (#{node_id}) references dataset folder "
+            f"Node '{node_title}' ({_context_label(context)}) references dataset folder "
             f"'{safe_name}' which is {problem}"
         ),
         evidence=[
@@ -676,6 +681,16 @@ class _WorkflowAssetNode:
     source_execution_id: str
     promoted_widget_indexes: frozenset[int]
     nested: bool
+    # How the visible (root) node is named in text: "#5" or "unidentified node at nodes[2]". A node with a
+    # malformed or duplicate id has visible_node_id None and is never a Locate target.
+    identity_label: str = ""
+    # False when the source node (a nested child) has a malformed or duplicate id inside its definition.
+    source_actionable: bool = True
+
+
+def _context_label(context: "_WorkflowAssetNode") -> str:
+    """Name the visible node for summaries without ever printing the word None or a raw corrupt id."""
+    return context.identity_label or f"#{context.visible_node_id}"
 
 
 def _normalize_path_budget(value: Any) -> int:
@@ -687,20 +702,6 @@ def _normalize_path_budget(value: Any) -> int:
     except (TypeError, ValueError, OverflowError):
         return DEFAULT_MAX_PATHS
     return max(0, min(MAX_PATH_BUDGET, normalized))
-
-
-def _safe_execution_id_component(value: Any) -> str:
-    """Keep provenance identifiers content-free and bounded."""
-    value = valid_node_id(value)
-    if type(value) is int:
-        return str(value)
-    if isinstance(value, str):
-        if re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
-            return value
-        # IMPORTANT: opaque IDs must not collapse to "unknown" or become path components.
-        # The ~ namespace cannot collide with legacy safe IDs; source_node keeps the raw mapping.
-        return "sha256~" + hashlib.sha256(value.encode("utf-8")).hexdigest()
-    return "unknown"
 
 
 def _widget_index_for_input(
@@ -843,18 +844,19 @@ def _apply_promoted_widget_values(
     if not isinstance(raw_nodes, list):
         return []
 
+    # IMPORTANT: only a valid AND unique id may receive a promoted value. A duplicate id would let the
+    # last writer win (and list that node twice); a malformed id has no stable address. Those children
+    # are still emitted, once each, with their own unpromoted values.
     effective: dict[Any, tuple[dict[str, Any], list[Any], set[int]]] = {}
-    ordered_ids: list[Any] = []
-    for node in raw_nodes:
-        if not isinstance(node, dict):
-            continue
-        node_id = valid_node_id(node.get("id"))
-        if node_id is None:
-            continue
+    ordered_entries: list[tuple[dict[str, Any], list[Any], set[int]]] = []
+    for identity in resolve_node_identities(raw_nodes):
+        node = identity.node
         values = node.get("widgets_values", [])
         copied_values = list(values) if isinstance(values, list) else []
-        effective[node_id] = (node, copied_values, set())
-        ordered_ids.append(node_id)
+        entry = (node, copied_values, set())
+        if identity.node_id is not None:
+            effective[identity.node_id] = entry
+        ordered_entries.append(entry)
 
     raw_inputs = definition.get("inputs", [])
     raw_links = definition.get("links", [])
@@ -940,11 +942,10 @@ def _apply_promoted_widget_values(
 
     return [
         (
-            effective[node_id][0]
-            | {"widgets_values": effective[node_id][1]},
-            frozenset(effective[node_id][2]),
+            source_node | {"widgets_values": values},
+            frozenset(promoted_indexes),
         )
-        for node_id in ordered_ids
+        for source_node, values, promoted_indexes in ordered_entries
     ]
 
 
@@ -977,8 +978,10 @@ def _collect_workflow_asset_nodes(
     def visit(
         node: dict[str, Any],
         *,
+        identity: NodeIdentity,
         visible_node_id: Any,
         visible_node_title: str,
+        identity_label: str,
         source_prefix: str,
         promoted_indexes: frozenset[int],
         definition_stack: frozenset[str],
@@ -990,10 +993,13 @@ def _collect_workflow_asset_nodes(
             return
         visited_nodes += 1
 
-        node_id = valid_node_id(node.get("id"))
-        if node_id is None:
-            return
-        node_component = _safe_execution_id_component(node_id)
+        # A node without a usable identity is still scanned; its provenance component is its list
+        # position (pos~N), a namespace no legacy safe id or sha256~ component can collide with.
+        node_component = (
+            _safe_execution_id_component(identity.node_id)
+            if identity.actionable
+            else identity.discriminator
+        )
         source_execution_id = (
             f"{source_prefix}:{node_component}"
             if source_prefix
@@ -1011,12 +1017,17 @@ def _collect_workflow_asset_nodes(
                 definition,
                 node,
             )
+            child_identities = resolve_node_identities(definition.get("nodes", []))
             next_stack = definition_stack | {node_type}
-            for child, child_promoted_indexes in children:
+            for child_identity, (child, child_promoted_indexes) in zip(
+                child_identities, children, strict=True
+            ):
                 visit(
                     child,
+                    identity=child_identity,
                     visible_node_id=visible_node_id,
                     visible_node_title=visible_node_title,
+                    identity_label=identity_label,
                     source_prefix=source_execution_id,
                     promoted_indexes=child_promoted_indexes,
                     definition_stack=next_stack,
@@ -1033,22 +1044,24 @@ def _collect_workflow_asset_nodes(
             source_execution_id=source_execution_id,
             promoted_widget_indexes=promoted_indexes,
             nested=nested,
+            identity_label=identity_label,
+            source_actionable=identity.actionable,
         ))
 
-    for root_node in raw_nodes:
+    for root_identity in resolve_node_identities(raw_nodes):
         if visited_nodes >= MAX_WORKFLOW_NODES:
             break
-        if not isinstance(root_node, dict):
-            continue
-        root_id = root_node.get("id")
+        root_node = root_identity.node
         root_type = root_node.get("type", "")
         root_title = root_node.get("title", root_type)
         visit(
             root_node,
-            visible_node_id=root_id,
+            identity=root_identity,
+            visible_node_id=root_identity.node_id,
             visible_node_title=(
                 root_title if isinstance(root_title, str) else str(root_type)
             ),
+            identity_label=root_identity.label,
             source_prefix="",
             promoted_indexes=frozenset(),
             definition_stack=frozenset(),
@@ -1069,13 +1082,17 @@ def _asset_provenance_metadata(
         return {}
     source_node_id = context.source_node.get("id")
     safe_source_node_id: Any = (
-        source_node_id
+        None
+        if not context.source_actionable
+        else source_node_id
         if isinstance(source_node_id, int)
         else _safe_execution_id_component(source_node_id)
     )
     visible_node_id = context.visible_node_id
     safe_visible_node_id: Any = (
-        visible_node_id
+        None
+        if visible_node_id is None
+        else visible_node_id
         if isinstance(visible_node_id, int)
         else _safe_execution_id_component(visible_node_id)
     )
@@ -1270,7 +1287,7 @@ async def check_model_assets(
                     category=IssueCategory.MODEL,
                     severity=severity,
                     title="Asset File Not Found",
-                    summary=f"Node '{node_title}' (#{node_id}) references file '{safe_name}' which cannot be found",
+                    summary=f"Node '{node_title}' ({_context_label(context)}) references file '{safe_name}' which cannot be found",
                     evidence=[
                         f"Filename: {safe_name}",
                         f"Node type: {node_type}",
@@ -1310,6 +1327,10 @@ async def check_model_assets(
                         node_title,
                         node_type,
                         value,
+                        identity_label=_context_label(context),
+                        discriminator=(
+                            context.source_execution_id if node_id is None else ""
+                        ),
                     )
                     if readable_issue:
                         readable_issue.metadata = _asset_provenance_metadata(
@@ -1460,12 +1481,18 @@ def _determine_asset_category(node_type: str, filename: str) -> str:
 def _check_file_readable(
     path: Path,
     containing_root: Path,
-    node_id: NodeId,
+    node_id: Optional[NodeId],
     node_title: str,
     node_type: str,
     original_value: str,
+    *,
+    identity_label: str = "",
+    discriminator: str = "",
 ) -> Optional[HealthIssue]:
     """Check if a file is readable."""
+    label = identity_label or f"#{node_id}"
+    # Only a node without a target needs the discriminator; ids of targeted nodes stay as they were.
+    id_content = f"{original_value[:32]}:{discriminator}" if discriminator else original_value[:32]
     try:
         # IMPORTANT: re-resolve immediately before reading so a symlink change
         # cannot bypass the registered-root decision made during lookup.
@@ -1482,12 +1509,12 @@ def _check_file_readable(
         safe_name = _sanitize_path_for_display(original_value)
         return HealthIssue(
             issue_id=HealthIssue.generate_issue_id(
-                "asset_permission", target, original_value[:32]
+                "asset_permission", target, id_content
             ),
             category=IssueCategory.MODEL,
             severity=IssueSeverity.WARNING,
             title="Asset File Not Readable",
-            summary=f"Node '{node_title}' (#{node_id}) references file '{safe_name}' which cannot be read (permission denied)",
+            summary=f"Node '{node_title}' ({label}) references file '{safe_name}' which cannot be read (permission denied)",
             evidence=[
                 f"Filename: {safe_name}",
                 "File exists but cannot be read",
@@ -1504,12 +1531,12 @@ def _check_file_readable(
         safe_name = _sanitize_path_for_display(original_value)
         return HealthIssue(
             issue_id=HealthIssue.generate_issue_id(
-                "asset_error", target, original_value[:32]
+                "asset_error", target, id_content
             ),
             category=IssueCategory.MODEL,
             severity=IssueSeverity.INFO,
             title="Asset File Access Error",
-            summary=f"Node '{node_title}' (#{node_id}) references file '{safe_name}' which cannot be accessed",
+            summary=f"Node '{node_title}' ({label}) references file '{safe_name}' which cannot be accessed",
             evidence=[
                 f"Filename: {safe_name}",
                 f"Error: {type(e).__name__}",

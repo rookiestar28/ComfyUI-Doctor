@@ -11,6 +11,7 @@ from services.diagnostics.checks.workflow_lint import (
     check_workflow_lint,
 )
 from services.diagnostics.models import HealthCheckRequest, HealthReport, IssueSeverity
+from services.diagnostics.node_identity import resolve_node_identities
 
 SWITCHES = ("ComfySwitchNode", "ComfySoftSwitchNode")
 BRANCHES = ("on_true", "on_false")
@@ -37,7 +38,7 @@ def test_optional_switch_branch_has_no_false_warning_or_score_penalty(
 ):
     value = workflow(node_type, branch, input_type, omit_link=omit_link)
     original = copy.deepcopy(value)
-    assert _check_disconnected_links({1: value["nodes"][0]}, {}) == []
+    assert _check_disconnected_links(resolve_node_identities([value["nodes"][0]]), {}) == []
     issues = diagnose(value)
     assert issues == []
     assert HealthReport.compute_health_score(issues) == 100

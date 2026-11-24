@@ -18,7 +18,13 @@ from ..models import (
     IssueTarget,
 )
 from . import register_check
-from ..node_identity import NodeId, valid_node_id
+from ..node_identity import (
+    NodeIdentity,
+    resolve_node_identities,
+    safe_execution_id_component,
+    valid_node_id,
+    with_discriminator,
+)
 
 logger = logging.getLogger("comfyui-doctor.diagnostics.checks.workflow_lint")
 
@@ -130,21 +136,11 @@ async def check_workflow_lint(
     if not isinstance(nodes, list):
         return issues
 
-    # IMPORTANT: int(id) both crashes on opaque IDs and aliases "09" to 9.
-    # Reject malformed/duplicate identities locally so unrelated findings survive.
-    node_map: Dict[NodeId, Dict[str, Any]] = {}
-    identities: Dict[str, NodeId] = {}
-    for node in nodes:
-        if isinstance(node, dict):
-            node_id = valid_node_id(node.get("id"))
-            if node_id is None:
-                continue
-            key = str(node_id)
-            if key in identities:
-                node_map.pop(identities[key], None)
-            else:
-                identities[key] = node_id
-                node_map[node_id] = node
+    # IMPORTANT: int(id) both crashes on opaque IDs and aliases "09" to 9, and a malformed or duplicate
+    # id must never select a node. Every node is still linted: a node whose identity is not usable keeps
+    # its findings but gets no node target (so Locate/fix cannot land on another node) and a position
+    # discriminator in its issue ids (so two such nodes with identical findings stay distinct).
+    identities = resolve_node_identities(nodes)
 
     # Build link lookup: link_id -> (from_node, from_slot, to_node, to_slot)
     link_map: Dict[int, Tuple[int, int, int, int]] = {}
@@ -155,26 +151,40 @@ async def check_workflow_lint(
                 link_map[link_id] = (from_node, from_slot, to_node, to_slot)
 
     # Check 1: Disconnected/broken links
-    issues.extend(_check_disconnected_links(node_map, link_map))
+    issues.extend(_check_disconnected_links(identities, link_map))
 
     # Check 2: Missing/unsupported nodes
-    issues.extend(_check_unsupported_nodes(node_map))
+    issues.extend(_check_unsupported_nodes(identities))
 
     # Check 3: Parameter anti-patterns
-    issues.extend(_check_parameter_antipatterns(node_map))
+    issues.extend(_check_parameter_antipatterns(identities))
+
+    # Check 4: Duplicate node identities (reported once per group, never targeted at a node)
+    issues.extend(_check_duplicate_identities(identities))
 
     return issues
 
 
+LOCATE_NODE_STEP = "Use 'Locate Node' to find this node on the canvas"
+NO_USABLE_ID_STEP = (
+    "This node has no usable ID, so Locate Node is unavailable; "
+    "save the workflow again so each node has a unique ID."
+)
+MAX_DUPLICATE_GROUPS = 20
+MAX_DUPLICATE_POSITIONS = 8
+
+
 def _check_disconnected_links(
-    node_map: Dict[NodeId, Dict[str, Any]],
+    identities: List[NodeIdentity],
     link_map: Dict[int, Tuple[int, int, int, int]],
 ) -> List[HealthIssue]:
     """Check for disconnected or broken links."""
     issues: List[HealthIssue] = []
 
     # Check each node's inputs for broken links
-    for node_id, node in node_map.items():
+    for identity in identities:
+        node = identity.node
+        node_id = identity.node_id
         node_type = node.get("type", "Unknown")
         node_title = node.get("title", node_type)
 
@@ -220,19 +230,19 @@ def _check_disconnected_links(
                                 issue_id=HealthIssue.generate_issue_id(
                                     "disconnected_input",
                                     target,
-                                    f"{input_name}:{input_type}",
+                                    with_discriminator(f"{input_name}:{input_type}", identity),
                                 ),
                                 category=IssueCategory.WORKFLOW,
                                 severity=IssueSeverity.WARNING,
                                 title="Disconnected Required Input",
-                                summary=f"Node '{node_title}' (#{node_id}) has unconnected input '{input_name}' of type {input_type}",
+                                summary=f"Node '{node_title}' ({identity.label}) has unconnected input '{input_name}' of type {input_type}",
                                 evidence=[
                                     f"Input '{input_name}' expects type '{input_type}'",
                                     f"Node type: {node_type}",
                                 ],
                                 recommendation=[
                                     f"Connect the '{input_name}' input to a compatible output",
-                                    "Use 'Locate Node' to find this node on the canvas",
+                                    LOCATE_NODE_STEP if identity.actionable else NO_USABLE_ID_STEP,
                                 ],
                                 target=target,
                             ))
@@ -244,12 +254,12 @@ def _check_disconnected_links(
                             issue_id=HealthIssue.generate_issue_id(
                                 "broken_link",
                                 target,
-                                f"{input_name}:{link_id}",
+                                with_discriminator(f"{input_name}:{link_id}", identity),
                             ),
                             category=IssueCategory.WORKFLOW,
                             severity=IssueSeverity.CRITICAL,
                             title="Broken Link Reference",
-                            summary=f"Node '{node_title}' (#{node_id}) has a broken link on input '{input_name}'",
+                            summary=f"Node '{node_title}' ({identity.label}) has a broken link on input '{input_name}'",
                             evidence=[
                                 f"Link ID {link_id} does not exist in workflow",
                                 f"Input '{input_name}' cannot receive data",
@@ -265,12 +275,14 @@ def _check_disconnected_links(
 
 
 def _check_unsupported_nodes(
-    node_map: Dict[NodeId, Dict[str, Any]],
+    identities: List[NodeIdentity],
 ) -> List[HealthIssue]:
     """Check for potentially missing or unsupported nodes."""
     issues: List[HealthIssue] = []
 
-    for node_id, node in node_map.items():
+    for identity in identities:
+        node = identity.node
+        node_id = identity.node_id
         node_type = node.get("type", "")
         if not node_type:
             continue
@@ -297,11 +309,13 @@ def _check_unsupported_nodes(
         if properties.get("missing_node"):
             target = IssueTarget(node_id=node_id)
             issues.append(HealthIssue(
-                issue_id=HealthIssue.generate_issue_id("missing_node", target, node_type),
+                issue_id=HealthIssue.generate_issue_id(
+                    "missing_node", target, with_discriminator(node_type, identity)
+                ),
                 category=IssueCategory.DEPS,
                 severity=IssueSeverity.CRITICAL,
                 title="Missing Custom Node",
-                summary=f"Custom node '{node_type}' (#{node_id}) is not installed",
+                summary=f"Custom node '{node_type}' ({identity.label}) is not installed",
                 evidence=[
                     f"Node type: {node_type}",
                     "This node type is not recognized by ComfyUI",
@@ -318,11 +332,13 @@ def _check_unsupported_nodes(
             # Only flag as INFO since we can't be certain
             target = IssueTarget(node_id=node_id)
             issues.append(HealthIssue(
-                issue_id=HealthIssue.generate_issue_id("unknown_node", target, node_type),
+                issue_id=HealthIssue.generate_issue_id(
+                    "unknown_node", target, with_discriminator(node_type, identity)
+                ),
                 category=IssueCategory.WORKFLOW,
                 severity=IssueSeverity.INFO,
                 title="Unknown Node Type",
-                summary=f"Node type '{node_type}' (#{node_id}) is not in the known node registry",
+                summary=f"Node type '{node_type}' ({identity.label}) is not in the known node registry",
                 evidence=[
                     f"Node type: {node_type}",
                     "This may be a custom node or a recently added core node",
@@ -338,12 +354,13 @@ def _check_unsupported_nodes(
 
 
 def _check_parameter_antipatterns(
-    node_map: Dict[NodeId, Dict[str, Any]],
+    identities: List[NodeIdentity],
 ) -> List[HealthIssue]:
     """Check for obvious parameter anti-patterns."""
     issues: List[HealthIssue] = []
 
-    for node_id, node in node_map.items():
+    for identity in identities:
+        node = identity.node
         node_type = node.get("type", "")
         node_title = node.get("title", node_type)
         widgets_values = node.get("widgets_values", [])
@@ -357,26 +374,27 @@ def _check_parameter_antipatterns(
 
         # For KSampler and similar nodes, check common parameters
         if "KSampler" in node_type or "Sampler" in node_type:
-            issues.extend(_check_sampler_params(node_id, node_title, node_type, widgets_values))
+            issues.extend(_check_sampler_params(identity, node_title, node_type, widgets_values))
 
         # For EmptyLatentImage, check resolution
         if "EmptyLatentImage" in node_type or "LatentImage" in node_type:
-            issues.extend(_check_latent_params(node_id, node_title, node_type, widgets_values))
+            issues.extend(_check_latent_params(identity, node_title, node_type, widgets_values))
 
         # Generic widget value checks
-        issues.extend(_check_generic_widget_values(node_id, node_title, node_type, widgets_values))
+        issues.extend(_check_generic_widget_values(identity, node_title, node_type, widgets_values))
 
     return issues
 
 
 def _check_sampler_params(
-    node_id: NodeId,
+    identity: NodeIdentity,
     node_title: str,
     node_type: str,
     widgets_values: List[Any],
 ) -> List[HealthIssue]:
     """Check KSampler-type nodes for anti-patterns."""
     issues: List[HealthIssue] = []
+    node_id = identity.node_id
 
     # KSampler widget order is typically:
     # seed, control_after_generate, steps, cfg, sampler_name, scheduler, denoise
@@ -392,12 +410,12 @@ def _check_sampler_params(
                 target = IssueTarget(node_id=node_id)
                 issues.append(HealthIssue(
                     issue_id=HealthIssue.generate_issue_id(
-                        "high_steps", target, f"{value}"
+                        "high_steps", target, with_discriminator(f"{value}", identity)
                     ),
                     category=IssueCategory.PERFORMANCE,
                     severity=IssueSeverity.WARNING,
                     title="Very High Step Count",
-                    summary=f"Node '{node_title}' (#{node_id}) has {int(value)} steps, which may be excessive",
+                    summary=f"Node '{node_title}' ({identity.label}) has {int(value)} steps, which may be excessive",
                     evidence=[
                         f"Steps value: {int(value)}",
                         f"Threshold: {PARAM_THRESHOLDS['steps']}",
@@ -417,12 +435,12 @@ def _check_sampler_params(
                 target = IssueTarget(node_id=node_id)
                 issues.append(HealthIssue(
                     issue_id=HealthIssue.generate_issue_id(
-                        "high_cfg", target, f"{value}"
+                        "high_cfg", target, with_discriminator(f"{value}", identity)
                     ),
                     category=IssueCategory.WORKFLOW,
                     severity=IssueSeverity.INFO,
                     title="Very High CFG Value",
-                    summary=f"Node '{node_title}' (#{node_id}) has CFG {value}, which may produce artifacts",
+                    summary=f"Node '{node_title}' ({identity.label}) has CFG {value}, which may produce artifacts",
                     evidence=[
                         f"CFG value: {value}",
                         f"Recommended max: {PARAM_THRESHOLDS['cfg']}",
@@ -439,13 +457,14 @@ def _check_sampler_params(
 
 
 def _check_latent_params(
-    node_id: NodeId,
+    identity: NodeIdentity,
     node_title: str,
     node_type: str,
     widgets_values: List[Any],
 ) -> List[HealthIssue]:
     """Check latent image nodes for resolution anti-patterns."""
     issues: List[HealthIssue] = []
+    node_id = identity.node_id
 
     # EmptyLatentImage widget order: width, height, batch_size
     width = None
@@ -471,11 +490,11 @@ def _check_latent_params(
     if width and width > PARAM_THRESHOLDS["width"]:
         target = IssueTarget(node_id=node_id)
         issues.append(HealthIssue(
-            issue_id=HealthIssue.generate_issue_id("high_width", target, f"{width}"),
+            issue_id=HealthIssue.generate_issue_id("high_width", target, with_discriminator(f"{width}", identity)),
             category=IssueCategory.PERFORMANCE,
             severity=IssueSeverity.WARNING,
             title="Very High Resolution Width",
-            summary=f"Node '{node_title}' (#{node_id}) has width {width}px, which requires significant VRAM",
+            summary=f"Node '{node_title}' ({identity.label}) has width {width}px, which requires significant VRAM",
             evidence=[
                 f"Width: {width}px",
                 f"Threshold: {PARAM_THRESHOLDS['width']}px",
@@ -490,11 +509,11 @@ def _check_latent_params(
     if height and height > PARAM_THRESHOLDS["height"]:
         target = IssueTarget(node_id=node_id)
         issues.append(HealthIssue(
-            issue_id=HealthIssue.generate_issue_id("high_height", target, f"{height}"),
+            issue_id=HealthIssue.generate_issue_id("high_height", target, with_discriminator(f"{height}", identity)),
             category=IssueCategory.PERFORMANCE,
             severity=IssueSeverity.WARNING,
             title="Very High Resolution Height",
-            summary=f"Node '{node_title}' (#{node_id}) has height {height}px, which requires significant VRAM",
+            summary=f"Node '{node_title}' ({identity.label}) has height {height}px, which requires significant VRAM",
             evidence=[
                 f"Height: {height}px",
                 f"Threshold: {PARAM_THRESHOLDS['height']}px",
@@ -510,11 +529,11 @@ def _check_latent_params(
     if batch_size and batch_size > PARAM_THRESHOLDS["batch_size"]:
         target = IssueTarget(node_id=node_id)
         issues.append(HealthIssue(
-            issue_id=HealthIssue.generate_issue_id("high_batch", target, f"{batch_size}"),
+            issue_id=HealthIssue.generate_issue_id("high_batch", target, with_discriminator(f"{batch_size}", identity)),
             category=IssueCategory.PERFORMANCE,
             severity=IssueSeverity.WARNING,
             title="Very High Batch Size",
-            summary=f"Node '{node_title}' (#{node_id}) has batch size {batch_size}, which multiplies VRAM usage",
+            summary=f"Node '{node_title}' ({identity.label}) has batch size {batch_size}, which multiplies VRAM usage",
             evidence=[
                 f"Batch size: {batch_size}",
                 f"Threshold: {PARAM_THRESHOLDS['batch_size']}",
@@ -531,13 +550,14 @@ def _check_latent_params(
 
 
 def _check_generic_widget_values(
-    node_id: NodeId,
+    identity: NodeIdentity,
     node_title: str,
     node_type: str,
     widgets_values: List[Any],
 ) -> List[HealthIssue]:
     """Check generic widget values for common anti-patterns."""
     issues: List[HealthIssue] = []
+    node_id = identity.node_id
 
     # Check for suspiciously large numbers that might indicate mistakes
     for idx, value in enumerate(widgets_values):
@@ -550,12 +570,12 @@ def _check_generic_widget_values(
             target = IssueTarget(node_id=node_id)
             issues.append(HealthIssue(
                 issue_id=HealthIssue.generate_issue_id(
-                    "suspicious_value", target, f"{idx}:{value}"
+                    "suspicious_value", target, with_discriminator(f"{idx}:{value}", identity)
                 ),
                 category=IssueCategory.WORKFLOW,
                 severity=IssueSeverity.INFO,
                 title="Unusually Large Parameter Value",
-                summary=f"Node '{node_title}' (#{node_id}) has an unusually large value: {value}",
+                summary=f"Node '{node_title}' ({identity.label}) has an unusually large value: {value}",
                 evidence=[
                     f"Widget index {idx} has value: {value}",
                     "This might be intentional or a typo",
@@ -566,4 +586,47 @@ def _check_generic_widget_values(
                 target=target,
             ))
 
+    return issues
+
+
+def _check_duplicate_identities(identities: List[NodeIdentity]) -> List[HealthIssue]:
+    """Report each group of nodes that share an ID once, without ever targeting one of them."""
+    groups: Dict[str, List[NodeIdentity]] = {}
+    for identity in identities:
+        if identity.state == "duplicate":
+            groups.setdefault(str(valid_node_id(identity.node.get("id"))), []).append(identity)
+
+    issues: List[HealthIssue] = []
+    for members in list(groups.values())[:MAX_DUPLICATE_GROUPS]:
+        # IMPORTANT: the identity is shown only through the bounded, content-free component; the raw id
+        # of a workflow file is untrusted and may be 1024 characters of arbitrary text.
+        component = safe_execution_id_component(members[0].node.get("id"))
+        positions = ", ".join(
+            f"nodes[{member.position}]" for member in members[:MAX_DUPLICATE_POSITIONS]
+        )
+        extra = len(members) - MAX_DUPLICATE_POSITIONS
+        if extra > 0:
+            positions += f" and {extra} more"
+        target = IssueTarget()
+        issues.append(HealthIssue(
+            issue_id=HealthIssue.generate_issue_id("duplicate_node_id", target, component),
+            category=IssueCategory.WORKFLOW,
+            severity=IssueSeverity.WARNING,
+            title="Duplicate Node ID",
+            summary=f"Node ID '{component}' is used by {len(members)} nodes, so none of them can be located",
+            evidence=[
+                f"Occurrences: {len(members)}",
+                f"Positions: {positions}",
+                "Findings for these nodes are reported without a node target",
+            ],
+            recommendation=[
+                "Save the workflow again so each node has a unique ID",
+                "A hand-edited or merged workflow file can contain repeated node IDs",
+            ],
+            target=target,
+        ))
+
+    skipped = len(groups) - len(issues)
+    if skipped > 0 and issues:
+        issues[-1].evidence.append(f"... and {skipped} more duplicate groups")
     return issues

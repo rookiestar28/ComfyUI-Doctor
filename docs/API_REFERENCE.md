@@ -132,8 +132,10 @@ An issue target's `node_id` may be a nonnegative safe integer or an opaque strin
 Unicode code points. Strings preserve their exact spelling, including colons and leading zeros;
 surrounding whitespace, control characters and unpaired surrogates are rejected. Clients must not
 cast these IDs to integers or split them on colons. A target may be absent when no safe target is
-available. Ambiguous targets cannot authorize a fix. Malformed/duplicate workflow identities can
-omit findings for those nodes while unrelated valid-node findings survive.
+available. Ambiguous targets cannot authorize a fix. A workflow node whose ID is malformed or shared
+with another node keeps its findings, but they carry no `node_id` and are described by their position
+in the workflow (for example `unidentified node at nodes[2]`), so a client cannot locate or fix the
+wrong node. Each group of nodes that share an ID is reported once as a `Duplicate Node ID` warning.
 
 Model asset diagnostics use the current host's registered model roots and
 extensions when available, including custom folders and `.pt2`/`.sft`

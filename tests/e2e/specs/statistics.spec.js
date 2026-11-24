@@ -970,4 +970,40 @@ test.describe('Statistics Dashboard', () => {
     await expect(banner).toContainText(/No dominant intent detected/i);
   });
 
+  test('should render a finding without a node target next to a targeted one and offer Locate only for the target', async ({ page }) => {
+    const issue = (id, title, target) => ({
+      issue_id: id, category: 'workflow', severity: 'warning', title, summary: `${title} summary`,
+      evidence: [], recommendation: [], status: 'open', target,
+    });
+    const report = {
+      success: true,
+      report: {
+        report_id: 'r68-report', timestamp: Date.now(), health_score: 90,
+        issues: [
+          issue('r68-targeted', 'Disconnected Required Input', { node_id: 5 }),
+          // A node with a malformed or duplicate id keeps its finding but has no target at all.
+          issue('r68-untargeted', 'Disconnected Required Input (unidentified node at nodes[1])', {}),
+        ],
+      },
+    };
+    await page.route('**/doctor/health_report', route => {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(report) });
+    });
+
+    await page.reload();
+    await waitForDoctorReady(page);
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+
+    const issues = page.locator('#diagnostics-issues-list .diagnostics-issue');
+    await expect(issues).toHaveCount(2);
+    for (const card of await issues.all()) {
+      await card.locator('div[style*="cursor: pointer"]').first().click();
+    }
+    const locate = page.locator('#diagnostics-issues-list button', { hasText: /Locate Node/i });
+    await expect(locate).toHaveCount(1);
+    await expect(page.locator('.diagnostics-issue[data-issue-id="r68-targeted"] button', { hasText: /Locate Node/i })).toHaveCount(1);
+    await expect(page.locator('.diagnostics-issue[data-issue-id="r68-untargeted"] button', { hasText: /Locate Node/i })).toHaveCount(0);
+    await expect(page.locator('.diagnostics-issue[data-issue-id="r68-untargeted"]')).toContainText('unidentified node at nodes[1]');
+  });
+
 });

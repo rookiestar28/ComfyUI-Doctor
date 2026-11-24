@@ -39,8 +39,11 @@ def test_invalid_node_identity_cannot_discard_unrelated_findings(invalid):
     workflow = {"nodes": [node(invalid), node(OPAQUE_ID, 99), node(9)], "links": []}
     original = copy.deepcopy(workflow)
     issues = asyncio.run(workflow_lint.check_workflow_lint(workflow, HealthCheckRequest(workflow=workflow)))
+    # R68: the node with the invalid id keeps its finding but has no node target; the others are unchanged.
     assert [(issue.title, issue.target.node_id) for issue in issues] == [
-        ("Broken Link Reference", OPAQUE_ID), ("Disconnected Required Input", 9),
+        ("Disconnected Required Input", None),
+        ("Broken Link Reference", OPAQUE_ID),
+        ("Disconnected Required Input", 9),
     ]
     assert workflow == original
 
@@ -54,10 +57,15 @@ def test_mixed_links_and_leading_zero_identities_are_not_coerced_or_overwritten(
     ]
 
 
-def test_duplicate_identities_are_skipped_without_hiding_other_nodes():
+def test_duplicate_identities_keep_their_findings_without_a_target_and_do_not_hide_other_nodes():
     workflow = {"nodes": [node(9), node("9"), node(OPAQUE_ID)], "links": []}
     issues = asyncio.run(workflow_lint.check_workflow_lint(workflow, HealthCheckRequest(workflow=workflow)))
-    assert [issue.target.node_id for issue in issues] == [OPAQUE_ID]
+    assert [(issue.title, issue.target.node_id) for issue in issues] == [
+        ("Disconnected Required Input", None),
+        ("Disconnected Required Input", None),
+        ("Disconnected Required Input", OPAQUE_ID),
+        ("Duplicate Node ID", None),
+    ]
 
 
 @pytest.mark.parametrize("node_id", [9, "9", "09", OPAQUE_ID, "insert:other:root:node:9"])
@@ -116,7 +124,8 @@ def test_malformed_asset_nodes_do_not_hide_valid_root_or_nested_contexts():
                 "definitions": {"subgraphs": [{"id": "synthetic-subgraph", "nodes": [invalid, child]}]}}
     original = copy.deepcopy(workflow)
     contexts = model_assets._collect_workflow_asset_nodes(workflow)
+    # R68: the corrupt root and the corrupt nested child are scanned too; neither has a node target.
     assert [(context.visible_node_id, context.source_node["id"]) for context in contexts] == [
-        (OPAQUE_ID, "child:9"), (9, 9),
+        (None, []), (OPAQUE_ID, []), (OPAQUE_ID, "child:9"), (9, 9),
     ]
     assert workflow == original
