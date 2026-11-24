@@ -18,6 +18,7 @@ from ..models import (
     IssueTarget,
 )
 from . import register_check
+from ..known_nodes import STATIC_KNOWN_CORE_NODE_TYPES, is_known_node_type
 from ..node_identity import (
     NodeIdentity,
     resolve_node_identities,
@@ -33,43 +34,8 @@ logger = logging.getLogger("comfyui-doctor.diagnostics.checks.workflow_lint")
 # Configuration
 # ============================================================================
 
-# Known core ComfyUI node types (not exhaustive, but covers common cases)
-# This helps distinguish between "missing custom node" vs "typo in node type"
-KNOWN_CORE_NODE_TYPES: Set[str] = {
-    # Loaders
-    "CheckpointLoaderSimple", "CheckpointLoader", "VAELoader", "CLIPLoader",
-    "LoraLoader", "LoraLoaderModelOnly", "ControlNetLoader", "StyleModelLoader",
-    "CLIPVisionLoader", "UpscaleModelLoader", "GLIGENLoader", "HypernetworkLoader",
-    "LoadImage", "LoadImageMask", "LoadLatent",
-    # Samplers
-    "KSampler", "KSamplerAdvanced", "SamplerCustom",
-    # Conditioning
-    "CLIPTextEncode", "CLIPTextEncodeSDXL", "CLIPSetLastLayer",
-    "ConditioningCombine", "ConditioningAverage", "ConditioningConcat",
-    "ConditioningSetArea", "ConditioningSetAreaPercentage",
-    "ConditioningSetMask", "ConditioningZeroOut",
-    "ControlNetApply", "ControlNetApplyAdvanced",
-    # Latent
-    "EmptyLatentImage", "LatentUpscale", "LatentUpscaleBy", "LatentFromBatch",
-    "RepeatLatentBatch", "LatentComposite", "LatentBlend", "LatentRotate",
-    "LatentFlip", "LatentCrop", "SetLatentNoiseMask", "LatentCompositeMasked",
-    # Image
-    "VAEDecode", "VAEEncode", "VAEEncodeForInpaint", "VAEDecodeTiled",
-    "VAEEncodeTiled", "ImageScale", "ImageScaleBy", "ImageUpscaleWithModel",
-    "ImageSharpen", "ImageInvert", "ImagePadForOutpaint", "ImageBatch",
-    "ImageCompositeMasked", "JoinImageWithAlpha", "SplitImageWithAlpha",
-    "ImageBlend", "ImageBlur", "ImageQuantize", "ImageToMask",
-    # Mask
-    "MaskToImage", "ImageToMask", "SolidMask", "InvertMask", "CropMask",
-    "MaskComposite", "FeatherMask", "GrowMask", "ThresholdMask",
-    # Model
-    "ModelSamplingDiscrete", "ModelSamplingContinuousEDM",
-    "RescaleCFG", "FreeU", "FreeU_V2",
-    # Utilities
-    "PreviewImage", "SaveImage", "SaveLatent",
-    "PrimitiveNode", "Reroute", "Note",
-    "ComfySwitchNode", "ComfySoftSwitchNode", "BranchNode",
-}
+# Known core node types now live in known_nodes.py; the name stays exported for existing callers.
+KNOWN_CORE_NODE_TYPES: Set[str] = set(STATIC_KNOWN_CORE_NODE_TYPES)
 
 OPTIONAL_SWITCH_INPUTS: frozenset[tuple[str, str]] = frozenset({
     ("ComfySwitchNode", "on_false"),
@@ -284,11 +250,12 @@ def _check_unsupported_nodes(
         node = identity.node
         node_id = identity.node_id
         node_type = node.get("type", "")
-        if not node_type:
+        # A type that is not a non-empty string is not a node name (and is unhashable when it is a list).
+        if not isinstance(node_type, str) or not node_type:
             continue
 
-        # Skip known core nodes
-        if node_type in KNOWN_CORE_NODE_TYPES:
+        # Skip node types the running host registers (or the fallback list knows)
+        if is_known_node_type(node_type):
             continue
 
         # Check for common custom node prefixes (these are expected to be custom)
@@ -327,7 +294,7 @@ def _check_unsupported_nodes(
                 ],
                 target=target,
             ))
-        elif not is_likely_custom and node_type not in KNOWN_CORE_NODE_TYPES:
+        elif not is_likely_custom:
             # Unknown node type - might be missing or typo
             # Only flag as INFO since we can't be certain
             target = IssueTarget(node_id=node_id)
@@ -362,6 +329,9 @@ def _check_parameter_antipatterns(
     for identity in identities:
         node = identity.node
         node_type = node.get("type", "")
+        if not isinstance(node_type, str):
+            # `"KSampler" in None` raises; a type that is not a string is not a node name here either.
+            node_type = ""
         node_title = node.get("title", node_type)
         widgets_values = node.get("widgets_values", [])
 
