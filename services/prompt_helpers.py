@@ -202,13 +202,15 @@ def collect_error_context(error_data, workflow_data):
             # 5. Check for missing required connections
             # This requires ComfyUI's node definition API
             try:
-                try:
-                    from ..nodes import NODE_CLASS_MAPPINGS
-                except ImportError as import_error:
-                    from import_compat import ensure_absolute_import_fallback_allowed
-                    ensure_absolute_import_fallback_allowed(import_error)
-                    from nodes import NODE_CLASS_MAPPINGS
-                node_class = NODE_CLASS_MAPPINGS.get(node.get("class_type"))
+                # IMPORTANT (R76): never read `from ..nodes import NODE_CLASS_MAPPINGS` here. The relative import
+                # succeeds and names this package's own one-node `nodes.py`, so every real node class came back
+                # None and `missing_connections` stayed empty whatever the workflow was (the host fallback only
+                # ran after an ImportError that never happens). The host registry is looked up without importing
+                # anything and is trusted only when it carries the core anchor names.
+                from .diagnostics.known_nodes import host_node_registry
+
+                registry = host_node_registry()
+                node_class = registry.get(node.get("class_type")) if registry is not None else None
                 # Only API-format inputs list every required input; a UI-format slot list omits widgets,
                 # so comparing against it would report every widget as a missing connection.
                 if (

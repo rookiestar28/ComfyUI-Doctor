@@ -273,8 +273,14 @@ def test_missing_connections_are_reported_for_api_format_nodes_only(harness, mon
             return {"required": {"model": ("MODEL",), "seed": ("INT",)}}
 
     fake_nodes = types.ModuleType("nodes")
-    fake_nodes.NODE_CLASS_MAPPINGS = {"KSampler": FakeSampler}
-    monkeypatch.setitem(sys.modules, f"{harness.package_name}.nodes", fake_nodes)
+    # The host registry is trusted only when it carries the core anchor names (R76).
+    fake_nodes.NODE_CLASS_MAPPINGS = {
+        "KSampler": FakeSampler,
+        "CheckpointLoaderSimple": object,
+        "VAEDecode": object,
+        "CLIPTextEncode": object,
+    }
+    monkeypatch.setitem(sys.modules, "nodes", fake_nodes)
 
     api = _collect(harness, "3", {"3": {"class_type": "KSampler", "inputs": {"model": ["1", 0]}}})
     ui = _collect(harness, "3", dict(_ui_workflow(3), nodes=[{"id": 3, "class_type": "KSampler", "type": "KSampler",

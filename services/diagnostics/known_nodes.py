@@ -74,6 +74,15 @@ def _host_registry() -> Optional[Mapping]:
     return None
 
 
+def host_node_registry() -> Optional[Mapping]:
+    """The host's node registry for other services (the failed node's required inputs), or None.
+
+    The same guarded lookup the workflow lint uses: ``sys.modules`` only, and only a mapping that carries the
+    core anchor names. It never imports anything.
+    """
+    return _host_registry()
+
+
 def is_known_node_type(node_type: Any) -> bool:
     """True for a non-empty string that the static list or the running host's registry knows."""
     if not isinstance(node_type, str) or not node_type:
