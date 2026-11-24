@@ -85,7 +85,12 @@ class SignalExtractor:
             if not isinstance(node, dict):
                 continue
 
-            node_type = node.get("type") or node.get("class_type") or ""
+            raw_type = node.get("type") or node.get("class_type")
+            # IMPORTANT (R77): the type becomes a dict key and part of a signal id. A list or dict type raised
+            # ``TypeError: unhashable`` and the runner then dropped the whole intent signature because of one
+            # malformed node; an int or bool produced a meaningless ``node_type.5`` signal. Only a string is a
+            # node type; anything else is skipped on its own and never costs a valid sibling its signal.
+            node_type = raw_type if isinstance(raw_type, str) else ""
             # IMPORTANT: keep the exact id; never coerce it. ``int("09")`` is 9, ``int("\u0669")`` is 9 and
             # ``int("\u00b2")`` raises, so the old coercion merged different nodes or dropped one. An id that
             # is not valid is skipped on its own and never costs a valid sibling its signal.
