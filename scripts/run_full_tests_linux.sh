@@ -121,7 +121,7 @@ if [[ "$skip_e2e" -eq 0 ]]; then
   [[ "$node_major" =~ ^[0-9]+$ ]] || fail "Could not parse Node.js version from '$node_version'."
   (( node_major >= 18 && node_major < 26 )) || fail "Node.js >=18 <26 is required for E2E. Current: $node_version. Use a Doctor-supported Node runtime from Node 18 through Node 25; Node 26+ is blocked until validated against Doctor's Playwright harness."
 
-  run_step "npm install" npm install
+  run_step "npm ci" npm ci
   run_step "Install Playwright Chromium" npx playwright install chromium
   run_step "Frontend E2E (npm test)" npm test
 fi

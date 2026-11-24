@@ -121,7 +121,7 @@ if (-not $SkipE2E) {
         Fail "Node.js >=18 <26 is required for E2E. Current: $NodeVersion. Use a Doctor-supported Node runtime from Node 18 through Node 25; Node 26+ is blocked until validated against Doctor's Playwright harness."
     }
 
-    Run-Checked "npm install" { npm install }
+    Run-Checked "npm ci" { npm ci }
     Run-Checked "Install Playwright Chromium" { npx playwright install chromium }
     Run-Checked "Frontend E2E (npm test)" { npm test }
 }

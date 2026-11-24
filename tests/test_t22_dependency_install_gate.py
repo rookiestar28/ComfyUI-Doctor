@@ -91,8 +91,8 @@ def test_full_test_scripts_run_supply_chain_gate_before_npm_install():
     windows_script = (REPO_ROOT / "scripts" / "run_full_tests_windows.ps1").read_text(encoding="utf-8")
     linux_script = (REPO_ROOT / "scripts" / "run_full_tests_linux.sh").read_text(encoding="utf-8")
 
-    assert windows_script.index("Supply-chain dependency gate") < windows_script.index("npm install")
-    assert linux_script.index("Supply-chain dependency gate") < linux_script.index("npm install")
+    assert windows_script.index("Supply-chain dependency gate") < windows_script.index("npm ci")
+    assert linux_script.index("Supply-chain dependency gate") < linux_script.index("npm ci")
 
 
 def test_ci_workflows_run_supply_chain_gate_before_dependency_install():
