@@ -76,6 +76,22 @@ OPTIONAL_BRANCH_INPUTS: frozenset[str] = frozenset(
     f"autogrow.branch{index}" for index in range(32)
 )
 
+# Serialized form of `RenderShape.HollowCircle`. The host frontend writes it as `shape` on every input
+# slot whose spec is optional (litegraphService.ts: `shape: inputSpec.isOptional ? ... : undefined`);
+# it is present on the Desktop, core-pinned and standalone frontend lanes this project supports.
+HOST_OPTIONAL_SLOT_SHAPE: int = 7
+
+
+def _is_host_optional_slot(slot: Any) -> bool:
+    """Return True only when the host serialized ``slot`` as optional (``shape`` exactly integer 7)."""
+    # ``type(...) is int`` is deliberate: JSON producers can emit "7", 7.0 or booleans, and none of those
+    # is the host's marker; accepting them would let a loosely typed producer widen the exemption.
+    return (
+        isinstance(slot, dict)
+        and type(slot.get("shape")) is int
+        and slot["shape"] == HOST_OPTIONAL_SLOT_SHAPE
+    )
+
 # Parameter thresholds for anti-pattern detection
 PARAM_THRESHOLDS = {
     "batch_size": 16,       # batch > 16 is usually a mistake
@@ -186,6 +202,14 @@ def _check_disconnected_links(
                                 or (node_type == "BranchNode" and input_name in OPTIONAL_BRANCH_INPUTS)
                             )
                         ):
+                            continue
+                        # IMPORTANT: the host's own optional marker (`shape: 7`) is the authority for
+                        # optionality, not the slot type or the node name: typed optional inputs such as
+                        # VAE/CLIP on new first-party nodes would otherwise warn as "required". Keep this
+                        # inside the null-link branch; moving it above would hide "Broken Link Reference"
+                        # for an optional slot whose link id dangles. Do not widen it to other `shape`
+                        # values or loosely typed 7 ("7", 7.0, True): those are different host states.
+                        if _is_host_optional_slot(inp):
                             continue
                         # Some inputs are optional (like CLIP in some loaders)
                         # We'll only warn for clearly required types

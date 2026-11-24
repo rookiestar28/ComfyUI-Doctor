@@ -5,7 +5,9 @@ import copy
 import pytest
 
 from services.diagnostics.checks.workflow_lint import (
+    HOST_OPTIONAL_SLOT_SHAPE,
     _check_disconnected_links,
+    _is_host_optional_slot,
     check_workflow_lint,
 )
 from services.diagnostics.models import HealthCheckRequest, HealthReport, IssueSeverity
@@ -194,3 +196,114 @@ def test_mixed_branch_switch_and_required_node_keep_only_real_warning():
     ]
     assert HealthReport.compute_health_score(issues) == 90
     assert value == original
+
+
+# ---- Host-declared optional slots: the host serializes an optional input as `shape: 7` (RenderShape.HollowCircle) ----
+# The literal 7 is repeated on purpose so a wrong edit of the production constant cannot silently move this contract.
+HOST_MARKER = 7
+OPAQUE_NODE_ID = "insert:insert-workflow-op-id-padded-to-32c:root:node:9"
+HOST_OPTIONAL_NODES = (
+    ("ControlNetApplyAdvanced", False),  # core node known to Doctor
+    ("MiniMaxH3ImageConditioning", True),  # new first-party node, unknown to Doctor's list
+    ("SomeCustomNode", True),  # custom node
+)
+NON_MARKER_SHAPES = (0, 1, 2, 3, 6, 8, 70, -7, "7", 7.0, True, False, None, [7], {"shape": 7})
+ABSENT = object()
+
+
+def slot(name, input_type, link=None, **extra):
+    return {"name": name, "type": input_type, "link": link, **extra}
+
+
+def shaped(node_type, inputs, node_id=1):
+    return {"nodes": [{"id": node_id, "type": node_type, "inputs": inputs}], "links": []}
+
+
+def titles(issues):
+    return [issue.title for issue in issues]
+
+
+@pytest.mark.parametrize("node_type,unknown", HOST_OPTIONAL_NODES)
+@pytest.mark.parametrize("input_type", TYPES)
+@pytest.mark.parametrize("node_id", (1, OPAQUE_NODE_ID))
+def test_host_declared_optional_slot_has_no_false_warning_or_score_penalty(node_type, unknown, input_type, node_id):
+    value = shaped(node_type, [slot("vae", input_type, shape=HOST_MARKER)], node_id)
+    clean = shaped(node_type, [], node_id)
+    original = copy.deepcopy(value)
+    issues = diagnose(value)
+    expected = diagnose(clean)
+    assert "Disconnected Required Input" not in titles(issues)
+    assert titles(issues) == titles(expected)
+    assert HealthReport.compute_health_score(issues) == HealthReport.compute_health_score(expected)
+    assert value == original
+
+
+@pytest.mark.parametrize("input_type", TYPES)
+@pytest.mark.parametrize("shape", (ABSENT,) + NON_MARKER_SHAPES, ids=repr)
+def test_only_the_exact_integer_marker_exempts_a_null_link_slot(shape, input_type):
+    extra = {} if shape is ABSENT else {"shape": shape}
+    issues = diagnose(shaped("ControlNetApplyAdvanced", [slot("vae", input_type, **extra)]))
+    assert titles(issues) == ["Disconnected Required Input"]
+    assert issues[0].severity == IssueSeverity.WARNING
+    assert issues[0].target.node_id == 1
+    assert HealthReport.compute_health_score(issues) == 90
+
+
+def test_mixed_optional_and_required_slots_warn_only_for_the_required_slot():
+    value = shaped("ControlNetApplyAdvanced", [slot("vae", "VAE", shape=HOST_MARKER), slot("model", "MODEL")])
+    original = copy.deepcopy(value)
+    issues = diagnose(value)
+    control = diagnose(shaped("ControlNetApplyAdvanced", [slot("model", "MODEL")]))
+    assert titles(issues) == ["Disconnected Required Input"]
+    assert "'model'" in issues[0].summary and "'vae'" not in issues[0].summary
+    assert issues[0].target.node_id == 1
+    assert issues[0].issue_id == control[0].issue_id
+    assert HealthReport.compute_health_score(issues) == 90
+    assert value == original
+
+
+@pytest.mark.parametrize("input_type", TYPES)
+@pytest.mark.parametrize("link", (0, 99))
+def test_broken_link_on_a_host_optional_slot_still_reports_a_broken_reference(input_type, link):
+    issues = diagnose(shaped("ControlNetApplyAdvanced", [slot("vae", input_type, link, shape=HOST_MARKER)]))
+    expected = diagnose(shaped("ControlNetApplyAdvanced", [slot("vae", input_type, link)]))
+    assert titles(issues) == ["Broken Link Reference"]
+    assert issues[0].severity == IssueSeverity.CRITICAL
+    assert [issue.issue_id for issue in issues] == [issue.issue_id for issue in expected]
+    assert HealthReport.compute_health_score(issues) == HealthReport.compute_health_score(expected) == 70
+
+
+def test_connected_host_optional_slot_stays_clean():
+    value = shaped("ControlNetApplyAdvanced", [slot("vae", "VAE", 7, shape=HOST_MARKER)])
+    value["links"] = [[7, 2, 0, 1, 0, "VAE"]]
+    value["nodes"].append({"id": 2, "type": "CheckpointLoaderSimple"})
+    original = copy.deepcopy(value)
+    assert diagnose(value) == []
+    assert value == original
+
+
+@pytest.mark.parametrize("with_marker", (False, True))
+def test_switch_and_branch_exemptions_do_not_depend_on_the_marker(with_marker):
+    extra = {"shape": HOST_MARKER} if with_marker else {}
+    value = {"nodes": [
+        {"id": 1, "type": "ComfySwitchNode", "inputs": [slot("on_true", "MODEL", **extra)]},
+        {"id": 2, "type": "BranchNode", "inputs": [slot("autogrow.branch31", "VAE", **extra)]},
+    ], "links": []}
+    assert diagnose(value) == []
+
+
+def test_out_of_range_branch_name_is_exempt_only_with_the_host_marker():
+    unmarked = diagnose(shaped("BranchNode", [slot("autogrow.branch32", "MODEL")]))
+    marked = diagnose(shaped("BranchNode", [slot("autogrow.branch32", "MODEL", shape=HOST_MARKER)]))
+    assert titles(unmarked) == ["Disconnected Required Input"]
+    assert marked == []
+
+
+def test_marker_boundary_helper_accepts_only_the_exact_integer():
+    assert HOST_OPTIONAL_SLOT_SHAPE == HOST_MARKER
+    assert _is_host_optional_slot({"shape": HOST_MARKER}) is True
+    for bad in NON_MARKER_SHAPES:
+        assert _is_host_optional_slot({"shape": bad}) is False, repr(bad)
+    assert _is_host_optional_slot({}) is False
+    assert _is_host_optional_slot(None) is False
+    assert _is_host_optional_slot("shape") is False
