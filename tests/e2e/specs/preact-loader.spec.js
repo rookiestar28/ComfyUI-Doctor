@@ -69,8 +69,8 @@ test.describe('Preact Loader', () => {
         });
 
         test('should load Preact with all expected exports', async ({ page }) => {
-            // This test requires network access to esm.sh CDN
-            test.slow(); // Allow more time for CDN loading
+            // Loads the vendored local modules only; allow more time on slow or sandboxed file systems.
+            test.slow();
 
             const result = await page.evaluate(async () => {
                 try {
@@ -162,7 +162,7 @@ test.describe('Preact Loader', () => {
                 }
             });
 
-            // Should fail gracefully when both local and CDN are blocked
+            // Should fail gracefully when the local vendor files are blocked (there is no remote fallback)
             expect(result.success).toBe(false);
             // Error message should indicate failure (may vary)
             expect(result.error).toBeTruthy();
@@ -219,7 +219,7 @@ test.describe('Preact Loader', () => {
     // 5B.2/5B.5: Vendor load failure should trigger vanilla UI fallback
     test.describe('UI Fallback on Load Failure', () => {
         test('should render vanilla Chat UI when vendor files fail to load', async ({ page }) => {
-            // Block all vendor files AND CDN before page load
+            // Block all vendor files (and any remote host) before page load
             await page.route('**/web/lib/**', route => route.abort());
             await page.route('**/esm.sh/**', route => route.abort());
 
@@ -255,7 +255,7 @@ test.describe('Preact Loader', () => {
                 });
             });
 
-            // Block all vendor files AND CDN
+            // Block all vendor files (and any remote host)
             await page.route('**/web/lib/**', route => route.abort());
             await page.route('**/esm.sh/**', route => route.abort());
 
@@ -270,6 +270,45 @@ test.describe('Preact Loader', () => {
             // Verify Stats panel renders (vanilla fallback)
             const statsPanel = page.locator('#doctor-statistics-panel, #doctor-stats-content');
             await expect(statsPanel.first()).toBeVisible({ timeout: 5000 });
+        });
+    });
+
+    // S33: the shipped extension never loads a module from a remote host, not even as a fallback.
+    test.describe('No Remote Module Load', () => {
+        test('a failed local load requests no remote host and degrades to the vanilla UI', async ({ page }) => {
+            const origin = new URL(page.url()).origin;
+            const foreign = [];
+            page.on('request', (request) => {
+                const url = new URL(request.url());
+                if (/^https?:$/.test(url.protocol) && url.origin !== origin) foreign.push(url.href);
+            });
+
+            // Block the local Preact modules and abort (never serve) anything that leaves the origin; the
+            // request event is still emitted for an aborted request, so a remote attempt cannot hide.
+            await page.route('**/web/lib/preact*.module.js', (route) => route.abort());
+            await page.route('**/web/lib/htm.module.js', (route) => route.abort());
+            await page.route('**/web/lib/signals-core.module.js', (route) => route.abort());
+            await page.route((url) => url.origin !== origin, (route) => route.abort());
+
+            await page.goto('test-harness.html');
+            await page.waitForFunction(() => window.__doctorTestReady === true, null, { timeout: 20000 });
+
+            const result = await page.evaluate(async () => {
+                const loader = await import('/web/preact-loader.js');
+                loader.resetLoader();
+                try {
+                    await loader.loadPreact();
+                    return { rejected: false };
+                } catch (error) {
+                    return { rejected: true, message: String(error.message) };
+                }
+            });
+
+            expect(foreign).toEqual([]);
+            expect(result.rejected).toBe(true);
+            expect(result.message).toMatch(/local/i);
+            expect(result.message).not.toMatch(/cdn|esm\.sh/i);
+            await assertChatFallbackUI(page);
         });
     });
 

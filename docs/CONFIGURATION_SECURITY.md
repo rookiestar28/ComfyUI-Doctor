@@ -225,7 +225,7 @@ the host setting-change telemetry registry.
 
 Doctor frontend assets are served locally from the extension directory. External CDN use is not required for normal operation.
 
-The chat markdown and code-highlighting libraries load only from the extension's own `web/lib/` directory, whatever the custom-node folder is named; there is no CDN fallback for them. If those files are missing, chat replies are shown as plain text.
+The chat markdown and code-highlighting libraries load only from the extension's own `web/lib/` directory, whatever the custom-node folder is named; there is no CDN fallback for them. If those files are missing, chat replies are shown as plain text. The Preact libraries behind the chat and statistics panels follow the same rule: they load only from `web/lib/`, never from a remote host, and if they cannot be loaded Doctor shows its plain (non-Preact) chat and statistics panels instead.
 
 ## Rendered Chat Replies
 

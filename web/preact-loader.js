@@ -2,7 +2,7 @@
  * Preact Loader Utility
  * =====================
  * Provides a centralized, single-instance loader for Preact and related libraries.
- * Ensures consistent loading from local vendor files with CDN fallback.
+ * Ensures consistent loading from the shipped local vendor files only (there is no remote fallback).
  *
  * Usage:
  *   import { loadPreact, isPreactEnabled } from './utils/preact-loader.js';
@@ -36,14 +36,6 @@ const VENDOR_PATHS = {
     preactHooks: './lib/preact-hooks.module.js',
     signals: './lib/preact-signals.module.js',
     htm: './lib/htm.module.js'
-};
-
-// CDN fallback paths (used if local files fail)
-const CDN_PATHS = {
-    preact: `https://esm.sh/preact@${VERSIONS.preact}`,
-    preactHooks: `https://esm.sh/preact@${VERSIONS.preact}/hooks`,
-    signals: `https://esm.sh/@preact/signals@${VERSIONS.signals}`,
-    htm: `https://esm.sh/htm@${VERSIONS.htm}`
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -124,12 +116,12 @@ async function doLoad() {
     loadError = null;
 
     try {
-        // Try local vendor files first
+        // Load the shipped local vendor files; a failure rejects and the island registry renders the vanilla UI.
         const results = await Promise.allSettled([
-            tryImport(VENDOR_PATHS.preact, CDN_PATHS.preact, 'Preact'),
-            tryImport(VENDOR_PATHS.preactHooks, CDN_PATHS.preactHooks, 'Preact Hooks'),
-            tryImport(VENDOR_PATHS.signals, CDN_PATHS.signals, 'Preact Signals'),
-            tryImport(VENDOR_PATHS.htm, CDN_PATHS.htm, 'HTM')
+            tryImport(VENDOR_PATHS.preact, 'Preact'),
+            tryImport(VENDOR_PATHS.preactHooks, 'Preact Hooks'),
+            tryImport(VENDOR_PATHS.signals, 'Preact Signals'),
+            tryImport(VENDOR_PATHS.htm, 'HTM')
         ]);
 
         // Check for failures
@@ -155,25 +147,22 @@ async function doLoad() {
 }
 
 /**
- * Try importing a module from local path, fallback to CDN.
+ * Import one module from its shipped local vendor path.
+ *
+ * IMPORTANT: there is deliberately no remote (CDN) fallback. A fallback would load unpinned third-party code
+ * without any integrity check into the ComfyUI page origin whenever a local file is missing or blocked, which
+ * is a remote code execution path for a rare failure. A failed import rejects instead, and the island registry
+ * degrades to the vanilla UI (covered by the "No Remote Module Load" case in tests/e2e/specs/preact-loader.spec.js
+ * and tests/test_s33_no_remote_module_load.py).
  */
-async function tryImport(localPath, cdnPath, name) {
+async function tryImport(localPath, name) {
     try {
-        // Try local first
         const module = await import(localPath);
         console.log(`[Preact-Loader] ✅ ${name} loaded from local vendor`);
         return module;
     } catch (localError) {
-        console.warn(`[Preact-Loader] ⚠️ ${name} local load failed, trying CDN...`, localError.message);
-
-        try {
-            const module = await import(cdnPath);
-            console.log(`[Preact-Loader] ✅ ${name} loaded from CDN`);
-            return module;
-        } catch (cdnError) {
-            console.error(`[Preact-Loader] ❌ ${name} CDN load also failed:`, cdnError.message);
-            throw new Error(`${name}: Local failed (${localError.message}), CDN failed (${cdnError.message})`);
-        }
+        console.error(`[Preact-Loader] ❌ ${name} local vendor load failed:`, localError.message);
+        throw new Error(`${name}: local vendor file failed to load (${localError.message})`);
     }
 }
 
