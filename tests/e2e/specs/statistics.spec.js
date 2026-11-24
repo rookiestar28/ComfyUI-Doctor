@@ -1161,3 +1161,71 @@ test.describe('Vanilla renderer escaping (S34)', () => {
     expect(await page.locator('#s34-privacy').count()).toBe(0);
   });
 });
+
+
+// S36: the Preact statistics island renders the pull-request address from the server reply. Preact escapes the
+// text but does not judge the scheme, so only an address accepted by the sanitizer's URL judge may become a link.
+// IMPORTANT: unlike the S34 group above, the island must stay ENABLED here (no disablePreact).
+test.describe('Statistics island pull-request link (S36)', () => {
+  const PREVIEW_OK = { success: true, submission_id: 's', files: {}, warnings: [], github: { ready: true }, preview: { schema_version: '1.0' } };
+  const SUBMIT_OK = (prUrl) => ({
+    success: true, submission_id: 's', files: {}, warnings: [], preview: { schema_version: '1.0' },
+    github: { ready: true, pr_number: 1, pr_url: prUrl },
+  });
+
+  async function submitWithAddress(page, prUrl) {
+    await setupMocks(page);
+    await page.goto('test-harness.html');
+    await clearStorage(page);
+    await page.evaluate(() => { if (window.api) window.api.fetchApi = undefined; });
+    await waitForDoctorReady(page);
+    await waitForI18nLoaded(page);
+    await page.route('**/doctor/feedback/preview', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(PREVIEW_OK),
+    }));
+    await page.route('**/doctor/feedback/submit', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(SUBMIT_OK(prUrl)),
+    }));
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(250);
+    await page.evaluate(() => {
+      window.app?.Doctor?.handleNewError?.({
+        last_error: 'RuntimeError: mock', error_summary: 'RuntimeError: mock', suggestion: 'Test suggestion',
+        timestamp: '2026-02-26T12:00:00Z', node_context: { node_id: '12', node_name: 'KSampler' },
+      });
+    });
+    await page.locator('#doctor-feedback-panel summary').click();
+    await page.fill('#doctor-feedback-suggestion', 'Test suggestion');
+    await page.click('#doctor-feedback-preview-btn');
+    await page.click('#doctor-feedback-submit-btn');
+  }
+
+  test('the island is the active renderer in this group', async ({ page }) => {
+    await submitWithAddress(page, 'https://github.com/rookiestar28/ComfyUI-Doctor/pull/1');
+    expect(await page.evaluate(() => window.app.Doctor.statsIslandActive)).toBe(true);
+  });
+
+  test('a script address is shown as text, not as a link', async ({ page }) => {
+    await submitWithAddress(page, 'javascript:window.__s36=1');
+    await expect(page.locator('#doctor-feedback-status')).toContainText('javascript:window.__s36=1');
+    expect(await page.locator('#doctor-feedback-status a').count()).toBe(0);
+    expect(await page.evaluate(() => window.__s36 || 0)).toBe(0);
+  });
+
+  test('a value that is not an address at all is shown as text', async ({ page }) => {
+    await submitWithAddress(page, '<img id="s36-pr" src="x" onerror="window.__s36=1">');
+    await expect(page.locator('#doctor-feedback-status')).toContainText('<img id="s36-pr"');
+    expect(await page.locator('#s36-pr, #doctor-feedback-status img, #doctor-feedback-status a').count()).toBe(0);
+    expect(await page.evaluate(() => window.__s36 || 0)).toBe(0);
+  });
+
+  test('a normal pull-request address stays a link with the same text', async ({ page }) => {
+    const url = 'https://github.com/rookiestar28/ComfyUI-Doctor/pull/123';
+    await submitWithAddress(page, url);
+    const link = page.locator('#doctor-feedback-status a');
+    await expect(link).toHaveAttribute('href', url);
+    await expect(link).toHaveText(url);
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+});

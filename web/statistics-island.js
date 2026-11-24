@@ -6,6 +6,7 @@
 
 import { loadPreact, isPreactEnabled } from './preact-loader.js';
 import { DoctorAPI } from './doctor_api.js';
+import { judgeSanitizerUrl } from './doctor_rendering.js';
 // 5C.2: Use selectors for UI text
 import { getUIText, getWorkflowContext } from './doctor_selectors.js';
 import { setState } from './doctor_actions.js';
@@ -361,7 +362,16 @@ function CommunityFeedbackSection({ uiText, stats }) {
             const result = await DoctorAPI.submitCommunityFeedback(buildPayload(), adminToken);
             if (result?.success) {
                 const prUrl = result?.github?.pr_url;
-                setStatus({ type: 'success', text: uiText?.feedback_submit_success || 'GitHub PR created', url: prUrl });
+                const successText = uiText?.feedback_submit_success || 'GitHub PR created';
+                // IMPORTANT (S36): only an address the sanitizer's judge accepts may reach the anchor's href. Preact
+                // escapes attribute text but does not block a javascript: address, and the server reply is not trusted.
+                // Any other non-empty value is shown as plain text (the template renders `text` escaped).
+                const safePrUrl = judgeSanitizerUrl(prUrl, 'a');
+                if (safePrUrl) {
+                    setStatus({ type: 'success', text: successText, url: safePrUrl });
+                } else {
+                    setStatus({ type: 'success', text: prUrl ? `${successText}: ${prUrl}` : successText });
+                }
                 if (result.preview) {
                     setPreviewOutput(JSON.stringify(result.preview, null, 2));
                 }
