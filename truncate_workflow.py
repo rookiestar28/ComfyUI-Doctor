@@ -168,7 +168,11 @@ def truncate_workflow_smart(
 
 def _prune_node_properties(workflow: dict | list, nodes: list) -> dict | list:
     """Remove verbose/non-essential properties from nodes."""
-    PRUNE_KEYS = {"widgets_values", "pos", "size", "order", "mode", "flags", "color", "bgcolor"}
+    # IMPORTANT: the host frontend serializes every widget value twice: positionally (`widgets_values`)
+    # and by name (`widgets_values_named`). Both are pruned together. Pruning only the positional copy
+    # leaves the named copy (including full prompt text) in Strategy 1, which then overflows the budget
+    # and collapses a workflow that fits into a node_removal result holding only the error node.
+    PRUNE_KEYS = {"widgets_values", "widgets_values_named", "pos", "size", "order", "mode", "flags", "color", "bgcolor"}
 
     def trim_value(value):
         if isinstance(value, str) and len(value) > 100:
@@ -223,7 +227,26 @@ def _get_priority_nodes(workflow: dict | list, error_node_id: str, max_hops: int
                     adjacency[node_id].add(str(inp_val[0]))
                 elif isinstance(inp_val, (int, str)) and str(inp_val) in node_map:
                     adjacency[node_id].add(str(inp_val))
-    
+
+    # IMPORTANT: UI-format workflows (what the host frontend serializes) carry no connections inside a
+    # node: `inputs` is a list of slot dicts and every connection is a top-level `links` row
+    # [link_id, origin_id, origin_slot, target_id, target_slot, type]. Without this, the neighborhood of
+    # the error node is the error node alone and every over-budget UI workflow loses its context.
+    # Rows are untrusted JSON: skip anything that is not a well-formed row between two known nodes
+    # instead of raising (a self link is harmless: it only re-adds a node to its own neighborhood).
+    # The dict-input branch above stays the only authority for API-format nodes.
+    links = workflow.get("links") if isinstance(workflow, dict) else None
+    if isinstance(links, list):
+        for row in links:
+            if not isinstance(row, (list, tuple)) or len(row) < 5:
+                continue
+            origin_id, target_id = str(row[1]), str(row[3])
+            if origin_id not in node_map or target_id not in node_map:
+                continue
+            if isinstance(node_map[target_id].get("inputs", []), dict):
+                continue
+            adjacency[target_id].add(origin_id)
+
     # BFS from error node
     priority = {str(error_node_id)}
     frontier = {str(error_node_id)}
