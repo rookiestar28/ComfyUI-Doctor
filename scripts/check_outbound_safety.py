@@ -9,7 +9,8 @@ Prevents bypass of outbound.py sanitization funnel by detecting:
 4. Missing sanitizer application
 5. aiohttp.ClientSession()/TCPConnector() created outside the destination-policy session modules
    (import aliases and qualified names included)
-6. HTTP client calls that do not pass allow_redirects=False
+6. HTTP client calls that do not pass allow_redirects=False (the receiver is recognised by where it
+   comes from, not only by a name that ends with "session")
 7. session_manager.py sessions without a connector, or connectors without the policy resolver
 8. Raw HTTP client imports (requests, httpx, urllib3, urllib.request, http.client)
 
@@ -59,6 +60,11 @@ class OutboundSafetyChecker(ast.NodeVisitor):
     CLIENT_CONSTRUCTORS = frozenset({'ClientSession', 'TCPConnector'})
     HTTP_METHODS = {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'request'}
     RAW_HTTP_CLIENT_MODULES = frozenset({'requests', 'httpx', 'urllib3', 'urllib.request', 'http.client'})
+    # Sources of an HTTP client object: the policy session factory (any `<x>.get_session(...)`), an aiohttp
+    # ClientSession, or a raw client constructor on a raw client module.
+    SESSION_FACTORY_NAMES = frozenset({'get_session'})
+    RAW_CLIENT_CONSTRUCTORS = frozenset({'Session', 'session', 'Client', 'AsyncClient', 'PoolManager'})
+    RAW_CLIENT_ROOTS = frozenset({'requests', 'httpx', 'urllib3'})
     # CRITICAL: destination-policy rules are never suppressible by the sanitization-funnel nosec
     # marker; a new outbound client must be added to the allowlist above in a reviewed change.
     POLICY_RULES = frozenset({
@@ -78,6 +84,13 @@ class OutboundSafetyChecker(ast.NodeVisitor):
         self.module_aliases = {'aiohttp'}
         self.constructor_aliases: Dict[str, str] = {}
         self.request_aliases: set = set()
+        self.raw_client_aliases: set = set()
+        # Receivers: plain names are scoped to their function (module level included for every function);
+        # dotted `self.attr` keys are module-wide because a method may bind what another method uses.
+        self.module_receivers: set = set()
+        self.attribute_receivers: set = set()
+        self.function_receivers: Dict[int, set] = {}
+        self.receiver_scopes: List[set] = []
 
         # Track state within functions
         self.in_function = False
@@ -86,7 +99,21 @@ class OutboundSafetyChecker(ast.NodeVisitor):
         self.has_session_post = False
         self.payload_assignments = []
 
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        self.receiver_scopes.append(self.function_receivers.get(id(node), set()))
+        try:
+            self.generic_visit(node)
+        finally:
+            self.receiver_scopes.pop()
+
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        self.receiver_scopes.append(self.function_receivers.get(id(node), set()))
+        try:
+            self._visit_async_function(node)
+        finally:
+            self.receiver_scopes.pop()
+
+    def _visit_async_function(self, node: ast.AsyncFunctionDef):
         # Reset state for each function
         old_state = (self.sanitizer_created, self.sanitizer_applied,
                      self.has_session_post, self.payload_assignments)
@@ -154,6 +181,7 @@ class OutboundSafetyChecker(ast.NodeVisitor):
                     if alias.name == 'aiohttp' or alias.name.startswith('aiohttp.'):
                         self.module_aliases.add(alias.asname or alias.name.split('.')[0])
                     if self._is_raw_http_module(alias.name):
+                        self.raw_client_aliases.add(alias.asname or alias.name.split('.')[0])
                         self.add_violation(node, 'RAW_HTTP_CLIENT_IMPORT',
                             f'import {alias.name}: use the policy session from session_manager.py')
             elif isinstance(node, ast.ImportFrom):
@@ -168,6 +196,89 @@ class OutboundSafetyChecker(ast.NodeVisitor):
                     if self._is_raw_http_module(module) or self._is_raw_http_module(f'{module}.{alias.name}'):
                         self.add_violation(node, 'RAW_HTTP_CLIENT_IMPORT',
                             f'from {module} import {alias.name}: use the policy session from session_manager.py')
+
+    _SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+    def collect_receivers(self, tree: ast.AST) -> None:
+        """Pre-pass: names and ``self.attr`` keys that are bound from an HTTP client source.
+
+        IMPORTANT: this is deliberately flow-insensitive and per function scope. A name bound from a source
+        anywhere in its function stays a receiver there (a later rebinding does not clear it), while the same
+        name in another function is untouched. Do not widen the *name* heuristic to words such as ``client``
+        or ``http``: unrelated objects use them and would turn this CI backstop into noise.
+        """
+        self._collect_scope(tree, self.module_receivers)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                names: set = set()
+                self._collect_scope(node, names)
+                self.function_receivers[id(node)] = names
+
+    def _scope_nodes(self, scope: ast.AST):
+        """Nodes of one scope, not descending into nested function scopes (those are collected on their own)."""
+        stack = list(ast.iter_child_nodes(scope))
+        while stack:
+            node = stack.pop()
+            yield node
+            if not isinstance(node, self._SCOPE_NODES):
+                stack.extend(ast.iter_child_nodes(node))
+
+    def _collect_scope(self, scope: ast.AST, names: set) -> None:
+        bindings = []
+        for node in self._scope_nodes(scope):
+            if isinstance(node, ast.Assign):
+                bindings.extend((target, node.value) for target in node.targets)
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                bindings.append((node.target, node.value))
+            elif isinstance(node, ast.NamedExpr):
+                bindings.append((node.target, node.value))
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                bindings.extend((item.optional_vars, item.context_expr) for item in node.items if item.optional_vars)
+        # Alias chains (`other = http`) need a fixed point because the scan order is not source order.
+        changed = True
+        while changed:
+            changed = False
+            for target, value in bindings:
+                key = self._receiver_key(target)
+                if key is None or not self._is_http_source(value, names):
+                    continue
+                bucket = self.attribute_receivers if '.' in key else names
+                if key not in bucket:
+                    bucket.add(key)
+                    changed = True
+
+    @staticmethod
+    def _receiver_key(node: ast.AST) -> Optional[str]:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            return f'{node.value.id}.{node.attr}'
+        return None
+
+    def _is_http_source(self, value: ast.AST, names: set) -> bool:
+        if isinstance(value, ast.Await):
+            value = value.value
+        if isinstance(value, ast.Call):
+            func = value.func
+            called = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+            if called in self.SESSION_FACTORY_NAMES:
+                return True
+            if self._client_constructor(value) == 'ClientSession':
+                return True
+            return (isinstance(func, ast.Attribute) and func.attr in self.RAW_CLIENT_CONSTRUCTORS
+                    and isinstance(func.value, ast.Name)
+                    and (func.value.id in self.RAW_CLIENT_ROOTS or func.value.id in self.raw_client_aliases))
+        key = self._receiver_key(value)
+        return key is not None and (key in names or key in self.attribute_receivers)
+
+    def _is_http_receiver(self, receiver: ast.AST) -> bool:
+        """True when ``receiver`` is bound from an HTTP client source in a visible scope."""
+        key = self._receiver_key(receiver)
+        if key is None:
+            return False
+        if '.' in key:
+            return key in self.attribute_receivers
+        return key in self.module_receivers or any(key in scope for scope in self.receiver_scopes)
 
     def _is_raw_http_module(self, name: str) -> bool:
         return any(name == module or name.startswith(module + '.') for module in self.RAW_HTTP_CLIENT_MODULES)
@@ -198,11 +309,12 @@ class OutboundSafetyChecker(ast.NodeVisitor):
         if not isinstance(func, ast.Attribute) or func.attr not in self.HTTP_METHODS:
             return False
         receiver = func.value
-        if isinstance(receiver, ast.Name):
-            return receiver.id in self.module_aliases or receiver.id.lower().endswith('session')
-        if isinstance(receiver, ast.Attribute):
-            return receiver.attr.lower().endswith('session')
-        return False
+        if isinstance(receiver, ast.Name) and (
+                receiver.id in self.module_aliases or receiver.id.lower().endswith('session')):
+            return True
+        if isinstance(receiver, ast.Attribute) and receiver.attr.lower().endswith('session'):
+            return True
+        return self._is_http_receiver(receiver)
 
     @staticmethod
     def _disables_redirects(node: ast.Call) -> bool:
@@ -239,11 +351,11 @@ class OutboundSafetyChecker(ast.NodeVisitor):
         return False
 
     def _is_session_post(self, node: ast.Call) -> bool:
-        """Check if node is session.post() call."""
-        return (isinstance(node.func, ast.Attribute) and
-                node.func.attr == 'post' and
-                isinstance(node.func.value, ast.Name) and
-                node.func.value.id == 'session')
+        """Check if node is session.post() or a post on a receiver bound from an HTTP client source."""
+        if not (isinstance(node.func, ast.Attribute) and node.func.attr == 'post'):
+            return False
+        receiver = node.func.value
+        return (isinstance(receiver, ast.Name) and receiver.id == 'session') or self._is_http_receiver(receiver)
 
     def _is_json_dumps(self, node: ast.Call) -> bool:
         """Check if node is json.dumps() call."""
@@ -398,6 +510,7 @@ def check_file(file_path: Path, project_root: Optional[Path] = None) -> List[Vio
     try:
         checker = OutboundSafetyChecker(str(file_path), source, _relative_posix(file_path, root))
         checker.collect_imports(tree)
+        checker.collect_receivers(tree)
         checker.visit(tree)
         return checker.violations
     except Exception as e:  # checker bug: never pass silently
