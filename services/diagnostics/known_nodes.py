@@ -88,3 +88,52 @@ def is_known_node_type(node_type: Any) -> bool:
     except Exception:
         # A registry that is being mutated or is hostile must not break the check.
         return False
+
+
+# A legacy group node is serialized with the type ``workflow>Name``; the name is the group's own and is never
+# a registered host class. Matching is exact and case-sensitive on purpose.
+WORKFLOW_GROUP_NODE_PREFIX = "workflow>"
+
+# The workflow file is untrusted input: the walk over nested subgraph definitions is bounded.
+MAX_LOCAL_DEFINITION_DEPTH = 16
+MAX_LOCAL_DEFINITIONS = 2000
+
+
+def collect_workflow_local_node_types(workflow: Any) -> FrozenSet[str]:
+    """The ids of the subgraphs this workflow defines (``definitions.subgraphs[].id``), nested ones included.
+
+    A node whose ``type`` is one of these ids is an instance of a subgraph defined in the same file, not a
+    node the host failed to register. Only non-empty string ids count and every other shape contributes
+    nothing. The walk is iterative and capped (depth and number of definitions); past a cap the remaining
+    definitions are simply not recognized, so their instances keep the finding they had before.
+    """
+    found = set()
+    seen = 0
+    stack = [(workflow, 0)]
+    while stack:
+        scope, depth = stack.pop()
+        definitions = scope.get("definitions") if isinstance(scope, dict) else None
+        subgraphs = definitions.get("subgraphs") if isinstance(definitions, dict) else None
+        if not isinstance(subgraphs, list):
+            continue
+        for definition in subgraphs:
+            if not isinstance(definition, dict):
+                continue
+            seen += 1
+            if seen > MAX_LOCAL_DEFINITIONS:
+                return frozenset(found)
+            definition_id = definition.get("id")
+            if isinstance(definition_id, str) and definition_id:
+                found.add(definition_id)
+            if depth + 1 < MAX_LOCAL_DEFINITION_DEPTH:
+                stack.append((definition, depth + 1))
+    return frozenset(found)
+
+
+def is_workflow_local_node_type(node_type: Any, local_types: FrozenSet[str] = frozenset()) -> bool:
+    """True for a non-empty string that names a subgraph of this workflow or uses the group-node convention."""
+    if not isinstance(node_type, str) or not node_type:
+        return False
+    if node_type.startswith(WORKFLOW_GROUP_NODE_PREFIX):
+        return True
+    return node_type in local_types

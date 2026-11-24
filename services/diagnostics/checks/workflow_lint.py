@@ -8,7 +8,8 @@ Analyzes workflow graph structure to detect:
 """
 
 import logging
-from typing import Dict, Any, List, Set, Tuple
+import math
+from typing import Dict, Any, FrozenSet, List, Set, Tuple
 
 from ..models import (
     HealthIssue,
@@ -18,7 +19,12 @@ from ..models import (
     IssueTarget,
 )
 from . import register_check
-from ..known_nodes import STATIC_KNOWN_CORE_NODE_TYPES, is_known_node_type
+from ..known_nodes import (
+    STATIC_KNOWN_CORE_NODE_TYPES,
+    collect_workflow_local_node_types,
+    is_known_node_type,
+    is_workflow_local_node_type,
+)
 from ..node_identity import (
     NodeIdentity,
     resolve_node_identities,
@@ -52,6 +58,15 @@ OPTIONAL_BRANCH_INPUTS: frozenset[str] = frozenset(
 # slot whose spec is optional (litegraphService.ts: `shape: inputSpec.isOptional ? ... : undefined`);
 # it is present on the Desktop, core-pinned and standalone frontend lanes this project supports.
 HOST_OPTIONAL_SLOT_SHAPE: int = 7
+
+
+def _is_usable_link_id(value: Any) -> bool:
+    """True when ``value`` can be a link id key. A list or dict id (a malformed file) is not hashable."""
+    try:
+        hash(value)
+    except TypeError:
+        return False
+    return True
 
 
 def _is_host_optional_slot(slot: Any) -> bool:
@@ -114,13 +129,17 @@ async def check_workflow_lint(
         for link in links:
             if isinstance(link, list) and len(link) >= 5:
                 link_id, from_node, from_slot, to_node, to_slot = link[:5]
+                # IMPORTANT (R80): the id is a dict key. One malformed entry (a list or dict id) must be skipped
+                # alone; letting it raise would drop every finding of this check for the whole workflow.
+                if not _is_usable_link_id(link_id):
+                    continue
                 link_map[link_id] = (from_node, from_slot, to_node, to_slot)
 
     # Check 1: Disconnected/broken links
     issues.extend(_check_disconnected_links(identities, link_map))
 
-    # Check 2: Missing/unsupported nodes
-    issues.extend(_check_unsupported_nodes(identities))
+    # Check 2: Missing/unsupported nodes (an instance of a subgraph defined in this file is not one)
+    issues.extend(_check_unsupported_nodes(identities, collect_workflow_local_node_types(workflow)))
 
     # Check 3: Parameter anti-patterns
     issues.extend(_check_parameter_antipatterns(identities))
@@ -161,6 +180,10 @@ def _check_disconnected_links(
                 if isinstance(inp, dict):
                     input_name = inp.get("name", f"input_{idx}")
                     link_id = inp.get("link")
+                    # IMPORTANT (R80): `link_id not in link_map` and the type lookup below hash their operands. An
+                    # input whose link is a list or dict is skipped alone; its sibling inputs are still checked.
+                    if not _is_usable_link_id(link_id):
+                        continue
 
                     # link is null but input exists - might be optional
                     # Check if there's a type hint suggesting it's required
@@ -190,7 +213,7 @@ def _check_disconnected_links(
                         # Some inputs are optional (like CLIP in some loaders)
                         # We'll only warn for clearly required types
                         required_types = {"MODEL", "CLIP", "VAE", "LATENT", "CONDITIONING"}
-                        if input_type in required_types:
+                        if isinstance(input_type, str) and input_type in required_types:
                             target = IssueTarget(node_id=node_id)
                             issues.append(HealthIssue(
                                 issue_id=HealthIssue.generate_issue_id(
@@ -242,6 +265,7 @@ def _check_disconnected_links(
 
 def _check_unsupported_nodes(
     identities: List[NodeIdentity],
+    local_types: FrozenSet[str] = frozenset(),
 ) -> List[HealthIssue]:
     """Check for potentially missing or unsupported nodes."""
     issues: List[HealthIssue] = []
@@ -258,6 +282,12 @@ def _check_unsupported_nodes(
         if is_known_node_type(node_type):
             continue
 
+        # IMPORTANT (R75): a type that names a subgraph defined in this workflow (exact id) or uses the legacy
+        # `workflow>` group-node convention is an instance, not a missing node. An undefined uuid keeps its
+        # finding: only ids this file defines are accepted.
+        if is_workflow_local_node_type(node_type, local_types):
+            continue
+
         # Check for common custom node prefixes (these are expected to be custom)
         custom_prefixes = (
             "IPAdapter", "ControlNet", "AnimateDiff", "VHS_", "Impact",
@@ -270,7 +300,11 @@ def _check_unsupported_nodes(
         # Check for error indicators in the node (ComfyUI marks missing nodes)
         # Note: This is heuristic - actual missing node detection requires backend
         widgets_values = node.get("widgets_values", [])
-        properties = node.get("properties", {})
+        properties = node.get("properties")
+        # IMPORTANT (R80): `properties` comes from the file; null, a list or a string would make `.get` raise and
+        # abort the whole check. A value that is not a dict is treated as no properties.
+        if not isinstance(properties, dict):
+            properties = {}
 
         # If node has "Node not found" style properties, it's definitely missing
         if properties.get("missing_node"):
@@ -443,6 +477,11 @@ def _check_latent_params(
 
     for idx, value in enumerate(widgets_values):
         if not isinstance(value, (int, float)):
+            continue
+
+        # IMPORTANT (R80): Infinity and NaN parse from JSON but `int()` raises on them; skip them like any
+        # other non-numeric entry instead of aborting the check.
+        if isinstance(value, float) and not math.isfinite(value):
             continue
 
         value = int(value)
