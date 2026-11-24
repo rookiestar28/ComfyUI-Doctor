@@ -39,7 +39,7 @@ def _create_minimal_reference(root: Path) -> None:
         "ModelPatcher. VRAM estimates may be unreliable especially on Windows')\n",
     )
     _write(root / "ComfyUI" / "nodes.py", "EXTENSION_WEB_DIRS = {}\nWEB_DIRECTORY = './web'\n")
-    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.57.1\n")
+    _write(root / "ComfyUI" / "requirements.txt", "comfyui-frontend-package==1.59.11\n")
     _write(
         root / "ComfyUI" / "README.md",
         "torch 2.7 is minimally supported but using a newer version is extremely recommended.\n",
@@ -170,7 +170,7 @@ def _create_minimal_reference(root: Path) -> None:
     )
     _write(
         root / "ComfyUI_frontend" / "package.json",
-        '{"name": "@comfyorg/comfyui-frontend", "version": "1.59.1"}\n',
+        '{"name": "@comfyorg/comfyui-frontend", "version": "1.61.8"}\n',
     )
     _write(
         root / "ComfyUI_frontend" / "src" / "types" / "extensionTypes.ts",
@@ -198,9 +198,9 @@ def _create_minimal_reference(root: Path) -> None:
         "toggleSidebarTab\n",
     )
     _write(
-        root / "ComfyUI_frontend" / "src" / "platform" / "remote" / "comfyui" / "execution" / "types.ts",
+        root / "ComfyUI_frontend" / "packages" / "api-client" / "src" / "executionTypes.ts",
         "export interface ExecutionErrorWsMessage extends ExecutionWsMessageBase {\n"
-        "  node_id?: NodeId | null\n  node_type: string\n  traceback: string[]\n"
+        "  node_id?: NodeId | null\n  node_type: string\n  traceback?: string[] | null\n"
         "  exception_message: string\n  exception_type: string\n"
         "  current_inputs?: unknown\n  current_outputs?: unknown\n}\n",
     )
@@ -222,7 +222,7 @@ def _create_minimal_reference(root: Path) -> None:
         "])\n",
     )
     _write(
-        root / "ComfyUI_frontend" / "src" / "scripts" / "api.ts",
+        root / "ComfyUI_frontend" / "packages" / "api-client" / "src" / "ComfyApi.ts",
         "async queuePrompt(number, { output, workflow }) {\n"
         "  const body = {\n"
         "    extra_data: {\n"
@@ -240,10 +240,11 @@ def _create_minimal_reference(root: Path) -> None:
         "}\n",
     )
     _write(
-        root / "ComfyUI_frontend" / "src" / "platform" / "remote" / "comfyui" / "jobs" / "fetchJobs.ts",
+        root / "ComfyUI_frontend" / "packages" / "api-client" / "src" / "fetchJobs.ts",
         "async function fetchJobsRaw(fetchApi, statuses, maxItems = 200, offset = 0) {\n"
         "  const statusParam = statuses.join(',')\n"
-        "  const url = `/jobs?status=${statusParam}&limit=${maxItems}&offset=${offset}`\n"
+        "  const cappedTotalParam = ''\n"
+        "  const url = `/jobs?status=${statusParam}&limit=${maxItems}&offset=${offset}${cappedTotalParam}`\n"
         "  return fetchApi(url)\n"
         "}\n"
         "export async function fetchHistory(fetchApi, maxItems = 200, offset = 0) {\n"
@@ -254,7 +255,7 @@ def _create_minimal_reference(root: Path) -> None:
         "}\n",
     )
     _write(
-        root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "settingStore.ts",
+        root / "ComfyUI_frontend" / "packages" / "settings-core" / "src" / "settingStore.ts",
         "async function callHandler(setting, newValue, oldValue) {\n"
         "  try {\n"
         "    await setting?.onChange?.(newValue, oldValue)\n"
@@ -272,7 +273,7 @@ def _create_minimal_reference(root: Path) -> None:
         "if (event) useTelemetry()?.trackSettingChanged(event)\n",
     )
     _write(
-        root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "types.ts",
+        root / "ComfyUI_frontend" / "packages" / "settings-core" / "src" / "types.ts",
         "type SettingTelemetryOptions =\n"
         "  | { trackChanges: false; includeValues?: never }\n"
         "  | { trackChanges?: true; includeValues?: boolean }\n"
@@ -339,13 +340,16 @@ function getRestoredWidgetValue(graphId, nodeId, widget, positionalIndex) {
   if (!restoration) return
   if (restoration.restoreNamed && restoration.named) {
     if (!Object.hasOwn(restoration.named, widget.name)) return
-    return { value: coerceRestoredWidgetValue(widget, restoration.named[widget.name]) }
+    const saved = restoration.named[widget.name]
+    return convertRestoredValue(graphId, nodeId, widget, saved)
   }
   if (positionalIndex >= restoration.positional.length) return
-  return { value: coerceRestoredWidgetValue(
-    widget,
-    restoration.positional[positionalIndex]
-  ) }
+  const saved = restoration.positional[positionalIndex]
+  return convertRestoredValue(graphId, nodeId, widget, saved)
+}
+function convertRestoredValue(graphId, nodeId, widget, saved) {
+  const value = coerceRestoredWidgetValue(widget, saved)
+  return { value }
 }
 export function stripGraphPrefix(scopedId: SerializedNodeId): NodeId | null {
   let rest = String(scopedId)
@@ -366,8 +370,8 @@ export function stripGraphPrefix(scopedId: SerializedNodeId): NodeId | null {
         / "ComfyUI_frontend"
         / "src"
         / "platform"
-        / "billing"
-        / "composables"
+        / "auth"
+        / "partnerNode"
         / "usePartnerNodesRunGate.ts",
         "export function partnerRunGateBlocksAutoQueue(): boolean {\n"
         "  if (isCloud) return false\n"
@@ -403,7 +407,7 @@ export function stripGraphPrefix(scopedId: SerializedNodeId): NodeId | null {
         "id: 'Comfy.Workflow.NamedValuesRestore',\n"
         "    name: 'Restore widget values by name',\n"
         "    type: 'boolean',\n"
-        "    defaultValue: false,\n"
+        "    defaultValue: true,\n"
         "    experimental: true\n",
     )
     _write(
@@ -474,6 +478,40 @@ export function stripGraphPrefix(scopedId: SerializedNodeId): NodeId | null {
         '{"definitions":{"subgraphs":[{"id":"synthetic-subgraph","inputs":'
         '[{"name":"ckpt_name","type":"COMBO"}],"nodes":[{"id":2,'
         '"widgets_values":["synthetic_model.safetensors"]}]}]}}\n',
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "scripts" / "api.ts",
+        "import { ComfyApi as ComfyApiClient } from '@comfyorg/api-client/ComfyApi'\n"
+        "export const ComfyApi = ComfyApiClient\n"
+        "export const api = new ComfyApi({\n  api_base: ''\n})\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "settingStore.ts",
+        "function deferExtensionSettingCallbacks(signal: AbortSignal) {\n"
+        "  async function activateExtensionSettingCallbacks() {\n"
+        "  function addExtensionSetting(setting: SettingParams) {\n"
+        "      if (editorSignal?.aborted) return\n"
+        "    settings.addSetting({ ...setting, onChange: invoke })\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "platform" / "settings" / "composables" / "useLitegraphSettings.ts",
+        "    LiteGraph.namedValuesRestore = settingStore.get(\n"
+        "      'Comfy.Workflow.NamedValuesRestore'\n"
+        "    )\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "build" / "plugins" / "comfyAPIPlugin.ts",
+        "    /export\\s+(const|let|var|function|class|async function)\\s+([a-zA-Z$_][a-zA-Z\\d$_]*)(\\s|\\()/g\n"
+        "    newCode += `\\nwindow.comfyAPI.${moduleName}.${name} = ${name};`\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "src" / "services" / "litegraphService.ts",
+        "      shape: inputSpec.isOptional ? RenderShape.HollowCircle : undefined,\n"
+        "        shape: inputSpec.isOptional ? RenderShape.HollowCircle : undefined,\n",
+    )
+    _write(
+        root / "ComfyUI_frontend" / "packages" / "graph-model" / "src" / "globalEnums.ts",
+        "export enum RenderShape {\n  BOX = 1,\n  ARROW = 5,\n  HollowCircle = 7\n}\n",
     )
     _write(
         root / "desktop" / "package.json",
@@ -702,7 +740,7 @@ def test_host_compatibility_smoke_reports_missing_execution_usage_source_hidden_
 
 def test_host_compatibility_smoke_reports_missing_frontend_queue_usage_source(tmp_path):
     _create_minimal_reference(tmp_path)
-    api_path = tmp_path / "ComfyUI_frontend" / "src" / "scripts" / "api.ts"
+    api_path = tmp_path / "ComfyUI_frontend" / "packages" / "api-client" / "src" / "ComfyApi.ts"
     api_path.write_text(
         api_path.read_text(encoding="utf-8").replace("comfy_usage_source: 'comfyui-frontend'", "usage_source: 'legacy'"),
         encoding="utf-8",
@@ -831,7 +869,7 @@ def test_host_compatibility_smoke_reports_missing_enable_telemetry_feature_flag(
 
 def test_host_compatibility_smoke_reports_missing_frontend_jobs_cancel_api(tmp_path):
     _create_minimal_reference(tmp_path)
-    api_path = tmp_path / "ComfyUI_frontend" / "src" / "scripts" / "api.ts"
+    api_path = tmp_path / "ComfyUI_frontend" / "packages" / "api-client" / "src" / "ComfyApi.ts"
     api_path.write_text(
         api_path.read_text(encoding="utf-8").replace("async cancelJobs", "async stopJobs"),
         encoding="utf-8",
@@ -929,8 +967,8 @@ T33_NEW_CHECK_LABELS = {
 }
 
 EXPECTED_HOST_REVISIONS = {
-    "ComfyUI": "19ae172bff6c9e4c738e7f2e00fe087f5b5b46ab",  # pragma: allowlist secret
-    "ComfyUI_frontend": "43845693a1b72d16509e4eb7be6d1d95a1d3cdb2",  # pragma: allowlist secret
+    "ComfyUI": "da8bd08e48deee74d9f6c3bc00aed365b00ec209",  # pragma: allowlist secret
+    "ComfyUI_frontend": "d813611ee2727af86f00328645f3261f5c75c3ad",  # pragma: allowlist secret
     "desktop": "e2d964b7456cea8423c7b9d3371c612313c06baa",  # pragma: allowlist secret
 }
 
@@ -992,8 +1030,8 @@ def test_t28_records_three_distinct_frontend_runtime_lanes():
         for lane in lanes
     ] == [
         ("desktop-0.9.4", "1.43.18", False, False),
-        ("core-pin-1.57.1", "1.57.1", True, True),
-        ("standalone-1.59.1", "1.59.1", True, True),
+        ("core-pin-1.59.11", "1.59.11", True, True),
+        ("standalone-1.61.8", "1.61.8", True, True),
     ]
 
 
@@ -1009,14 +1047,14 @@ def test_t28_runtime_lane_source_versions_fail_in_isolation(tmp_path):
         (
             "core",
             Path("ComfyUI/requirements.txt"),
-            "comfyui-frontend-package==1.57.1",
+            "comfyui-frontend-package==1.59.11",
             "comfyui-frontend-package==1.49.5",
             "frontend runtime lane: ComfyUI package pin",
         ),
         (
             "standalone",
             Path("ComfyUI_frontend/package.json"),
-            '"version": "1.59.1"',
+            '"version": "1.61.8"',
             '"version": "1.52.0"',
             "frontend runtime lane: standalone source",
         ),
@@ -1076,17 +1114,15 @@ def test_t28_rejects_client_id_in_cached_history_query_contract(tmp_path):
     path = (
         tmp_path
         / "ComfyUI_frontend"
+        / "packages"
+        / "api-client"
         / "src"
-        / "platform"
-        / "remote"
-        / "comfyui"
-        / "jobs"
         / "fetchJobs.ts"
     )
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            "&offset=${offset}`",
-            "&offset=${offset}&client_id=synthetic`",
+            "&offset=${offset}${cappedTotalParam}`",
+            "&offset=${offset}${cappedTotalParam}&client_id=synthetic`",
         ),
         encoding="utf-8",
     )
@@ -1100,7 +1136,7 @@ def test_t28_rejects_client_id_in_cached_history_query_contract(tmp_path):
 
 def test_t28_reports_missing_setting_telemetry_defaults(tmp_path):
     _create_minimal_reference(tmp_path)
-    path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "settings" / "settingStore.ts"
+    path = tmp_path / "ComfyUI_frontend" / "packages" / "settings-core" / "src" / "settingStore.ts"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
             "const trackChanges = telemetry?.trackChanges ?? isVisible",
@@ -1118,7 +1154,7 @@ def test_t28_reports_missing_setting_telemetry_defaults(tmp_path):
 
 def test_t28_reports_missing_setting_telemetry_opt_out_type(tmp_path):
     _create_minimal_reference(tmp_path)
-    path = tmp_path / "ComfyUI_frontend" / "src" / "platform" / "settings" / "types.ts"
+    path = tmp_path / "ComfyUI_frontend" / "packages" / "settings-core" / "src" / "types.ts"
     path.write_text(
         path.read_text(encoding="utf-8").replace("trackChanges: false", "trackChanges: true"),
         encoding="utf-8",
@@ -1304,8 +1340,8 @@ def test_t28_new_checks_report_source_revision_and_applicable_lanes(tmp_path):
 
     assert "Frontend runtime matrix:" in formatted
     assert "desktop-0.9.4: frontend 1.43.18" in formatted
-    assert "core-pin-1.57.1: frontend 1.57.1" in formatted
-    assert "standalone-1.59.1: frontend 1.59.1" in formatted
+    assert "core-pin-1.59.11: frontend 1.59.11" in formatted
+    assert "standalone-1.61.8: frontend 1.61.8" in formatted
     assert "Source revision:" in formatted
     assert "Applies to:" in formatted
 
@@ -1330,8 +1366,8 @@ def test_t28_reference_source_is_never_executed(tmp_path):
 def test_t30_records_current_revisions_and_contract_families():
     labels = {check.label for check in host_compat.CHECKS}
 
-    assert host_compat.COMFYUI_REVISION == "19ae172bff6c9e4c738e7f2e00fe087f5b5b46ab"  # pragma: allowlist secret
-    assert host_compat.FRONTEND_REVISION == "43845693a1b72d16509e4eb7be6d1d95a1d3cdb2"  # pragma: allowlist secret
+    assert host_compat.COMFYUI_REVISION == "da8bd08e48deee74d9f6c3bc00aed365b00ec209"  # pragma: allowlist secret
+    assert host_compat.FRONTEND_REVISION == "d813611ee2727af86f00328645f3261f5c75c3ad"  # pragma: allowlist secret
     assert {
         "dual positional and named widget serialization",
         "partner node validation classification",
@@ -1362,8 +1398,10 @@ def test_current_host_manifest_preserves_prior_checks_and_adds_named_contracts()
 
     assert len(PRE_T33_CHECK_LABELS) == 66
     assert labels >= PRE_T33_CHECK_LABELS
-    assert labels - PRE_T33_CHECK_LABELS == T33_NEW_CHECK_LABELS | CURRENT_NEW_CHECK_LABELS | ALIGNMENT_CHECK_LABELS
-    assert len(host_compat.CHECKS) == 78
+    assert labels - PRE_T33_CHECK_LABELS == (
+        T33_NEW_CHECK_LABELS | CURRENT_NEW_CHECK_LABELS | ALIGNMENT_CHECK_LABELS | T38_NEW_CHECK_LABELS
+    )
+    assert len(host_compat.CHECKS) == 84
 
 
 def test_t32_revision_metadata_is_exact_and_stale_constants_fail_independently():
@@ -1393,7 +1431,7 @@ def test_t32_stale_lane_and_surface_revision_metadata_fail_independently():
         source_revision="dd79c643a95402136a75a28f6187d843bcf457ed",  # pragma: allowlist secret
     )
 
-    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.57.1"]
+    assert _revision_metadata_failures(lanes=tuple(mutated_lanes)) == ["lane:core-pin-1.59.11"]
 
     checks = host_compat.CHECKS
     check_index = next(
@@ -1442,21 +1480,21 @@ def test_t32_new_contract_anchors_fail_in_isolation(tmp_path):
         ),
         (
             "async-setting-type",
-            Path("ComfyUI_frontend/src/platform/settings/types.ts"),
+            Path("ComfyUI_frontend/packages/settings-core/src/types.ts"),
             "onChange?(newValue: TValue, oldValue?: TValue): void | Promise<void>",
             "onChange?(newValue: TValue, oldValue?: TValue): void",
             "standalone settings onChange return type",
         ),
         (
             "async-setting-handler-await",
-            Path("ComfyUI_frontend/src/platform/settings/settingStore.ts"),
+            Path("ComfyUI_frontend/packages/settings-core/src/settingStore.ts"),
             "await setting?.onChange?.(newValue, oldValue)",
             "setting?.onChange?.(newValue, oldValue)",
             "standalone settings awaited handler containment",
         ),
         (
             "async-setting-write-order-await",
-            Path("ComfyUI_frontend/src/platform/settings/settingStore.ts"),
+            Path("ComfyUI_frontend/packages/settings-core/src/settingStore.ts"),
             "await handled",
             "void handled",
             "standalone settings awaited handler containment",
@@ -1567,7 +1605,14 @@ def test_t30_current_contract_anchors_fail_in_isolation(tmp_path):
         (
             "named-setting",
             Path("ComfyUI_frontend/src/platform/settings/constants/coreSettings.ts"),
+            "    defaultValue: true,\n    experimental: true",
             "    defaultValue: false,\n    experimental: true",
+            "named widget restore setting boundary",
+        ),
+        (
+            "named-setting-experimental",
+            Path("ComfyUI_frontend/src/platform/settings/constants/coreSettings.ts"),
+            "    defaultValue: true,\n    experimental: true",
             "    defaultValue: true,\n    experimental: false",
             "named widget restore setting boundary",
         ),
@@ -1653,7 +1698,7 @@ def test_t33_current_contract_anchors_fail_in_isolation(tmp_path):
         ),
         (
             "partner-auto-queue-gate",
-            Path("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts"),
+            Path("ComfyUI_frontend/src/platform/auth/partnerNode/usePartnerNodesRunGate.ts"),
             "export function partnerRunGateBlocksAutoQueue(): boolean {",
             "export function partnerRunGateBlocksAfterQueue(): boolean {",
             "frontend partner run gate ownership",
@@ -1696,12 +1741,32 @@ def test_t30_rejects_unconditional_default_detail_file(tmp_path):
 
 # Minimal inert source fragments; no fixture is imported or executed.
 CURRENT_CONTRACT_FIXTURES = {
-    "ComfyUI/comfy_execution/asset_enrichment.py": "def register_executed_outputs(\nenriched = copy.deepcopy(output_ui)\nif not asset_manager.enabled:\nlambda path, job: asset_manager.register_executed_output(path, job, preview_ref=previews.get(path))\ndef register_cached_outputs(\nenriched = copy.deepcopy(ui_wrapper)\n_strip_ids(output_ui)\n_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)\nenriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)\n\"display_node\": display_node_id\n",
-    "ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts": "export function isHostTelemetryEnabled(): boolean\nconst ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'\ngetDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)\nif (override !== undefined) return override\nremoteConfig.value.enable_telemetry === true\n",
+    "ComfyUI/comfy_execution/asset_enrichment.py": "def register_executed_outputs(\nenriched = copy.deepcopy(output_ui)\nif not asset_manager.enabled:\nlambda path, job: asset_manager.register_executed_output(path, job, preview_ref=previews.get(path))\ndef register_cached_outputs(\nenriched = copy.deepcopy(ui_wrapper)\n_strip_ids(output_ui)\n_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)\nenriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)\n",
+    "ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts": "export function isHostTelemetryEnabled(): boolean\nconst ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'\ngetDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)\nif (override !== undefined) return override\nuseRemoteConfigStore().config.enable_telemetry === true\n",
     "ComfyUI/comfy_extras/nodes_logic.py": "node_id=\"ComfySwitchNode\"\nnode_id=\"ComfySoftSwitchNode\"\nselected = on_true if switch else on_false\nreturn io.NodeOutput(None if selected is MISSING else selected)\nio.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_false\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)\nio.MatchType.Input(\"on_true\", template=template, lazy=True, optional=True)\n",
     "ComfyUI_frontend/src/core/graph/widgets/dynamicWidgets.ts": "const groupInputs: INodeInputSlot[] = node.inputs.filter(\n(inp) => inp.name in matchGroup\nconst connectedTypes = groupInputs.map(\nif (!link) return '*'\n...connectedTypes.slice(0, idx)\n...connectedTypes.slice(idx + 1)\ninput.type = combinedType\nconst typedSpec = { ...inputSpec, type: allowed_types }\naddNodeInput(node, typedSpec)\n",
     "ComfyUI/comfy_execution/validation.py": "class LoopValidationError(Exception):\n\"type\": \"custom_validation_failed\"\n\"input_name\": \"loop boundary\"\n\"loop_error_type\": error_type\n\"node_ids\": sorted(node_ids)\n\"output_ids\": sorted(output_ids)\n",
     "ComfyUI_frontend/src/composables/canvas/useFocusNode.ts": "const navigated = await navigationStore.navigateToGraph(node.graph)\nif (!navigated) return\nif (graphChanged) await waitForCanvasNavigation()\nconst activeCanvas = canvasStore.canvas\nactiveCanvas.graph !== node.graph\n!node.graph.nodes.includes(node)\nwindow.setTimeout(resolve, 100)\nactiveCanvas.animateToBounds(node.boundingRect\n",
+}
+
+# Verbatim host signature (inert text): the cached-output helper now takes the node meta dict.
+EMIT_CACHED_OUTPUT_SIGNATURE = (
+    'def emit_cached_output(server: "ExecutionServer", node_id: str, meta: dict, cached: "CacheEntry", '
+    'prompt_id: str, ui_outputs: dict, asset_manager: "AssetManager") -> None:'
+)
+CURRENT_CONTRACT_FIXTURES["ComfyUI/comfy_execution/asset_enrichment.py"] += (
+    EMIT_CACHED_OUTPUT_SIGNATURE + "\n"
+    'enriched["meta"] = meta\n'
+    '"display_node": meta["display_node"]\n'
+)
+
+T38_NEW_CHECK_LABELS = {
+    "extension setting callback deferral",
+    "named widget restore setting application",
+    "api client shim keeps scripts/api export",
+    "legacy shim generator exports",
+    "optional input slot shape marker",
+    "render shape hollow circle value",
 }
 
 CURRENT_NEW_CHECK_LABELS = {
@@ -1723,12 +1788,14 @@ CURRENT_CONTRACT_MUTATIONS = (
     ("ComfyUI/comfy_execution/asset_enrichment.py", "_strip_ids(output_ui)", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "_enrich_in_place(output_ui, job_id, asset_manager.register_cached_output)", "executed asset registration helper"),
     ("ComfyUI/comfy_execution/asset_enrichment.py", "enriched = register_cached_outputs(cached.ui, prompt_id, asset_manager)", "executed asset registration helper"),
-    ("ComfyUI/comfy_execution/asset_enrichment.py", "\"display_node\": display_node_id", "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", EMIT_CACHED_OUTPUT_SIGNATURE, "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", 'enriched["meta"] = meta', "executed asset registration helper"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", '"display_node": meta["display_node"]', "executed asset registration helper"),
     ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "export function isHostTelemetryEnabled(): boolean", "host telemetry enablement helper"),
     ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "const ENABLE_TELEMETRY_FEATURE = 'enable_telemetry'", "host telemetry enablement helper"),
     ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "getDevOverride<boolean>(ENABLE_TELEMETRY_FEATURE)", "host telemetry enablement helper"),
     ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "if (override !== undefined) return override", "host telemetry enablement helper"),
-    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "remoteConfig.value.enable_telemetry === true", "host telemetry enablement helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "useRemoteConfigStore().config.enable_telemetry === true", "host telemetry enablement helper"),
     ("ComfyUI/comfy_extras/nodes_logic.py", "node_id=\"ComfySwitchNode\"", "optional Switch branch contract"),
     ("ComfyUI/comfy_extras/nodes_logic.py", "node_id=\"ComfySoftSwitchNode\"", "optional Switch branch contract"),
     ("ComfyUI/comfy_extras/nodes_logic.py", "selected = on_true if switch else on_false", "optional Switch branch contract"),
@@ -1776,9 +1843,9 @@ def test_current_contract_anchors_fail_independently(tmp_path):
 def test_current_relocated_contract_fields_fail_independently(tmp_path):
     cases = (
         ("ComfyUI_frontend/src/types/extensionTypes.ts", "set: (id: string, value: unknown) => void", "extensionManager settings/sidebar API"),
-        ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "node_id?: NodeId | null", "frontend execution_error schema"),
-        ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "exception_message: string", "frontend execution_error schema"),
-        ("ComfyUI_frontend/src/platform/remote/comfyui/execution/types.ts", "current_outputs?: unknown", "frontend execution_error schema"),
+        ("ComfyUI_frontend/packages/api-client/src/executionTypes.ts", "node_id?: NodeId | null", "frontend execution_error schema"),
+        ("ComfyUI_frontend/packages/api-client/src/executionTypes.ts", "exception_message: string", "frontend execution_error schema"),
+        ("ComfyUI_frontend/packages/api-client/src/executionTypes.ts", "current_outputs?: unknown", "frontend execution_error schema"),
         ("ComfyUI_frontend/src/platform/telemetry/initHostTelemetry.ts", "import { isHostTelemetryEnabled } from './hostTelemetryEnabled'", "host telemetry initialization gate"),
         ("ComfyUI_frontend/src/platform/telemetry/initHostTelemetry.ts", "if (!isHostTelemetryEnabled()) return", "host telemetry initialization gate"),
         ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "const rootGraph = useApp().rootGraphOrUndefined", "surfaced error derivation"),
@@ -1798,8 +1865,8 @@ def test_current_relocated_contract_fields_fail_independently(tmp_path):
 def test_current_settings_contract_provenance_is_independent_of_package_pin():
     expected = {
         "desktop-0.9.4": ("e2d964b7456cea8423c7b9d3371c612313c06baa", False),  # pragma: allowlist secret
-        "core-pin-1.57.1": ("c875ee420aa027a359b2953361eb3b356b7bef00", True),  # pragma: allowlist secret
-        "standalone-1.59.1": ("43845693a1b72d16509e4eb7be6d1d95a1d3cdb2", True),  # pragma: allowlist secret
+        "core-pin-1.59.11": ("28b679cb87e88f6328883feccfac737d3f7c4415", True),  # pragma: allowlist secret
+        "standalone-1.61.8": ("d813611ee2727af86f00328645f3261f5c75c3ad", True),  # pragma: allowlist secret
     }  # pragma: allowlist secret
 
     def mismatches(lanes):
@@ -1818,7 +1885,7 @@ def test_current_settings_contract_provenance_is_independent_of_package_pin():
         changed[index] = replace(lane, async_setting_on_change=not lane.async_setting_on_change)
         assert mismatches(changed) == [lane.id]
     formatted = host_compat.format_results([])
-    assert "c875ee420aa027a359b2953361eb3b356b7bef00" in formatted  # pragma: allowlist secret
+    assert "28b679cb87e88f6328883feccfac737d3f7c4415" in formatted  # pragma: allowlist secret
 
 
 ALIGNMENT_CHECK_LABELS = {
@@ -1850,17 +1917,17 @@ def test_refreshed_host_contracts_fail_independently(tmp_path):
     # All eight repaired labels plus each newly added guard are pinned here.
     cases = (
         ("ComfyUI/execution.py", "register_executed_outputs(output_ui, prompt_id, asset_manager, asset_previews)", "executed output asset enrichment tolerance"),
-        ("ComfyUI/requirements.txt", "comfyui-frontend-package==1.57.1", "frontend runtime lane: ComfyUI package pin"),
-        ("ComfyUI_frontend/package.json", '\"version\": \"1.59.1\"', "frontend runtime lane: standalone source"),
+        ("ComfyUI/requirements.txt", "comfyui-frontend-package==1.59.11", "frontend runtime lane: ComfyUI package pin"),
+        ("ComfyUI_frontend/package.json", '\"version\": \"1.61.8\"', "frontend runtime lane: standalone source"),
         ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "Object.hasOwn(restoration.named, widget.name)", "named widget restoration store precedence"),
         ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "if (positionalIndex >= restoration.positional.length) return", "named widget restoration store precedence"),
-        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "value: coerceRestoredWidgetValue(widget, restoration.named[widget.name])", "named widget restoration store precedence"),
-        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "coerceRestoredWidgetValue(\n", "named widget restoration store precedence"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "const value = coerceRestoredWidgetValue(widget, saved)", "named widget restoration store precedence"),
+        ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "convertRestoredValue(", "named widget restoration store precedence"),
         ("ComfyUI_frontend/src/platform/workflowErrors/missingMedia/missingMediaScan.ts", "if (spec.video_upload) return 'video'", "missing media upload spec classification"),
         ("ComfyUI_frontend/src/stores/executionErrorStore.ts", "const rootGraph = useApp().rootGraphOrUndefined", "surfaced error derivation"),
-        ("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts", "export function partnerRunGateBlocksAutoQueue(): boolean {", "frontend partner run gate ownership"),
-        ("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts", "if (isAuthResolving(apiKeyStore)) return false", "frontend partner run gate ownership"),
-        ("ComfyUI_frontend/src/platform/billing/composables/usePartnerNodesRunGate.ts", "(Boolean(apiKeyStore.getApiKey()) && !apiKeyStore.isAuthenticated)", "frontend partner run gate ownership"),
+        ("ComfyUI_frontend/src/platform/auth/partnerNode/usePartnerNodesRunGate.ts", "export function partnerRunGateBlocksAutoQueue(): boolean {", "frontend partner run gate ownership"),
+        ("ComfyUI_frontend/src/platform/auth/partnerNode/usePartnerNodesRunGate.ts", "if (isAuthResolving(apiKeyStore)) return false", "frontend partner run gate ownership"),
+        ("ComfyUI_frontend/src/platform/auth/partnerNode/usePartnerNodesRunGate.ts", "(Boolean(apiKeyStore.getApiKey()) && !apiKeyStore.isAuthenticated)", "frontend partner run gate ownership"),
         ("ComfyUI/comfy_execution/asset_enrichment.py", "lambda path, job: asset_manager.register_executed_output(path, job, preview_ref=previews.get(path))", "executed asset registration helper"),
         ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "isUuidShapedSubgraphId(rest.slice(0, separatorIndex))", "opaque node identity preservation"),
         ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "rest = rest.slice(separatorIndex + 1)", "opaque node identity preservation"),
@@ -1885,3 +1952,146 @@ def test_refreshed_host_contracts_fail_independently(tmp_path):
         covered.add(label)
     assert len(covered) == 11
     assert covered >= ALIGNMENT_CHECK_LABELS
+
+
+# ---- T38: matrix refresh against ComfyUI da8bd08e / frontend d813611e ----------------------------------------
+T38_REPAIRED_CHECK_MUTATIONS = (
+    ("ComfyUI_frontend/packages/api-client/src/ComfyApi.ts", "comfy_usage_source: 'comfyui-frontend'", "frontend queue prompt usage source"),
+    ("ComfyUI_frontend/packages/api-client/src/ComfyApi.ts", "'/jobs/cancel'", "frontend jobs cancel API"),
+    ("ComfyUI_frontend/packages/api-client/src/executionTypes.ts", "traceback?: string[] | null", "frontend execution_error schema"),
+    ("ComfyUI/requirements.txt", "comfyui-frontend-package==1.59.11", "frontend runtime lane: ComfyUI package pin"),
+    ("ComfyUI_frontend/package.json", '"version": "1.61.8"', "frontend runtime lane: standalone source"),
+    ("ComfyUI_frontend/packages/settings-core/src/types.ts", "void | Promise<void>", "standalone settings onChange return type"),
+    ("ComfyUI_frontend/packages/settings-core/src/settingStore.ts", "await handled", "standalone settings awaited handler containment"),
+    ("ComfyUI_frontend/src/platform/settings/constants/coreSettings.ts", "defaultValue: true", "named widget restore setting boundary"),
+    ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "if (!Object.hasOwn(restoration.named, widget.name)) return", "named widget restoration store precedence"),
+    ("ComfyUI_frontend/src/stores/widgetValueStore.ts", "convertRestoredValue(", "named widget restoration store precedence"),
+    ("ComfyUI_frontend/packages/api-client/src/fetchJobs.ts", "${cappedTotalParam}", "cached history query without client id"),
+    ("ComfyUI_frontend/packages/settings-core/src/settingStore.ts", "const includeValues = telemetry?.includeValues ?? isVisible", "setting telemetry defaults"),
+    ("ComfyUI_frontend/packages/settings-core/src/types.ts", "includeValues?: never", "setting telemetry opt-out type"),
+    ("ComfyUI_frontend/src/platform/auth/partnerNode/usePartnerNodesRunGate.ts", "if (isCloud) return false", "frontend partner run gate ownership"),
+    ("ComfyUI/comfy_execution/asset_enrichment.py", 'enriched["meta"] = meta', "executed asset registration helper"),
+    ("ComfyUI_frontend/src/platform/telemetry/hostTelemetryEnabled.ts", "useRemoteConfigStore().config.enable_telemetry === true", "host telemetry enablement helper"),
+)
+
+T38_NEW_GUARD_MUTATIONS = (
+    ("ComfyUI_frontend/src/platform/settings/settingStore.ts", "function deferExtensionSettingCallbacks(signal: AbortSignal) {", "extension setting callback deferral"),
+    ("ComfyUI_frontend/src/platform/settings/settingStore.ts", "async function activateExtensionSettingCallbacks() {", "extension setting callback deferral"),
+    ("ComfyUI_frontend/src/platform/settings/settingStore.ts", "function addExtensionSetting(setting: SettingParams) {", "extension setting callback deferral"),
+    ("ComfyUI_frontend/src/platform/settings/settingStore.ts", "if (editorSignal?.aborted) return", "extension setting callback deferral"),
+    ("ComfyUI_frontend/src/platform/settings/settingStore.ts", "settings.addSetting({ ...setting, onChange: invoke })", "extension setting callback deferral"),
+    ("ComfyUI_frontend/src/platform/settings/composables/useLitegraphSettings.ts", "LiteGraph.namedValuesRestore = settingStore.get(", "named widget restore setting application"),
+    ("ComfyUI_frontend/src/platform/settings/composables/useLitegraphSettings.ts", "'Comfy.Workflow.NamedValuesRestore'", "named widget restore setting application"),
+    ("ComfyUI_frontend/src/scripts/api.ts", "import { ComfyApi as ComfyApiClient } from '@comfyorg/api-client/ComfyApi'", "api client shim keeps scripts/api export"),
+    ("ComfyUI_frontend/src/scripts/api.ts", "export const ComfyApi = ComfyApiClient", "api client shim keeps scripts/api export"),
+    ("ComfyUI_frontend/src/scripts/api.ts", "export const api = new ComfyApi({", "api client shim keeps scripts/api export"),
+    ("ComfyUI_frontend/build/plugins/comfyAPIPlugin.ts", "window.comfyAPI.${moduleName}.${name} = ${name};", "legacy shim generator exports"),
+    ("ComfyUI_frontend/build/plugins/comfyAPIPlugin.ts", "(const|let|var|function|class|async function)", "legacy shim generator exports"),
+    ("ComfyUI_frontend/src/services/litegraphService.ts", "shape: inputSpec.isOptional ? RenderShape.HollowCircle : undefined,", "optional input slot shape marker"),
+    ("ComfyUI_frontend/packages/graph-model/src/globalEnums.ts", "HollowCircle = 7", "render shape hollow circle value"),
+)
+
+
+def _assert_only_label_fails(tmp_path, cases):
+    for index, (relative, anchor, label) in enumerate(cases):
+        root = tmp_path / str(index)
+        _create_minimal_reference(root)
+        assert not _failed_results(root), (relative, anchor)
+        path = root / relative
+        source = path.read_text(encoding="utf-8")
+        assert anchor in source, (relative, anchor)
+        path.write_text(source.replace(anchor, "REMOVED_CONTRACT", 1), encoding="utf-8")
+        assert [r.check.label for r in _failed_results(root)] == [label], (relative, anchor)
+
+
+def test_t38_matrix_is_green_with_exact_manifest():
+    labels = [check.label for check in host_compat.CHECKS]
+
+    assert len(labels) == len(set(labels)) == 84
+    assert T38_NEW_CHECK_LABELS <= set(labels)
+    assert len(T38_NEW_CHECK_LABELS) == 6
+
+
+def test_t38_every_repaired_check_fails_in_isolation(tmp_path):
+    repaired = {label for _, _, label in T38_REPAIRED_CHECK_MUTATIONS}
+
+    # Fifteen failing labels at base 4963fc9, three of which have two independent anchors.
+    assert len(repaired) == 15
+    _assert_only_label_fails(tmp_path, T38_REPAIRED_CHECK_MUTATIONS)
+
+
+def test_t38_every_new_guard_anchor_fails_in_isolation(tmp_path):
+    guarded = {label for _, _, label in T38_NEW_GUARD_MUTATIONS}
+
+    assert guarded == T38_NEW_CHECK_LABELS
+    _assert_only_label_fails(tmp_path, T38_NEW_GUARD_MUTATIONS)
+
+
+def test_t38_named_restore_default_is_pinned_without_weakening(tmp_path):
+    # Flipping the host setting default back to false must be reported, never ignored.
+    root = tmp_path / "flip"
+    _create_minimal_reference(root)
+    path = root / "ComfyUI_frontend/src/platform/settings/constants/coreSettings.ts"
+    path.write_text(path.read_text(encoding="utf-8").replace("defaultValue: true", "defaultValue: false"), encoding="utf-8")
+    failed = _failed_results(root)
+    assert [r.check.label for r in failed] == ["named widget restore setting boundary"]
+    assert any("defaultValue: true" in pattern for pattern in failed[0].missing_patterns)
+
+    by_label = {check.label: check for check in host_compat.CHECKS}
+    note = by_label["named widget restore global default"].note
+    assert "host default remains false" not in note
+    assert "setting default is now true" in note
+
+
+def test_t38_optional_slot_marker_requires_both_expression_occurrences(tmp_path):
+    # The shape expression exists at two slot-construction sites in the host; one remaining is not enough.
+    root = tmp_path / "one-site"
+    _create_minimal_reference(root)
+    path = root / "ComfyUI_frontend/src/services/litegraphService.ts"
+    expression = "shape: inputSpec.isOptional ? RenderShape.HollowCircle : undefined,"
+    path.write_text(path.read_text(encoding="utf-8").replace(expression, "shape: undefined,", 1), encoding="utf-8")
+    failed = _failed_results(root)
+    assert [r.check.label for r in failed] == ["optional input slot shape marker"]
+    assert any("minimum occurrences" in pattern for pattern in failed[0].missing_patterns)
+
+    root = tmp_path / "wrong-value"
+    _create_minimal_reference(root)
+    path = root / "ComfyUI_frontend/packages/graph-model/src/globalEnums.ts"
+    path.write_text(path.read_text(encoding="utf-8").replace("HollowCircle = 7", "HollowCircle = 8"), encoding="utf-8")
+    assert [r.check.label for r in _failed_results(root)] == ["render shape hollow circle value"]
+
+
+def test_t38_lane_records_and_applicability_use_current_lane_ids():
+    lanes = {lane.id: lane for lane in host_compat.FRONTEND_RUNTIME_LANES}
+
+    assert list(lanes) == ["desktop-0.9.4", "core-pin-1.59.11", "standalone-1.61.8"]
+    assert lanes["core-pin-1.59.11"].setting_contract_revision == "28b679cb87e88f6328883feccfac737d3f7c4415"  # pragma: allowlist secret
+    assert lanes["core-pin-1.59.11"].source_revision == host_compat.COMFYUI_REVISION
+    assert lanes["standalone-1.61.8"].source_revision == host_compat.FRONTEND_REVISION
+    assert lanes["desktop-0.9.4"].source_revision == "e2d964b7456cea8423c7b9d3371c612313c06baa"  # pragma: allowlist secret
+    for check in host_compat.CHECKS:
+        for lane_id in check.applicable_lanes:
+            assert lane_id in lanes or lane_id.startswith("comfyui-core-v"), (check.label, lane_id)
+    by_label = {check.label: check for check in host_compat.CHECKS}
+    # The core-pin copy of the partner gate lives only in the v1.59.11 tag object, never in the working tree.
+    assert by_label["frontend partner run gate ownership"].applicable_lanes == ("standalone-1.61.8",)
+
+
+def test_t38_checker_stays_source_only():
+    import ast
+
+    tree = ast.parse(SCRIPT_PATH.read_text(encoding="utf-8"))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.add((node.module or "").split(".")[0])
+    # No subprocess, network, import machinery or serialization that could execute or fetch host content.
+    assert imported <= {"__future__", "argparse", "collections", "dataclasses", "pathlib"}
+    called = {
+        node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+    }
+    assert called.isdisjoint({"exec", "eval", "compile", "__import__", "system", "popen", "run", "Popen", "urlopen"})
