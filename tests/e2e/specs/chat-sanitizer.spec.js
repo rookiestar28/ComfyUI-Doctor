@@ -228,7 +228,7 @@ test.describe('Rendered markdown sanitizer', () => {
       linkedImageNoAlt: { html: '<a href="https://example.com/page"><img src="https://canary.invalid/i.png"></a>' },
       unusableAddress: { html: '<img src="data:image/png;base64,AAAA" alt="inline">' },
       relativeAddress: { html: '<img src="/x.png" alt="rel">' },
-      credentialAddress: { html: '<img src="https://user:pw@canary.invalid/x.png" alt="cred">' },
+      credentialAddress: { html: '<img src="https://user:pw@canary.invalid/x.png" alt="cred">' },  // pragma: allowlist secret
       longAddress: { html: `<img src="${longAddress}">` },
       paddedAddress: { html: '<img src="  https://exa&#9;mple.com/a.png  " alt="p">' },
     };
