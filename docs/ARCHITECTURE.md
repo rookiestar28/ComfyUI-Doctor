@@ -73,7 +73,10 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 
 1. ComfyUI output is captured by `SmartLogger`.
 2. The analyzer and pattern pipeline classify the error.
-3. Node/workflow context is collected and pruned.
+3. Node/workflow context is collected and pruned. The sidebar sends the stored error context only; it adds the
+   serialized workflow graph to a chat request when the user turns on "Send the workflow with chat questions"
+   (setting `Doctor.Behavior.IncludeWorkflowContext`, off by default). The backend then prunes the graph around
+   the failed node and sanitizes it with the rest of the request.
 4. Prompt helpers build a provider-neutral request payload.
 5. LLM calls go through approved-destination matching, adapter, retry, rate-limit, proxy, connect-time address checks, and outbound-sanitization layers.
 6. Results are stored in history and exposed to the frontend.

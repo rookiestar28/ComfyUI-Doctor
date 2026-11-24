@@ -69,6 +69,12 @@ built from the error text alone. A workflow longer than the request budget is sh
 its connected neighbors (the largest neighborhood that fits), or cut to the budget when even the node alone does
 not fit.
 
+The shipped sidebar sends no workflow with `/doctor/chat` by default. When the user turns on
+"Send the workflow with chat questions" (off by default) it adds the serialized root graph as
+`error_context.workflow`, a JSON string; a graph longer than 256,000 characters is left out whole rather than cut.
+The workflow text is sanitized with the rest of the request according to the request's privacy mode, like any
+other outbound text.
+
 ## Credential Store Endpoints
 
 | Method | Path | Purpose |

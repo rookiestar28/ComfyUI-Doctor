@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "Widget introuvable",
     "generation_stopped_user": "Génération arrêtée par l'utilisateur.",
     "global_error_banner_title": "Une erreur s'est produite",
+    "include_workflow_context_hint": "Si cette option est activée, le graphe du workflow (types de nœuds, connexions et valeurs des widgets telles que les prompts et les noms de fichiers) est envoyé avec vos questions de chat au fournisseur d'IA sélectionné, une fois le mode de confidentialité appliqué. Désactivé par défaut.",
+    "include_workflow_context_label": "Envoyer le workflow avec les questions du chat",
     "info_message": "Cliquez sur le bouton 🏥 Doctor (barre latérale gauche) pour analyser les erreurs avec l'IA",
     "info_title": "INFO",
     "intent_controlnet": "Guidé par ControlNet",

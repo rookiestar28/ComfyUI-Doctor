@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "Widget non trovato",
     "generation_stopped_user": "Generazione interrotta dall'utente.",
     "global_error_banner_title": "Si è verificato un errore",
+    "include_workflow_context_hint": "Se abilitato, il grafo del workflow (tipi di nodo, connessioni e valori dei widget come prompt e nomi di file) viene inviato con le tue domande della chat al provider AI selezionato, dopo l'applicazione della modalità privacy. Disattivato per impostazione predefinita.",
+    "include_workflow_context_label": "Invia il workflow con le domande della chat",
     "info_message": "Fai clic sul pulsante 🏥 Doctor (barra laterale sinistra) per analizzare gli errori con l'IA",
     "info_title": "INFO",
     "intent_controlnet": "Guidato da ControlNet",

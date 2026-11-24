@@ -20,6 +20,7 @@ import {
 } from "./doctor_right_panel.js";
 import { doctorContext } from "./doctor_state.js";
 import { describeLlmError } from "./utils/llm_error_text.js";
+import { buildChatErrorContext } from "./chat_workflow_context.js";
 
 /**
  * CRITICAL INITIALIZATION WARNING (Added 2026-01-03)
@@ -1886,7 +1887,7 @@ export class DoctorUI {
 
             const payload = {
                 messages: [{ role: 'user', content: text }],
-                error_context: this.currentErrorData || {},
+                error_context: buildChatErrorContext(this.currentErrorData),
                 intent: 'chat',
                 selected_nodes: [],
                 api_key: apiKey,
@@ -1897,7 +1898,12 @@ export class DoctorUI {
             };
 
             // S8: Never log secrets — redact api_key from debug output
-            console.log('[Doctor] Payload prepared:', { ...payload, api_key: payload.api_key ? '***' : '(empty)' });
+            // Never log the error context: with the workflow opt-in it can hold a whole serialized graph.
+            console.log('[Doctor] Payload prepared:', {
+                ...payload,
+                api_key: payload.api_key ? '***' : '(empty)',
+                error_context: `(${Object.keys(payload.error_context).join(', ')})`,
+            });
 
             // Add placeholder assistant message
             const placeholderMsg = this.addChatMessage('assistant', 'Thinking...');
@@ -1953,27 +1959,6 @@ export class DoctorUI {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
-    }
-
-    /**
-     * Capture current workflow context for AI analysis.
-     * Returns a simplified workflow structure to avoid token overflow.
-     */
-    getWorkflowContext() {
-        try {
-            const graph = this.getComfyGraph();
-            if (!graph?.serialize) return null;
-
-            // IMPORTANT: Use rootGraph serialization directly so subgraph-expanded
-            // workflows retain their full execution topology for backend truncation.
-            const workflow = graph.serialize();
-            if (!workflow) return null;
-
-            return JSON.stringify(workflow);
-        } catch (e) {
-            console.warn('[ComfyUI-Doctor] Failed to capture workflow:', e);
-            return null;
-        }
     }
 
     /**

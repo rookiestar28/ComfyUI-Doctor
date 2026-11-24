@@ -5,6 +5,7 @@ export const DOCTOR_DEFAULTS = {
     POLL_INTERVAL: 2000,
     AUTO_OPEN_ON_ERROR: true,
     ENABLE_NOTIFICATIONS: true,
+    INCLUDE_WORKFLOW_CONTEXT: false,
     LLM_PROVIDER: "openai",
     LLM_BASE_URL: "https://api.openai.com/v1",
     LLM_MODEL: "",
@@ -102,6 +103,16 @@ export const DOCTOR_EXTENSION_SETTINGS = [
         name: "Doctor: Enable Browser Notifications",
         type: "boolean",
         defaultValue: DOCTOR_DEFAULTS.ENABLE_NOTIFICATIONS,
+        telemetry: { trackChanges: false },
+    },
+    {
+        // Off by default: the serialized graph carries prompts, file names and custom-node settings, so it
+        // is sent with a chat question only after the user opts in.
+        id: "Doctor.Behavior.IncludeWorkflowContext",
+        category: ["Doctor", "Behavior", "IncludeWorkflowContext"],
+        name: "Doctor: Send the workflow with chat questions",
+        type: "boolean",
+        defaultValue: DOCTOR_DEFAULTS.INCLUDE_WORKFLOW_CONTEXT,
         telemetry: { trackChanges: false },
     },
     {
@@ -203,6 +214,7 @@ export function getDoctorRuntimeSettings(appInstance = app) {
         pollInterval: getDoctorSetting("Doctor.Behavior.PollInterval", DOCTOR_DEFAULTS.POLL_INTERVAL, appInstance),
         autoOpenOnError: getDoctorBooleanSetting("Doctor.Behavior.AutoOpenOnError", DOCTOR_DEFAULTS.AUTO_OPEN_ON_ERROR, appInstance),
         enableNotifications: getDoctorBooleanSetting("Doctor.Behavior.EnableNotifications", DOCTOR_DEFAULTS.ENABLE_NOTIFICATIONS, appInstance),
+        includeWorkflowContext: getDoctorBooleanSetting("Doctor.Behavior.IncludeWorkflowContext", DOCTOR_DEFAULTS.INCLUDE_WORKFLOW_CONTEXT, appInstance),
         provider: getDoctorSetting("Doctor.LLM.Provider", DOCTOR_DEFAULTS.LLM_PROVIDER, appInstance),
         baseUrl: getDoctorSetting("Doctor.LLM.BaseUrl", DOCTOR_DEFAULTS.LLM_BASE_URL, appInstance),
         model: getDoctorSetting("Doctor.LLM.Model", DOCTOR_DEFAULTS.LLM_MODEL, appInstance),

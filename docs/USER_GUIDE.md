@@ -40,6 +40,7 @@ Cloud providers require a credential. Local providers such as Ollama and LMStudi
 Provider-specific request and response formats are normalized by Doctor's backend for chat, single-shot analysis, model listing, and connectivity checks.
 
 Chat also works before any error has been captured. While a reply is being generated, a **Stop** button cancels it; a failed request is shown as an error message in the conversation. Long workflow and traceback context is trimmed to the configured token budget before it is sent.
+By default a chat question carries the latest error context but not your workflow. To let the assistant see the nodes around the failure, turn on **Send the workflow with chat questions** in the Settings tab: the workflow graph (node types, connections and widget values such as prompts and file names) is then sent with your questions to the selected AI provider, after the privacy mode has been applied. It is off by default, and a graph that is too large to send whole is left out.
 Replies are rendered as markdown with code highlighting from Doctor's own bundled files; if those files are unavailable, replies are shown as plain text.
 Fix suggestions appear as buttons on assistant replies only. Applying one changes only the exact node the suggestion names, and values that do not fit the input are rejected.
 
@@ -72,6 +73,7 @@ Use Settings for routine configuration:
 - Model selection or manual model entry.
 - Privacy mode.
 - Right-side latest-diagnosis auto-open behavior.
+- Whether chat questions also carry your workflow (off by default).
 - Optional Advanced Key Store for server-side credential storage. If the store is encrypted and the configured key is missing or different, it stays locked: saved keys are not used and saving or deleting is refused until the original key is restored (see [Server-Side Credential Store](CONFIGURATION_SECURITY.md#server-side-credential-store)).
 
 Doctor also registers compatibility defaults through the current ComfyUI frontend settings API so modern frontend builds retain expected defaults. The sidebar Settings tab remains the recommended surface for normal use.
@@ -136,7 +138,7 @@ Privacy mode controls how much sensitive context is removed before sending an LL
 | `basic` | Default cloud-provider use | Removes common local paths, credential-looking values, emails, private IPs, and URL credentials. |
 | `strict` | Shared or compliance-sensitive use | Applies stronger masking for additional network and identity-like values. |
 
-Error messages, node names, model names, and workflow structure may remain because they are often required to diagnose the issue.
+Error messages, node names, model names, and workflow structure may remain because they are often required to diagnose the issue. The workflow itself is not sent with chat questions unless you turn on **Send the workflow with chat questions** in the Settings tab.
 
 ## Diagnostics and Signature Packs
 

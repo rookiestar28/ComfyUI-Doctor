@@ -71,7 +71,9 @@
     "intent_txt2img": "Text to Image",
     "intent_img2img": "Image to Image",
     "auto_open_on_error_label": "Auto-open error report panel on new errors",
-    "auto_open_on_error_hint": "When enabled, the right-side error report panel will automatically open when a new error is detected"
+    "auto_open_on_error_hint": "When enabled, the right-side error report panel will automatically open when a new error is detected",
+    "include_workflow_context_label": "Send the workflow with chat questions",
+    "include_workflow_context_hint": "When enabled, the workflow graph (node types, connections and widget values such as prompts and file names) is sent with your chat questions to the selected AI provider, after the privacy mode has been applied. Off by default."
   },
   "ja": {
     "sidebar_doctor_title": "ComfyUI Doctor",

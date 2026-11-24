@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "Widget nicht gefunden",
     "generation_stopped_user": "Generierung vom Benutzer gestoppt.",
     "global_error_banner_title": "Ein Fehler ist aufgetreten",
+    "include_workflow_context_hint": "Wenn aktiviert, wird der Workflow-Graph (Knotentypen, Verbindungen und Widget-Werte wie Prompts und Dateinamen) nach Anwendung des Datenschutzmodus zusammen mit Ihren Chat-Fragen an den ausgewählten KI-Anbieter gesendet. Standardmäßig aus.",
+    "include_workflow_context_label": "Workflow mit Chat-Fragen senden",
     "info_message": "Klicken Sie auf die 🏥 Doctor-Schaltfläche (linke Seitenleiste), um Fehler mit KI zu analysieren",
     "info_title": "INFO",
     "intent_controlnet": "ControlNet Geführt",

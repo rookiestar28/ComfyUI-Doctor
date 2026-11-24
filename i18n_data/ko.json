@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "위젯을 찾을 수 없음",
     "generation_stopped_user": "사용자가 생성을 중지했습니다.",
     "global_error_banner_title": "오류가 발생했습니다",
+    "include_workflow_context_hint": "활성화하면 개인정보 보호 모드를 적용한 뒤, 워크플로 그래프(노드 유형, 연결, 프롬프트와 파일 이름 같은 위젯 값)가 채팅 질문과 함께 선택한 AI 제공자에게 전송됩니다. 기본값은 꺼짐입니다.",
+    "include_workflow_context_label": "채팅 질문과 함께 워크플로 보내기",
     "info_message": "🏥 Doctor 버튼(왼쪽 사이드바)을 클릭하여 AI로 오류 분석",
     "info_title": "정보",
     "intent_controlnet": "ControlNet 가이드",

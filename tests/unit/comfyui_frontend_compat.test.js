@@ -165,8 +165,30 @@ describe("Doctor setting telemetry contract", () => {
             )
             .map((setting) => setting.id);
 
-        expect(DOCTOR_EXTENSION_SETTINGS).toHaveLength(11);
+        expect(DOCTOR_EXTENSION_SETTINGS).toHaveLength(12);
         expect(missingOrInvalid).toEqual([]);
+    });
+
+    test("sending the workflow with chat questions is a boolean setting that is off by default", async () => {
+        const compat = await loadCompatibilityModule();
+        const setting = compat.DOCTOR_EXTENSION_SETTINGS.find(
+            (entry) => entry.id === "Doctor.Behavior.IncludeWorkflowContext",
+        );
+
+        expect(setting).toMatchObject({ type: "boolean", defaultValue: false });
+        expect(compat.DOCTOR_DEFAULTS.INCLUDE_WORKFLOW_CONTEXT).toBe(false);
+        // A host without the setting (or without a settings API at all) never opts the user in.
+        expect(compat.getDoctorRuntimeSettings({}).includeWorkflowContext).toBe(false);
+        expect(
+            compat.getDoctorRuntimeSettings({
+                extensionManager: { setting: { get: () => "false" } },
+            }).includeWorkflowContext,
+        ).toBe(false);
+        expect(
+            compat.getDoctorRuntimeSettings({
+                extensionManager: { setting: { get: (id) => id === "Doctor.Behavior.IncludeWorkflowContext" } },
+            }).includeWorkflowContext,
+        ).toBe(true);
     });
 
     test("setting ids stay unique and the session-only API key is not registered", async () => {
@@ -236,7 +258,7 @@ describe("Doctor setting telemetry contract", () => {
                 }
             }
 
-            expect(registered.size).toBe(11);
+            expect(registered.size).toBe(12);
             expect(
                 [...registered.values()].every(
                     (setting) => setting.telemetry?.trackChanges === false,

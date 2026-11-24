@@ -6,6 +6,7 @@
 
 import { app } from "../../../scripts/app.js";
 import { getDoctorSetting } from "./comfyui_frontend_compat.js";
+import { buildChatErrorContext } from './chat_workflow_context.js';
 import { loadPreact, isPreactEnabled } from './preact-loader.js';
 import { DoctorAPI } from './doctor_api.js';
 import { FixHandler } from './doctor_fix_handler.js';
@@ -462,7 +463,7 @@ function ChatIsland({ uiText }) {
         const settings = getSettings();
         const payload = {
             messages: buildChatHistory(getMessages(), pending.id),
-            error_context: wfCtx || {},
+            error_context: buildChatErrorContext(wfCtx),
             intent: 'chat',
             selected_nodes: [],
             api_key: settings.apiKey,

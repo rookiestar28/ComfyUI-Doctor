@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "ウィジェットが見つかりません",
     "generation_stopped_user": "ユーザーによって生成が停止されました。",
     "global_error_banner_title": "エラーが発生しました",
+    "include_workflow_context_hint": "有効にすると、チャットの質問と一緒に、プライバシーモードを適用したうえでワークフローのグラフ（ノードの種類、接続、プロンプトやファイル名などのウィジェット値）が選択した AI プロバイダーに送信されます。デフォルトではオフです。",
+    "include_workflow_context_label": "チャットの質問にワークフローを同送する",
     "info_message": "左側の 🏥 Doctor ボタンをクリックして AI でエラーを分析",
     "info_title": "情報",
     "intent_controlnet": "ControlNet ガイド",

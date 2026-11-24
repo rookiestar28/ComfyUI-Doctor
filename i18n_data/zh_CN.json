@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "找不到小工具",
     "generation_stopped_user": "生成已被用户停止。",
     "global_error_banner_title": "发生错误",
+    "include_workflow_context_hint": "启用后，聊天提问时会将工作流图（节点类型、连接，以及提示词、文件名等控件值）在应用隐私模式后，一并发送给所选的 AI 提供商。默认关闭。",
+    "include_workflow_context_label": "聊天提问时一并发送工作流",
     "info_message": "点击左侧 🏥 Doctor 按钮使用 AI 分析错误",
     "info_title": "信息",
     "intent_controlnet": "ControlNet 引导",

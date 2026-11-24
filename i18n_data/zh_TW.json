@@ -164,6 +164,8 @@
     "fix_error_widget_not_found": "找不到小工具",
     "generation_stopped_user": "生成已被使用者停止。",
     "global_error_banner_title": "發生錯誤",
+    "include_workflow_context_hint": "啟用後，聊天提問時會將工作流程圖（節點類型、連線，以及提示詞、檔案名稱等元件值）在套用隱私模式後，一併傳送給所選的 AI 提供者。預設為關閉。",
+    "include_workflow_context_label": "聊天提問時一併傳送工作流程",
     "info_message": "點擊左側 🏥 Doctor 按鈕使用 AI 分析錯誤",
     "info_title": "資訊",
     "intent_controlnet": "ControlNet 引導",

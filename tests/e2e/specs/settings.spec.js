@@ -96,7 +96,7 @@ test.describe('Settings Panel', () => {
       }));
     });
 
-    expect(contract).toHaveLength(11);
+    expect(contract).toHaveLength(12);
     expect(contract.map((setting) => setting.id)).not.toContain('Doctor.LLM.ApiKey');
     expect(contract.every(
       (setting) => setting.trackChanges === false && setting.telemetryKeyCount === 1

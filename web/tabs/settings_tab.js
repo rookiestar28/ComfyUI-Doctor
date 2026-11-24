@@ -78,6 +78,7 @@ export function render(container) {
         model: currentModel,
         privacyMode: currentPrivacyMode,
         autoOpenOnError: currentAutoOpenOnError,
+        includeWorkflowContext: currentIncludeWorkflowContext,
     } = getDoctorRuntimeSettings(app);
     // S8: API key is session-only; never read from persisted ComfyUI settings.
     const currentApiKey = getRuntimeApiKey();
@@ -207,6 +208,13 @@ export function render(container) {
                     <span>${doctorUI.getUIText('auto_open_on_error_label') || 'Auto-open error report panel on new errors'}</span>
                 </label>
                 <div style="font-size: 12px; color: #888; margin-top: 5px; margin-left: 24px;">${doctorUI.getUIText('auto_open_on_error_hint') || 'When enabled, the right-side error report panel will automatically open when a new error is detected'}</div>
+            </div>
+            <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; cursor: pointer;">
+                    <input type="checkbox" id="doctor-include-workflow-toggle" ${currentIncludeWorkflowContext ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+                    <span id="doctor-include-workflow-label">${doctorUI.getUIText('include_workflow_context_label') || 'Send the workflow with chat questions'}</span>
+                </label>
+                <div id="doctor-include-workflow-hint" style="font-size: 12px; color: #888; margin-top: 5px; margin-left: 24px;">${doctorUI.getUIText('include_workflow_context_hint') || 'When enabled, the workflow graph (node types, connections and widget values such as prompts and file names) is sent with your chat questions to the selected AI provider, after the privacy mode has been applied. Off by default.'}</div>
             </div>
             <button id="doctor-save-settings-btn" style="width: 100%; padding: 10px; background: #4caf50; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px;">💾 ${doctorUI.getUIText('save_settings_btn')}</button>
         </div>
@@ -368,6 +376,7 @@ export function render(container) {
 
     const saveBtn = settingsPanel.querySelector('#doctor-save-settings-btn');
     const autoOpenToggle = settingsPanel.querySelector('#doctor-auto-open-toggle');
+    const includeWorkflowToggle = settingsPanel.querySelector('#doctor-include-workflow-toggle');
     saveBtn.onclick = async () => {
         const langSelect = settingsPanel.querySelector('#doctor-language-select');
         const modelValue = manualToggle.checked ? modelInputManual.value : modelSelect.value;
@@ -376,6 +385,7 @@ export function render(container) {
         const apiKeyVal = apiKeyInput.value;
         const privacyVal = privacySelect.value;
         const autoOpenVal = autoOpenToggle.checked;
+        const includeWorkflowVal = includeWorkflowToggle.checked;
 
         try {
             setDoctorSetting("Doctor.General.Language", langSelect.value, app);
@@ -388,6 +398,7 @@ export function render(container) {
             // F17: Save auto-open setting and apply immediately
             setDoctorSetting("Doctor.Behavior.AutoOpenOnError", autoOpenVal, app);
             doctorUI.autoOpenOnError = autoOpenVal;
+            setDoctorSetting("Doctor.Behavior.IncludeWorkflowContext", includeWorkflowVal, app);
 
             // Reload UI Text for new language (which also updates privacy text eventually)
             // doctorUI.updateUILanguage() -> will update info card etc.
