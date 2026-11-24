@@ -227,6 +227,10 @@ Doctor frontend assets are served locally from the extension directory. External
 
 The chat markdown and code-highlighting libraries load only from the extension's own `web/lib/` directory, whatever the custom-node folder is named; there is no CDN fallback for them. If those files are missing, chat replies are shown as plain text.
 
+## Rendered Chat Replies
+
+Assistant replies are treated as untrusted text. Doctor renders them from markdown through an allowlist sanitizer: only ordinary text, code, list, table, heading, link and image elements survive, with a fixed set of attributes. Links keep only absolute `http`, `https` or `mailto` addresses (and in-page `#` fragments); images keep only `http` or `https` sources. Every address is judged after the browser's own URL parsing, so split, entity-encoded or whitespace-padded schemes such as `javascript:` are removed. Forms, scripts, frames, styles, inline event handlers, SVG and MathML are removed. Kept links open in a new tab with `rel="noopener noreferrer"`, and images are requested without a referrer. If sanitizing fails for any reason, the reply is shown as escaped plain text.
+
 For restricted environments:
 
 - Keep ComfyUI and Doctor assets served from local extension paths.
