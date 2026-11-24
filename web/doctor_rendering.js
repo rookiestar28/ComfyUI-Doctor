@@ -268,27 +268,6 @@ export function sanitizeHtml(unsafeHtml) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MARKDOWN RENDERING
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Render markdown content to sanitized HTML.
- * Requires assets to be loaded first.
- *
- * @param {string} content - Markdown content
- * @returns {string} Sanitized HTML
- */
-export function renderMarkdown(content) {
-    if (!window.marked) {
-        console.warn('[DoctorRendering] marked not loaded, returning raw content');
-        return sanitizeHtml(content);
-    }
-
-    const rawHtml = window.marked.parse(content || '');
-    return sanitizeHtml(rawHtml);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // CODE HIGHLIGHTING
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -347,16 +326,4 @@ export function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// EXPORTS FOR TESTING
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Reset the assets loaded state (for testing only).
- */
-export function _resetAssets() {
-    assetsLoaded = false;
-    loadPromise = null;
 }

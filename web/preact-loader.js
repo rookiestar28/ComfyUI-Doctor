@@ -68,14 +68,6 @@ export function isPreactEnabled() {
 }
 
 /**
- * Check if Preact has been successfully loaded.
- * @returns {boolean} True if Preact is loaded and ready
- */
-export function isPreactLoaded() {
-    return cachedPreact !== null && loadError === null;
-}
-
-/**
  * Get the last load error, if any.
  * @returns {Error|null} The error object or null
  */

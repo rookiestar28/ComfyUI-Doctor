@@ -174,36 +174,11 @@ export function unmount(id, expectedContainer = null) {
 }
 
 /**
- * Get an island config by id.
- * @param {string} id - Island id
- * @returns {IslandConfig|undefined}
- */
-export function getConfig(id) {
-    return registry.get(id);
-}
-
-/**
- * Check if an island is registered.
- * @param {string} id - Island id
- * @returns {boolean}
- */
-export function isRegistered(id) {
-    return registry.has(id);
-}
-
-/**
  * Get all recorded island errors.
  * @returns {Array<{id: string, error: Error, timestamp: number}>}
  */
 export function getErrors() {
     return [...islandErrors];
-}
-
-/**
- * Clear all recorded errors.
- */
-export function clearErrors() {
-    islandErrors.length = 0;
 }
 
 // INTERNAL FUNCTIONS (exported for testing)

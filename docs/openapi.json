@@ -226,7 +226,7 @@
               "text/event-stream": {
                 "schema": {
                   "type": "string",
-                  "description": "SSE stream with data events containing JSON fragments."
+                  "description": "SSE stream of data events, each a JSON object: content fragments {\"delta\": text, \"done\": false}, the end of the reply {\"delta\": \"\", \"done\": true}, a terminal failure {\"error\": message, \"code\": code, \"done\": true}, and at most one {\"type\": \"fix_suggestion\", \"data\": {\"fixes\": [...]}} after the done event when the reply contains a valid fixes block."
                 }
               }
             }

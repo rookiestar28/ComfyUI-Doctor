@@ -184,17 +184,3 @@ export function installGlobalErrorHandlers() {
 
     console.log('[ComfyUI-Doctor] Global error handlers installed');
 }
-
-/**
- * Clear the error cache (for testing).
- */
-export function _clearErrorCache() {
-    errorCache.clear();
-}
-
-/**
- * Reset handlers (for testing).
- */
-export function _resetHandlers() {
-    window.__doctorGlobalErrorHandlersInstalled = false;
-}

@@ -21,9 +21,3 @@ export function hasNoMatchedIntent(report) {
         (!report.intent_signature.top_intents || report.intent_signature.top_intents.length === 0)
     );
 }
-
-export function formatIntentStage(stageId) {
-    // This is just a helper for consistent ID formatting if needed
-    // The actual display uses i18n which is a separate concern
-    return stageId || 'unknown';
-}

@@ -65,22 +65,6 @@ export function getUIText() {
 }
 
 /**
- * Get selected nodes.
- * @returns {Array<{id: string, type: string}>}
- */
-export function getSelectedNodes() {
-    return doctorContext.state.selectedNodes || [];
-}
-
-/**
- * Get session ID.
- * @returns {string}
- */
-export function getSessionId() {
-    return doctorContext.state.sessionId || '';
-}
-
-/**
  * Get sanitization metadata from workflow context.
  * @returns {{privacy_mode: string, pii_found: boolean}|null}
  */
@@ -113,28 +97,6 @@ export function onStateChanged(callback) {
         // data contains {prev, current}, pass current
         const current = data?.current || doctorContext.state;
         callback(current);
-    });
-}
-
-/**
- * Subscribe to processing state changes.
- * @param {(isProcessing: boolean) => void} callback
- * @returns {() => void} Unsubscribe function
- */
-export function onProcessingChanged(callback) {
-    return doctorContext.subscribe('change:isProcessing', (isProcessing) => {
-        callback(isProcessing);
-    });
-}
-
-/**
- * Subscribe to workflow context changes.
- * @param {(context: Object|null) => void} callback
- * @returns {() => void} Unsubscribe function
- */
-export function onWorkflowContextChanged(callback) {
-    return doctorContext.subscribe('change:workflowContext', (context) => {
-        callback(context);
     });
 }
 

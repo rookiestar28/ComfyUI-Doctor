@@ -75,6 +75,19 @@ The shipped sidebar sends no workflow with `/doctor/chat` by default. When the u
 The workflow text is sanitized with the rest of the request according to the request's privacy mode, like any
 other outbound text.
 
+### Chat stream events
+
+A streaming `/doctor/chat` reply is a Server-Sent Events stream. Every event is one `data:` line that holds a JSON object:
+
+| Event | Shape | Meaning |
+| --- | --- | --- |
+| Content | `{"delta": "<text>", "done": false}` | A fragment of the reply, in order. |
+| End | `{"delta": "", "done": true}` | The provider finished the reply. |
+| Error | `{"error": "<message>", "code": "<code>", "done": true}` | The stream failed; this is the terminal event. |
+| Fix suggestion | `{"type": "fix_suggestion", "data": {"fixes": [...]}}` | Optional, at most once, after the `done` event. |
+
+When the complete reply contains a fenced `json` block with a `fixes` list in which every entry is an object with the keys `node_id`, `widget`, `from`, `to` and `reason`, the route writes one `fix_suggestion` event after the `done` event. Its `data` is that block's parsed JSON; only the first matching block is used. Nothing is written when the block is missing, is not valid JSON, or fails that check. The event has neither `delta` nor `done`, so a client that stops reading at `done` never sees it. The shipped sidebar reads only `delta`, `done` and `error` and ignores it. Non-streaming replies never carry it.
+
 ## Credential Store Endpoints
 
 | Method | Path | Purpose |
