@@ -722,7 +722,7 @@ test.describe('Doctor Chat Interface', () => {
     expect(state).toEqual({ requested: 2, pending: 0, ids: ['42'] });
   });
 
-  for (const mode of ['root', 'group', 'subgraph', 'nested', 'legacy']) {
+  for (const mode of ['root', 'group', 'group-in-subgraph', 'subgraph', 'nested', 'legacy']) {
     test('focus lifecycle: Locate button reaches the live ' + mode + ' target', async ({ page }) => {
       await page.evaluate((mode) => {
         const { app } = window;
@@ -731,15 +731,13 @@ test.describe('Doctor Chat Interface', () => {
           boundingRect: [100, 200, 200, 100] };
         let graph = root;
         let executionId = '42';
-        if (mode === 'group') {
-          node.getInnerNodes = () => [{ id: 7 }];
-          executionId = '42:7';
-        }
-        if (mode === 'subgraph' || mode === 'nested') {
+        if (mode === 'group' || mode === 'group-in-subgraph') node.getInnerNodes = () => [{ id: 7 }];
+        if (mode === 'group') executionId = '42:7';
+        if (mode === 'subgraph' || mode === 'nested' || mode === 'group-in-subgraph') {
           graph = { _nodes: [node], isRootGraph: false };
           node.graph = graph;
           let host = { id: 65, graph: root, subgraph: graph, isSubgraphNode: () => true };
-          executionId = '65:42';
+          executionId = mode === 'group-in-subgraph' ? '65:42:7' : '65:42';
           if (mode === 'nested') {
             const middle = { _nodes: [host], isRootGraph: false };
             host.graph = middle;
@@ -777,6 +775,27 @@ test.describe('Doctor Chat Interface', () => {
       }
     });
   }
+
+  test('focus lifecycle: a group inside a real subgraph is a navigation target, never a fix target', async ({ page }) => {
+    const resolved = await page.evaluate(async () => {
+      const { app } = window;
+      const compat = await import('/web/comfyui_frontend_compat.js');
+      const group = { id: 42, pos: [100, 200], size: [200, 100], getInnerNodes: () => [{ id: 7 }] };
+      const graph = { _nodes: [group], isRootGraph: false };
+      group.graph = graph;
+      app.rootGraph._nodes = [{ id: 65, graph: app.rootGraph, subgraph: graph, isSubgraphNode: () => true }];
+      const navigation = compat.resolveComfyNodeTarget('65:42:7', app, { allowGroupFallback: true });
+      return {
+        navigationIsTheGroup: navigation?.node === group && navigation?.graph === graph,
+        fixTarget: compat.resolveComfyFixTargetNode('65:42:7', app),
+        withoutFallback: compat.resolveComfyNodeTarget('65:42:7', app),
+        // Even a caller that asks for both the fallback and a fix target must not get the group.
+        bothFlags: compat.resolveComfyNodeTarget('65:42:7', app, { forFix: true, allowGroupFallback: true }),
+      };
+    });
+
+    expect(resolved).toEqual({ navigationIsTheGroup: true, fixTarget: null, withoutFallback: null, bothFlags: null });
+  });
 
 
   for (const cancellation of ['destroy', 'supersede']) {
