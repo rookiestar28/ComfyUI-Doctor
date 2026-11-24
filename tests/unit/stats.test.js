@@ -3,7 +3,8 @@ import {
     formatPatternName,
     calculateCategoryBreakdown,
     calculateResolutionPercentages,
-    getScoreColor
+    getScoreColor,
+    toSafeCount
 } from '../../web/utils/stats_logic.js';
 
 describe('Stats Logic - formatPatternName', () => {
@@ -80,5 +81,35 @@ describe('Stats Logic - getScoreColor', () => {
         expect(getScoreColor(79)).toBe('#ff9800'); // Warning
         expect(getScoreColor(50)).toBe('#ff9800');
         expect(getScoreColor(49)).toBe('#f44336'); // Critical
+    });
+});
+
+describe('Stats Logic - toSafeCount (S34)', () => {
+    it('keeps whole non-negative numbers and numeric strings', () => {
+        expect(toSafeCount(0)).toBe(0);
+        expect(toSafeCount(12)).toBe(12);
+        expect(toSafeCount('15')).toBe(15);
+        expect(toSafeCount(' 7 ')).toBe(7);
+        expect(toSafeCount(Number.MAX_SAFE_INTEGER)).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    it('floors fractions', () => {
+        expect(toSafeCount(2.9)).toBe(2);
+        expect(toSafeCount('3.7')).toBe(3);
+    });
+
+    it('turns markup, negatives and non-numbers into 0', () => {
+        for (const value of ['<img src=x onerror=alert(1)>9', '9<b>', '', '   ', 'many', -4, '-1', NaN, Infinity, -Infinity,
+            null, undefined, true, false, {}, [], [5], () => 5]) {
+            expect(toSafeCount(value), String(value)).toBe(0);
+        }
+    });
+
+    it('never returns anything but a finite integer', () => {
+        for (const value of ['1e3', '0x10', 1e21, '1e400']) {
+            const out = toSafeCount(value);
+            expect(Number.isInteger(out)).toBe(true);
+            expect(Number.isFinite(out)).toBe(true);
+        }
     });
 });

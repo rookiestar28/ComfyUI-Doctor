@@ -965,4 +965,30 @@ test.describe('Settings Panel', () => {
     await expect(page.locator('#doctor-keystore-status')).not.toContainText('POISON-SERVER-LOCKED-TEXT');
     await expect(page.locator('#doctor-keystore-delete-btn')).toBeEnabled();
   });
+
+
+  // S34: persisted settings are written into attributes of the settings form. A value with a quote must
+  // stay a value; it must not add attributes or elements to the input.
+  test('S34: stored base URL, model and API key stay values and never add attributes or elements', async ({ page }) => {
+    const base = 'https://x.example/v1" id="s34-base" onfocus="window.__s34=1" data-x="';
+    const model = 'm"><b id="s34-model">x</b><input id="s34-model-input" value="';
+    const key = 'k" id="s34-key" onfocus="window.__s34=1" data-y="';
+    await page.evaluate(async ({ base, model, key }) => {
+      window.app.ui.settings.setSettingValue('Doctor.LLM.BaseUrl', base);
+      window.app.ui.settings.setSettingValue('Doctor.LLM.Model', model);
+      const store = await import('/web/llm_key_store.js');
+      store.setRuntimeApiKey(key);
+    }, { base, model, key });
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+
+    await expect(page.locator('#doctor-baseurl-input')).toHaveValue(base);
+    await expect(page.locator('#doctor-model-input-manual')).toHaveValue(model);
+    await expect(page.locator('#doctor-apikey-input')).toHaveValue(key);
+    expect(await page.locator('#s34-base, #s34-model, #s34-model-input, #s34-key').count()).toBe(0);
+    for (const id of ['doctor-baseurl-input', 'doctor-model-input-manual', 'doctor-apikey-input']) {
+      const attrs = await page.locator(`#${id}`).evaluate((el) => [...el.attributes].map((a) => a.name).filter((n) => n.startsWith('on') || n.startsWith('data-')));
+      expect(attrs, id).toEqual([]);
+    }
+    expect(await page.evaluate(() => window.__s34 || 0)).toBe(0);
+  });
 });

@@ -122,7 +122,7 @@ export function render(container) {
             </div>
             <div>
                 <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">${doctorUI.getUIText('base_url_label')}</label>
-                <input type="text" id="doctor-baseurl-input" value="${currentBaseUrl}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                <input type="text" id="doctor-baseurl-input" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
             </div>
             <div>
                 <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #aaa; margin-bottom: 5px;">
@@ -135,7 +135,7 @@ export function render(container) {
                         </div>
                     </span>
                 </label>
-                <input type="password" id="doctor-apikey-input" value="${currentApiKey}" placeholder="${doctorUI.getUIText('api_key_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
+                <input type="password" id="doctor-apikey-input" placeholder="${doctorUI.getUIText('api_key_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box;" />
                 <div style="font-size: 11px; color: #888; margin-top: 4px;">${doctorUI.getUIText('api_key_session_only_hint') || '⚡ Session-only — cleared on reload. Use Advanced Key Store below to persist.'}</div>
             </div>
             <details id="doctor-key-store-section" style="border-top: 1px solid #444; padding-top: 12px; margin-top: -3px;">
@@ -190,7 +190,7 @@ export function render(container) {
                         ${doctorUI.getUIText('enter_model_manually')}
                     </label>
                 </div>
-                <input type="text" id="doctor-model-input-manual" value="${currentModel}" placeholder="${doctorUI.getUIText('model_manual_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
+                <input type="text" id="doctor-model-input-manual" placeholder="${doctorUI.getUIText('model_manual_placeholder')}" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; box-sizing: border-box; margin-top: 5px; display: none;" />
             </div>
             <div style="border-top: 1px solid #444; padding-top: 15px; margin-top: 5px;">
                 <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; color: #aaa; margin-bottom: 5px;">
@@ -231,6 +231,13 @@ export function render(container) {
     const manualToggle = settingsPanel.querySelector('#doctor-manual-model-toggle');
     const modelInputManual = settingsPanel.querySelector('#doctor-model-input-manual');
     const apiKeyInput = settingsPanel.querySelector('#doctor-apikey-input');
+
+    // IMPORTANT (S34): stored values are assigned as properties, never interpolated into the template above.
+    // `value="${stored}"` lets a stored value containing a double quote close the attribute and add attributes
+    // (an event handler) or elements to the form. escapeHtml does not help here: it leaves quotes untouched.
+    if (baseUrlInput) baseUrlInput.value = String(currentBaseUrl ?? '');
+    if (modelInputManual) modelInputManual.value = String(currentModel ?? '');
+    if (apiKeyInput) apiKeyInput.value = String(currentApiKey ?? '');
 
     // Load models logic
     // IMPORTANT: only the newest request may update the list; a slower earlier response (for a

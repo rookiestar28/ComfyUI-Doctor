@@ -635,10 +635,14 @@ app.registerExtension({
                         content.innerHTML = `
                             <div style="padding: 20px; color: #ff5555;">
                                 <h4>⚠️ Tab Initialization Error</h4>
-                                <p style="font-size: 12px; white-space: pre-wrap;">${tabError.message}</p>
+                                <p id="doctor-tab-init-error-message" style="font-size: 12px; white-space: pre-wrap;"></p>
                                 <p style="font-size: 10px; color: #888;">Check browser console for details</p>
                             </div>
                         `;
+                        // IMPORTANT (S34): the message is assigned as text; it is an error string of unknown origin
+                        // (a failing module can put markup into it), so it must never be part of the template above.
+                        const tabErrorMessage = content.querySelector('#doctor-tab-init-error-message');
+                        if (tabErrorMessage) tabErrorMessage.textContent = String(tabError?.message ?? tabError);
                     }
                     } catch (mountError) {
                         destroyDoctorSidebarMount(doctorUI);

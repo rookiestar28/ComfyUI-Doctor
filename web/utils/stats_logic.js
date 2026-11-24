@@ -56,3 +56,20 @@ export function getScoreColor(score) {
     if (score >= 50) return '#ff9800';
     return '#f44336';
 }
+
+/**
+ * Coerce a statistics value that arrives in a response into a plain count.
+ *
+ * IMPORTANT (S34): the vanilla statistics renderer writes counts into `innerHTML`. A count must therefore
+ * be a finite, non-negative whole number, or 0. Interpolating the raw value turns a tampered response such
+ * as `"<img src=x onerror=...>9"` into a live element. Numeric strings are accepted because older
+ * stored files held counts as text; anything else (null, objects, NaN, negatives, booleans) is 0.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function toSafeCount(value) {
+    const candidate = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+    if (typeof candidate !== 'number' || !Number.isFinite(candidate) || candidate < 0) return 0;
+    return Math.floor(candidate);
+}

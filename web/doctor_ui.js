@@ -20,6 +20,7 @@ import {
 } from "./doctor_right_panel.js";
 import { doctorContext } from "./doctor_state.js";
 import { describeLlmError } from "./utils/llm_error_text.js";
+import { toSafeCount } from "./utils/stats_logic.js";
 import { buildChatErrorContext } from "./chat_workflow_context.js";
 
 /**
@@ -2113,7 +2114,7 @@ export class DoctorUI {
                         html += `
                             <div class="pattern-item">
                                 <span class="pattern-name">${this.escapeHtml(displayName)}</span>
-                                <span class="pattern-count">${p.count}</span>
+                                <span class="pattern-count">${toSafeCount(p.count)}</span>
                             </div>
                         `;
                     });
@@ -2129,7 +2130,8 @@ export class DoctorUI {
             // Render category breakdown
             const categoriesEl = document.getElementById('doctor-category-breakdown');
             if (categoriesEl && stats.category_breakdown) {
-                const total = stats.total_errors || 1;
+                // IMPORTANT (S34): counts go into innerHTML below, so every one is coerced to a whole number first.
+                const total = toSafeCount(stats.total_errors) || 1;
                 const colors = {
                     'memory': '#f44',
                     'model_loading': '#ff9800',
@@ -2140,7 +2142,8 @@ export class DoctorUI {
 
                 let html = `<h5>📁 ${this.getUIText('stats_categories') || 'Categories'}</h5>`;
 
-                Object.entries(stats.category_breakdown).forEach(([category, count]) => {
+                Object.entries(stats.category_breakdown).forEach(([category, rawCount]) => {
+                    const count = toSafeCount(rawCount);
                     const percent = Math.round((count / total) * 100);
                     const color = colors[category] || '#888';
                     const labelKey = `category_${category}`;

@@ -9,6 +9,7 @@ import { renderStatisticsIsland, unmountStatisticsIsland } from "../statistics-i
 import { isPreactEnabled } from "../preact-loader.js";
 import { DoctorAPI } from "../doctor_api.js";
 import { formatHealthSummary } from "../utils/health_summary.js";
+import { judgeSanitizerUrl } from "../doctor_rendering.js";
 
 let isPreactMode = false;
 
@@ -329,10 +330,29 @@ function setupCommunityFeedbackHandlers(container, doctorUI) {
         };
     };
 
-    const setStatus = (text, type = 'success') => {
+    // IMPORTANT (S34): the status line is built from text nodes and a created anchor, never from innerHTML.
+    // Its text comes from responses (`result.error`, `e.message`) and the pull-request address comes from the
+    // server's GitHub reply; either one holding markup or a javascript: address must stay inert.
+    const setStatus = (text, type = 'success', linkUrl = null) => {
         if (!statusDiv) return;
         statusDiv.style.color = type === 'error' ? '#ff6b6b' : '#8bc34a';
-        statusDiv.innerHTML = text || '';
+        statusDiv.textContent = '';
+        if (!linkUrl) {
+            statusDiv.textContent = text || '';
+            return;
+        }
+        const href = judgeSanitizerUrl(linkUrl, 'a');
+        if (!href) {
+            statusDiv.textContent = `${text || ''}: ${linkUrl}`;
+            return;
+        }
+        const link = document.createElement('a');
+        link.setAttribute('href', href);
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+        link.style.color = '#7db7ff';
+        link.textContent = href;
+        statusDiv.append(document.createTextNode(`${text || ''}: `), link);
     };
 
     const buildPayload = async () => {
@@ -420,7 +440,7 @@ function setupCommunityFeedbackHandlers(container, doctorUI) {
                 const prUrl = result?.github?.pr_url;
                 const successText = doctorUI.getUIText('feedback_submit_success') || 'GitHub PR created';
                 if (prUrl) {
-                    setStatus(`${successText}: <a href="${prUrl}" target="_blank" rel="noopener noreferrer" style="color:#7db7ff;">${prUrl}</a>`);
+                    setStatus(successText, 'success', prUrl);
                 } else {
                     setStatus(successText);
                 }

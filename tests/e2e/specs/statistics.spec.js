@@ -13,7 +13,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { waitForDoctorReady, waitForI18nLoaded, clearStorage } from '../utils/helpers.js';
+import { waitForDoctorReady, waitForI18nLoaded, clearStorage, disablePreact } from '../utils/helpers.js';
 
 // Mock statistics data
 const MOCK_STATISTICS = {
@@ -1006,4 +1006,158 @@ test.describe('Statistics Dashboard', () => {
     await expect(page.locator('.diagnostics-issue[data-issue-id="r68-untargeted"]')).toContainText('unidentified node at nodes[1]');
   });
 
+});
+
+
+// S34: runtime values written into the vanilla UI must never become markup. The statistics counts, the
+// feedback status text and the pull-request address come from responses; a tampered response or file must
+// not be able to create an element, an attribute or a javascript: link.
+// IMPORTANT: the Preact islands escape text on their own, so a vanilla-renderer guard is only exercised when
+// Preact is disabled BEFORE the page loads (disablePreact adds an init script). Do not call clearStorage here:
+// it would drop the flag that keeps the vanilla UI active for later tab activations.
+test.describe('Vanilla renderer escaping (S34)', () => {
+  async function openStats(page, statistics) {
+    await setupMocks(page, statistics ? { statistics } : {});
+    await disablePreact(page);
+    await page.goto('test-harness.html');
+    await page.evaluate(() => { if (window.api) window.api.fetchApi = undefined; });
+    await waitForDoctorReady(page);
+    await waitForI18nLoaded(page);
+  }
+
+  test('markup in a pattern count or a category count is shown as a number, never as an element', async ({ page }) => {
+    await openStats(page, {
+      success: true,
+      statistics: {
+        ...MOCK_STATISTICS.statistics,
+        top_patterns: [
+          { pattern_id: 'cuda_oom_classic', count: '<img id="s34-pattern" src="x" onerror="window.__s34=1">9', category: 'memory' },
+          { pattern_id: 'missing_module', count: 10, category: 'framework' },
+        ],
+        category_breakdown: { memory: '<b id="s34-category">7</b>', workflow: 12 },
+      },
+    });
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await expect(page.locator('.pattern-item')).toHaveCount(2);
+
+    expect(await page.locator('#s34-pattern, #s34-category').count()).toBe(0);
+    expect(await page.locator('#doctor-top-patterns img, #doctor-category-breakdown b').count()).toBe(0);
+    await expect(page.locator('.pattern-count').nth(0)).toHaveText('0');
+    await expect(page.locator('.pattern-count').nth(1)).toHaveText('10');
+    await expect(page.locator('.category-bar .bar-label').nth(0)).toContainText('0 (0%)');
+    await expect(page.locator('.category-bar .bar-label').nth(1)).toContainText('12 (29%)');
+    expect(await page.evaluate(() => window.__s34 || 0)).toBe(0);
+  });
+
+  test('numeric strings and non-numbers are coerced to plain counts', async ({ page }) => {
+    await openStats(page, {
+      success: true,
+      statistics: {
+        ...MOCK_STATISTICS.statistics,
+        total_errors: 'many',
+        top_patterns: [
+          { pattern_id: 'a', count: '15' }, { pattern_id: 'b', count: -4 }, { pattern_id: 'c', count: null },
+          { pattern_id: 'd', count: 2.9 }, { pattern_id: 'e', count: Number.MAX_SAFE_INTEGER },
+        ],
+        category_breakdown: { memory: '5', workflow: 'x' },
+      },
+    });
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await expect(page.locator('.pattern-item')).toHaveCount(5);
+    const counts = await page.locator('.pattern-count').allTextContents();
+    expect(counts).toEqual(['15', '0', '0', '2', String(Number.MAX_SAFE_INTEGER)]);
+    const labels = await page.locator('.category-bar .bar-label').allTextContents();
+    // The total is not a number, so the denominator falls back to 1 and a percentage never prints NaN.
+    expect(labels.join(' ')).not.toContain('NaN');
+  });
+
+  async function openFeedback(page, { previewBody, submitBody }) {
+    await openStats(page);
+    await page.route('**/doctor/feedback/preview', (route) => route.fulfill({
+      status: previewBody.success === false ? 400 : 200, contentType: 'application/json', body: JSON.stringify(previewBody),
+    }));
+    await page.route('**/doctor/feedback/submit', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(submitBody),
+    }));
+    await page.click('.doctor-tab-button[data-tab-id="stats"]');
+    await page.waitForTimeout(250);
+    await page.evaluate(() => {
+      window.app?.Doctor?.handleNewError?.({
+        last_error: 'RuntimeError: mock', error_summary: 'RuntimeError: mock', suggestion: 'Test suggestion',
+        timestamp: '2026-02-26T12:00:00Z', node_context: { node_id: '12', node_name: 'KSampler' },
+      });
+    });
+    await page.locator('#doctor-feedback-panel summary').click();
+    await page.fill('#doctor-feedback-suggestion', 'Test suggestion');
+  }
+
+  test('a failing preview shows its error text as text, never as markup', async ({ page }) => {
+    await openFeedback(page, {
+      previewBody: { success: false, error: 'bad <img id="s34-status" src="x" onerror="window.__s34=1"> input' },
+      submitBody: { success: true },
+    });
+    await page.click('#doctor-feedback-preview-btn');
+    await expect(page.locator('#doctor-feedback-status')).toContainText('<img id="s34-status"');
+    expect(await page.locator('#s34-status').count()).toBe(0);
+    expect(await page.locator('#doctor-feedback-status img').count()).toBe(0);
+    expect(await page.evaluate(() => window.__s34 || 0)).toBe(0);
+  });
+
+  const SUBMIT_OK = (prUrl) => ({
+    success: true, submission_id: 's', files: {}, warnings: [], preview: { schema_version: '1.0' },
+    github: { ready: true, pr_number: 1, pr_url: prUrl },
+  });
+  const PREVIEW_OK = { success: true, submission_id: 's', files: {}, warnings: [], github: { ready: true }, preview: { schema_version: '1.0' } };
+
+  test('a pull-request address that is not http(s) is shown as text, not as a link', async ({ page }) => {
+    await openFeedback(page, { previewBody: PREVIEW_OK, submitBody: SUBMIT_OK('javascript:window.__s34=1') });
+    await page.click('#doctor-feedback-preview-btn');
+    await page.click('#doctor-feedback-submit-btn');
+    await expect(page.locator('#doctor-feedback-status')).toContainText('javascript:window.__s34=1');
+    expect(await page.locator('#doctor-feedback-status a').count()).toBe(0);
+    expect(await page.evaluate(() => window.__s34 || 0)).toBe(0);
+  });
+
+  test('a pull-request address cannot break out of the link attribute or add elements', async ({ page }) => {
+    const hostile = 'https://github.com/o/r/pull/1" onmouseover="window.__s34=1" id="s34-attr"><img id="s34-pr" src="x">';
+    await openFeedback(page, { previewBody: PREVIEW_OK, submitBody: SUBMIT_OK(hostile) });
+    await page.click('#doctor-feedback-preview-btn');
+    await page.click('#doctor-feedback-submit-btn');
+    const link = page.locator('#doctor-feedback-status a');
+    await expect(link).toHaveCount(1);
+    expect(await page.locator('#s34-attr, #s34-pr, #doctor-feedback-status img').count()).toBe(0);
+    expect(await link.evaluate((a) => a.hasAttribute('onmouseover'))).toBe(false);
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  test('a pull-request value that is not an address at all is shown as text', async ({ page }) => {
+    await openFeedback(page, { previewBody: PREVIEW_OK, submitBody: SUBMIT_OK('<img id="s34-pr2" src="x" onerror="window.__s34=1">') });
+    await page.click('#doctor-feedback-preview-btn');
+    await page.click('#doctor-feedback-submit-btn');
+    await expect(page.locator('#doctor-feedback-status')).toContainText('<img id="s34-pr2"');
+    expect(await page.locator('#s34-pr2, #doctor-feedback-status img, #doctor-feedback-status a').count()).toBe(0);
+    expect(await page.evaluate(() => window.__s34 || 0)).toBe(0);
+  });
+
+  test('a normal pull-request address stays a link with the same text', async ({ page }) => {
+    const url = 'https://github.com/rookiestar28/ComfyUI-Doctor/pull/123';
+    await openFeedback(page, { previewBody: PREVIEW_OK, submitBody: SUBMIT_OK(url) });
+    await page.click('#doctor-feedback-preview-btn');
+    await page.click('#doctor-feedback-submit-btn');
+    const link = page.locator('#doctor-feedback-status a');
+    await expect(link).toHaveAttribute('href', url);
+    await expect(link).toHaveText(url);
+    await expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  test('a privacy mode outside the known labels is shown as text', async ({ page }) => {
+    await openStats(page);
+    await page.evaluate(() => {
+      const doctor = window.app.Doctor;
+      doctor.lastAnalysisMetadata = { sanitization: { privacy_mode: '<b id="s34-privacy">x</b>', pii_found: true } };
+      doctor.updateSanitizationStatusVanilla(document.querySelector('#doctor-sanitization-status'));
+    });
+    await expect(page.locator('#doctor-sanitization-status')).toContainText('<b id="s34-privacy">');
+    expect(await page.locator('#s34-privacy').count()).toBe(0);
+  });
 });

@@ -287,7 +287,10 @@ function updateSanitizationStatus(doctorUI, statusEl) {
     const piiFound = metadata.pii_found === true;
 
     const privacyLabel = doctorUI.getUIText('sanitization_label') || 'Privacy';
-    const modeLabel = doctorUI.getUIText(`sanitization_${privacyMode}`) || privacyMode;
+    // IMPORTANT (S34): getUIText never returns an empty value; for an unknown mode it returns
+    // `[Missing: sanitization_<mode>]`, which carries the response's mode string into innerHTML below.
+    // The label is therefore escaped as a whole, not only its `|| privacyMode` fallback.
+    const modeLabel = doctorUI.escapeHtml(doctorUI.getUIText(`sanitization_${privacyMode}`) || privacyMode);
     const piiLabel = piiFound
         ? (doctorUI.getUIText('sanitization_pii_found') || 'PII removed')
         : (doctorUI.getUIText('sanitization_pii_not_found') || 'No PII');
