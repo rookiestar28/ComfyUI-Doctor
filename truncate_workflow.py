@@ -73,6 +73,8 @@ def truncate_workflow_smart(
         - kept_nodes: Number of nodes after truncation
         - truncation_method: "none", "property_pruning", "node_removal", or "char_slice"
         - error_node_preserved: Whether the error node is in the output (None when no error node was given)
+        - omitted_members: only on a reduced result; the non-node members of a serialized graph that were
+          left out to fit the budget (the output names them in an ``_omitted_members`` member)
     """
     if not workflow_str:
         return "", {"truncation_method": "none", "original_length": 0}
@@ -171,12 +173,14 @@ def truncate_workflow_smart(
     hop_limit = max(max_hops, 0)
     # The documented hop count is tried first; a neighborhood that does not fit the budget degrades hop
     # by hop (down to the error node alone) instead of collapsing into a character slice.
+    attempted_neighborhoods = []
     for hops in range(hop_limit if neighborhood_node_id else 0, -1, -1):
         if neighborhood_node_id:
             priority_nodes = _get_priority_nodes(workflow, neighborhood_node_id, hops)
         else:
             # No error node specified, keep first N nodes
             priority_nodes = {entry_id for entry_id, _ in _node_entries(workflow)[:20]}
+        attempted_neighborhoods.append(priority_nodes)
         filtered_workflow = _filter_nodes(filtered_source_workflow, filtered_source_nodes, priority_nodes)
         filtered_str = json.dumps(filtered_workflow, ensure_ascii=False, separators=(',', ':'))
         if len(filtered_str) <= max_chars:
@@ -198,6 +202,31 @@ def truncate_workflow_smart(
             "error_node_preserved": error_node_preserved
         }
     
+    # Strategy 2b: reduced shell. Only reached when no neighborhood fits with its whole shell, i.e. on the path
+    # that would otherwise end in a character slice, so every output that fits today stays byte-identical.
+    if _has_ui_nodes(workflow):
+        reduced = _reduce_shell_to_budget(filtered_source_workflow, attempted_neighborhoods, max_chars)
+        if reduced is not None:
+            reduced_str, omitted_members, reduced_nodes = reduced
+            reduced_entries = _node_entries({"nodes": reduced_nodes})
+            reduced_preserved = False
+            if normalized_error_node_id:
+                # Decided on the text itself: the node must be in what is returned, not merely in the candidate.
+                error_text = next(
+                    (_dump(node) for entry_id, node in reduced_entries if entry_id == normalized_error_node_id),
+                    None,
+                )
+                reduced_preserved = error_text is not None and error_text in reduced_str
+            return reduced_str, {
+                "truncation_method": "node_removal",
+                "original_length": original_length,
+                "truncated_length": len(reduced_str),
+                "original_nodes": original_node_count,
+                "kept_nodes": len(reduced_entries),
+                "error_node_preserved": reduced_preserved,
+                "omitted_members": omitted_members,
+            }
+
     # Strategy 3: Final fallback - character truncation with note
     truncated = filtered_str[:max(max_chars - 80, 0)] + ',"_truncated":true}'
     # Ensure valid JSON by trying to close it properly
@@ -354,6 +383,68 @@ def _preserve_workflow_shell(workflow: dict, filtered_nodes: list, keep_ids: set
     if isinstance(workflow.get("links"), list):
         result["links"] = _filter_links_for_nodes(workflow["links"], keep_ids)
     return result
+
+
+# Marker member of a reduced result; it is part of the measured text and names the members left out.
+OMITTED_MEMBERS_KEY = "_omitted_members"
+
+
+def _dump(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
+
+
+def _reduce_shell_to_budget(
+    workflow: dict, neighborhoods: list, max_chars: int
+) -> Optional[tuple[str, list, list]]:
+    """Nodes and links first, then as many non-node members as still fit. None when nothing fits.
+
+    IMPORTANT (R78): ``_preserve_workflow_shell`` writes every non-node member (``definitions``, ``extra``,
+    ``groups``, ...) unpruned and BEFORE ``nodes``. A few KB of definitions therefore made every neighborhood
+    exceed the budget, and the character-slice fallback kept only the start of the text: valid-looking output
+    that contained no node at all. Here the nodes and their links are written first, the members that still
+    fit follow in their original order (a member that does not fit is skipped, a later smaller one may still
+    fit), and the omitted names are listed in ``_omitted_members``. That marker is part of the measured text,
+    so the result never exceeds ``max_chars``. Do not move the shell back in front of ``nodes`` and do not
+    leave the marker out of the measured length.
+
+    ``neighborhoods`` are the id sets the hop loop tried, widest first; the first one whose nodes, links
+    and marker fit is used. If even the smallest does not fit, the caller falls through unchanged.
+    """
+    shell = [(key, value) for key, value in workflow.items() if key not in {"nodes", "links"}]
+    if not shell:
+        return None  # nothing can be left out: the nodes alone are what did not fit
+    shell_names = [key for key, _ in shell]
+    # A member that is called like the marker is never kept: the marker replaces it.
+    eligible = [(key, value) for key, value in shell if key != OMITTED_MEMBERS_KEY]
+
+    def piece(key: str, value: Any) -> str:
+        return f"{_dump(key)}:{_dump(value)}"
+
+    def total(pieces: list) -> int:
+        # "{" + pieces joined by "," + "}"
+        return 2 + sum(len(item) for item in pieces) + max(len(pieces) - 1, 0)
+
+    links = workflow.get("links")
+    for keep_ids in neighborhoods:
+        kept_nodes = [node for node in workflow["nodes"] if isinstance(node, dict) and str(node.get("id", "")) in keep_ids]
+        base = [piece("nodes", kept_nodes)]
+        if isinstance(links, list):
+            base.append(piece("links", _filter_links_for_nodes(links, keep_ids)))
+        if total(base + [piece(OMITTED_MEMBERS_KEY, shell_names)]) > max_chars:
+            continue  # a smaller neighborhood may still fit
+
+        kept_members: list = []
+        omitted = list(shell_names)
+        for name, value in eligible:
+            candidate = piece(name, value)
+            remaining = [item for item in omitted if item != name]
+            marker = [piece(OMITTED_MEMBERS_KEY, remaining)] if remaining else []
+            if total(base + kept_members + [candidate] + marker) <= max_chars:
+                kept_members.append(candidate)
+                omitted = remaining
+        pieces = base + kept_members + ([piece(OMITTED_MEMBERS_KEY, omitted)] if omitted else [])
+        return "{" + ",".join(pieces) + "}", omitted, kept_nodes
+    return None
 
 
 def _filter_nodes(workflow: dict | list, nodes: list, keep_ids: set) -> dict | list:
