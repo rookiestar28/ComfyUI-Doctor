@@ -71,6 +71,7 @@ _BLOCKED_LOOPBACK_PORTS = frozenset({11434, 1234})
 _SCRUBBED_ENV_TOKENS = ("API_KEY", "DOCTOR", "TOKEN", "SECRET", "PROXY")
 _HOST_STUB_NAMES = ("folder_paths", "server", "torch")
 _API_LOGGER_NAME = "ComfyUI-Doctor-API"
+_INTERNAL_LOGGER_NAME = "doctor._internal"
 
 T = TypeVar("T")
 
@@ -368,6 +369,7 @@ class DoctorRouteHarness:
             stack.callback(self.guard.uninstall)
 
             stack.callback(self._restore_api_logger, self._detach_api_logger())
+            stack.callback(self._restore_internal_logger, self._detach_internal_logger())
 
             validator = _load_validator()
             self.package_name = stack.enter_context(validator.synthetic_package_import_context(PROJECT_ROOT))
@@ -412,6 +414,35 @@ class DoctorRouteHarness:
             api_logger.addHandler(handler)
         api_logger.setLevel(level)
         api_logger.propagate = propagate
+
+    @staticmethod
+    def _detach_internal_logger() -> Tuple[List[logging.Handler], int, bool]:
+        # IMPORTANT: the synthetic package import runs ``logger.py`` a second time. Its module-level setup
+        # attaches a stream handler (wrapping ITS OWN ``FlushSafeProxy`` class) to the process-global
+        # ``doctor._internal`` logger when that logger has none, and always sets its level and ``propagate``.
+        # If the harness leaves that behind, the real ``logger`` module imported later sees a handler and
+        # skips its own setup, so ``test_logger_safety`` compares ``handler.stream`` with another class
+        # object and fails, but only when a harness test happens to run first in the process. Detach what
+        # the logger has now, and ``_restore_internal_logger`` puts exactly that back. Do not restore only
+        # when handlers existed before: an initially empty logger must end empty, not keep the synthetic one.
+        internal_logger = logging.getLogger(_INTERNAL_LOGGER_NAME)
+        saved = (list(internal_logger.handlers), internal_logger.level, internal_logger.propagate)
+        for handler in saved[0]:
+            internal_logger.removeHandler(handler)
+        return saved
+
+    @staticmethod
+    def _restore_internal_logger(saved: Tuple[List[logging.Handler], int, bool]) -> None:
+        internal_logger = logging.getLogger(_INTERNAL_LOGGER_NAME)
+        # Everything attached now was added during the run (the saved handlers were detached on enter).
+        for handler in list(internal_logger.handlers):
+            internal_logger.removeHandler(handler)
+            handler.close()
+        handlers, level, propagate = saved
+        for handler in handlers:
+            internal_logger.addHandler(handler)
+        internal_logger.setLevel(level)
+        internal_logger.propagate = propagate
 
     @staticmethod
     def _restore_host_stubs(saved: Mapping[str, Optional[types.ModuleType]]) -> None:
