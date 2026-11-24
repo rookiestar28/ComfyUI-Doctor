@@ -233,15 +233,15 @@ def test_lint_mixed_workflow_keeps_valid_findings_exactly():
 
 
 LINT_GOLDEN = [
-    ("Disconnected Required Input", "76cbd0abb937b5ce", {"node_id": 5}),
-    ("Broken Link Reference", "f6ce8bf1537613ee", {"node_id": 5}),
+    ("Disconnected Required Input", "76cbd0abb937b5ce", {"node_id": 5}),  # pragma: allowlist secret
+    ("Broken Link Reference", "f6ce8bf1537613ee", {"node_id": 5}),  # pragma: allowlist secret
     ("Unknown Node Type", "e773a26ea2dae007", {"node_id": OPAQUE}),
-    ("Unknown Node Type", "fd154785651f6e68", {"node_id": "09"}),
-    ("Missing Custom Node", "9cfe2b52c47234b9", {"node_id": 11}),
+    ("Unknown Node Type", "fd154785651f6e68", {"node_id": "09"}),  # pragma: allowlist secret
+    ("Missing Custom Node", "9cfe2b52c47234b9", {"node_id": 11}),  # pragma: allowlist secret
     ("Very High Step Count", "659aa0fe8f868c8a", {"node_id": 5}),
-    ("Very High Resolution Width", "cea256e96d9d0461", {"node_id": 7}),
-    ("Very High Resolution Height", "2c95dab719bad184", {"node_id": 7}),
-    ("Very High Batch Size", "aa57e6d31b160b4e", {"node_id": 7}),
+    ("Very High Resolution Width", "cea256e96d9d0461", {"node_id": 7}),  # pragma: allowlist secret
+    ("Very High Resolution Height", "2c95dab719bad184", {"node_id": 7}),  # pragma: allowlist secret
+    ("Very High Batch Size", "aa57e6d31b160b4e", {"node_id": 7}),  # pragma: allowlist secret
     ("Unusually Large Parameter Value", "6dc5cb9c8c7155cd", {"node_id": "09"}),
 ]
 
@@ -354,9 +354,9 @@ def test_asset_provenance_of_a_non_actionable_node_reports_no_raw_id():
 
 
 ASSET_GOLDEN = [
-    ("Asset File Not Found", "e0f44967b9e39cc0", {"node_id": 5}),
-    ("Asset File Not Found", "28f44d5eefb3e6a0", {"node_id": OPAQUE}),
-    ("Asset File Not Found", "5227ac70ab474f9f", {"node_id": OPAQUE}),
+    ("Asset File Not Found", "e0f44967b9e39cc0", {"node_id": 5}),  # pragma: allowlist secret
+    ("Asset File Not Found", "28f44d5eefb3e6a0", {"node_id": OPAQUE}),  # pragma: allowlist secret
+    ("Asset File Not Found", "5227ac70ab474f9f", {"node_id": OPAQUE}),  # pragma: allowlist secret
 ]
 
 
@@ -406,9 +406,13 @@ def test_signature_packs_two_corrupt_nodes_get_distinct_deterministic_ids(monkey
 
 
 SIGNATURE_GOLDEN = [
-    ("Placeholder or Example Model Path", "d5a0ed7d46582210", {"node_id": 1}),
-    ("Possible Missing Asset / Unconfigured Loader", "810d42eb5f8084cd", {"node_id": OPAQUE}),
-    ("Sampler Denoise Value Looks Out of Range", "767442bd60a5b2e6", {"node_id": "09"}),
+    ("Placeholder or Example Model Path", "d5a0ed7d46582210", {"node_id": 1}),  # pragma: allowlist secret
+    (
+        "Possible Missing Asset / Unconfigured Loader",
+        "810d42eb5f8084cd",  # pragma: allowlist secret
+        {"node_id": OPAQUE},
+    ),
+    ("Sampler Denoise Value Looks Out of Range", "767442bd60a5b2e6", {"node_id": "09"}),  # pragma: allowlist secret
 ]
 
 

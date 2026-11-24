@@ -25,7 +25,7 @@ OPENAI_BASE = "https://api.openai.com/v1"
 I18N_DIR = Path(__file__).resolve().parents[1] / "i18n_data"
 LANGUAGES = ("en", "zh_TW", "zh_CN", "ja", "de", "fr", "it", "es", "ko")
 SETTING_STRINGS = ("include_workflow_context_label", "include_workflow_context_hint")
-SECRET = "sk-a20SyntheticGraphSecret0123456789abcdefABCDEF"
+SECRET = "sk-a20SyntheticGraphSecret0123456789abcdefABCDEF"  # pragma: allowlist secret
 EMAIL = "a20.synthetic.person@example.com"
 BYSTANDER_MARK = "A20-BYSTANDER-CLASS"
 ERROR = {
@@ -70,7 +70,7 @@ def _reset_capture(harness):
 def _chat(harness: DoctorRouteHarness, error_context: Dict[str, Any], **extra: Any):
     body: Dict[str, Any] = {
         "base_url": OPENAI_BASE,
-        "api_key": "SYNTHETIC-REQUEST-KEY",
+        "api_key": "SYNTHETIC-REQUEST-KEY",  # pragma: allowlist secret
         "model": "gpt-test",
         "stream": False,
         "messages": [{"role": "user", "content": "Why did this fail?"}],

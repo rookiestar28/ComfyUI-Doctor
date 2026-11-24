@@ -35,7 +35,7 @@ FRONTEND_VIRTUAL_NAMES = ("PrimitiveNode", "Reroute", "Note", "MarkdownNote")
 HOST_ANCHORS = ("KSampler", "CheckpointLoaderSimple", "VAEDecode", "CLIPTextEncode")
 
 # Issue id of the INFO finding for an unregistered type (golden value captured before the change).
-GOLDEN_UNKNOWN = ("NotARealNodeXyz", 7, "c02dfcaec0718168")
+GOLDEN_UNKNOWN = ("NotARealNodeXyz", 7, "c02dfcaec0718168")  # pragma: allowlist secret
 
 
 @pytest.fixture

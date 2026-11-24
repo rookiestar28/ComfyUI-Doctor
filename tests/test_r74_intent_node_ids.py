@@ -13,8 +13,8 @@ import pytest
 from services.intent import SignalExtractor
 
 # Digest of the signals for the valid-id workflows below, captured before the change.
-GOLDEN_TXT2IMG = "51d56fe1e3bc52f35e204fcefc380863e88c1a46a4c493aebcea2ffa5e48aa92"
-GOLDEN_IMG2IMG = "dee8ba2b9e4318f30756a65c1248fbf90b982b1851e15f4e1ad45b7acef1b679"
+GOLDEN_TXT2IMG = "51d56fe1e3bc52f35e204fcefc380863e88c1a46a4c493aebcea2ffa5e48aa92"  # pragma: allowlist secret
+GOLDEN_IMG2IMG = "dee8ba2b9e4318f30756a65c1248fbf90b982b1851e15f4e1ad45b7acef1b679"  # pragma: allowlist secret
 
 TXT2IMG = {
     "nodes": [

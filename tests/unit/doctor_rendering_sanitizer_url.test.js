@@ -57,7 +57,7 @@ describe('judgeSanitizerUrl', () => {
   });
 
   it('rejects credential-bearing URLs', () => {
-    expect(judgeSanitizerUrl('https://user:pass@example.com/', 'a')).toBeNull();
+    expect(judgeSanitizerUrl('https://user:pass@example.com/', 'a')).toBeNull();  // pragma: allowlist secret
     expect(judgeSanitizerUrl('https://user@example.com/', 'img')).toBeNull();
   });
 

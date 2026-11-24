@@ -22,7 +22,7 @@ pytest.importorskip("aiohttp")
 from tests.doctor_route_harness import DoctorRouteHarness, ProviderReply  # noqa: E402
 
 OPENAI_BASE = "https://api.openai.com/v1"
-SECRET = "sk-r71SyntheticWidgetSecret0123456789abcdefABCDEF"
+SECRET = "sk-r71SyntheticWidgetSecret0123456789abcdefABCDEF"  # pragma: allowlist secret
 ERROR = {
     "error": "RuntimeError: CUDA out of memory. Tried to allocate 2.00 GiB",
     "traceback": (
@@ -99,7 +99,7 @@ def _reset_capture(harness):
 def _chat(harness: DoctorRouteHarness, error_context: Dict[str, Any], **extra: Any):
     body: Dict[str, Any] = {
         "base_url": OPENAI_BASE,
-        "api_key": "SYNTHETIC-REQUEST-KEY",
+        "api_key": "SYNTHETIC-REQUEST-KEY",  # pragma: allowlist secret
         "model": "gpt-test",
         "stream": False,
         "messages": [{"role": "user", "content": "Why did this fail?"}],
@@ -187,7 +187,7 @@ def test_the_legacy_format_switch_still_selects_the_legacy_prompt(harness, shape
 def test_analyze_never_fails_on_a_ui_workflow_that_contains_the_failed_node(harness):
     body = {
         "base_url": OPENAI_BASE,
-        "api_key": "SYNTHETIC-REQUEST-KEY",
+        "api_key": "SYNTHETIC-REQUEST-KEY",  # pragma: allowlist secret
         "model": "gpt-test",
         "error": ERROR["error"],
         "traceback": ERROR["traceback"],
