@@ -287,3 +287,30 @@ def test_metadata_keys_are_unchanged_for_every_strategy():
     for budget, error_node in itertools.product((30000, 1800, 120), ("7", None)):
         _, meta = truncate_workflow_smart(chain, error_node, max_chars=budget)
         assert set(meta) <= CONTRACT_KEYS | {"reason"}
+
+
+# ------------------------------------------------------------------ review follow-ups
+@pytest.mark.parametrize("shape", list(SHAPES))
+@pytest.mark.parametrize("error_node", ["999", "12:999", "not-a-node"])
+def test_an_error_node_that_is_not_in_the_workflow_keeps_the_first_nodes(shape, error_node):
+    # An error id that names no node (a stale error, or a node deleted since) used to select an empty
+    # neighborhood, so the over-budget workflow came back as an empty graph; it must behave as if no
+    # error node had been named: the first nodes are kept, and the metadata still says it was not found.
+    max_chars = 1800
+    workflow = SHAPES[shape](30)
+
+    output, meta = truncate_workflow_smart(workflow, error_node, max_chars=max_chars)
+
+    assert len(output) <= max_chars
+    assert meta["kept_nodes"] >= 1
+    assert "Step1" in output
+    assert meta["error_node_preserved"] is False
+
+
+@pytest.mark.parametrize("max_hops", [-1, -5])
+def test_a_negative_hop_count_means_the_error_node_alone(max_hops):
+    # Before: the hop range was empty, so the call raised UnboundLocalError (no caller passes it today).
+    output, meta = truncate_workflow_smart(api_prompt(30), "7", max_chars=1500, max_hops=max_hops)
+
+    assert meta["error_node_preserved"] is True
+    assert ids_in(output) == {"7"}

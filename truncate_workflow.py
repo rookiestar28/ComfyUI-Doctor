@@ -162,11 +162,18 @@ def truncate_workflow_smart(
     # Strategy 2: Node removal (keep error node and neighbors)
     filtered_source_workflow = pruned_workflow if _has_ui_nodes(workflow) else workflow
     filtered_source_nodes = filtered_source_workflow["nodes"] if _has_ui_nodes(workflow) else nodes
+    # IMPORTANT: only an error id that names a node of THIS workflow selects a neighborhood. An id that is
+    # absent (a stale error, or a node deleted since) has an empty neighborhood, which used to come back as
+    # an empty graph; it must behave like "no error node named" (the first nodes are kept). The metadata
+    # still reports the error node as not preserved. A negative hop count means the error node alone: an
+    # empty hop range would leave `filtered_workflow` unbound below.
+    neighborhood_node_id = normalized_error_node_id if normalized_error_node_id in known_ids else None
+    hop_limit = max(max_hops, 0)
     # The documented hop count is tried first; a neighborhood that does not fit the budget degrades hop
     # by hop (down to the error node alone) instead of collapsing into a character slice.
-    for hops in range(max_hops if normalized_error_node_id else 0, -1, -1):
-        if normalized_error_node_id:
-            priority_nodes = _get_priority_nodes(workflow, normalized_error_node_id, hops)
+    for hops in range(hop_limit if neighborhood_node_id else 0, -1, -1):
+        if neighborhood_node_id:
+            priority_nodes = _get_priority_nodes(workflow, neighborhood_node_id, hops)
         else:
             # No error node specified, keep first N nodes
             priority_nodes = {entry_id for entry_id, _ in _node_entries(workflow)[:20]}
