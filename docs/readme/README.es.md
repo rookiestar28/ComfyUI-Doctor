@@ -30,6 +30,8 @@ Las últimas actualizaciones se mantienen en el README en inglés. Consulta [Lat
 - Soporte completo de UI y sugerencias en inglés, chino tradicional, chino simplificado, japonés, coreano, alemán, francés, italiano y español.
 - Se conservan los ID numéricos y las cadenas opacas de los nodos, incluidos los dos puntos y caracteres especiales. Locate y las correcciones permitidas resuelven el destino exacto; se rechazan las correcciones de destinos ambiguos.
 - Se reconocen las entradas opcionales de los nodos Switch/Branch del núcleo y se mantienen los diagnósticos de entradas obligatorias ausentes y enlaces rotos.
+- Las preguntas del chat no incluyen el workflow por defecto; solo se envía si «Enviar el workflow con las preguntas del chat» está activado en Settings (desactivado por defecto). Las respuestas del chat se muestran con un sanitizador basado en lista de permitidos y nunca se muestran las imágenes de las respuestas.
+- Los nodos con ID mal formado o duplicado conservan sus hallazgos (sin destino de Locate ni de corrección); un solo campo anómalo ya no interrumpe todo el lint del workflow.
 
 ## Capturas de pantalla
 

@@ -114,8 +114,9 @@ Doctor-owned docs use canonical `/doctor/...` route paths. Current ComfyUI hosts
 contract shared by issue targets, workflow lint, signature targets and asset provenance.
 `web/comfyui_frontend_compat.js` resolves raw IDs and real subgraph execution paths with bounded
 enumeration; mutations require a unique exact target. Colons inside raw IDs are preserved.
-Malformed or duplicate workflow identities are skipped locally, so valid-node findings survive,
-but completeness on the malformed nodes is not guaranteed. Workflow lint exempts only the proven
+A workflow node whose identity is malformed or shared with another node keeps its findings
+without a target, so Locate and fixes cannot reach another node, and each group of shared IDs is
+reported once as a `Duplicate Node ID` warning. Workflow lint exempts only the proven
 optional Switch and canonical Branch input families; host-selected branch execution checks remain
 owned by ComfyUI.
 

@@ -17,6 +17,11 @@ The static safety check prevents accidental bypass of the outbound sanitization 
    destination policy resolver**
 8. **Raw HTTP client imports** (`requests`, `httpx`, `urllib3`, `urllib.request`, `http.client`)
 
+HTTP client calls are recognized by where the client comes from (the policy session factory, an
+`aiohttp` client session or a raw client constructor, including aliased, awaited, annotated and
+`with ... as` bindings and `self` attributes bound in another method), in addition to the
+`*session` naming convention, so renaming the variable does not hide a call.
+
 Rules 5-8 cannot be suppressed with the `nosec` marker, and a file that cannot be read or parsed
 fails the check. Only git-tracked Python files are scanned; test directories and the
 sanitization funnel modules themselves are skipped by exact path segment.

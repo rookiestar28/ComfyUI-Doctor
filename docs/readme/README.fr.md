@@ -30,6 +30,8 @@ Les dernières mises à jour sont maintenues dans le README anglais. Consultez [
 - Prise en charge complète de l'interface et des suggestions en anglais, chinois traditionnel, chinois simplifié, japonais, coréen, allemand, français, italien et espagnol.
 - Les identifiants numériques et les chaînes opaques des nœuds sont préservés, y compris les deux-points et caractères spéciaux. Locate et les corrections autorisées résolvent la cible exacte ; les cibles ambiguës ne peuvent pas être modifiées.
 - Les entrées facultatives des nœuds Switch/Branch du cœur sont reconnues, tout en conservant les diagnostics des entrées obligatoires manquantes et des liens cassés.
+- Les questions du chat n'incluent pas le workflow par défaut ; il n'est envoyé que si « Envoyer le workflow avec les questions du chat » est activé dans Settings (désactivé par défaut). Les réponses du chat sont affichées via un sanitizer à liste d'autorisation, et les images des réponses ne sont jamais affichées.
+- Les nœuds dont l'ID est mal formé ou dupliqué conservent leurs constats (sans cible Locate ni correction) ; un seul champ inhabituel n'interrompt plus tout le lint du workflow.
 
 ## Captures d'écran
 

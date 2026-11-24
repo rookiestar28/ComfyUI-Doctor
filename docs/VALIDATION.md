@@ -46,7 +46,7 @@ pre-commit run --all-files --show-diff-on-failure
 python scripts/validate_host_load.py
 DOCTOR_STATE_DIR="$(pwd)/doctor_state/_local_unit" python scripts/run_unittests.py --start-dir tests --pattern "test_*.py"
 node -v
-npm install
+npm ci
 npx playwright install chromium
 npm test
 ```
@@ -76,8 +76,8 @@ typing/containment, frontend raw/surfaced validation errors, setting-change
 telemetry controls, real subgraph shape, system statistics metadata, Desktop
 layout, ComfyUI job-cancel routes, and frontend queue/cancel adoption.
 
-The current frontend source lanes are Desktop `1.43.18`, ComfyUI-pinned `1.57.1`, and standalone
-`1.59.1`. Dedicated contracts cover opaque node identity, optional Branch autogrow inputs, and
+The current frontend source lanes are Desktop `1.43.18`, ComfyUI-pinned `1.59.11`, and standalone
+`1.61.8`. Dedicated contracts cover opaque node identity, optional Branch autogrow inputs, and
 asset-preview extraction/cache boundaries. Source checks and mocked UI tests are distinct from
 live-host qualification.
 
@@ -145,11 +145,12 @@ See [Security Audit](SECURITY_AUDIT.md) for the quarterly cadence, manual SSRF/X
 
 ## Frontend E2E Requirements
 
-Frontend E2E requires Node.js `>=18 <26`.
+Frontend E2E requires Node.js `>=18 <26`. Install with `npm ci`: it installs exactly what
+`package-lock.json` pins and never rewrites it, which is also what the full-gate scripts do.
 
 ```bash
 node -v
-npm install
+npm ci
 npx playwright install chromium
 npm test
 ```

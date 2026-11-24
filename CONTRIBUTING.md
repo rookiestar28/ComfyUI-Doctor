@@ -17,8 +17,10 @@ Recommended local setup:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
-npm install
+npm ci
 ```
+
+Use `npm ci` rather than `npm install` so `package-lock.json` is installed as pinned and not rewritten.
 
 Use one Python interpreter consistently for setup, tests, and validation. On Windows, the repository full-test script uses `.venv` as the project-local environment.
 

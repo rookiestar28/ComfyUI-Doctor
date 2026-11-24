@@ -30,6 +30,8 @@ Die neuesten Änderungen werden in der englischen README gepflegt. Siehe [Latest
 - Vollständige UI- und Vorschlagssprachunterstützung für Englisch, traditionelles Chinesisch, vereinfachtes Chinesisch, Japanisch, Koreanisch, Deutsch, Französisch, Italienisch und Spanisch.
 - Numerische und opake Zeichenfolgen als Knoten-IDs bleiben einschließlich Doppelpunkten und Sonderzeichen erhalten. Locate und zulässige Korrekturen lösen das genaue Ziel auf; mehrdeutige Korrekturziele werden abgelehnt.
 - Optionale Eingänge der Core-Knoten Switch/Branch werden erkannt; echte fehlende Pflichteingänge und defekte Links werden weiterhin gemeldet.
+- Chat-Fragen enthalten den Workflow standardmäßig nicht; er wird nur gesendet, wenn „Workflow mit Chat-Fragen senden“ in den Settings aktiviert ist (standardmäßig aus). Chat-Antworten werden über einen Allowlist-Sanitizer dargestellt, Bilder aus Antworten werden nie angezeigt.
+- Knoten mit fehlerhafter oder doppelter ID behalten ihre Befunde (ohne Locate- oder Korrekturziel); ein einzelnes ungewöhnliches Feld bricht den gesamten Workflow-Lint nicht mehr ab.
 
 ## Screenshots
 

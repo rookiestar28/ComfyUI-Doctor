@@ -14,6 +14,21 @@ Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md) | Architecture: [docs/ARCH
 <summary><h2>Latest Updates - Click to expand</h2></summary>
 
 <details>
+<summary><strong>Safer reply rendering, opt-in workflow context, and more resilient diagnostics</strong></summary>
+
+- Rebuilt rendered chat replies from an element and attribute allowlist so entity-encoded or whitespace-split `javascript:` addresses can no longer run. Images in replies are never displayed (an image becomes a plain link with its alt text), and the statistics, settings, and chat panels keep response and stored values inert.
+- Stopped loading Preact from a remote host; if the bundled copies cannot load, the plain chat and statistics panels are used.
+- Added the **Send the workflow with chat questions** setting, off by default. When it is on, the workflow is sanitized with the rest of the request, and a workflow over 256,000 characters is left out whole.
+- Fixed chat for workflows in the host's serialized-graph shape (previously HTTP 500), kept the error node when large definitions or groups exceed the token budget, honored the documented hop count, and read the failed node's missing required inputs from the host's node registry.
+- Kept findings on nodes with malformed or duplicate IDs (without a Locate or fix target), reported duplicate IDs once, and kept node IDs exact in intent signals.
+- Stopped reporting host-marked optional inputs, node types registered by the running host, and subgraph or legacy group-node instances as problems; one odd field type no longer aborts the whole workflow lint.
+- Added a clear Settings notice, in all nine languages, when the server key store is locked or was rebuilt.
+- Refreshed host contract coverage for Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.59.11`, and standalone frontend `1.61.8`.
+- Switched the full-gate scripts to `npm ci` so acceptance runs no longer rewrite `package-lock.json`, and made the static outbound check find HTTP calls by where the client comes from rather than by variable name.
+
+</details>
+
+<details>
 <summary><strong>Opaque node IDs, Branch diagnostics, and dependency security aligned</strong></summary>
 
 - Preserved numeric and opaque string node IDs throughout diagnostics, Locate Node, and permitted fixes, including IDs containing colons; ambiguous or stale targets cannot change another node.
@@ -558,17 +573,19 @@ ComfyUI-Doctor introduced a JSON-based pattern management architecture for built
 - Optional LLM analysis through OpenAI-compatible services, Anthropic, Gemini, xAI, OpenRouter, Ollama, and LMStudio, with unified provider request/response handling.
 - Privacy controls for outbound LLM requests, including path/key/email/IP sanitization modes and unconditional sensitive-header redaction.
 - LLM requests go only to operator-approved destinations, and keys stored on the server are only sent to the destination they belong to.
-- Optional server-side credential store with admin guarding and encryption-at-rest support; a store that cannot be opened with the configured key stays locked instead of being overwritten.
+- Optional server-side credential store with admin guarding and encryption-at-rest support; a store that cannot be opened with the configured key stays locked instead of being overwritten, and Settings explains a locked or rebuilt store.
+- Chat questions carry the error context but not the workflow unless you turn on **Send the workflow with chat questions** in Settings (off by default); when it is on, the workflow is sanitized with the rest of the outbound payload.
+- Model replies are treated as untrusted text: they are rendered through an allowlist sanitizer, images from replies are never displayed, and the chat and statistics libraries load only from Doctor's own folder.
 - Local diagnostics for workflow linting, registered ComfyUI model roots/extensions, nested workflow assets, first-party dataset folders, privacy, performance, signature packs, statistics, plugin trust, bounded host fallback advisories, telemetry controls, and community feedback preview/submit tools.
 - Consistent JSON error envelopes for Doctor API failures.
 - Full UI and suggestion language support for English, Traditional Chinese, Simplified Chinese, Japanese, Korean, German, French, Italian, and Spanish.
 
 ## Host Compatibility and Diagnostics
 
-- Current source checks cover Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.57.1`, and exact standalone frontend `1.59.1`. Both current core-pinned and standalone lanes support asynchronous settings callbacks; the Desktop lane retains its synchronous contract. These checks and mocked browser tests do not establish live-host certification.
+- Current source checks cover Desktop frontend `1.43.18`, ComfyUI-pinned frontend `1.59.11`, and exact standalone frontend `1.61.8`. Both current core-pinned and standalone lanes support asynchronous settings callbacks; the Desktop lane retains its synchronous contract. These checks and mocked browser tests do not establish live-host certification.
 - The compatibility lane tracks host contracts by applicable runtime instead of treating every frontend checkout as one version: ComfyUI Desktop's bundled frontend, ComfyUI's pinned frontend package, and the current standalone frontend source are checked separately.
-- Workflow diagnostics recognize first-party `ComfySwitchNode` / `ComfySoftSwitchNode` optional `on_true` / `on_false` inputs and `BranchNode` optional `autogrow.branch0` through `autogrow.branch31` inputs, including propagated socket types. Broken link references and unrelated required inputs still produce diagnostics; ComfyUI remains responsible for validating the selected branch at execution time.
-- Diagnostics preserve numeric and bounded opaque string node IDs, including IDs containing colons. Locate and permitted fixes resolve the exact live target; ambiguous identities cannot trigger a fix. Malformed or duplicate node identities may omit findings on those nodes, while unrelated valid-node findings remain available. A previous acknowledgement for a numeric-string ID may reappear once because its issue identifier now preserves the original ID type.
+- Workflow diagnostics recognize first-party `ComfySwitchNode` / `ComfySoftSwitchNode` optional `on_true` / `on_false` inputs and `BranchNode` optional `autogrow.branch0` through `autogrow.branch31` inputs, including propagated socket types. Broken link references and unrelated required inputs still produce diagnostics; ComfyUI remains responsible for validating the selected branch at execution time. Typed inputs that the host frontend serializes as optional (slot shape `7`) are not reported as disconnected required inputs.
+- Diagnostics preserve numeric and bounded opaque string node IDs, including IDs containing colons. Locate and permitted fixes resolve the exact live target; ambiguous identities cannot trigger a fix. A node whose ID is malformed or shared with another node keeps its findings, but they carry no Locate or fix target, and each group of nodes that share an ID is reported once as a `Duplicate Node ID` warning. A previous acknowledgement for a numeric-string ID may reappear once because its issue identifier now preserves the original ID type.
 - Locate Node rechecks the active canvas, workflow, and target after graph navigation. New requests and sidebar teardown cancel pending focus, while root nodes, groups, nested subgraphs, and legacy canvas positioning remain supported.
 - Model asset diagnostics use ComfyUI's live `folder_names_and_paths` registry when available, including host/custom roots and extensions such as `.pt2` and `.sft`. Older hosts retain a bounded legacy fallback.
 - The exact first-party `SAM3DBody_Loader` resolves `model_file` only against registered `detection` roots. If that category is unavailable, Doctor reports the unresolved asset rather than accepting a same-named checkpoints file.
@@ -624,7 +641,7 @@ Open **Doctor** in ComfyUI's left sidebar:
 
 - **Chat**: review latest error context and ask follow-up debugging questions.
 - **Statistics**: inspect recent error trends, diagnostics, trust/health information, telemetry controls, and feedback tools.
-- **Settings**: choose language, LLM provider, base URL, model, privacy mode, auto-open behavior, and optional server-side credential storage.
+- **Settings**: choose language, LLM provider, base URL, model, privacy mode, auto-open behavior, whether to send the workflow with chat questions (off by default), and optional server-side credential storage.
   The base URL must be one of the LLM destinations approved on the ComfyUI server: the built-in official providers, local Ollama/LM Studio, or URLs the server operator lists in `DOCTOR_LLM_ALLOWED_BASE_URLS` (see [Configuration and Security](docs/CONFIGURATION_SECURITY.md#llm-destinations)).
   Keys stored on the server are only sent to the destination they belong to: provider keys to that official provider, the generic key to official providers and the `DOCTOR_LLM_BASE_URL` endpoint; other endpoints need a key entered in Settings (see [LLM Credentials](docs/CONFIGURATION_SECURITY.md#llm-credentials)).
 
@@ -651,6 +668,7 @@ Recommended defaults:
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md): UI walkthrough, diagnostics, privacy modes, LLM setup, and feedback flow.
+- [2.2.0 Release Notes](docs/releases/v2.2.0.md): improvements since v2.1.0 and upgrade notes.
 - [2.1.0 Release Notes](docs/releases/v2.1.0.md): improvements since v1.9.0 and upgrade notes.
 - [Architecture](docs/ARCHITECTURE.md): host startup, backend/frontend boundaries, data flows, security/storage boundaries, and test lanes.
 - [Configuration and Security](docs/CONFIGURATION_SECURITY.md): environment variables, admin guard behavior, credential storage, outbound safety, telemetry, and CSP notes.

@@ -30,6 +30,8 @@ Gli ultimi aggiornamenti sono mantenuti nel README inglese. Vedi [Latest Updates
 - Supporto completo di UI e suggerimenti in inglese, cinese tradizionale, cinese semplificato, giapponese, coreano, tedesco, francese, italiano e spagnolo.
 - Gli ID numerici e le stringhe opache dei nodi sono preservati, inclusi due punti e caratteri speciali. Locate e le correzioni consentite risolvono il bersaglio esatto; le correzioni su bersagli ambigui vengono rifiutate.
 - Gli ingressi facoltativi dei nodi core Switch/Branch sono riconosciuti, mantenendo le diagnosi degli ingressi obbligatori mancanti e dei collegamenti interrotti.
+- Le domande della chat non includono il workflow per impostazione predefinita; viene inviato solo se «Invia il workflow con le domande della chat» è attivo in Settings (disattivato di default). Le risposte della chat sono visualizzate tramite un sanitizer basato su allowlist e le immagini nelle risposte non vengono mai mostrate.
+- I nodi con ID malformato o duplicato mantengono i propri risultati (senza destinazione per Locate o correzione); un singolo campo anomalo non interrompe più l'intero lint del workflow.
 
 ## Screenshot
 

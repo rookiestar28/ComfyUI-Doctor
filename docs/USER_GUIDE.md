@@ -178,9 +178,10 @@ Diagnostics can run without an LLM call. Built-in JSON signature packs provide d
 Diagnostic matches include confidence and provenance metadata so results can be reviewed without treating them as a security or malware verdict.
 The diagnostics registry only runs concrete production checks; obsolete placeholder checks are not included in health reports.
 
-Malformed or duplicate node identities can omit findings on those nodes; findings on unrelated
-valid nodes remain available. After upgrading, an acknowledged issue for a numeric-string node
-ID may appear once again because issue identifiers now preserve the original ID type.
+A node whose ID is malformed or shared with another node keeps its findings, but they carry no
+Locate or fix target, and each group of nodes that share an ID is reported once as a
+`Duplicate Node ID` warning. After upgrading from an older version, an acknowledged issue for a
+numeric-string node ID may appear once again because issue identifiers now preserve the original ID type.
 
 Frontend error and credential-store status messages are displayed as literal
 text. Backend or exception strings are not treated as trusted markup.
