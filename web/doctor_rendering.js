@@ -120,9 +120,10 @@ const IMAGE_SCHEMES = new Set(['http:', 'https:']);
 const FRAGMENT_LINK = /^#[A-Za-z0-9_.:-]{0,128}$/;
 const CODE_LANGUAGE_CLASS = /^language-[A-Za-z0-9_+-]{1,32}$/;
 const SAFE_TAGS = new Set([
-    'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img',
+    'a', 'b', 'blockquote', 'br', 'code', 'del', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i',
     'input', 'li', 'ol', 'p', 'pre', 's', 'span', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u', 'ul',
 ]);
+const MAX_IMAGE_LINK_TEXT_LENGTH = 200;
 // Removed together with their content; every other unknown element is unwrapped (its children are kept).
 const DROPPED_TAGS = new Set([
     'applet', 'audio', 'base', 'button', 'canvas', 'dialog', 'embed', 'form', 'frame', 'frameset', 'head', 'iframe',
@@ -183,15 +184,6 @@ function createSafeElement(source, doc) {
             target.setAttribute('target', '_blank');
             break;
         }
-        case 'img': {
-            const src = judgeSanitizerUrl(source.getAttribute('src'), 'img');
-            if (src === null) return null;
-            target.setAttribute('src', src);
-            setText('alt');
-            setText('title');
-            target.setAttribute('referrerpolicy', 'no-referrer');
-            break;
-        }
         case 'input':
             // Only the disabled task-list checkbox that markdown emits; any other input is dropped.
             if ((source.getAttribute('type') || '').toLowerCase() !== 'checkbox') return null;
@@ -221,6 +213,37 @@ function createSafeElement(source, doc) {
     return target;
 }
 
+/**
+ * Replace an `<img>` by its text: a plain link (alt text, or the address when there is none), or the alt
+ * text alone when the address is unusable or the image sits inside a link already.
+ *
+ * IMPORTANT (S35): an `<img>` in the sanitized output starts a network request the moment the string is
+ * assigned, with no click. The reply is prompt-injectable and the model's input holds error text and
+ * workflow content, so a remote image address is a one-way channel that carries that text out in its query
+ * string (`referrerpolicy` does not stop the request). Never re-add `img` to SAFE_TAGS and never keep the
+ * element with a different `src` check; the user reaches the picture by clicking the link instead.
+ */
+function appendImageAsText(source, targetParent, doc) {
+    const alt = (limitedAttribute(source, 'alt') || '').trim();
+    const href = judgeSanitizerUrl(source.getAttribute('src'), 'img');
+    // A link inside a link would be split by the HTML parser when the string is assigned, so a linked
+    // image keeps only its text and the surrounding link stays the single way to navigate.
+    const insideLink = typeof targetParent.closest === 'function' && targetParent.closest('a') !== null;
+    if (href === null || insideLink) {
+        if (alt) targetParent.appendChild(doc.createTextNode(alt));
+        return;
+    }
+    const link = doc.createElement('a');
+    link.setAttribute('href', href);
+    const title = limitedAttribute(source, 'title');
+    if (title !== null) link.setAttribute('title', title);
+    link.setAttribute('rel', 'noopener noreferrer');
+    link.setAttribute('target', '_blank');
+    const shownAddress = href.length > MAX_IMAGE_LINK_TEXT_LENGTH ? `${href.slice(0, MAX_IMAGE_LINK_TEXT_LENGTH)}…` : href;
+    link.appendChild(doc.createTextNode(alt || shownAddress));
+    targetParent.appendChild(link);
+}
+
 function copySafeChildren(sourceParent, targetParent, doc) {
     for (const node of sourceParent.childNodes) {
         if (node.nodeType === 3) {
@@ -231,6 +254,10 @@ function copySafeChildren(sourceParent, targetParent, doc) {
         if (node.nodeType !== 1) continue;
         const tag = node.localName;
         if (node.namespaceURI !== XHTML_NS || DROPPED_TAGS.has(tag)) continue;
+        if (tag === 'img') {
+            appendImageAsText(node, targetParent, doc);
+            continue;
+        }
         if (!SAFE_TAGS.has(tag)) {
             copySafeChildren(node, targetParent, doc);
             continue;
