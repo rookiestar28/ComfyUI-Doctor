@@ -723,4 +723,246 @@ test.describe('Settings Panel', () => {
     await expect(status.locator('span')).toHaveCSS('color', 'rgb(76, 175, 80)');
     await expect(page.locator('#doctor-keystore-delete-btn')).toBeEnabled();
   });
+
+  // F19: a locked or just-rotated server key store is explained in the key-store section.
+  const STORE_NOTICE_KEYS = {
+    locked_key_required: 'keystore_state_locked_key_required',
+    locked_key_mismatch: 'keystore_state_locked_key_mismatch',
+    corrupt: 'keystore_state_corrupt',
+  };
+
+  const mockStoreStatus = async (page, store, extra = {}) => {
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        providers: { openai: { source: 'env' } },
+        ...(store === undefined ? {} : { store }),
+        ...extra,
+      }),
+    }));
+  };
+
+  const openKeyStore = async (page) => {
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.locator('#doctor-key-store-section summary').click();
+  };
+
+  for (const [state, key] of Object.entries(STORE_NOTICE_KEYS)) {
+    test(`key store notice: the ${state} state shows its own localized notice`, async ({ page }) => {
+      await mockStoreStatus(page, { state });
+      await openKeyStore(page);
+
+      const notice = page.locator('#doctor-keystore-state-notice');
+      await expect(notice).toBeVisible();
+      await expect(notice).toHaveAttribute('data-store-state', state);
+      const expected = await page.evaluate(k => window.app.Doctor.getUIText(k), key);
+      expect(String(expected).length).toBeGreaterThan(20);
+      await expect(notice).toHaveText(expected);
+      await expect(notice.locator('button, a, input')).toHaveCount(0);
+    });
+  }
+
+  test('key store notice: the three states render three different texts', async ({ page }) => {
+    const texts = [];
+    let current = 'locked_key_required';
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, providers: { openai: { source: 'env' } }, store: { state: current } }),
+    }));
+    await openKeyStore(page);
+    for (const state of Object.keys(STORE_NOTICE_KEYS)) {
+      current = state;
+      await page.locator('#doctor-key-store-section summary').click();
+      await page.locator('#doctor-key-store-section summary').click();
+      await expect(page.locator('#doctor-keystore-state-notice')).toHaveAttribute('data-store-state', state);
+      texts.push(await page.locator('#doctor-keystore-state-notice').innerText());
+    }
+
+    expect(new Set(texts).size).toBe(3);
+  });
+
+  for (const [label, store] of [
+    ['ok', { state: 'ok' }],
+    ['empty', { state: 'empty' }],
+    ['missing', undefined],
+    ['unknown', { state: 'something_else' }],
+    ['prototype key', { state: 'constructor' }],
+    ['markup', { state: '<img src=x onerror="window.__poisonedState=1">' }],
+  ]) {
+    test(`key store notice: a ${label} store state shows no notice`, async ({ page }) => {
+      await mockStoreStatus(page, store);
+      await openKeyStore(page);
+
+      await expect(page.locator('#doctor-keystore-providers-grid')).toContainText('openai');
+      await expect(page.locator('#doctor-keystore-state-notice')).toBeHidden();
+      await expect(page.locator('#doctor-keystore-state-notice')).not.toHaveAttribute('data-store-state', /.+/);
+      expect(await page.evaluate(() => window.__poisonedState)).toBeUndefined();
+    });
+  }
+
+  test('key store notice: a failed status call shows no notice', async ({ page }) => {
+    await page.route('**/doctor/secrets/status', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: false, error: 'status unavailable', store: { state: 'locked_key_mismatch' } }),
+    }));
+    await openKeyStore(page);
+
+    await expect(page.locator('#doctor-keystore-providers-grid')).toContainText('status unavailable');
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeHidden();
+  });
+
+  test('key store notice: server-provided fields never reach the DOM', async ({ page }) => {
+    await mockStoreStatus(
+      page,
+      {
+        state: 'locked_key_mismatch',
+        path: 'C:\\poison\\secrets.json',
+        detail: '<b id="poison-marker">poison</b>',
+        message: 'POISON-SERVER-TEXT',
+      },
+      { message: 'POISON-TOP-LEVEL-TEXT' },
+    );
+    await openKeyStore(page);
+
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeVisible();
+    const html = (await page.locator('#doctor-key-store-section').innerHTML()).toLowerCase();
+    for (const needle of ['poison', 'secrets.json']) {
+      expect(html).not.toContain(needle);
+    }
+    await expect(page.locator('#poison-marker')).toHaveCount(0);
+  });
+
+  test('key store notice: a later healthy status clears the notice', async ({ page }) => {
+    let calls = 0;
+    await page.route('**/doctor/secrets/status', route => {
+      calls += 1;
+      const store = calls === 1 ? { state: 'locked_key_required' } : { state: 'ok' };
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, providers: { openai: { source: 'env' } }, store }),
+      });
+    });
+    await openKeyStore(page);
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeVisible();
+
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.locator('#doctor-key-store-section summary').click();
+    await expect.poll(() => calls).toBeGreaterThanOrEqual(2);
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeHidden();
+  });
+
+  test('key store notice: a status call that fails afterwards clears the notice', async ({ page }) => {
+    let calls = 0;
+    await page.route('**/doctor/secrets/status', route => {
+      calls += 1;
+      const body = calls === 1
+        ? { success: true, providers: { openai: { source: 'env' } }, store: { state: 'locked_key_required' } }
+        : { success: false, error: 'status unavailable', store: { state: 'locked_key_required' } };
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    await openKeyStore(page);
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeVisible();
+
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.locator('#doctor-key-store-section summary').click();
+    await expect(page.locator('#doctor-keystore-providers-grid')).toContainText('status unavailable');
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeHidden();
+  });
+
+  test('key store notice: a status call that throws afterwards clears the notice', async ({ page }) => {
+    await mockStoreStatus(page, { state: 'corrupt' });
+    await openKeyStore(page);
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeVisible();
+
+    await page.evaluate(async () => {
+      const { DoctorAPI } = await import('/web/doctor_api.js');
+      DoctorAPI.getSecretsStatus = async () => { throw new Error('status exploded'); };
+    });
+    await page.locator('#doctor-key-store-section summary').click();
+    await page.locator('#doctor-key-store-section summary').click();
+    await expect(page.locator('#doctor-keystore-providers-grid')).toContainText('status exploded');
+    await expect(page.locator('#doctor-keystore-state-notice')).toBeHidden();
+  });
+
+  test('key store notice: the notice uses the localized text of the active language', async ({ page }) => {
+    await mockStoreStatus(page, { state: 'corrupt' });
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.evaluate(() => {
+      const doctorUI = window.app.Doctor;
+      const original = doctorUI.getUIText.bind(doctorUI);
+      doctorUI.getUIText = key => (key === 'keystore_state_corrupt' ? 'LOCALIZED-CORRUPT-NOTICE-TEXT' : original(key));
+    });
+    await page.locator('#doctor-key-store-section summary').click();
+
+    await expect(page.locator('#doctor-keystore-state-notice')).toHaveText('LOCALIZED-CORRUPT-NOTICE-TEXT');
+  });
+
+  test('key store notice: a missing translation falls back to English instead of showing the marker', async ({ page }) => {
+    await mockStoreStatus(page, { state: 'locked_key_mismatch' });
+    await page.click('.doctor-tab-button[data-tab-id="settings"]');
+    await page.evaluate(() => {
+      const doctorUI = window.app.Doctor;
+      const original = doctorUI.getUIText.bind(doctorUI);
+      doctorUI.getUIText = key => (key.startsWith('keystore_state_') ? `[Missing: ${key}]` : original(key));
+    });
+    await page.locator('#doctor-key-store-section summary').click();
+
+    const notice = page.locator('#doctor-keystore-state-notice');
+    await expect(notice).toBeVisible();
+    await expect(notice).not.toContainText('[Missing');
+    await expect(notice).toContainText('DOCTOR_SECRET_STORE_ENCRYPTION_KEY does not match');
+  });
+
+  test('key store notice: a save refused by a locked store shows the notice, not the server message', async ({ page }) => {
+    await mockStoreStatus(page, { state: 'ok' });
+    await page.route('**/doctor/secrets', route => route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        error: 'POISON-SERVER-LOCKED-TEXT',
+        code: 'secret_store_locked',
+        state: 'locked_key_mismatch',
+      }),
+    }));
+    await openKeyStore(page);
+    await page.locator('#doctor-keystore-key').fill('fixture-value');
+    await page.locator('#doctor-keystore-save-btn').click();
+
+    const notice = page.locator('#doctor-keystore-state-notice');
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveAttribute('data-store-state', 'locked_key_mismatch');
+    const status = page.locator('#doctor-keystore-status');
+    await expect(status).toContainText(/fail/i);
+    await expect(status).not.toContainText('POISON-SERVER-LOCKED-TEXT');
+    await expect(page.locator('#doctor-keystore-save-btn')).toBeEnabled();
+  });
+
+  test('key store notice: a delete refused by a locked store shows the notice, not the server message', async ({ page }) => {
+    await page.route('**/doctor/secrets/*', route => route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: false,
+        error: 'POISON-SERVER-LOCKED-TEXT',
+        code: 'secret_store_locked',
+        state: 'locked_key_required',
+      }),
+    }));
+    await mockStoreStatus(page, { state: 'ok' });
+    page.on('dialog', dialog => dialog.accept());
+    await openKeyStore(page);
+    await page.locator('#doctor-keystore-delete-btn').click();
+
+    const notice = page.locator('#doctor-keystore-state-notice');
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveAttribute('data-store-state', 'locked_key_required');
+    await expect(page.locator('#doctor-keystore-status')).not.toContainText('POISON-SERVER-LOCKED-TEXT');
+    await expect(page.locator('#doctor-keystore-delete-btn')).toBeEnabled();
+  });
 });

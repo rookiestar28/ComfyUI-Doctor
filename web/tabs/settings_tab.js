@@ -170,6 +170,7 @@ export function render(container) {
                             <button id="doctor-keystore-save-btn" style="flex: 1; padding: 8px; background: #2196f3; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">${doctorUI.getUIText('keystore_save_btn') || '💾 Save to Server'}</button>
                             <button id="doctor-keystore-delete-btn" style="flex: 1; padding: 8px; background: #e53935; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px;">${doctorUI.getUIText('keystore_delete_btn') || '🗑️ Delete'}</button>
                         </div>
+                        <div id="doctor-keystore-state-notice" role="status" hidden style="font-size: 11px; color: #f0ad4e; line-height: 1.4; padding: 8px; background: rgba(240,173,78,0.1); border-radius: 4px;"></div>
                         <div id="doctor-keystore-status" style="font-size: 11px; color: #888; margin-top: 4px;"></div>
                         <div id="doctor-keystore-providers-grid" style="margin-top: 8px;"></div>
                     </div>
@@ -439,6 +440,7 @@ export function render(container) {
     const keystoreDeleteBtn = settingsPanel.querySelector('#doctor-keystore-delete-btn');
     const keystoreStatus = settingsPanel.querySelector('#doctor-keystore-status');
     const keystoreGrid = settingsPanel.querySelector('#doctor-keystore-providers-grid');
+    const keystoreStateNotice = settingsPanel.querySelector('#doctor-keystore-state-notice');
 
     const SOURCE_BADGES = {
         env: { label: 'ENV', color: '#4caf50', bg: 'rgba(76,175,80,0.15)' },
@@ -460,6 +462,50 @@ export function render(container) {
     const renderKeystoreStatus = (text, color) => {
         replaceWithPlainText(keystoreStatus, text, { color });
     };
+
+    // A missing translation comes back as "[Missing: key]", which is truthy, so a plain `||` never falls back.
+    const localizedText = (key, fallback) => {
+        const text = doctorUI.getUIText(key);
+        return typeof text === 'string' && text && !text.startsWith('[Missing:') ? text : fallback;
+    };
+
+    // The three store states the status endpoint reports besides ok and empty, each with fixed copy.
+    const STORE_STATE_NOTICES = {
+        locked_key_required: {
+            key: 'keystore_state_locked_key_required',
+            fallback: 'The server key store is locked: it is encrypted, but DOCTOR_SECRET_STORE_ENCRYPTION_KEY is not set. Saved server keys are unavailable, and saving or deleting is refused. Nothing was changed or sent. Set the original key and restart ComfyUI.',
+        },
+        locked_key_mismatch: {
+            key: 'keystore_state_locked_key_mismatch',
+            fallback: 'The server key store is locked: DOCTOR_SECRET_STORE_ENCRYPTION_KEY does not match the key that encrypted it. Saved server keys are unavailable, and saving or deleting is refused. Nothing was changed or sent. Restore the original key and restart ComfyUI.',
+        },
+        corrupt: {
+            key: 'keystore_state_corrupt',
+            fallback: 'The server key store file could not be read, so Doctor moved it aside and started a new, empty store. Saved server keys must be entered again. Nothing was sent anywhere.',
+        },
+    };
+
+    // SECURITY: only a state NAME that is an own key of STORE_STATE_NOTICES is rendered, as fixed localized copy
+    // (textContent) plus that name in data-store-state. Never render server text, a path or a key here, and look the
+    // name up with Object.hasOwn: a state such as "constructor" must not resolve through the prototype chain.
+    const renderStoreStateNotice = (state) => {
+        if (!keystoreStateNotice) return;
+        const entry = typeof state === 'string' && Object.hasOwn(STORE_STATE_NOTICES, state)
+            ? STORE_STATE_NOTICES[state]
+            : null;
+        if (!entry) {
+            keystoreStateNotice.hidden = true;
+            keystoreStateNotice.textContent = '';
+            keystoreStateNotice.removeAttribute('data-store-state');
+            return;
+        }
+        keystoreStateNotice.textContent = localizedText(entry.key, entry.fallback);
+        keystoreStateNotice.setAttribute('data-store-state', state);
+        keystoreStateNotice.hidden = false;
+    };
+
+    // A write refused by a locked store: the localized notice replaces the server's English message.
+    const isLockedStoreResult = (result) => result?.code === 'secret_store_locked';
 
     const renderProvidersGrid = (providers) => {
         if (!keystoreGrid || !providers) return;
@@ -515,7 +561,9 @@ export function render(container) {
             const result = await DoctorAPI.getSecretsStatus(adminToken);
             if (result.success) {
                 renderProvidersGrid(result.providers);
+                renderStoreStateNotice(result.store?.state);
             } else {
+                renderStoreStateNotice(null);
                 replaceWithPlainText(
                     keystoreGrid,
                     `Failed: ${result.error || result.message || 'unknown'}`,
@@ -523,6 +571,7 @@ export function render(container) {
                 );
             }
         } catch (e) {
+            renderStoreStateNotice(null);
             replaceWithPlainText(
                 keystoreGrid,
                 `Error: ${e?.message ?? e}`,
@@ -559,6 +608,9 @@ export function render(container) {
                     renderKeystoreStatus(successText.replace('{0}', provider), '#4caf50');
                     keystoreKeyInput.value = '';
                     await loadKeystoreStatus();
+                } else if (isLockedStoreResult(result)) {
+                    renderStoreStateNotice(result.state);
+                    renderKeystoreStatus(`❌ ${localizedText('keystore_save_failed', 'Save failed')}`, '#e53935');
                 } else {
                     renderKeystoreStatus(
                         `❌ ${result.error || result.message || doctorUI.getUIText('keystore_save_failed') || 'Save failed'}`,
@@ -588,6 +640,9 @@ export function render(container) {
                     const successText = doctorUI.getUIText('keystore_delete_success') || '✅ Deleted {0} key.';
                     renderKeystoreStatus(successText.replace('{0}', provider), '#4caf50');
                     await loadKeystoreStatus();
+                } else if (isLockedStoreResult(result)) {
+                    renderStoreStateNotice(result.state);
+                    renderKeystoreStatus(`❌ ${localizedText('keystore_delete_failed', 'Delete failed')}`, '#e53935');
                 } else {
                     renderKeystoreStatus(
                         `❌ ${result.error || result.message || doctorUI.getUIText('keystore_delete_failed') || 'Delete failed'}`,

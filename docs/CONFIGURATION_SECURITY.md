@@ -151,6 +151,8 @@ While locked, the store file is never rewritten, downgraded to plaintext, or mov
 
 To recover, restore the original `DOCTOR_SECRET_STORE_ENCRYPTION_KEY` and restart ComfyUI. To deliberately start over instead, move the store file aside and save the credentials again. A store file that is structurally unreadable (not valid JSON or invalid encoding) is still moved aside as `<name>.corrupt-<timestamp>` so a new store can be created.
 
+Doctor's settings panel shows a notice in its key store section for the `locked_key_required`, `locked_key_mismatch` and `corrupt` states, in the interface language. It says what happened and what to do, that nothing was changed or sent, and it names the environment variable for the two locked states. It shows only that fixed text, never a file path, a key or a server message, and it has no reset action: moving the store file aside stays a manual decision.
+
 ## Runtime State Location
 
 Doctor stores runtime state under ComfyUI's private system-user directory when

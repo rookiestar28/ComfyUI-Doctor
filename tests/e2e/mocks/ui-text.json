@@ -73,7 +73,10 @@
     "auto_open_on_error_label": "Auto-open error report panel on new errors",
     "auto_open_on_error_hint": "When enabled, the right-side error report panel will automatically open when a new error is detected",
     "include_workflow_context_label": "Send the workflow with chat questions",
-    "include_workflow_context_hint": "When enabled, the workflow graph (node types, connections and widget values such as prompts and file names) is sent with your chat questions to the selected AI provider, after the privacy mode has been applied. Off by default."
+    "include_workflow_context_hint": "When enabled, the workflow graph (node types, connections and widget values such as prompts and file names) is sent with your chat questions to the selected AI provider, after the privacy mode has been applied. Off by default.",
+    "keystore_state_corrupt": "The server key store file could not be read, so Doctor moved it aside and started a new, empty store. Saved server keys must be entered again. Nothing was sent anywhere.",
+    "keystore_state_locked_key_mismatch": "The server key store is locked: DOCTOR_SECRET_STORE_ENCRYPTION_KEY does not match the key that encrypted it. Saved server keys are unavailable, and saving or deleting is refused. Nothing was changed or sent. Restore the original key and restart ComfyUI.",
+    "keystore_state_locked_key_required": "The server key store is locked: it is encrypted, but DOCTOR_SECRET_STORE_ENCRYPTION_KEY is not set. Saved server keys are unavailable, and saving or deleting is refused. Nothing was changed or sent. Set the original key and restart ComfyUI."
   },
   "ja": {
     "sidebar_doctor_title": "ComfyUI Doctor",
