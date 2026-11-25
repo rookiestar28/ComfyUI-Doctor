@@ -120,7 +120,7 @@ jobs:
   focused-e2e-gate:
     name: Focused E2E Regression Tests (Required)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -150,7 +150,9 @@ jobs:
         run: npm test
         env:
           CI: true
-        timeout-minutes: 8
+        # One worker on CI: 184 tests took 7 minutes, 237 need about 9. The old 8 minute
+        # limit cut the run off before the last tests, so keep this well above the run time.
+        timeout-minutes: 15
 
       - name: Upload test results
         if: failure()
@@ -181,7 +183,7 @@ jobs:
   focused-e2e-integration-optional:
     name: Focused E2E Integration (Optional)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration_e2e == 'true') ||
       (vars.RUN_INTEGRATION_E2E == 'true')
@@ -215,7 +217,8 @@ jobs:
         env:
           CI: true
           COMFYUI_URL: ${{ github.event.inputs.comfyui_url || vars.COMFYUI_URL || 'http://127.0.0.1:8188' }}
-        timeout-minutes: 8
+        # Same limit as the required E2E job above (this suite also runs on one worker).
+        timeout-minutes: 15
 
       - name: Upload integration report
         if: failure()
