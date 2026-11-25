@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import http.server
 import importlib.util
+import os
 import socket
 import subprocess
 import sys
@@ -197,6 +198,53 @@ def test_resolver_local_entries_accept_only_loopback_answers():
         _resolve(DestinationPolicyResolver(registry, _FakeResolver(["8.8.4.4"])), "localhost", 11434)
     ok = _resolve(DestinationPolicyResolver(registry, _FakeResolver(["127.0.0.1", "::1"])), "localhost", 11434)
     assert len(ok) == 2
+
+
+def test_resolver_does_not_swallow_dns_failures():
+    # A lookup that fails must fail the connection: there is no fallback address and no retry path
+    # that could skip the destination check.
+    class _FailingResolver(aiohttp.abc.AbstractResolver):
+        async def resolve(self, host, port=0, family=socket.AF_INET):
+            raise OSError("synthetic DNS failure")
+
+        async def close(self):
+            return None
+
+    resolver = DestinationPolicyResolver(build_destination_registry({}), _FailingResolver())
+    with pytest.raises(OSError, match="synthetic DNS failure"):
+        _resolve(resolver, "api.openai.com", 443)
+
+
+_LEGACY_VALIDATOR_NAMES = (
+    "validate_ssrf_url",
+    "_resolve_hostname_ips",
+    "_classify_restricted_ip",
+    "DOCTOR_SSRF_DNS_TIMEOUT_SECONDS",
+)
+_NON_RUNTIME_DIRS = {"tests", "reference", "REFERENCE", "node_modules", "docs"}
+
+
+def test_legacy_deny_list_validator_stays_removed():
+    # IMPORTANT: the old validator checked a caller-supplied URL with one DNS lookup at check time
+    # and let the connector resolve again (DNS rebinding gap), and it let CGNAT, Alibaba metadata and
+    # 0.0.0.0:11434 through. Destinations are approved only through the registry and the connect-time
+    # resolver; do not bring a deny-list "validate the caller's URL" function back.
+    import security
+
+    for name in ("validate_ssrf_url", "_resolve_hostname_ips", "_classify_restricted_ip", "_dns_timeout_seconds"):
+        assert not hasattr(security, name), f"security.{name} must stay removed"
+
+    offenders = []
+    for root, dirs, files in os.walk(PROJECT_ROOT):
+        # Prune hidden directories (.git, .tmp, .planning, .github, ...) and non-runtime trees.
+        dirs[:] = [d for d in dirs if d not in _NON_RUNTIME_DIRS and not d.startswith(".")]
+        for filename in files:
+            if not filename.endswith(".py"):
+                continue
+            path = Path(root) / filename
+            text = path.read_text(encoding="utf-8", errors="replace")
+            offenders.extend(f"{path.relative_to(PROJECT_ROOT)}: {name}" for name in _LEGACY_VALIDATOR_NAMES if name in text)
+    assert offenders == []
 
 
 def test_resolver_proxy_mode_passes_only_unregistered_hosts():

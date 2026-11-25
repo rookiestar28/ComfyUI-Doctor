@@ -10,7 +10,7 @@ import unittest
 import sys
 import os
 import threading
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from collections import deque
 
 # --- PATH SETUP ---
@@ -287,117 +287,22 @@ class TestSetLanguageLogic(unittest.TestCase):
         self.assertNotIn(invalid_lang, SUPPORTED_LANGUAGES)
 
 
-class TestSSRFProtection(unittest.TestCase):
-    """S2: Tests for SSRF protection in base URL validation."""
-    
-    def setUp(self):
-        """Import validate_ssrf_url from project."""
-        from security import validate_ssrf_url, is_local_llm_url
-        self.validate_ssrf_url = validate_ssrf_url
-        self.is_local_llm_url = is_local_llm_url
-    
-    def test_private_ip_blocked(self):
-        """Test that private IP addresses are blocked."""
-        blocked_urls = [
-            "http://10.0.0.1/v1",
-            "http://10.255.255.255/v1",
-            "http://172.16.0.1/v1",
-            "http://172.31.255.255/v1",
-            "http://192.168.0.1/v1",
-            "http://192.168.1.100/v1",
-        ]
-        for url in blocked_urls:
-            is_valid, error = self.validate_ssrf_url(url, allow_local_llm=False)
-            self.assertFalse(is_valid, f"Private IP {url} should be blocked")
-            self.assertIn("private", error.lower())
-    
-    def test_localhost_blocked(self):
-        """Test that localhost is blocked (when not local LLM)."""
-        blocked_urls = [
-            "http://localhost/v1",
-            "http://127.0.0.1/v1",
-            "http://0.0.0.0/v1",
-        ]
-        for url in blocked_urls:
-            is_valid, error = self.validate_ssrf_url(url, allow_local_llm=False)
-            self.assertFalse(is_valid, f"Localhost {url} should be blocked")
-    
-    def test_local_llm_allowed(self):
-        """Test that known local LLM patterns are allowed."""
-        allowed_urls = [
-            "http://localhost:11434/v1",  # Ollama
-            "http://127.0.0.1:1234/v1",   # LMStudio
-        ]
-        for url in allowed_urls:
-            is_valid, error = self.validate_ssrf_url(url, allow_local_llm=True)
-            self.assertTrue(is_valid, f"Local LLM {url} should be allowed")
-    
-    def test_cloud_urls_allowed(self):
-        """Test that legitimate cloud URLs are allowed."""
-        allowed_urls = [
-            "https://api.openai.com/v1",
-            "https://api.deepseek.com/v1",
-            "https://api.groq.com/openai/v1",
-            "https://api.anthropic.com/v1",
-        ]
-        # Keep test deterministic/offline-safe: no live DNS dependency.
-        with patch("security._resolve_hostname_ips", return_value=["104.18.32.45"]):
-            for url in allowed_urls:
-                is_valid, error = self.validate_ssrf_url(url)
-                self.assertTrue(is_valid, f"Cloud URL {url} should be allowed: {error}")
+class TestSSRFMetrics(unittest.TestCase):
+    """The block counter that /doctor/health reports.
 
-    def test_dns_rebinding_private_ip_blocked(self):
-        """Domain resolving to private IP must be blocked (DNS rebinding defense)."""
-        with patch("security._resolve_hostname_ips", return_value=["10.12.0.8"]):
-            is_valid, error = self.validate_ssrf_url("https://api.example.com/v1")
-            self.assertFalse(is_valid)
-            self.assertIn("dns resolved to private ip", error.lower())
+    Which destinations are refused is covered by test_s29_outbound_policy_unit.py and
+    test_s29_outbound_destination_routes.py; this only pins the counter itself.
+    """
 
-    def test_dns_resolution_timeout_fail_closed(self):
-        """DNS resolution timeout/failure should be blocked (fail-closed)."""
-        with patch("security._resolve_hostname_ips", side_effect=RuntimeError("DNS resolution timeout (1.5s)")):
-            is_valid, error = self.validate_ssrf_url("https://api.example.com/v1")
-            self.assertFalse(is_valid)
-            self.assertIn("dns resolution error", error.lower())
-    
-    def test_non_http_blocked(self):
-        """Test that non-HTTP protocols are blocked."""
-        blocked_urls = [
-            "file:///etc/passwd",
-            "ftp://ftp.example.com/file",
-            "gopher://example.com/",
-        ]
-        for url in blocked_urls:
-            is_valid, error = self.validate_ssrf_url(url)
-            self.assertFalse(is_valid, f"Non-HTTP {url} should be blocked")
-            self.assertIn("protocol", error.lower())
-    
-    def test_internal_domains_blocked(self):
-        """Test that internal domains are blocked."""
-        blocked_urls = [
-            "http://server.local/v1",
-            "http://api.internal/v1",
-            "http://db.corp/v1",
-            "http://host.lan/v1",
-        ]
-        for url in blocked_urls:
-            is_valid, error = self.validate_ssrf_url(url)
-            self.assertFalse(is_valid, f"Internal domain {url} should be blocked")
-    
-    def test_metadata_endpoint_blocked(self):
-        """Test that cloud metadata endpoints are blocked."""
-        # AWS metadata endpoint
-        is_valid, error = self.validate_ssrf_url("http://169.254.169.254/latest/meta-data/")
-        self.assertFalse(is_valid, "Metadata endpoint should be blocked")
+    def test_recorded_blocks_increment_the_counter(self):
+        from security import get_ssrf_metrics, record_ssrf_block
 
-    def test_ssrf_metrics_increment(self):
-        """Blocked requests should increment SSRF metrics."""
-        from security import get_ssrf_metrics
         before = get_ssrf_metrics().get("ssrf_block_count", 0)
-        self.validate_ssrf_url("http://169.254.169.254/latest/meta-data/", allow_local_llm=False)
-        after = get_ssrf_metrics().get("ssrf_block_count", 0)
-        self.assertGreaterEqual(after, before + 1)
-
+        record_ssrf_block("destination_not_allowed")
+        after = get_ssrf_metrics()
+        self.assertEqual(after["ssrf_block_count"], before + 1)
+        self.assertEqual(after["last_block_reason"], "destination_not_allowed")
+        self.assertIsNotNone(after["last_block_timestamp"])
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

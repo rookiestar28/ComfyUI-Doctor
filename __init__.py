@@ -59,7 +59,7 @@ from .analyzer import ErrorAnalyzer
 from .session_manager import SessionManager
 from .system_info import get_system_environment, format_env_for_llm
 from .sanitizer import PIISanitizer, SanitizationLevel
-from .security import is_local_llm_url, validate_ssrf_url, get_ssrf_metrics
+from .security import is_local_llm_url, get_ssrf_metrics
 from .outbound import get_outbound_sanitizer, sanitize_outbound_payload
 from .llm_client import llm_request_with_retry, RetryConfig, RetryResult
 from .services.token_budget import TokenBudgetService, BudgetConfig

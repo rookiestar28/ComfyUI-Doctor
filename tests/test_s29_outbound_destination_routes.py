@@ -103,6 +103,21 @@ def test_unapproved_destination_is_rejected_without_outbound_call_or_dns(harness
         assert str(base_url).strip() not in response.text
 
 
+def test_refused_destination_is_counted_in_the_ssrf_metrics(harness):
+    # /doctor/health reports this counter; it must keep moving once per refused request.
+    security = harness.module("security")
+    before = security.get_ssrf_metrics()["ssrf_block_count"]
+
+    response = harness.request(
+        "POST", "/doctor/verify_key", json=_body("/doctor/verify_key", "https://public.probe.test/v1")
+    )
+
+    assert _error_code(response) == "destination_not_allowed", response.text
+    after = security.get_ssrf_metrics()
+    assert after["ssrf_block_count"] == before + 1
+    assert after["last_block_reason"] == "destination_not_allowed"
+
+
 @pytest.mark.parametrize(
     "base_url, expected_models_url",
     [
