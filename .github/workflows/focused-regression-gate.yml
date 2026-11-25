@@ -62,9 +62,12 @@ permissions:
   contents: read
 
 jobs:
+  # Runner pinned on purpose. The ubuntu-latest label moved to Ubuntu 26.04, where the
+  # pinned Playwright (1.57.0) cannot install a browser, so the E2E job failed before any
+  # test ran. Move this label only together with a Playwright upgrade that supports it.
   focused-python-gate:
     name: Focused Python Security & Contract Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
@@ -116,7 +119,7 @@ jobs:
 
   focused-e2e-gate:
     name: Focused E2E Regression Tests (Required)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -177,7 +180,7 @@ jobs:
 
   focused-e2e-integration-optional:
     name: Focused E2E Integration (Optional)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     if: |
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration_e2e == 'true') ||
@@ -240,7 +243,7 @@ jobs:
 
   focused-gate-complete:
     name: Focused Gate Complete
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [focused-python-gate, focused-e2e-gate]
     if: always()
 
