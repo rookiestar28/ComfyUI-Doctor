@@ -49,7 +49,10 @@ def _assert_vite_security_floor(package: dict, lock: dict) -> None:
     release = re.fullmatch(r"6\.4\.(0|[1-9][0-9]*)", override)
     # IMPORTANT: Vite bundles launch-editor; a standalone override cannot patch it.
     # Floors differ by major branch, so do not accept an arbitrary newer major.
-    assert release and int(release[1]) >= 4, "Vite needs a patched stable 6.4.x release"
+    # 6.4.4 was once treated as patched, but it is affected by the server.fs.deny bypass with
+    # queries; 6.4.5 is the first patched release. Keep the floor at 6.4.5 so that the override
+    # cannot slide back to 6.4.4 (or lower) and silently reopen the advisory.
+    assert release and int(release[1]) >= 5, "Vite needs a patched stable 6.4.x release (6.4.5 or newer)"
     entries = {
         path: entry
         for path, entry in lock.get("packages", {}).items()
@@ -73,9 +76,9 @@ def test_vite_override_and_every_locked_copy_resolve_a_patched_release():
 
 
 def _patched_vite_fixture():
-    return {"overrides": {"vite": "6.4.4"}}, {"packages": {"node_modules/vite": {
-        "version": "6.4.4",
-        "resolved": "https://registry.npmjs.org/vite/-/vite-6.4.4.tgz",
+    return {"overrides": {"vite": "6.4.6"}}, {"packages": {"node_modules/vite": {
+        "version": "6.4.6",
+        "resolved": "https://registry.npmjs.org/vite/-/vite-6.4.6.tgz",
         "integrity": "sha512-synthetic-fixture",
     }}}
 
@@ -89,14 +92,33 @@ def test_patched_vite_fixture_and_matching_nested_copy_pass():
 
 
 @pytest.mark.parametrize("version", [
-    None, "", "6.4.3", "6.4.bad", "6.4.04", "6.4.4-beta.1", "^6.4.4",
-    "7.0.0", "8.0.0", "6.4.4 ", "6.4.-4",
+    None, "", "6.4.3", "6.4.4", "6.4.bad", "6.4.04", "6.4.6-beta.1", "^6.4.6",
+    "7.0.0", "8.0.0", "6.4.6 ", "6.4.-4",
 ])
 def test_vite_rejects_missing_malformed_vulnerable_or_unreviewed_override(version):
     package, lock = _patched_vite_fixture()
     package["overrides"]["vite"] = version
+    _sync_lock_with_override(lock, version)
     with pytest.raises(AssertionError):
         _assert_vite_security_floor(package, lock)
+
+
+def _sync_lock_with_override(lock: dict, version) -> None:
+    # Keep the lock graph consistent with a well-formed 6.4.x override, so that only the version
+    # floor can reject it. Without this a vulnerable version would be refused for the wrong reason
+    # (lock drift) and the floor itself would stay untested.
+    if isinstance(version, str) and re.fullmatch(r"6\.4\.(0|[1-9][0-9]*)", version):
+        entry = lock["packages"]["node_modules/vite"]
+        entry["version"] = version
+        entry["resolved"] = f"https://registry.npmjs.org/vite/-/vite-{version}.tgz"
+
+
+@pytest.mark.parametrize("version", ["6.4.5", "6.4.6", "6.4.7"])
+def test_vite_accepts_the_first_patched_release_and_newer_patches(version):
+    package, lock = _patched_vite_fixture()
+    package["overrides"]["vite"] = version
+    _sync_lock_with_override(lock, version)
+    _assert_vite_security_floor(package, lock)
 
 
 @pytest.mark.parametrize("mutation", [
